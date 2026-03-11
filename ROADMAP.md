@@ -19,7 +19,7 @@ Browser REPL with ClojureScript pattern engine and Web Audio synthesis.
 
 ---
 
-## Phase 2 — Rust/WASM Synthesis 🔧 *in progress* (source complete, build pending)
+## Phase 2 — Rust/WASM Synthesis ✅ *delivered*
 
 Replace JS oscillator synthesis with a Rust/WASM module for better sound quality.
 Sample loading from the Strudel CDN is unchanged.
@@ -55,9 +55,9 @@ npx shadow-cljs watch app
 Or in one step: `npm run dev:full`
 
 **Definition of done:**
-- [ ] `npm run build:wasm` completes without errors
-- [ ] Browser console shows `[REPuLse] audio backend: wasm`
-- [ ] `:bd :sd :hh :oh` sound noticeably better than Phase 1
+- [x] `npm run build:wasm` completes without errors
+- [x] Browser console shows `[REPuLse] audio backend: wasm`
+- [x] `:bd :sd :hh :oh` sound noticeably better than Phase 1
 - [x] `(stop)` stops sound immediately
 - [x] Fallback verified (JS synthesis when WASM unavailable — confirmed Firefox, Chrome, Safari)
 

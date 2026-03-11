@@ -1,8 +1,5 @@
-use js_sys::Float32Array;
 use wasm_bindgen::prelude::*;
-use web_sys::{
-    AudioBuffer, AudioContext, BiquadFilterType, OscillatorType,
-};
+use web_sys::{AudioBuffer, AudioContext, BiquadFilterType, OscillatorType};
 
 // ─── Console helper ────────────────────────────────────────────────────────────
 
@@ -22,14 +19,14 @@ fn generate_noise(ctx: &AudioContext, duration_secs: f32) -> Result<AudioBuffer,
     let length = (sample_rate * duration_secs) as u32;
     let buffer = ctx.create_buffer(1, length, sample_rate)?;
 
-    let channel = buffer.get_channel_data(0)?; // Float32Array view
-
     let mut state: u32 = 0xDEAD_BEEF;
-    for i in 0..length {
+    let mut data: Vec<f32> = Vec::with_capacity(length as usize);
+    for _ in 0..length {
         state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
         let sample = (state as f32 / u32::MAX as f32).mul_add(2.0, -1.0);
-        channel.set_index(i, sample);
+        data.push(sample);
     }
+    buffer.copy_to_channel(&data, 0)?;
 
     Ok(buffer)
 }
@@ -102,6 +99,7 @@ impl AudioEngine {
     }
 
     /// Snare: bandpass noise (body) + sine tone (crack).
+    #[allow(deprecated)]
     fn play_snare(&self, t: f64) -> Result<(), JsValue> {
         let ctx = &self.ctx;
 
@@ -143,6 +141,7 @@ impl AudioEngine {
     }
 
     /// Hi-hat (closed or open): highpass noise, short or long decay.
+    #[allow(deprecated)]
     fn play_hihat(&self, t: f64, open: bool) -> Result<(), JsValue> {
         let ctx = &self.ctx;
         let decay: f64 = if open { 0.35 } else { 0.045 };
