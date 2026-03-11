@@ -6,16 +6,26 @@ pattern engine is implemented in ClojureScript.
 
 The name: **REPL** + **pulse** (rhythm, heartbeat).
 
+I love Clojure — its REPL-driven workflow, immutable data model, and the way it makes you think
+about time and transformation. REPuLse is what happens when that mindset meets live music: a
+sequencer you talk to like a Clojure REPL, where patterns are pure functions and the output is
+sound.
+
 ---
 
 ## Quick start
 
-**Requirements:** Node.js 18+, Java 11+ (for shadow-cljs)
+**Requirements:** Node.js 18+, Java 11+ (for shadow-cljs), Rust + wasm-pack (for WASM synthesis)
 
 ```bash
 git clone <repo>
 cd repulse
 npm install
+
+# Build the Rust/WASM synthesis engine (first time only)
+npm run build:wasm
+
+# Start the dev server
 npx shadow-cljs watch app
 ```
 
@@ -32,6 +42,9 @@ You'll hear a kick and snare alternating in a loop. To stop:
 ```lisp
 (stop)
 ```
+
+> If you skip `npm run build:wasm`, the app still works — it falls back to a JS synthesis
+> engine automatically. You'll see `audio backend: js synthesis` in the browser console.
 
 ---
 
@@ -52,17 +65,24 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(rev pat)` | Reverse a pattern within each cycle |
 | `(every 4 (fast 2) pat)` | Apply transform every 4th cycle |
 | `(fmap f pat)` | Apply a function to every event value |
+| `(bpm 140)` | Set the tempo in BPM (default: 120) |
 | `(stop)` | Stop playback |
 
 ### Sound values
 
 | Value | Sound |
 |---|---|
-| `:bd` | Kick drum (low sine burst) |
-| `:sd` | Snare (noise burst) |
-| `:hh` | Hi-hat (high noise burst) |
+| `:bd` | Kick drum |
+| `:sd` | Snare |
+| `:hh` | Closed hi-hat |
+| `:oh` | Open hi-hat |
+| `:_` | Rest (silence) |
 | `440` | Sine tone at that frequency in Hz |
-| any other keyword | Sine tone at 440 Hz |
+| `(sound :bank n)` | Sample from the Strudel CDN library by name and index |
+| any loaded keyword | Plays the matching sample bank (e.g. `:cp`, `:bass`, `:tabla`) |
+
+Over 100 sample banks from the [Strudel CDN](https://strudel.cc) (TidalCycles Dirt-Samples +
+Tidal Drum Machines) are loaded at startup. Use `(sound :bd 2)` for indexed access.
 
 ### Examples
 
@@ -71,8 +91,13 @@ function from a time span to a list of events — the same model used by TidalCy
 (stack (seq :bd :bd :bd :bd)
        (seq :_ :sd :_ :sd))
 
-; Fast hi-hat pattern
-(fast 2 (seq :hh :hh :hh :hh))
+; Hi-hats twice as fast as the kick
+(stack (seq :bd :_ :bd :_)
+       (fast 2 (seq :hh :_)))
+
+; Open hi-hat on the offbeat
+(stack (seq :bd :_ :bd :_)
+       (seq :_ :oh :_ :oh))
 
 ; Every 4th cycle, double the speed
 (every 4 (fast 2) (seq :bd :sd :bd :sd))
@@ -84,6 +109,9 @@ function from a time span to a list of events — the same model used by TidalCy
 
 ; Tone sequence
 (seq 220 330 440 550)
+
+; Samples from the library
+(seq (sound :tabla 0) (sound :tabla 1) :_ :_)
 ```
 
 ### Language features
@@ -112,16 +140,20 @@ repulse/
 ├── packages/
 │   ├── core/        # Pattern algebra — pure CLJS, no DOM, no audio
 │   │   └── src/repulse/core.cljs
-│   └── lisp/        # REPuLse-Lisp reader + evaluator
-│       └── src/repulse/lisp/
-│           ├── reader.cljs   # Tokeniser + parser
-│           ├── eval.cljs     # Environment-based evaluator
-│           └── core.cljs     # Public eval-string entry point
+│   ├── lisp/        # REPuLse-Lisp reader + evaluator
+│   │   └── src/repulse/lisp/
+│   │       ├── reader.cljs   # Recursive-descent parser
+│   │       ├── eval.cljs     # Environment-based evaluator
+│   │       └── core.cljs     # Public eval-string entry point
+│   └── audio/       # Rust/WASM synthesis engine
+│       ├── Cargo.toml
+│       └── src/lib.rs        # Kick, snare, hi-hat, tone via web-sys
 ├── app/             # Browser app
 │   ├── src/repulse/
-│   │   ├── app.cljs    # UI bootstrap + CodeMirror 6 editor
-│   │   └── audio.cljs  # Web Audio scheduler
-│   └── public/         # Static assets + compiled JS output
+│   │   ├── app.cljs     # UI bootstrap + CodeMirror 6 editor
+│   │   ├── audio.cljs   # Web Audio scheduler + WASM integration
+│   │   └── samples.cljs # Strudel CDN sample loader
+│   └── public/          # Static assets + compiled JS output
 ├── package.json     # npm workspaces root
 └── shadow-cljs.edn  # Build config
 ```
@@ -129,14 +161,17 @@ repulse/
 ### Build targets
 
 ```bash
+# Build Rust/WASM engine (required once, or after changing packages/audio/src/lib.rs)
+npm run build:wasm
+
 # Start dev server with hot reload at http://localhost:3000
 npx shadow-cljs watch app
 
+# Both in one step
+npm run dev:full
+
 # Run core unit tests (Node.js)
 npx shadow-cljs compile test && node out/test.js
-
-# Production build
-npx shadow-cljs release app
 ```
 
 ### How it fits together
@@ -149,11 +184,21 @@ npx shadow-cljs release app
    evaluator. The initial environment is populated with all `core` functions. Undefined symbol
    errors include Levenshtein-based typo hints.
 
-3. **`app/audio.cljs`** — implements the [Web Audio lookahead clock](https://web.dev/articles/audio-scheduling)
-   pattern (Chris Wilson). A `setInterval` fires every 25 ms and schedules any events falling
-   within the next 100 ms lookahead window using `AudioContext.currentTime`.
+3. **`packages/audio`** — a Rust crate compiled to WASM via `wasm-pack`. Provides an
+   `AudioEngine` class with a `trigger(value, time)` method. All synthesis (kick, snare,
+   hi-hats, tones) uses Web Audio API nodes via `web-sys`. Noise buffers are generated with
+   a deterministic LCG — no `Math.random()`. Loaded as a `<script type="module">` in
+   `index.html` to bypass Closure Compiler's lack of `import.meta` support.
 
-4. **`app/app.cljs`** — mounts a CodeMirror 6 editor, wires **Ctrl+Enter** to `eval-string`,
+4. **`app/audio.cljs`** — implements the [Web Audio lookahead clock](https://web.dev/articles/audio-scheduling)
+   pattern (Chris Wilson). A `setInterval` fires every 25 ms and schedules any events falling
+   within the next **200 ms** lookahead window using `AudioContext.currentTime`. Sound dispatch:
+   sample bank → WASM synth → JS synth fallback.
+
+5. **`app/samples.cljs`** — fetches two JSON manifests from the Strudel CDN at startup and
+   builds a lazy buffer cache. Buffers are decoded on first use and reused thereafter.
+
+6. **`app/app.cljs`** — mounts a CodeMirror 6 editor, wires **Ctrl+Enter** to `eval-string`,
    and routes Pattern results to the audio scheduler vs. plain values to the output line.
 
 ### Editor keybindings
@@ -170,6 +215,14 @@ npx shadow-cljs release app
 2. Add it to the env map in [packages/lisp/src/repulse/lisp/eval.cljs](packages/lisp/src/repulse/lisp/eval.cljs) — `make-env`
 3. Add a test in [packages/core/src/repulse/core_test.cljs](packages/core/src/repulse/core_test.cljs)
 
-### Adding a new voice
+### Adding a new synthesized voice
 
-Open [app/src/repulse/audio.cljs](app/src/repulse/audio.cljs) and add a clause to the `play-event` multimethod at the bottom of the file.
+Open [packages/audio/src/lib.rs](packages/audio/src/lib.rs) and add a match arm to `trigger()`,
+then implement a `play_*` method on `AudioEngine`. Run `npm run build:wasm` to rebuild.
+
+---
+
+## Browser support
+
+Works on Chrome, Firefox, and Safari. Safari requires the `webkitAudioContext` fallback and
+an unconditional `.resume()` call — both handled automatically.
