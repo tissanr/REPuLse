@@ -1,0 +1,18 @@
+{:source-paths ["app/src" "packages/core/src" "packages/lisp/src"]
+
+ :dependencies []
+
+ :dev-http {3000 "app/public"}
+
+ :builds
+ {:app
+  {:target :browser
+   :output-dir "app/public/js"
+   :asset-path "/js"
+   :modules {:main {:init-fn repulse.app/init}}
+   :devtools {:after-load repulse.app/reload}}
+
+  :test
+  {:target :node-script
+   :output-to "out/test.js"
+   :main repulse.test-runner/main}}}

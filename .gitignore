@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# shadow-cljs build output
+app/public/js/
+out/
+.shadow-cljs/
+
+# Clojure/LSP tooling caches
+.clj-kondo/.cache/
+.lsp/.cache/
+
+# macOS
+.DS_Store

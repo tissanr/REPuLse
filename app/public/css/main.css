@@ -1,0 +1,98 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #1a1a2e;
+  --bg2: #16213e;
+  --border: #0f3460;
+  --text: #e0e0e0;
+  --accent: #e94560;
+  --dim: #888;
+  --green: #4caf50;
+  --red: #f44336;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+
+header h1 {
+  font-size: 1.1rem;
+  letter-spacing: 0.15em;
+  color: var(--accent);
+}
+
+.playing-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dim);
+  transition: background 0.1s;
+}
+
+.playing-dot.active {
+  background: var(--green);
+  animation: pulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0.5; transform: scale(1.3); }
+}
+
+.editor-container {
+  flex: 1;
+  overflow: hidden;
+}
+
+.editor-container .cm-editor {
+  height: 100%;
+  font-size: 15px;
+}
+
+.cm-editor.cm-focused {
+  outline: none;
+}
+
+footer {
+  padding: 10px 20px;
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.output {
+  font-size: 0.9rem;
+  color: var(--dim);
+}
+
+.output.success { color: var(--green); }
+.output.error   { color: var(--red); }
+
+.hint {
+  font-size: 0.75rem;
+  color: var(--dim);
+  margin-left: auto;
+}
