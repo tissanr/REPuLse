@@ -178,6 +178,36 @@ See full spec: [PROMPTS/phase-7-plugins-advanced.md](PROMPTS/phase-7-plugins-adv
 
 ---
 
+## Phase 8 — Song Arrangement Language 📋 *planned*
+
+A three-layer abstraction for composing full songs: motifs → sections → arrangement.
+Keeps live coding readable as pieces grow beyond a handful of patterns.
+
+**The three layers:**
+```lisp
+; Layer 1: motifs
+(def kick  (seq :bd :_ :bd :_))
+(def snare (seq :_ :sd :_ :sd))
+
+; Layer 2: sections
+(def verse  (stack kick snare))
+(def chorus (stack kick snare (fast 2 (seq :hh :oh))))
+
+; Layer 3: arrangement
+(arrange [[intro 4] [verse 8] [chorus 8] [verse 8] [chorus 8]])
+```
+
+**Key additions:**
+- `arrange* ` in `core.cljs` — time-shifting combinator; sections play in order, arrangement loops
+- `(arrange [[pattern cycles] ...])` Lisp built-in — full arrangement with per-section cycle counts
+- `(play-scenes [pat pat pat ...])` — each section plays for 1 cycle (Ableton scene-chain style)
+- Map literals `{:key val}` in the reader + `get`, `assoc`, `merge` built-ins
+- Parametric section factories: `(def make-verse (fn [opts] (if (get opts :dense false) ...)))`
+
+See full spec: [PROMPTS/phase-8-song-arrangement.md](PROMPTS/phase-8-song-arrangement.md)
+
+---
+
 ## Future ideas (unscheduled)
 
 See [docs/FUTURE-FEATURES.md](docs/FUTURE-FEATURES.md) for the full list, including
