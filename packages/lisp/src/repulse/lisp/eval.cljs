@@ -122,15 +122,22 @@
      "slow"   (fn [f p] (core/slow (unwrap f) (unwrap p)))
      "rev"    (fn [p] (core/rev (unwrap p)))
      "every"  (fn [n t p] (core/every (unwrap n) t (unwrap p)))
-     "fmap"   (fn [f p] (core/fmap f (unwrap p)))
+     "fmap"   (fn [f p] (core/fmap (fn [v] (unwrap (f v))) (unwrap p)))
      ;; Sound helpers
      "sound"  (fn [bank n] {:bank (unwrap bank) :n (or (unwrap n) 0)})
      "bpm"    (fn [b] (bpm-fn (unwrap b)) nil)
-     ;; Arithmetic — unwrap SourcedVals so numeric ops work
+     ;; Arithmetic and comparison — unwrap SourcedVals
      "+"      (fn [& args] (apply + (map unwrap args)))
      "-"      (fn [& args] (apply - (map unwrap args)))
      "*"      (fn [& args] (apply * (map unwrap args)))
      "/"      (fn [& args] (apply / (map unwrap args)))
+     "="      (fn [& args] (apply = (map unwrap args)))
+     "not="   (fn [& args] (apply not= (map unwrap args)))
+     "<"      (fn [& args] (apply < (map unwrap args)))
+     ">"      (fn [& args] (apply > (map unwrap args)))
+     "<="     (fn [& args] (apply <= (map unwrap args)))
+     ">="     (fn [& args] (apply >= (map unwrap args)))
+     "not"    (fn [x] (not (unwrap x)))
      "stop"   stop-fn
      :*defs*  defs}))
 
