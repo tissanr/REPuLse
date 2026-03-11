@@ -178,7 +178,7 @@ See full spec: [PROMPTS/phase-7-plugins-advanced.md](PROMPTS/phase-7-plugins-adv
 
 ---
 
-## Phase 8 — Song Arrangement Language 📋 *planned*
+## Phase 8 — Song Arrangement Language ✅ *delivered*
 
 A three-layer abstraction for composing full songs: motifs → sections → arrangement.
 Keeps live coding readable as pieces grow beyond a handful of patterns.
@@ -205,6 +205,28 @@ Keeps live coding readable as pieces grow beyond a handful of patterns.
 - Parametric section factories: `(def make-verse (fn [opts] (if (get opts :dense false) ...)))`
 
 See full spec: [PROMPTS/phase-8-song-arrangement.md](PROMPTS/phase-8-song-arrangement.md)
+
+---
+
+## Phase 9 — External Sample Repository Import 📋 *planned*
+
+Load sample banks at runtime from any public GitHub repository or Strudel-compatible
+JSON manifest, directly from the REPL.
+
+**Key additions:**
+- `(samples! "github:owner/repo")` — auto-discovers audio files via the GitHub public tree API, groups by folder name, registers as banks
+- `(samples! "github:owner/repo/branch")` — target a specific branch
+- `(samples! "https://…/samples.json")` — load any Strudel-format manifest JSON
+- `(sample-banks)` — list all currently registered bank names
+- After loading, new banks usable immediately: `(seq :my-kick :my-snare)`
+
+**How GitHub discovery works:**
+Queries `api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1`,
+filters for audio extensions (`.wav`, `.mp3`, `.ogg`, `.flac`, `.aiff`),
+groups files by immediate parent folder name, and fetches samples from
+`raw.githubusercontent.com`. Both endpoints support CORS from the browser.
+
+See full spec: [PROMPTS/phase-9-external-sample-repos.md](PROMPTS/phase-9-external-sample-repos.md)
 
 ---
 

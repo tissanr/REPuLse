@@ -170,6 +170,7 @@ npm run test:core        # cljs.test for packages/core
 | 6b    | Effect plugins — reverb, delay, filter via `(fx ...)`          | not started  |
 | 7     | Advanced plugins — per-pattern routing, MIDI out, recorder     | not started  |
 | 8     | Song arrangement — `arrange`, `play-scenes`, map literals      | ✓ delivered  |
+| 9     | External sample repos — `(samples! "github:owner/repo")`      | not started  |
 
 See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full delivery notes.
 

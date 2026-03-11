@@ -281,5 +281,6 @@ npm workspaces link the three packages together. The dev HTTP server serves
 | **6b** | Effect plugins — reverb, delay, filter, compressor via `(fx ...)` | 📋 planned |
 | **7** | Advanced plugins — per-pattern routing, MIDI out, recorder | 📋 planned |
 | **8** | Song arrangement — `arrange`, `play-scenes`, map literals | ✅ delivered |
+| **9** | External sample repos — `(samples! "github:owner/repo")` | 📋 planned |
 
 See `PROMPTS/` for detailed specifications of each phase.
