@@ -56,7 +56,10 @@ repulse/
 │   ├── lisp/          # REPuLse-Lisp reader + evaluator (CLJS)
 │   └── audio/         # Rust crate → wasm-pack → WASM module
 ├── app/               # Svelte 5 browser app — wires everything together
-├── prompts/           # Phase prompts (one per Claude Code session)
+├── PROMPTS/           # Phase prompts (one per Claude Code session)
+├── docs/              # Architecture, usage, and future-features docs
+├── README.md          # Quick start and language reference
+├── ROADMAP.md         # Detailed phase history and delivery status
 ├── CLAUDE.md          # This file
 ├── package.json       # npm workspaces root
 └── shadow-cljs.edn    # Shared CLJS build config
@@ -154,21 +157,21 @@ npm run test:core        # cljs.test for packages/core
 
 ---
 
-## Current phase
+## Phase status
 
-**Phase 2 — Rust/WASM Synthesis**
-See `prompts/phase-2-rust-wasm.md`
+| Phase | Description                                                    | Status       |
+|-------|----------------------------------------------------------------|--------------|
+| 1     | Monorepo scaffold + first sound (JS)                           | ✓ delivered  |
+| 2     | Rust/WASM synthesis, JS scheduler stays                        | ✓ delivered  |
+| 3     | Rust/WASM moves into AudioWorklet                              | ✓ delivered  |
+| 4     | Live features — named slots, tap BPM, MIDI clock, session URLs | not started  |
+| 5     | Active code highlighting — editor flashes playing tokens       | ✓ delivered  |
+| 6a    | Plugin system + visual plugins (oscilloscope, AnalyserNode)    | not started  |
+| 6b    | Effect plugins — reverb, delay, filter via `(fx ...)`          | not started  |
+| 7     | Advanced plugins — per-pattern routing, MIDI out, recorder     | not started  |
+| 8     | Song arrangement — `arrange`, `play-scenes`, map literals      | ✓ delivered  |
 
-### Phases
-
-| Phase | Description                              | Status      |
-|-------|------------------------------------------|-------------|
-| 1     | Monorepo scaffold + first sound (JS)     | ✓ complete  |
-| 2     | Rust/WASM synthesis, JS scheduler stays  | in progress |
-| 3     | Rust/WASM moves into AudioWorklet        | not started |
-| 4     | Mini-notation (`~` reader macro)         | not started |
-| 5     | Sample loading                           | not started |
-| 6     | Editor polish (CodeMirror extensions)    | not started |
+See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full delivery notes.
 
 ---
 

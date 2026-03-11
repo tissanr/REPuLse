@@ -44,7 +44,7 @@ You'll hear a kick and snare alternating in a loop. To stop:
 ```
 
 > If you skip `npm run build:wasm`, the app still works — it falls back to a JS synthesis
-> engine automatically. You'll see `audio backend: js synthesis` in the browser console.
+> engine automatically. You'll see `[REPuLse] audio backend: clojurescript synthesis` in the browser console.
 
 ---
 
