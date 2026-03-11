@@ -113,6 +113,24 @@ See full spec: [PROMPTS/phase-4-live-features.md](PROMPTS/phase-4-live-features.
 
 ---
 
+## Phase 5 — Active Code Highlighting 📋 *planned*
+
+As a pattern plays, the editor highlights the exact tokens in the source code that are
+generating the current sound — like Strudel.cc.
+
+**How it works:**
+- Reader extended to attach `{:from N :to N}` source ranges to every parsed form
+- Evaluator propagates source ranges from literals into pattern events as `:source`
+- Scheduler fires a `setTimeout` for each event, timed to the event's audio time
+- CodeMirror applies a 120 ms CSS flash (`active-event` class) on the source range
+
+**Example:** for `(seq :bd :sd :hh :sd)`, `:bd` flashes on beat 1, `:sd` on beats 2 and 4,
+`:hh` on beat 3. Works with `stack`, `fast`, `every`, `def`, and numeric frequencies.
+
+See full spec: [PROMPTS/phase-5-active-highlighting.md](PROMPTS/phase-5-active-highlighting.md)
+
+---
+
 ## Future ideas (unscheduled)
 
 - Export to audio file (OfflineAudioContext)
