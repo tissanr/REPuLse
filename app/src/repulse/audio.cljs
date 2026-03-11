@@ -7,24 +7,36 @@
 
 (def ctx (atom nil))
 
-;; WASM AudioEngine instance — nil until loaded
-(defonce wasm-engine (atom nil))
+;; AudioWorklet node — nil until loaded
+(defonce worklet-node (atom nil))
+(defonce worklet-ready? (atom false))
 
-(defn- init-wasm!
-  "Attach to the WASM AudioEngine loaded by index.html's <script type=module>.
-   Closure Compiler can't handle import.meta so wasm-pack output is loaded
-   outside the shadow-cljs pipeline."
+(defn- init-worklet!
+  "Register the AudioWorkletProcessor and load WASM inside it.
+   Falls back to JS synthesis if AudioWorklet is unavailable."
   [ac]
-  (if-let [p (.-__wasmAudioInit js/window)]
-    (-> p
-        (.then (fn [AudioEngine]
-                 (if AudioEngine
-                   (do (reset! wasm-engine (AudioEngine. ac))
-                       (js/console.log "[REPuLse] audio backend: wasm"))
-                   (js/console.warn "[REPuLse] audio backend: js synthesis (WASM file not found)"))))
+  (if-let [worklet (.-audioWorklet ac)]
+    (-> (.addModule worklet "/worklet.js")
+        (.then (fn []
+                 (let [node (js/AudioWorkletNode. ac "repulse-processor")]
+                   (.connect node (.-destination ac))
+                   (reset! worklet-node node)
+                   (set! (.. node -port -onmessage)
+                         (fn [e]
+                           (let [d (.-data e)]
+                             (condp = (.-type d)
+                               "ready" (do (reset! worklet-ready? true)
+                                           (js/console.log "[REPuLse] audio backend: audioworklet+wasm"))
+                               "error" (js/console.warn "[REPuLse] Worklet WASM error:" (.-message d))
+                               nil))))
+                   ;; Send WASM file URLs to the worklet for initialisation
+                   (.. node -port
+                       (postMessage #js {:type          "init"
+                                         :wasmJsUrl     "/repulse_audio.js"
+                                         :wasmBinaryUrl "/repulse_audio_bg.wasm"})))))
         (.catch (fn [e]
-                  (js/console.warn "[REPuLse] audio backend: js synthesis (WASM unavailable)" e))))
-    (js/console.warn "[REPuLse] audio backend: js synthesis (WASM script not loaded)")))
+                  (js/console.warn "[REPuLse] audio backend: clojurescript synthesis (Worklet load failed)" e))))
+    (js/console.warn "[REPuLse] audio backend: clojurescript synthesis (AudioWorklet not supported)")))
 
 (defn- make-audio-context []
   ;; Safari < 14.1 requires the webkit prefix
@@ -36,10 +48,10 @@
   (or @ctx
       (let [c (make-audio-context)]
         (reset! ctx c)
-        (init-wasm! c)
+        (init-worklet! c)
         c)))
 
-;;; Synthesized voices (JS fallback when WASM not available)
+;;; Synthesized voices (JS fallback when AudioWorklet is unavailable)
 
 (defn- make-kick [ac t]
   (let [osc  (.createOscillator ac)
@@ -108,15 +120,16 @@
 
 ;;; Synthesis dispatch
 
-(defn- wasm-trigger!
-  "Schedule a sound via WASM. Returns true if WASM handled it."
+(defn- worklet-trigger!
+  "Send a trigger message to the AudioWorklet. Returns true if worklet is ready."
   [value t]
-  (when-let [eng @wasm-engine]
-    (.trigger ^js eng value t)
+  (when (and @worklet-ready? @worklet-node)
+    (.. @worklet-node -port
+        (postMessage #js {:type "trigger" :value value :time t}))
     true))
 
 (defn- js-synth
-  "JS synthesis fallback."
+  "JS synthesis fallback — used when AudioWorklet is unavailable."
   [ac t value]
   (case value
     :bd (make-kick ac t)
@@ -134,19 +147,19 @@
     (let [{:keys [bank n]} value]
       (if (samples/has-bank? bank)
         (samples/play! ac t bank n)
-        (or (wasm-trigger! (name bank) t)
+        (or (worklet-trigger! (name bank) t)
             (make-sine ac t 440))))
 
-    ;; Keyword — sample registry first, WASM synth second, JS synth fallback
+    ;; Keyword — sample registry first, Worklet synth second, JS fallback
     (keyword? value)
     (cond
       (samples/has-bank? value) (samples/play! ac t value 0)
-      :else (or (wasm-trigger! (name value) t)
+      :else (or (worklet-trigger! (name value) t)
                 (js-synth ac t value)))
 
     ;; Number — frequency in Hz
     (number? value)
-    (or (wasm-trigger! (str value) t)
+    (or (worklet-trigger! (str value) t)
         (make-sine ac t value))
 
     :else (make-sine ac t 440)))
@@ -213,8 +226,8 @@
     (tick!)))
 
 (defn stop! []
-  (when-let [eng @wasm-engine]
-    (.stop_all ^js eng))
+  (when-let [node @worklet-node]
+    (.. node -port (postMessage #js {:type "stop"})))
   (when-let [id (:interval-id @scheduler-state)]
     (js/clearInterval id))
   (swap! scheduler-state assoc

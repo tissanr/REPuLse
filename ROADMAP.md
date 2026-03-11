@@ -65,16 +65,34 @@ See full spec: [PROMPTS/phase-2-rust-wasm.md](PROMPTS/phase-2-rust-wasm.md)
 
 ---
 
-## Phase 3 — AudioWorklet 📋 *planned*
+## Phase 3 — AudioWorklet ✅ *delivered*
 
 Move the WASM module into an `AudioWorkletProcessor` so synthesis runs on the
 dedicated audio thread — eliminating main-thread jank and GC pauses.
 
-**Key changes:**
-- `app/public/worklet.js` — AudioWorkletProcessor that loads WASM
-- `MessagePort` channel: scheduler → Worklet for each event
-- Three-tier fallback: Worklet+WASM → main-thread WASM → JS synthesis
-- Dev tools Performance tab shows work on Audio thread, not Main
+**What changed:**
+- `packages/audio/` — Rust crate rewritten for PCM synthesis; `web-sys` removed entirely
+- `AudioEngine` now accepts `sample_rate: f32` (not an `AudioContext`), generates raw `Float32Array` samples
+- `app/public/worklet.js` — `AudioWorkletProcessor` that loads WASM via dynamic `import()` on the audio thread
+- `MessagePort` channel: main thread → Worklet for `trigger`, `stop`, and `init` messages
+- `app/src/repulse/audio.cljs` — `init-worklet!` replaces `init-wasm!`; `wasm-engine` atom replaced by `worklet-node` + `worklet-ready?`
+- `app/public/index.html` — removed `<script type="module">` WASM bootstrap block
+- Two-tier fallback: Worklet+WASM → JS synthesis (main-thread WASM tier removed)
+- Console shows `[REPuLse] audio backend: audioworklet+wasm` when active
+
+**Synthesis improvements over Phase 2:**
+- All DSP runs on the dedicated audio render thread — zero main-thread audio work
+- `process_block(n_samples, current_time)` called directly from `AudioWorkletProcessor.process()`
+- Pending events are time-stamped and activated sample-accurately within each block
+- Voice lifecycle managed in Rust; `voices.retain(|v| !v.is_silent())` keeps the voice list lean
+
+**Definition of done:**
+- [x] `npm run build:wasm` completes without errors (no `web-sys` dependency)
+- [x] `app/public/worklet.js` registered as `repulse-processor`
+- [x] Browser console shows `[REPuLse] audio backend: audioworklet+wasm`
+- [x] `:bd :sd :hh :oh` play via PCM synthesis on the audio thread
+- [x] `(stop)` clears all voices and pending events in the Worklet
+- [x] JS synthesis fallback active when AudioWorklet is unavailable
 
 See full spec: [PROMPTS/phase-3-audioworklet.md](PROMPTS/phase-3-audioworklet.md)
 

@@ -1,7 +1,5 @@
+use js_sys::Float32Array;
 use wasm_bindgen::prelude::*;
-use web_sys::{AudioBuffer, AudioContext, BiquadFilterType, OscillatorType};
-
-// ─── Console helper ────────────────────────────────────────────────────────────
 
 #[wasm_bindgen]
 extern "C" {
@@ -11,181 +9,245 @@ extern "C" {
     fn warn(s: &str);
 }
 
-// ─── Noise buffer ───────────────────────────────────────────────────────────────
+// ── Biquad filter (Direct Form I) ──────────────────────────────────────────
 
-/// Generate white noise using a simple LCG — no JS Math.random().
-fn generate_noise(ctx: &AudioContext, duration_secs: f32) -> Result<AudioBuffer, JsValue> {
-    let sample_rate = ctx.sample_rate();
-    let length = (sample_rate * duration_secs) as u32;
-    let buffer = ctx.create_buffer(1, length, sample_rate)?;
-
-    let mut state: u32 = 0xDEAD_BEEF;
-    let mut data: Vec<f32> = Vec::with_capacity(length as usize);
-    for _ in 0..length {
-        state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-        let sample = (state as f32 / u32::MAX as f32).mul_add(2.0, -1.0);
-        data.push(sample);
-    }
-    buffer.copy_to_channel(&data, 0)?;
-
-    Ok(buffer)
+struct Biquad {
+    b0: f32, b1: f32, b2: f32,
+    a1: f32, a2: f32,
+    x1: f32, x2: f32,
+    y1: f32, y2: f32,
 }
 
-// ─── AudioEngine ────────────────────────────────────────────────────────────────
+impl Biquad {
+    fn bandpass(freq: f32, q: f32, sr: f32) -> Self {
+        let w0 = 2.0 * std::f32::consts::PI * freq / sr;
+        let alpha = w0.sin() / (2.0 * q);
+        let cos_w0 = w0.cos();
+        let a0 = 1.0 + alpha;
+        Biquad {
+            b0: alpha / a0, b1: 0.0, b2: -alpha / a0,
+            a1: -2.0 * cos_w0 / a0, a2: (1.0 - alpha) / a0,
+            x1: 0.0, x2: 0.0, y1: 0.0, y2: 0.0,
+        }
+    }
+
+    fn highpass(freq: f32, q: f32, sr: f32) -> Self {
+        let w0 = 2.0 * std::f32::consts::PI * freq / sr;
+        let alpha = w0.sin() / (2.0 * q);
+        let cos_w0 = w0.cos();
+        let a0 = 1.0 + alpha;
+        let b0 = (1.0 + cos_w0) / 2.0;
+        Biquad {
+            b0: b0 / a0, b1: -(1.0 + cos_w0) / a0, b2: b0 / a0,
+            a1: -2.0 * cos_w0 / a0, a2: (1.0 - alpha) / a0,
+            x1: 0.0, x2: 0.0, y1: 0.0, y2: 0.0,
+        }
+    }
+
+    fn tick(&mut self, x: f32) -> f32 {
+        let y = self.b0 * x + self.b1 * self.x1 + self.b2 * self.x2
+              - self.a1 * self.y1 - self.a2 * self.y2;
+        self.x2 = self.x1; self.x1 = x;
+        self.y2 = self.y1; self.y1 = y;
+        y
+    }
+}
+
+// ── LCG noise ──────────────────────────────────────────────────────────────
+
+fn lcg_next(state: &mut u32) -> f32 {
+    *state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+    (*state as f32 / u32::MAX as f32).mul_add(2.0, -1.0)
+}
+
+// ── Decay rate: reach 1e-5 from 1.0 over `dur_secs` ──────────────────────
+
+fn decay_rate(dur_secs: f32, sr: f32) -> f32 {
+    let n = (dur_secs * sr).max(1.0);
+    (1e-5_f32).powf(1.0 / n)
+}
+
+// ── Active voices ──────────────────────────────────────────────────────────
+
+enum Voice {
+    Kick {
+        phase: f64,
+        freq: f64,
+        freq_decay: f64,
+        freq_floor: f64,
+        gain: f32,
+        gain_decay: f32,
+    },
+    Snare {
+        noise_state: u32,
+        bpf: Biquad,
+        gain: f32,
+        gain_decay: f32,
+        // Sine crack component
+        phase: f64,
+        tone_gain: f32,
+        tone_gain_decay: f32,
+    },
+    Hihat {
+        noise_state: u32,
+        hpf: Biquad,
+        gain: f32,
+        gain_decay: f32,
+    },
+    Tone {
+        phase: f64,
+        freq: f64,
+        gain: f32,
+        gain_decay: f32,
+    },
+}
+
+impl Voice {
+    fn tick(&mut self, sr: f32) -> f32 {
+        use std::f64::consts::TAU;
+        match self {
+            Voice::Kick { phase, freq, freq_decay, freq_floor, gain, gain_decay } => {
+                *freq = (*freq * *freq_decay).max(*freq_floor);
+                let s = (*phase * TAU).sin() as f32;
+                *phase += *freq / sr as f64;
+                let out = s * *gain;
+                *gain *= *gain_decay;
+                out
+            }
+            Voice::Snare { noise_state, bpf, gain, gain_decay, phase, tone_gain, tone_gain_decay } => {
+                let body = bpf.tick(lcg_next(noise_state)) * *gain;
+                *gain *= *gain_decay;
+                let crack = (*phase * TAU).sin() as f32 * *tone_gain * 0.35;
+                *phase += 180.0 / sr as f64;
+                *tone_gain *= *tone_gain_decay;
+                body + crack
+            }
+            Voice::Hihat { noise_state, hpf, gain, gain_decay } => {
+                let out = hpf.tick(lcg_next(noise_state)) * *gain;
+                *gain *= *gain_decay;
+                out
+            }
+            Voice::Tone { phase, freq, gain, gain_decay } => {
+                let s = (*phase * TAU).sin() as f32;
+                *phase += *freq / sr as f64;
+                let out = s * *gain;
+                *gain *= *gain_decay;
+                out
+            }
+        }
+    }
+
+    fn is_silent(&self) -> bool {
+        let g = match self {
+            Voice::Kick { gain, .. } | Voice::Snare { gain, .. }
+            | Voice::Hihat { gain, .. } | Voice::Tone { gain, .. } => *gain,
+        };
+        g < 1e-5
+    }
+}
+
+// ── Pending event ──────────────────────────────────────────────────────────
+
+struct Pending { time: f64, value: String }
+
+// ── AudioEngine ────────────────────────────────────────────────────────────
 
 #[wasm_bindgen]
 pub struct AudioEngine {
-    ctx: AudioContext,
-    noise_buf: AudioBuffer,
+    sample_rate: f32,
+    voices: Vec<Voice>,
+    pending: Vec<Pending>,
+    noise_seed: u32,
 }
 
 #[wasm_bindgen]
 impl AudioEngine {
     #[wasm_bindgen(constructor)]
-    pub fn new(ctx: AudioContext) -> AudioEngine {
-        let noise_buf = generate_noise(&ctx, 2.0).expect("noise buffer creation failed");
-        log("[REPuLse WASM] audio engine ready");
-        AudioEngine { ctx, noise_buf }
+    pub fn new(sample_rate: f32) -> AudioEngine {
+        log(&format!("[REPuLse WASM] PCM engine ready (sr={})", sample_rate));
+        AudioEngine { sample_rate, voices: Vec::new(), pending: Vec::new(), noise_seed: 0xDEAD_BEEF }
     }
 
-    /// Schedule a sound event.
-    /// `value`: ":bd", ":sd", ":hh", ":oh", or a frequency in Hz as a string.
-    /// `time`: AudioContext.currentTime to schedule at.
-    pub fn trigger(&self, value: &str, time: f64) {
-        let v = value.trim_start_matches(':');
-        let result = match v {
-            "bd" => self.play_kick(time),
-            "sd" => self.play_snare(time),
-            "hh" => self.play_hihat(time, false),
-            "oh" => self.play_hihat(time, true),
-            other => {
-                let freq = other.parse::<f64>().unwrap_or(440.0);
-                self.play_tone(time, freq)
-            }
-        };
-        if let Err(e) = result {
-            warn(&format!("[REPuLse WASM] trigger error for '{}': {:?}", value, e));
+    /// Schedule a sound event at the given AudioContext time.
+    pub fn trigger(&mut self, value: &str, time: f64) {
+        self.pending.push(Pending { time, value: value.to_string() });
+    }
+
+    /// Generate one audio quantum. Returns a Float32Array of `n_samples` mono samples.
+    /// `current_time` = AudioWorkletGlobalScope.currentTime at the block start.
+    pub fn process_block(&mut self, n_samples: u32, current_time: f64) -> Float32Array {
+        let sr = self.sample_rate;
+        let n = n_samples as usize;
+        let block_end = current_time + n as f64 / sr as f64;
+
+        // Activate pending events whose scheduled time falls in this block
+        let pending = std::mem::take(&mut self.pending);
+        let mut deferred = Vec::new();
+        for p in pending {
+            if p.time < block_end { self.activate(&p.value); }
+            else { deferred.push(p); }
         }
+        self.pending = deferred;
+
+        // Generate samples
+        let mut buf = vec![0.0f32; n];
+        for s in buf.iter_mut() {
+            let mut sum = 0.0f32;
+            for v in self.voices.iter_mut() { sum += v.tick(sr); }
+            *s = sum.clamp(-1.0, 1.0);
+        }
+        self.voices.retain(|v| !v.is_silent());
+
+        let arr = Float32Array::new_with_length(n_samples);
+        arr.copy_from(&buf);
+        arr
     }
 
-    pub fn stop_all(&self) {
-        // Envelopes are all ≤500ms; scheduled nodes stop themselves.
-        // Full stop-tracking would be added in Phase 3 (AudioWorklet).
+    pub fn stop_all(&mut self) {
+        self.voices.clear();
+        self.pending.clear();
     }
 }
 
-// ─── Private synthesis impl ─────────────────────────────────────────────────────
-
 impl AudioEngine {
-    /// Kick drum: sine sweep 150 → 40 Hz with gain decay.
-    fn play_kick(&self, t: f64) -> Result<(), JsValue> {
-        let ctx = &self.ctx;
-        let osc = ctx.create_oscillator()?;
-        let gain = ctx.create_gain()?;
-
-        osc.set_type(OscillatorType::Sine);
-        osc.frequency().set_value_at_time(150.0, t)?;
-        osc.frequency().exponential_ramp_to_value_at_time(40.0, t + 0.06)?;
-
-        gain.gain().set_value_at_time(1.0, t)?;
-        gain.gain().exponential_ramp_to_value_at_time(0.001, t + 0.4)?;
-
-        osc.connect_with_audio_node(&gain)?;
-        gain.connect_with_audio_node(&ctx.destination())?;
-        osc.start_with_when(t)?;
-        osc.stop_with_when(t + 0.4)?;
-
-        Ok(())
+    fn next_seed(&mut self) -> u32 {
+        self.noise_seed = self.noise_seed
+            .wrapping_mul(1_664_525)
+            .wrapping_add(1_013_904_223);
+        self.noise_seed
     }
 
-    /// Snare: bandpass noise (body) + sine tone (crack).
-    #[allow(deprecated)]
-    fn play_snare(&self, t: f64) -> Result<(), JsValue> {
-        let ctx = &self.ctx;
-
-        // — noise body —
-        let src = ctx.create_buffer_source()?;
-        src.set_buffer(Some(&self.noise_buf));
-        src.set_loop(true);
-
-        let bpf = ctx.create_biquad_filter()?;
-        bpf.set_type(BiquadFilterType::Bandpass);
-        bpf.frequency().set_value(200.0);
-        bpf.q().set_value(0.7);
-
-        let gain = ctx.create_gain()?;
-        gain.gain().set_value_at_time(0.9, t)?;
-        gain.gain().exponential_ramp_to_value_at_time(0.001, t + 0.2)?;
-
-        src.connect_with_audio_node(&bpf)?;
-        bpf.connect_with_audio_node(&gain)?;
-        gain.connect_with_audio_node(&ctx.destination())?;
-        src.start_with_when(t)?;
-        src.stop_with_when(t + 0.2)?;
-
-        // — sine crack (180 Hz body tone) —
-        let tone = ctx.create_oscillator()?;
-        tone.set_type(OscillatorType::Sine);
-        tone.frequency().set_value(180.0);
-
-        let tgain = ctx.create_gain()?;
-        tgain.gain().set_value_at_time(0.35, t)?;
-        tgain.gain().exponential_ramp_to_value_at_time(0.001, t + 0.1)?;
-
-        tone.connect_with_audio_node(&tgain)?;
-        tgain.connect_with_audio_node(&ctx.destination())?;
-        tone.start_with_when(t)?;
-        tone.stop_with_when(t + 0.1)?;
-
-        Ok(())
-    }
-
-    /// Hi-hat (closed or open): highpass noise, short or long decay.
-    #[allow(deprecated)]
-    fn play_hihat(&self, t: f64, open: bool) -> Result<(), JsValue> {
-        let ctx = &self.ctx;
-        let decay: f64 = if open { 0.35 } else { 0.045 };
-        let vol: f32 = if open { 0.35 } else { 0.5 };
-
-        let src = ctx.create_buffer_source()?;
-        src.set_buffer(Some(&self.noise_buf));
-        src.set_loop(true);
-
-        let hpf = ctx.create_biquad_filter()?;
-        hpf.set_type(BiquadFilterType::Highpass);
-        hpf.frequency().set_value(8_000.0);
-
-        let gain = ctx.create_gain()?;
-        gain.gain().set_value_at_time(vol, t)?;
-        gain.gain().exponential_ramp_to_value_at_time(0.001, t + decay)?;
-
-        src.connect_with_audio_node(&hpf)?;
-        hpf.connect_with_audio_node(&gain)?;
-        gain.connect_with_audio_node(&ctx.destination())?;
-        src.start_with_when(t)?;
-        src.stop_with_when(t + decay)?;
-
-        Ok(())
-    }
-
-    /// Sine tone at the given frequency (Hz).
-    fn play_tone(&self, t: f64, freq: f64) -> Result<(), JsValue> {
-        let ctx = &self.ctx;
-
-        let osc = ctx.create_oscillator()?;
-        let gain = ctx.create_gain()?;
-
-        osc.set_type(OscillatorType::Sine);
-        osc.frequency().set_value(freq as f32);
-
-        gain.gain().set_value_at_time(0.5, t)?;
-        gain.gain().exponential_ramp_to_value_at_time(0.001, t + 0.3)?;
-
-        osc.connect_with_audio_node(&gain)?;
-        gain.connect_with_audio_node(&ctx.destination())?;
-        osc.start_with_when(t)?;
-        osc.stop_with_when(t + 0.3)?;
-
-        Ok(())
+    fn activate(&mut self, value: &str) {
+        let sr = self.sample_rate;
+        let seed = self.next_seed();
+        match value.trim_start_matches(':') {
+            "bd" => {
+                let sweep_samples = 0.06 * sr as f64;
+                self.voices.push(Voice::Kick {
+                    phase: 0.0, freq: 150.0, freq_floor: 40.0,
+                    freq_decay: (40.0_f64 / 150.0).powf(1.0 / sweep_samples),
+                    gain: 1.0, gain_decay: decay_rate(0.4, sr),
+                });
+            }
+            "sd" => self.voices.push(Voice::Snare {
+                noise_state: seed, bpf: Biquad::bandpass(200.0, 0.7, sr),
+                gain: 0.9, gain_decay: decay_rate(0.2, sr),
+                phase: 0.0, tone_gain: 1.0, tone_gain_decay: decay_rate(0.1, sr),
+            }),
+            "hh" => self.voices.push(Voice::Hihat {
+                noise_state: seed, hpf: Biquad::highpass(8000.0, 0.7, sr),
+                gain: 0.5, gain_decay: decay_rate(0.045, sr),
+            }),
+            "oh" => self.voices.push(Voice::Hihat {
+                noise_state: seed, hpf: Biquad::highpass(8000.0, 0.7, sr),
+                gain: 0.35, gain_decay: decay_rate(0.35, sr),
+            }),
+            other => {
+                let freq = other.parse::<f64>().unwrap_or(440.0);
+                self.voices.push(Voice::Tone {
+                    phase: 0.0, freq, gain: 0.5, gain_decay: decay_rate(0.3, sr),
+                });
+            }
+        }
     }
 }
