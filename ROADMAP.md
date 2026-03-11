@@ -131,12 +131,55 @@ See full spec: [PROMPTS/phase-5-active-highlighting.md](PROMPTS/phase-5-active-h
 
 ---
 
+## Phase 6a — Plugin System + Visual Plugins 📋 *planned*
+
+A lightweight plugin API and the first plugin type: visual plugins that receive the audio
+stream and draw to a canvas — like Strudel's oscilloscope and spectrum views.
+
+**Key additions:**
+- Plugin registry (`plugins.cljs`) — register, list, unregister plugins by name
+- Host API object passed to every plugin on `init` (audioCtx, analyser, registerLisp)
+- Permanent `AnalyserNode` tap on the master bus (no audible change)
+- Plugin panel DOM (collapsible, below the editor)
+- Built-in **oscilloscope** plugin (`app/public/plugins/oscilloscope.js`)
+- `(load-plugin url)` Lisp built-in — dynamically imports a third-party plugin
+
+See full spec: [PROMPTS/phase-6a-plugins-visual.md](PROMPTS/phase-6a-plugins-visual.md)
+
+---
+
+## Phase 6b — Effect Plugins 📋 *planned*
+
+The second plugin type: Web Audio nodes inserted into the master signal chain, addressable
+from the Lisp REPL via `(fx :name ...)`.
+
+**Key additions:**
+- Effect plugin interface — `createNodes`, `setParam`, `bypass`, `destroy`
+- Graph manager (`fx.cljs`) — inserts/rewires effect nodes cleanly, with dry/wet bypass
+- Four built-in effects: **reverb**, **delay**, **filter**, **compressor**
+- `(fx :reverb 0.4)` / `(fx :delay 0.25 0.5)` / `(fx :off :reverb)` Lisp built-ins
+
+See full spec: [PROMPTS/phase-6b-plugins-effects.md](PROMPTS/phase-6b-plugins-effects.md)
+
+---
+
+## Phase 7 — Advanced Plugins 📋 *planned*
+
+Per-pattern effect routing, MIDI output, and audio recording.
+
+**Key additions:**
+- Named pattern slots with independent gain nodes (`slots.cljs`)
+- `(with-fx :slot-name ...)` — per-slot effects chain before the master bus
+- **MIDI output plugin** — route pattern events to hardware via Web MIDI API
+- **Recorder plugin** — ⏺ record button captures master output to a downloadable file
+- `(record)` / `(record-stop)` Lisp built-ins
+
+See full spec: [PROMPTS/phase-7-plugins-advanced.md](PROMPTS/phase-7-plugins-advanced.md)
+
+---
+
 ## Future ideas (unscheduled)
 
-- Export to audio file (OfflineAudioContext)
-- MIDI / OSC output
-- Sample recording and upload
-- Collaborative session (WebRTC)
-- Mobile layout
-- Syntax highlighting for REPuLse-Lisp in CodeMirror
-- Community pattern library (share/import)
+See [docs/FUTURE-FEATURES.md](docs/FUTURE-FEATURES.md) for the full list, including
+additional visual plugins, effect ideas, MIDI/OSC/CV integration, export options,
+language features, and collaboration tools.
