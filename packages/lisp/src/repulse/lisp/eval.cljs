@@ -65,14 +65,16 @@
     (symbol? form)
     (let [n    (str form)
           defs (some-> (:*defs* env) deref)]
-      (or (when (contains? env n)   (get env n))
-          (when (contains? defs n)  (get defs n))
-          (let [known (concat (filter string? (keys env))
-                              (filter string? (keys defs)))]
-            (throw (ex-info (str "Undefined symbol: " n
-                                 (when-let [h (typo-hint n known)]
-                                   (str " — did you mean " h "?")))
-                            {:type :eval-error})))))
+      (cond
+        (contains? env n)   (get env n)
+        (contains? defs n)  (get defs n)
+        :else
+        (let [known (concat (filter string? (keys env))
+                            (filter string? (keys defs)))]
+          (throw (ex-info (str "Undefined symbol: " n
+                               (when-let [h (typo-hint n known)]
+                                 (str " — did you mean " h "?")))
+                          {:type :eval-error})))))
 
     (seq? form)
     (let [[head & tail] form]
