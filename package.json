@@ -5,10 +5,13 @@
   "workspaces": [
     "packages/core",
     "packages/lisp",
+    "packages/audio/pkg",
     "app"
   ],
   "scripts": {
+    "build:wasm": "wasm-pack build packages/audio --target web --out-dir pkg",
     "dev": "npx shadow-cljs watch app",
+    "dev:full": "npm run build:wasm && npx shadow-cljs watch app",
     "test": "npx shadow-cljs compile test && node out/test.js"
   },
   "devDependencies": {

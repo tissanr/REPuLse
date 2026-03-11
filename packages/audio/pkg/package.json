@@ -1,0 +1,8 @@
+{
+  "name": "repulse-audio",
+  "version": "0.1.0",
+  "description": "REPuLse WASM audio engine — run `npm run build:wasm` to populate",
+  "main": "repulse_audio.js",
+  "module": "repulse_audio.js",
+  "files": ["repulse_audio.js", "repulse_audio_bg.wasm", "repulse_audio_bg.js"]
+}
