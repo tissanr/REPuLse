@@ -11,6 +11,21 @@
 (defonce worklet-node (atom nil))
 (defonce worklet-ready? (atom false))
 
+;; Master signal chain: sources → master-gain → analyser → destination
+(defonce master-gain   (atom nil))
+(defonce analyser-node (atom nil))
+
+(defn- build-master-chain! [ac]
+  (let [gain (doto (.createGain ac)
+               (-> .-gain (.setValueAtTime 1.0 (.-currentTime ac))))
+        anl  (doto (.createAnalyser ac)
+               (aset "fftSize" 2048)
+               (aset "smoothingTimeConstant" 0.8))]
+    (.connect gain anl)
+    (.connect anl (.-destination ac))
+    (reset! master-gain gain)
+    (reset! analyser-node anl)))
+
 (defn- init-worklet!
   "Register the AudioWorkletProcessor and load WASM inside it.
    Falls back to JS synthesis if AudioWorklet is unavailable."
@@ -19,7 +34,7 @@
     (-> (.addModule worklet "/worklet.js")
         (.then (fn []
                  (let [node (js/AudioWorkletNode. ac "repulse-processor")]
-                   (.connect node (.-destination ac))
+                   (.connect node @master-gain)
                    (reset! worklet-node node)
                    (set! (.. node -port -onmessage)
                          (fn [e]
@@ -48,10 +63,14 @@
   (or @ctx
       (let [c (make-audio-context)]
         (reset! ctx c)
+        (build-master-chain! c)
         (init-worklet! c)
         c)))
 
 ;;; Synthesized voices (JS fallback when AudioWorklet is unavailable)
+
+(defn- output-node [ac]
+  (or @master-gain (.-destination ac)))
 
 (defn- make-kick [ac t]
   (let [osc  (.createOscillator ac)
@@ -62,7 +81,7 @@
     (.setValueAtTime (.-gain gain) 1.0 t)
     (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t 0.4))
     (.connect osc gain)
-    (.connect gain (.-destination ac))
+    (.connect gain (output-node ac))
     (.start osc t)
     (.stop osc (+ t 0.4))))
 
@@ -82,7 +101,7 @@
     (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t 0.2))
     (.connect src bpf)
     (.connect bpf gain)
-    (.connect gain (.-destination ac))
+    (.connect gain (output-node ac))
     (.start src t)
     (.stop src (+ t 0.2))))
 
@@ -102,7 +121,7 @@
     (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t 0.045))
     (.connect src hpf)
     (.connect hpf gain)
-    (.connect gain (.-destination ac))
+    (.connect gain (output-node ac))
     (.start src t)
     (.stop src (+ t 0.045))))
 
@@ -114,7 +133,7 @@
     (.setValueAtTime (.-gain gain) 0.5 t)
     (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t 0.3))
     (.connect osc gain)
-    (.connect gain (.-destination ac))
+    (.connect gain (output-node ac))
     (.start osc t)
     (.stop osc (+ t 0.3))))
 

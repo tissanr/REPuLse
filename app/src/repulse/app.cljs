@@ -3,6 +3,7 @@
             [repulse.lisp.eval :as leval]
             [repulse.audio :as audio]
             [repulse.samples :as samples]
+            [repulse.plugins :as plugins]
             ["@codemirror/view" :refer [EditorView Decoration keymap lineNumbers]]
             ["@codemirror/state" :refer [EditorState StateEffect StateField]]
             ["@codemirror/commands" :refer [defaultKeymap historyKeymap history]]
@@ -97,6 +98,22 @@
 (defonce env-atom
   (atom nil))
 
+;;; Plugin support
+
+(defn make-host []
+  #js {:audioCtx    (audio/get-ctx)
+       :analyser    @audio/analyser-node
+       :masterGain  @audio/master-gain
+       :sampleRate  (.-sampleRate (audio/get-ctx))
+       :version     "1.0.0"
+       :registerLisp (fn [name f]
+                       (swap! env-atom assoc name f))})
+
+(defn mount-visual! [plugin]
+  (let [panel (el "plugin-panel")]
+    (.mount plugin panel)
+    (.remove (.-classList panel) "hidden")))
+
 (defn make-stop-fn []
   (fn []
     (audio/stop!)
@@ -107,7 +124,19 @@
 (defn ensure-env! []
   (when (nil? @env-atom)
     (samples/init!)
-    (reset! env-atom (leval/make-env (make-stop-fn) audio/set-bpm!))))
+    (reset! env-atom
+            (assoc (leval/make-env (make-stop-fn) audio/set-bpm!)
+                   "load-plugin"
+                   (fn [url]
+                     (-> (js/import url)
+                         (.then (fn [m]
+                                  (let [plug (.-default m)]
+                                    (plugins/register! plug (make-host))
+                                    (when (= "visual" (.-type plug))
+                                      (mount-visual! plug)))))
+                         (.catch (fn [e]
+                                   (js/console.warn "[REPuLse] Plugin load failed:" e))))
+                     nil)))))
 
 ;;; Evaluation
 
@@ -184,6 +213,7 @@
                "  </div>"
                "</header>"
                "<div id=\"editor-container\" class=\"editor-container\"></div>"
+               "<div id=\"plugin-panel\" class=\"plugin-panel hidden\"></div>"
                "<footer>"
                "  <span id=\"output\" class=\"output\">ready &mdash; Ctrl+Enter or click play</span>"
                "  <span class=\"hint\">Ctrl+Enter to eval</span>"
@@ -196,8 +226,15 @@
   (let [container (el "editor-container")
         view (make-editor container "(seq :bd :sd :bd :sd)" evaluate!)]
     (reset! editor-view view)
-    ;; Focus editor
-    (.focus view)))
+    (.focus view))
+  ;; Auto-load built-in oscilloscope plugin
+  (-> (js/import "/plugins/oscilloscope.js")
+      (.then (fn [m]
+               (let [plug (.-default m)]
+                 (plugins/register! plug (make-host))
+                 (mount-visual! plug))))
+      (.catch (fn [e]
+                (js/console.warn "[REPuLse] oscilloscope load failed:" e)))))
 
 (defn reload []
   ;; Hot-reload hook: re-attach evaluate! without rebuilding the DOM

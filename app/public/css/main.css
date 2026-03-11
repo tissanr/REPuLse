@@ -125,6 +125,29 @@ footer {
   margin-left: auto;
 }
 
+/* Plugin panel — shown below the editor when visual plugins are active */
+.plugin-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  background: #0a0a0a;
+  border-top: 1px solid #222;
+  padding: 4px;
+  min-height: 88px;
+}
+
+.plugin-panel.hidden {
+  display: none;
+}
+
+.plugin-panel canvas {
+  flex: 1;
+  min-width: 200px;
+  height: 80px;
+  background: #111;
+  border-radius: 3px;
+}
+
 /* Active code highlighting — flashes when a pattern event fires */
 .active-event {
   background-color: rgba(255, 200, 50, 0.35);
