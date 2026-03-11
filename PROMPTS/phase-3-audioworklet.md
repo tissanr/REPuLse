@@ -1,4 +1,4 @@
-# REPuLse — AudioWorklet Phase (Phase 3)
+# REPuLse — AudioWorklet Phase (Phase 3) (delivered)
 
 ## Context
 

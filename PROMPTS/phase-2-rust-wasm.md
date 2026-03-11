@@ -1,4 +1,4 @@
-# REPuLse — Rust/WASM Audio Layer (Phase 2) (dev)
+# REPuLse — Rust/WASM Audio Layer (Phase 2) (delivered)
 
 ## Context
 

@@ -1,4 +1,4 @@
-# REPuLse — Active Code Highlighting (Phase 5)
+# REPuLse — Active Code Highlighting (Phase 5) (delivered)
 
 ## Context
 
