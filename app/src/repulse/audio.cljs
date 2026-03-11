@@ -21,9 +21,15 @@
       (.catch (fn [e]
                 (js/console.warn "[REPuLse] audio backend: js synthesis (WASM unavailable)" e)))))
 
+(defn- make-audio-context []
+  ;; Safari < 14.1 requires the webkit prefix
+  (let [ctor (or (.-AudioContext js/window)
+                 (.-webkitAudioContext js/window))]
+    (new ctor)))
+
 (defn get-ctx []
   (or @ctx
-      (let [c (js/AudioContext.)]
+      (let [c (make-audio-context)]
         (reset! ctx c)
         (init-wasm! c)
         c)))
@@ -185,11 +191,13 @@
 
 (defn start! [pattern on-beat-fn]
   (let [ac (get-ctx)]
-    (when (= "suspended" (.-state ac))
-      (.resume ac))
+    ;; Always call resume — Safari suspends the context even when state = "running"
+    (.resume ac)
     (let [now       (.-currentTime ac)
           cycle-dur (:cycle-dur @scheduler-state)
-          start-cycle (int (Math/ceil (/ now cycle-dur)))]
+          ;; Use floor so we start at the current cycle, not next one.
+          ;; tick! will skip events already in the past via the (> t now) guard.
+          start-cycle (int (Math/floor (/ now cycle-dur)))]
       (swap! scheduler-state assoc
              :playing?    true
              :pattern     pattern
