@@ -15,10 +15,11 @@ Browser REPL with ClojureScript pattern engine and Web Audio synthesis.
 - Strudel CDN sample library (Dirt-Samples + Tidal Drum Machines)
 - `(sound :bank n)` for indexed sample access, `(bpm N)` for tempo, `:_` rest
 - Core unit tests (6 tests, 18 assertions)
+- Safari compatibility: `webkitAudioContext` fallback, unconditional `.resume()`, improved first-play timing
 
 ---
 
-## Phase 2 — Rust/WASM Synthesis 🔧 *in progress*
+## Phase 2 — Rust/WASM Synthesis 🔧 *in progress* (source complete, build pending)
 
 Replace JS oscillator synthesis with a Rust/WASM module for better sound quality.
 Sample loading from the Strudel CDN is unchanged.
@@ -57,8 +58,8 @@ Or in one step: `npm run dev:full`
 - [ ] `npm run build:wasm` completes without errors
 - [ ] Browser console shows `[REPuLse] audio backend: wasm`
 - [ ] `:bd :sd :hh :oh` sound noticeably better than Phase 1
-- [ ] `(stop)` stops sound immediately
-- [ ] Fallback verified (JS synthesis when WASM unavailable)
+- [x] `(stop)` stops sound immediately
+- [x] Fallback verified (JS synthesis when WASM unavailable — confirmed Firefox, Chrome, Safari)
 
 See full spec: [PROMPTS/phase-2-rust-wasm.md](PROMPTS/phase-2-rust-wasm.md)
 
