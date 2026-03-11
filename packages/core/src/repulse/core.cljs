@@ -138,3 +138,33 @@
        (if (zero? (mod cycle n))
          (query (transform pat) sp)
          (query pat sp))))))
+
+(defn arrange*
+  "plan: [[pattern cycles] ...]
+   Returns a Pattern that plays each section in order, looping after the total duration."
+  [plan]
+  (let [timeline (reduce
+                   (fn [acc [pat dur]]
+                     (let [prev (:to (last acc) 0)]
+                       (conj acc {:pat pat :from prev :to (+ prev dur)})))
+                   [] plan)
+        total    (or (:to (last timeline)) 1)]
+    (pattern
+     (fn [{:keys [start end]}]
+       (let [g-cycle  (int (Math/floor (rat->float start)))
+             lc       (mod g-cycle total)
+             loop-off (- g-cycle lc)
+             entry    (some #(when (and (>= lc (:from %)) (< lc (:to %))) %) timeline)]
+         (when entry
+           (let [sec-off     (:from entry)
+                 offset      (+ loop-off sec-off)
+                 local-start (rat+ start [(- offset) 1])
+                 local-end   (rat+ end   [(- offset) 1])
+                 evs         (query (:pat entry) {:start local-start :end local-end})]
+             (map (fn [e]
+                    (-> e
+                        (update :whole #(span (rat+ (:start %) [offset 1])
+                                              (rat+ (:end   %) [offset 1])))
+                        (update :part  #(span (rat+ (:start %) [offset 1])
+                                              (rat+ (:end   %) [offset 1])))))
+                  evs))))))))

@@ -49,3 +49,21 @@
     (let [evs (c/query (c/fmap name (c/seq* [:bd :sd]))
                        (c/span (c/int->rat 0) (c/int->rat 1)))]
       (is (= "bd" (:value (first evs)))))))
+
+(deftest arrange-test
+  (testing "arrange* plays sections in order"
+    (let [a   (c/pure :a)
+          b   (c/pure :b)
+          arr (c/arrange* [[a 2] [b 2]])]
+      ;; Cycle 0: section a
+      (is (= [:a] (map :value (c/query arr (c/cycle-span 0)))))
+      ;; Cycle 1: still section a (it runs for 2 cycles)
+      (is (= [:a] (map :value (c/query arr (c/cycle-span 1)))))
+      ;; Cycle 2: section b
+      (is (= [:b] (map :value (c/query arr (c/cycle-span 2)))))
+      ;; Cycle 3: still section b
+      (is (= [:b] (map :value (c/query arr (c/cycle-span 3)))))
+      ;; Cycle 4: loops back to a
+      (is (= [:a] (map :value (c/query arr (c/cycle-span 4)))))
+      ;; Cycle 6: loops back to b
+      (is (= [:b] (map :value (c/query arr (c/cycle-span 6))))))))

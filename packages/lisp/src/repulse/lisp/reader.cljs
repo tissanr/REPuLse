@@ -100,6 +100,20 @@
         (= \] ch) (do (advance r) forms)
         :else     (recur (conj forms (read-form r)))))))
 
+(defn read-map [r]
+  (advance r) ; consume {
+  (loop [m {}]
+    (skip-ws-comments r)
+    (let [ch (peek-char r)]
+      (cond
+        (nil? ch) (throw (ex-info "Unterminated map" {:type :read-error}))
+        (= \} ch) (do (advance r) m)
+        :else
+        (let [k (read-form r)
+              _ (skip-ws-comments r)
+              v (read-form r)]
+          (recur (assoc m k v)))))))
+
 ;; read-form* is the raw reader — no source annotation.
 ;; It does NOT call skip-ws-comments (the outer read-form does).
 (defn read-form* [r]
@@ -110,6 +124,7 @@
       (= \: ch)      (read-keyword r)
       (= \( ch)      (read-list r)
       (= \[ ch)      (read-vector r)
+      (= \{ ch)      (read-map r)
       (digit? ch)    (read-number r)
       (= \- ch)      (do
                        (advance r)
@@ -133,7 +148,7 @@
     (if (= result ::eof)
       ::eof
       (cond
-        (or (seq? result) (vector? result) (symbol? result))
+        (or (seq? result) (vector? result) (map? result) (symbol? result))
         (with-meta result {:source {:from from :to to}})
         :else
         (->SourcedVal result {:from from :to to})))))

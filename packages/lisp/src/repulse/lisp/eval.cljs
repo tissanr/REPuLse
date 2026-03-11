@@ -56,6 +56,12 @@
     (vector? form)
     (mapv #(eval-form % env) form)
 
+    (map? form)
+    (into {} (map (fn [[k v]]
+                    [(unwrap (eval-form k env))
+                     (unwrap (eval-form v env))])
+                  form))
+
     (symbol? form)
     (let [n    (str form)
           defs (some-> (:*defs* env) deref)]
@@ -138,6 +144,24 @@
      "<="     (fn [& args] (apply <= (map unwrap args)))
      ">="     (fn [& args] (apply >= (map unwrap args)))
      "not"    (fn [x] (not (unwrap x)))
+     ;; Map operations
+     "get"    (fn [m k & rest]
+                (let [m' (unwrap m)
+                      k' (unwrap k)]
+                  (if (seq rest)
+                    (get m' k' (unwrap (first rest)))
+                    (get m' k'))))
+     "assoc"  (fn [m k v] (assoc (unwrap m) (unwrap k) (unwrap v)))
+     "merge"  (fn [& ms]  (apply merge (map unwrap ms)))
+     "keys"   (fn [m]     (keys (unwrap m)))
+     "vals"   (fn [m]     (vals (unwrap m)))
+     ;; Song arrangement
+     "arrange"     (fn [plan]
+                     (core/arrange*
+                       (mapv (fn [[pat dur]] [(unwrap pat) (unwrap dur)]) plan)))
+     "play-scenes" (fn [sections]
+                     (core/arrange*
+                       (mapv (fn [pat] [(unwrap pat) 1]) sections)))
      "stop"   stop-fn
      :*defs*  defs}))
 
