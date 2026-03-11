@@ -8,6 +8,13 @@
 </head>
 <body>
   <div id="app"></div>
+  <!-- Load WASM outside Closure/shadow-cljs — import.meta not supported by Closure -->
+  <script type="module">
+    import init, { AudioEngine } from '/repulse_audio.js';
+    window.__wasmAudioInit = init('/repulse_audio_bg.wasm')
+      .then(() => AudioEngine)
+      .catch(() => null);
+  </script>
   <script src="/js/main.js"></script>
 </body>
 </html>

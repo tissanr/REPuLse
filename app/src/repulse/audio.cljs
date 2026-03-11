@@ -1,7 +1,6 @@
 (ns repulse.audio
   (:require [repulse.core :as core]
-            [repulse.samples :as samples]
-            ["repulse-audio" :as wasm]))
+            [repulse.samples :as samples]))
 
 ;; Web Audio API scheduler
 ;; Based on Chris Wilson's "A Tale of Two Clocks"
@@ -12,16 +11,20 @@
 (defonce wasm-engine (atom nil))
 
 (defn- init-wasm!
-  "Load the WASM synthesis module. Falls back to JS synthesis on failure."
+  "Attach to the WASM AudioEngine loaded by index.html's <script type=module>.
+   Closure Compiler can't handle import.meta so wasm-pack output is loaded
+   outside the shadow-cljs pipeline."
   [ac]
-  ;; Pass the explicit URL so it works regardless of where shadow-cljs
-  ;; places the JS bundle (import.meta.url is /js/main.js, not /repulse_audio_bg.wasm).
-  (-> ((.-default wasm) "/repulse_audio_bg.wasm")
-      (.then (fn [_]
-               (reset! wasm-engine (wasm/AudioEngine. ac))
-               (js/console.log "[REPuLse] audio backend: wasm")))
-      (.catch (fn [e]
-                (js/console.warn "[REPuLse] audio backend: js synthesis (WASM unavailable)" e)))))
+  (if-let [p (.-__wasmAudioInit js/window)]
+    (-> p
+        (.then (fn [AudioEngine]
+                 (if AudioEngine
+                   (do (reset! wasm-engine (AudioEngine. ac))
+                       (js/console.log "[REPuLse] audio backend: wasm"))
+                   (js/console.warn "[REPuLse] audio backend: js synthesis (WASM file not found)"))))
+        (.catch (fn [e]
+                  (js/console.warn "[REPuLse] audio backend: js synthesis (WASM unavailable)" e))))
+    (js/console.warn "[REPuLse] audio backend: js synthesis (WASM script not loaded)")))
 
 (defn- make-audio-context []
   ;; Safari < 14.1 requires the webkit prefix

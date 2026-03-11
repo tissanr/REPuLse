@@ -9,7 +9,7 @@
     "app"
   ],
   "scripts": {
-    "build:wasm": "wasm-pack build packages/audio --target web --out-dir pkg && cp packages/audio/pkg/repulse_audio_bg.wasm app/public/repulse_audio_bg.wasm",
+    "build:wasm": "wasm-pack build packages/audio --target web --out-dir pkg && cp packages/audio/pkg/repulse_audio_bg.wasm app/public/repulse_audio_bg.wasm && cp packages/audio/pkg/repulse_audio.js app/public/repulse_audio.js",
     "dev": "npx shadow-cljs watch app",
     "dev:full": "npm run build:wasm && npx shadow-cljs watch app",
     "test": "npx shadow-cljs compile test && node out/test.js"
