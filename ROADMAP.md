@@ -113,7 +113,7 @@ See full spec: [PROMPTS/phase-4-live-features.md](PROMPTS/phase-4-live-features.
 
 ---
 
-## Phase 5 — Active Code Highlighting 📋 *planned*
+## Phase 5 — Active Code Highlighting ✅ *delivered*
 
 As a pattern plays, the editor highlights the exact tokens in the source code that are
 generating the current sound — like Strudel.cc.
