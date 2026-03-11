@@ -128,7 +128,7 @@
             (assoc (leval/make-env (make-stop-fn) audio/set-bpm!)
                    "load-plugin"
                    (fn [url]
-                     (-> (js/import url)
+                     (-> (js* "import(~{})" url)
                          (.then (fn [m]
                                   (let [plug (.-default m)]
                                     (plugins/register! plug (make-host))
@@ -228,7 +228,7 @@
     (reset! editor-view view)
     (.focus view))
   ;; Auto-load built-in oscilloscope plugin
-  (-> (js/import "/plugins/oscilloscope.js")
+  (-> (js* "import('/plugins/oscilloscope.js')")
       (.then (fn [m]
                (let [plug (.-default m)]
                  (plugins/register! plug (make-host))
