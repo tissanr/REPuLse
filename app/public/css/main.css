@@ -124,3 +124,10 @@ footer {
   color: var(--dim);
   margin-left: auto;
 }
+
+/* Active code highlighting — flashes when a pattern event fires */
+.active-event {
+  background-color: rgba(255, 200, 50, 0.35);
+  border-radius: 2px;
+  transition: background-color 0.08s ease-out;
+}

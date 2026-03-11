@@ -1,5 +1,17 @@
 (ns repulse.lisp.eval
-  (:require [repulse.core :as core]))
+  (:require [repulse.core :as core]
+            [repulse.lisp.reader :as reader]))
+
+;;; Source-tracking helpers
+
+(defn- sourced? [x] (instance? reader/SourcedVal x))
+(defn- unwrap  [x] (if (sourced? x) (:v x) x))
+(defn- source-of [x]
+  (if (sourced? x)
+    (:source x)
+    (:source (meta x))))
+
+;;; Levenshtein / typo hints
 
 (defn levenshtein [a b]
   (let [m (count a) n (count b)
@@ -33,6 +45,10 @@
 
 (defn eval-form [form env]
   (cond
+    ;; SourcedVal from reader — treat as literal, pass through as-is
+    (sourced? form)
+    form
+
     (or (number? form) (string? form) (keyword? form)
         (true? form) (false? form) (nil? form))
     form
@@ -76,7 +92,8 @@
 
         "if"
         (let [[c t e] tail]
-          (if (eval-form c env)
+          ;; unwrap needed: a SourcedVal wrapping false/nil would be truthy as a record
+          (if (unwrap (eval-form c env))
             (eval-form t env)
             (when e (eval-form e env))))
 
@@ -95,22 +112,25 @@
 
 (defn make-env [stop-fn bpm-fn]
   (let [defs (atom {})]
-    {"seq"    (fn [& vs] (core/seq* (vec vs)))
-     "stack"  (fn [& ps] (core/stack* (vec ps)))
-     "pure"   core/pure
-     "fast"   (fn [f p] (core/fast f p))
-     "slow"   (fn [f p] (core/slow f p))
-     "rev"    core/rev
-     "every"  (fn [n t p] (core/every n t p))
-     "fmap"   (fn [f p] (core/fmap f p))
+    {"seq"    (fn [& vs]
+                (let [srcs (mapv source-of vs)
+                      vals (mapv unwrap vs)]
+                  (core/seq* vals srcs)))
+     "stack"  (fn [& ps] (core/stack* (mapv unwrap ps)))
+     "pure"   (fn [v] (core/pure (unwrap v) (source-of v)))
+     "fast"   (fn [f p] (core/fast (unwrap f) (unwrap p)))
+     "slow"   (fn [f p] (core/slow (unwrap f) (unwrap p)))
+     "rev"    (fn [p] (core/rev (unwrap p)))
+     "every"  (fn [n t p] (core/every (unwrap n) t (unwrap p)))
+     "fmap"   (fn [f p] (core/fmap f (unwrap p)))
      ;; Sound helpers
-     "sound"  (fn [bank n] {:bank bank :n (or n 0)})
-     "bpm"    (fn [b] (bpm-fn b) nil)
-     ;; Arithmetic
-     "+"      +
-     "-"      -
-     "*"      *
-     "/"      /
+     "sound"  (fn [bank n] {:bank (unwrap bank) :n (or (unwrap n) 0)})
+     "bpm"    (fn [b] (bpm-fn (unwrap b)) nil)
+     ;; Arithmetic — unwrap SourcedVals so numeric ops work
+     "+"      (fn [& args] (apply + (map unwrap args)))
+     "-"      (fn [& args] (apply - (map unwrap args)))
+     "*"      (fn [& args] (apply * (map unwrap args)))
+     "/"      (fn [& args] (apply / (map unwrap args)))
      "stop"   stop-fn
      :*defs*  defs}))
 

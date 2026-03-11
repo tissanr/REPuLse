@@ -173,7 +173,8 @@
          :cycle-dur   2.0   ; seconds per cycle — 120 BPM, 1 cycle = 1 bar (4 beats)
          :lookahead   0.2   ; look-ahead in seconds
          :interval-id nil
-         :on-beat     nil}))
+         :on-beat     nil
+         :on-event    nil}))  ; (fn [{:keys [from to]}]) called per event at event time
 
 (defn set-bpm!
   "Set the tempo in BPM. One cycle = one bar (4 beats)."
@@ -181,7 +182,7 @@
   (swap! scheduler-state assoc :cycle-dur (/ 240.0 bpm)))
 
 (defn schedule-cycle! [ac state cycle]
-  (let [{:keys [pattern cycle-dur on-beat]} state
+  (let [{:keys [pattern cycle-dur on-beat on-event]} state
         sp {:start [cycle 1] :end [(inc cycle) 1]}]
     (when pattern
       (let [evs (core/query pattern sp)]
@@ -192,6 +193,9 @@
                 t (+ cycle-audio-start event-offset)]
             (when (> t (.-currentTime ac))
               (play-event ac t (:value ev))
+              (when (and on-event (:source ev))
+                (let [delay-ms (max 0 (* 1000 (- t (.-currentTime ac))))]
+                  (js/setTimeout #(on-event (:source ev)) delay-ms)))
               (when on-beat
                 (let [delay-ms (* 1000 (- t (.-currentTime ac)))]
                   (js/setTimeout on-beat delay-ms))))))))))
@@ -207,7 +211,7 @@
           (schedule-cycle! ac state cycle)
           (swap! scheduler-state update :cycle inc))))))
 
-(defn start! [pattern on-beat-fn]
+(defn start! [pattern on-beat-fn on-event-fn]
   (let [ac (get-ctx)]
     ;; Always call resume — Safari suspends the context even when state = "running"
     (.resume ac)
@@ -220,7 +224,8 @@
              :playing?    true
              :pattern     pattern
              :cycle       start-cycle
-             :on-beat     on-beat-fn))
+             :on-beat     on-beat-fn
+             :on-event    on-event-fn))
     (let [id (js/setInterval tick! 25)]
       (swap! scheduler-state assoc :interval-id id))
     (tick!)))

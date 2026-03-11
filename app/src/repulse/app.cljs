@@ -3,8 +3,8 @@
             [repulse.lisp.eval :as leval]
             [repulse.audio :as audio]
             [repulse.samples :as samples]
-            ["@codemirror/view" :refer [EditorView keymap lineNumbers]]
-            ["@codemirror/state" :refer [EditorState]]
+            ["@codemirror/view" :refer [EditorView Decoration keymap lineNumbers]]
+            ["@codemirror/state" :refer [EditorState StateEffect StateField]]
             ["@codemirror/commands" :refer [defaultKeymap historyKeymap history]]
             ["@codemirror/theme-one-dark" :refer [oneDark]]))
 
@@ -33,6 +33,65 @@
     (.add (.-classList dot) "flash")
     (js/setTimeout #(.remove (.-classList dot) "flash") 80)))
 
+;;; Active code highlighting — CodeMirror 6 decoration infrastructure
+
+;; A StateEffect that replaces the entire active-highlights DecorationSet.
+(def set-highlights-effect (.define StateEffect))
+
+;; A StateField that holds the current DecorationSet of active event highlights.
+(def highlights-field
+  (.define StateField
+    #js {:create   (fn [_] (.-none Decoration))
+         :update   (fn [decs tr]
+                     (let [mapped (.map decs (.-changes tr))]
+                       (if-let [eff (some #(when (.is % set-highlights-effect) %)
+                                          (array-seq (.-effects tr)))]
+                         (.-value eff)
+                         mapped)))
+         :provide  (fn [f] (.from EditorView.decorations f))}))
+
+;; The CSS class applied to active tokens.
+(def active-mark (.mark Decoration #js {:class "active-event"}))
+
+;; Atom holding currently active source ranges: [{:from N :to N} ...]
+(defonce active-ranges (atom []))
+
+(defonce editor-view (atom nil))
+
+(defn- rebuild-decorations! [view]
+  (let [ranges  (sort-by :from @active-ranges)
+        range-objs (keep (fn [{:keys [from to]}]
+                           (try (.range active-mark from to)
+                                (catch :default _ nil)))
+                         ranges)
+        deco-set (if (seq range-objs)
+                   (.set Decoration (clj->js range-objs))
+                   (.-none Decoration))]
+    (.dispatch view #js {:effects #js [(.of set-highlights-effect deco-set)]})))
+
+(defn highlight-range! [{:keys [from to]}]
+  (when-let [view @editor-view]
+    (let [doc-len (.. view -state -doc -length)
+          from'   (min from doc-len)
+          to'     (min to   doc-len)]
+      (when (< from' to')
+        (swap! active-ranges conj {:from from' :to to'})
+        (rebuild-decorations! view)
+        ;; Remove this range after 120 ms
+        (js/setTimeout
+          (fn []
+            (swap! active-ranges
+                   (fn [rs]
+                     (filterv #(not (and (= (:from %) from') (= (:to %) to'))) rs)))
+            (when-let [v @editor-view]
+              (rebuild-decorations! v)))
+          120)))))
+
+(defn clear-highlights! []
+  (reset! active-ranges [])
+  (when-let [view @editor-view]
+    (rebuild-decorations! view)))
+
 ;;; Environment — created once, reused across evaluations
 
 (defonce env-atom
@@ -41,6 +100,7 @@
 (defn make-stop-fn []
   (fn []
     (audio/stop!)
+    (clear-highlights!)
     (set-playing! false)
     (set-output! "stopped" :idle)))
 
@@ -57,14 +117,17 @@
   (let [env (assoc @env-atom "stop" (make-stop-fn))
         result (lisp/eval-string code env)]
     (if-let [err (:error result)]
-      (set-output! (str "Error: " err) :error)
+      (do
+        (clear-highlights!)
+        (set-output! (str "Error: " err) :error))
       (let [val (:result result)]
         (cond
           ;; Pattern — start playing
           (and (map? val) (fn? (:query val)))
           (do
             (audio/stop!)
-            (audio/start! val on-beat)
+            (clear-highlights!)
+            (audio/start! val on-beat highlight-range!)
             (set-playing! true)
             (set-output! "playing pattern — Ctrl+Enter to re-evaluate, (stop) to stop" :success))
 
@@ -74,8 +137,6 @@
 
           :else
           (set-output! (str "=> " (pr-str val)) :success))))))
-
-(defonce editor-view (atom nil))
 
 ;;; CodeMirror editor
 
@@ -87,6 +148,7 @@
         extensions #js [(history)
                         (lineNumbers)
                         oneDark
+                        highlights-field
                         (.-lineWrapping EditorView)
                         (.of keymap (.concat
                                      (clj->js defaultKeymap)
@@ -104,6 +166,7 @@
   (if (audio/playing?)
     ;; Stop
     (do (audio/stop!)
+        (clear-highlights!)
         (set-playing! false)
         (set-output! "stopped" :idle))
     ;; Evaluate current editor content and start

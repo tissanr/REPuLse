@@ -54,33 +54,40 @@
 
 ;;; Core combinators
 
-(defn pure [value]
-  (pattern
-   (fn [{:keys [start end]}]
-     (let [start-c (int (Math/floor (rat->float start)))
-           end-c   (int (Math/ceil  (rat->float end)))]
-       (for [c (range start-c end-c)
-             :let [whole (cycle-span c)
-                   part  (span-intersect whole (span start end))]
-             :when part]
-         (event value whole part))))))
+(defn pure
+  ([value] (pure value nil))
+  ([value source]
+   (pattern
+    (fn [{:keys [start end]}]
+      (let [start-c (int (Math/floor (rat->float start)))
+            end-c   (int (Math/ceil  (rat->float end)))]
+        (for [c (range start-c end-c)
+              :let [whole (cycle-span c)
+                    part  (span-intersect whole (span start end))]
+              :when part]
+          (let [base (event value whole part)]
+            (if source (assoc base :source source) base))))))))
 
-(defn seq* [values]
-  (let [n (count values)]
-    (if (zero? n)
-      (pattern (fn [_] []))
-      (pattern
-       (fn [{:keys [start end] :as sp}]
-         (let [start-c (int (Math/floor (rat->float start)))
-               end-c   (int (Math/ceil  (rat->float end)))]
-           (for [c (range start-c end-c)
-                 i (range n)
-                 :let [s (rat (+ (* c n) i) n)
-                       e (rat (+ (* c n) (inc i)) n)
-                       whole (span s e)
-                       part  (span-intersect whole sp)]
-                 :when part]
-             (event (nth values i) whole part))))))))
+(defn seq*
+  ([values] (seq* values nil))
+  ([values sources]
+   (let [n (count values)]
+     (if (zero? n)
+       (pattern (fn [_] []))
+       (pattern
+        (fn [{:keys [start end] :as sp}]
+          (let [start-c (int (Math/floor (rat->float start)))
+                end-c   (int (Math/ceil  (rat->float end)))]
+            (for [c (range start-c end-c)
+                  i (range n)
+                  :let [s (rat (+ (* c n) i) n)
+                        e (rat (+ (* c n) (inc i)) n)
+                        whole (span s e)
+                        part  (span-intersect whole sp)]
+                  :when part]
+              (let [base (event (nth values i) whole part)
+                    src  (when sources (nth sources i nil))]
+                (if src (assoc base :source src) base))))))))))
 
 (defn stack* [pats]
   (pattern

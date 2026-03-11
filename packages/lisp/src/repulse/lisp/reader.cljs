@@ -1,5 +1,10 @@
 (ns repulse.lisp.reader)
 
+;; SourcedVal: wraps a primitive literal with its source character range.
+;; Primitives (keywords, numbers, strings, booleans, nil) cannot carry ClojureScript
+;; metadata, so we box them in this record to thread source positions through eval.
+(defrecord SourcedVal [v source])
+
 (defn whitespace? [ch]
   (contains? #{\space \newline \tab \return \,} ch))
 
@@ -95,8 +100,9 @@
         (= \] ch) (do (advance r) forms)
         :else     (recur (conj forms (read-form r)))))))
 
-(defn read-form [r]
-  (skip-ws-comments r)
+;; read-form* is the raw reader — no source annotation.
+;; It does NOT call skip-ws-comments (the outer read-form does).
+(defn read-form* [r]
   (let [ch (peek-char r)]
     (cond
       (nil? ch)      ::eof
@@ -115,6 +121,22 @@
                            (read-symbol r))))
       (sym-char? ch) (read-symbol r)
       :else          (throw (ex-info (str "Unexpected char: " ch) {:type :read-error})))))
+
+;; read-form: skip whitespace, capture source range, then wrap result.
+;; - Collections (list, vector) and symbols support with-meta.
+;; - Primitives (keyword, number, string, boolean, nil) are wrapped in SourcedVal.
+(defn read-form [r]
+  (skip-ws-comments r)
+  (let [from @(:pos r)
+        result (read-form* r)
+        to @(:pos r)]
+    (if (= result ::eof)
+      ::eof
+      (cond
+        (or (seq? result) (vector? result) (symbol? result))
+        (with-meta result {:source {:from from :to to}})
+        :else
+        (->SourcedVal result {:from from :to to})))))
 
 (defn read-all [src]
   (let [r {:src src :pos (atom 0)}]
