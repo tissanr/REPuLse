@@ -90,7 +90,7 @@
     :else
     (throw (ex-info (str "Cannot evaluate: " (pr-str form)) {:type :eval-error}))))
 
-(defn make-env [stop-fn]
+(defn make-env [stop-fn bpm-fn]
   (let [defs (atom {})]
     {"seq"    (fn [& vs] (core/seq* (vec vs)))
      "stack"  (fn [& ps] (core/stack* (vec ps)))
@@ -100,6 +100,10 @@
      "rev"    core/rev
      "every"  (fn [n t p] (core/every n t p))
      "fmap"   (fn [f p] (core/fmap f p))
+     ;; Sound helpers
+     "sound"  (fn [bank n] {:bank bank :n (or n 0)})
+     "bpm"    (fn [b] (bpm-fn b) nil)
+     ;; Arithmetic
      "+"      +
      "-"      -
      "*"      *

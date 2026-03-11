@@ -1,0 +1,468 @@
+# REPuLse — Usage Reference
+
+REPuLse is a browser-based live coding instrument. You write patterns in a minimal Lisp,
+evaluate them with **Ctrl+Enter** (or the **▶ play** button), and hear them loop in real time.
+
+---
+
+## Table of Contents
+
+1. [Getting started](#getting-started)
+2. [The editor](#the-editor)
+3. [Language basics](#language-basics)
+4. [Pattern functions](#pattern-functions)
+5. [Sound and samples](#sound-and-samples)
+6. [Tempo control](#tempo-control)
+7. [Combining patterns](#combining-patterns)
+8. [Defining names](#defining-names)
+9. [Available sample banks](#available-sample-banks)
+10. [Error messages](#error-messages)
+11. [Examples](#examples)
+
+---
+
+## Getting started
+
+```bash
+npm install
+npx shadow-cljs watch app
+# open http://localhost:3000
+```
+
+Type an expression in the editor and press **Ctrl+Enter** (macOS: **Cmd+Enter**) or click **▶ play**.
+
+To stop: type `(stop)` and evaluate it, or click **■ stop**.
+
+---
+
+## The editor
+
+| Key | Action |
+|---|---|
+| **Ctrl+Enter** / **Cmd+Enter** | Evaluate the entire buffer and start playback |
+| **Ctrl+Z** / **Cmd+Z** | Undo |
+| **Ctrl+Shift+Z** / **Cmd+Shift+Z** | Redo |
+
+The **footer line** shows the last result or error. The **dot** in the header pulses on each beat
+when a pattern is playing.
+
+The **▶ play** / **■ stop** button in the header evaluates the current editor content and
+toggles playback.
+
+---
+
+## Language basics
+
+REPuLse-Lisp is a minimal Lisp. Every expression is either a literal or a function call.
+
+### Literals
+
+```lisp
+42          ; integer
+3.14        ; float
+"hello"     ; string
+:bd         ; keyword  — the main way to name sounds
+true false  ; booleans
+nil         ; null
+```
+
+### Function calls
+
+```lisp
+(function arg1 arg2 ...)
+```
+
+### Arithmetic
+
+```lisp
+(+ 1 2)        ; => 3
+(* 2 (+ 3 4))  ; => 14
+(/ 1 3)        ; => 0.333...
+```
+
+### Local bindings — `let`
+
+```lisp
+(let [x 4
+      y 2]
+  (fast x (seq :bd :sd)))
+```
+
+### Anonymous functions — `fn`
+
+```lisp
+(fn [x] (fast x (seq :bd :sd)))
+```
+
+### Top-level definitions — `def`
+
+```lisp
+(def kick (seq :bd :_ :bd :_))
+(def snare (seq :_ :sd :_ :sd))
+(stack kick snare)
+```
+
+`def` bindings persist for the session. Re-evaluate to update them.
+
+---
+
+## Pattern functions
+
+A **Pattern** is a pure function from a time span to a list of events. Evaluating a pattern
+expression starts playback; evaluating a non-pattern expression (a number, string, etc.)
+just prints the result.
+
+### `seq` — sequence
+
+Spread values evenly across one cycle (one bar):
+
+```lisp
+(seq :bd :sd :bd :sd)        ; kick snare kick snare, 4 per bar
+(seq :bd :sd :hh :sd :hh)    ; 5 notes per bar (odd metres work fine)
+(seq 220 440 330 550)         ; tone sequence in Hz
+```
+
+### `stack` — layer
+
+Play multiple patterns simultaneously:
+
+```lisp
+(stack (seq :bd :bd :bd :bd)
+       (seq :_ :sd :_ :sd)
+       (seq :hh :hh :hh :hh))
+```
+
+### `pure` — single value
+
+One value repeated every cycle:
+
+```lisp
+(pure :bd)    ; one kick per bar
+```
+
+### `fast` — speed up
+
+```lisp
+(fast 2 (seq :hh :hh))    ; double speed — 4 hats per bar
+(fast 0.5 (seq :bd :sd))  ; half speed — one hit every 2 bars
+```
+
+### `slow` — slow down
+
+```lisp
+(slow 2 (seq :bd :sd :bd :sd))    ; half speed
+(slow 3 (pure :bd))               ; one kick every 3 bars
+```
+
+### `rev` — reverse
+
+Reverse event order within each cycle:
+
+```lisp
+(rev (seq :bd :sd :hh :cp))    ; cp hh sd bd
+```
+
+### `every` — conditional transform
+
+Apply a transformation every nth cycle, leave pattern unchanged otherwise:
+
+```lisp
+(every 4 (fast 2) (seq :bd :sd))   ; double speed on every 4th bar
+(every 2 rev (seq :bd :hh :sd :hh)) ; reverse every other bar
+```
+
+### `fmap` — transform values
+
+Apply a function to every event value:
+
+```lisp
+(fmap (fn [x] (if (= x :bd) 80 440)) (seq :bd :sd))
+; plays 80 Hz on bd events and 440 Hz on sd events
+```
+
+---
+
+## Sound and samples
+
+REPuLse loads the **TidalCycles Dirt-Samples** and the **Tidal Drum Machines** sample library
+automatically from Strudel's CDN when the app starts. Samples are fetched and cached on first use.
+
+### Keywords as sounds
+
+Any keyword is looked up as a sample bank name:
+
+```lisp
+(seq :bd :sd :hh :cp)     ; kick, snare, hi-hat, clap
+(seq :arpy :arpy :arpy)   ; arpeggio synth
+(seq :bass)               ; bass
+```
+
+If the sample bank doesn't exist, REPuLse falls back to a 440 Hz sine tone.
+
+### Silence / rest
+
+Use `:_` for a silent step:
+
+```lisp
+(seq :bd :_ :sd :_)    ; kick on 1, snare on 3
+```
+
+### Numbers as frequencies
+
+Numbers are treated as Hz and played as a sine tone:
+
+```lisp
+(seq 110 220 330 440)     ; ascending tones
+(pure 60)                  ; 60 Hz drone
+```
+
+### `sound` — pick a specific sample from a bank
+
+Most sample banks contain multiple variations (different kit sounds). Use `sound` to pick one:
+
+```lisp
+(sound :bd 0)     ; first bd sample (same as :bd alone)
+(sound :bd 3)     ; fourth bd sample
+(sound :arpy 5)   ; sixth arpy sample
+
+; Use in sequences:
+(seq (sound :bd 0) (sound :bd 2) (sound :sd 1) :hh)
+```
+
+### Built-in synthesis fallback
+
+These four keywords always work even if samples haven't loaded yet:
+
+| Keyword | Synthesis |
+|---|---|
+| `:bd` | Low sine burst (kick drum) |
+| `:sd` | Bandpass-filtered noise (snare) |
+| `:hh` | Highpass-filtered noise (hi-hat) |
+
+---
+
+## Tempo control
+
+### `bpm` — beats per minute
+
+Default tempo is **120 BPM** (one cycle = one bar = 4 beats = 2 seconds).
+
+```lisp
+(bpm 140)                       ; set tempo to 140 BPM
+(bpm 90)                        ; slow it down
+(stack (bpm 160) (seq :bd :sd)) ; set tempo and play together
+```
+
+`bpm` takes effect immediately, even mid-playback. One cycle = one bar regardless of BPM.
+
+---
+
+## Combining patterns
+
+Patterns can be composed freely:
+
+```lisp
+; Layered groove
+(stack
+  (seq :bd :_ :bd :_)
+  (seq :_ :sd :_ :sd)
+  (fast 2 (seq :hh :_)))
+
+; Polyrhythm — 3 against 4
+(stack
+  (seq :bd :bd :bd)
+  (seq :hh :hh :hh :hh))
+
+; Conditional variation
+(every 4 (fast 2)
+  (stack (seq :bd :sd) (seq :hh :hh :hh :hh)))
+
+; Reverse every other bar
+(every 2 rev (seq :bd :hh :sd :oh))
+```
+
+---
+
+## Defining names
+
+`def` binds a name in the current session:
+
+```lisp
+(def kick  (seq :bd :_ :bd :_))
+(def snare (seq :_ :sd :_ :sd))
+(def hats  (fast 2 (seq :hh :_)))
+
+(stack kick snare hats)
+```
+
+After re-evaluating a `def`, any pattern that references it will use the new value on the
+next cycle.
+
+`let` is for local, non-persistent bindings:
+
+```lisp
+(let [n 3
+      base (seq :bd :sd :hh)]
+  (every n (fast 2) base))
+```
+
+---
+
+## Available sample banks
+
+Sample banks are loaded from the **Dirt-Samples** and **Tidal Drum Machines** collections.
+They are available after a short initial network fetch.
+
+### Dirt-Samples (classic TidalCycles sounds)
+
+| Bank | Description |
+|---|---|
+| `:bd` | Bass drum / kick |
+| `:sd` | Snare drum |
+| `:hh` | Closed hi-hat |
+| `:oh` | Open hi-hat |
+| `:cp` | Clap |
+| `:cb` | Cowbell |
+| `:cr` | Crash cymbal |
+| `:ride` | Ride cymbal |
+| `:lt` `:mt` `:ht` | Low / mid / high tom |
+| `:arpy` | Arpeggio synth |
+| `:bass` `:bass0`–`:bass3` | Various bass sounds |
+| `:moog` | Moog synthesizer |
+| `:jvbass` | Bass guitar |
+| `:feel` | Texture / feel samples |
+| `:house` | House music hits |
+| `:tink` | Tink / high percussive |
+| `:peri` | Peridactyl synth |
+| `:glitch` | Glitch/noise textures |
+| `:birds` | Bird sounds |
+| `:alphabet` | Spoken letters |
+| `:numbers` | Spoken numbers |
+| `:diphone` | Speech diphones |
+| `:gabba` | Gabba kick |
+| `:tabla` | Tabla |
+| `:tabla2` | Tabla variation |
+| `:casio` | Casio keyboard |
+| `:flick` | Flick/snap |
+| `:psr` | PSR keyboard |
+| `:electro1` | Electro hits |
+| `:rave` `:rave2` | Rave stabs |
+| `:space` | Space textures |
+| `:metal` | Metal hits |
+| `:can` | Metal can percussion |
+| `:drum` | Drum machine hits |
+| `:v` | Vocal hits |
+
+### Tidal Drum Machines (full kit names)
+
+These use the format `:<MachineModel>_<part>`:
+
+```lisp
+(seq :RolandTR808_bd :RolandTR808_sd :RolandTR808_hh :RolandTR808_cp)
+(seq :RolandTR909_bd :RolandTR909_sd)
+(seq :AkaiRhythm99_bd :AkaiRhythm99_sd)
+```
+
+Common drum machines in the library include: `RolandTR808`, `RolandTR909`, `RolandTR606`,
+`RolandTR707`, `LinnDrum`, `AkaiMPC60`, `EmuDrumulator`, `KorgKR55`, `YamahaRX5`, and many more.
+
+Use `(sound :RolandTR808_bd 2)` to pick from multiple kit variations.
+
+---
+
+## Error messages
+
+REPuLse shows structured errors in the footer:
+
+```
+Error: Undefined symbol: fsat — did you mean fast?
+Error: Unterminated list
+Error: seq is not a function  (when called wrong)
+```
+
+Typo detection uses Levenshtein distance — if your symbol is within 3 edits of a known
+name, a suggestion is shown.
+
+---
+
+## Examples
+
+### Basic beat
+
+```lisp
+(seq :bd :sd :bd :sd)
+```
+
+### Four-on-the-floor
+
+```lisp
+(stack
+  (seq :bd :bd :bd :bd)
+  (seq :_ :sd :_ :sd)
+  (fast 2 (seq :hh :_)))
+```
+
+### Triplet feel
+
+```lisp
+(seq :bd :hh :hh :sd :hh :hh)
+```
+
+### Polyrhythm
+
+```lisp
+(stack
+  (seq :bd :_ :bd :_ :bd)   ; 5-beat kick
+  (seq :hh :hh :hh :hh))    ; 4-beat hats
+```
+
+### Evolving pattern
+
+```lisp
+(every 4 (fast 2)
+  (every 2 rev
+    (stack (seq :bd :sd :bd :sd)
+           (fast 2 (seq :hh :oh)))))
+```
+
+### Drum machine sounds
+
+```lisp
+(bpm 128)
+(stack
+  (seq :RolandTR808_bd :_ :RolandTR808_bd :_)
+  (seq :_ :RolandTR808_sd :_ :RolandTR808_sd)
+  (fast 2 (seq :RolandTR808_hh :RolandTR808_oh)))
+```
+
+### Tone melody
+
+```lisp
+(bpm 100)
+(seq 220 277 330 415 330 277 220 165)
+```
+
+### Combining samples and synthesis
+
+```lisp
+(stack
+  (seq :bd :_ :bd :_)
+  (seq 440 330 220 165))
+```
+
+### Using `def` for structure
+
+```lisp
+(def kick  (seq :bd :_ :bd :bd))
+(def snare (seq :_ :sd :_ :sd))
+(def hats  (fast 4 (seq :hh :_ :hh :oh)))
+(def fill  (every 4 (fast 2) (seq :bd :bd :sd :sd :hh :hh :cp :cp)))
+
+(stack kick snare hats fill)
+```
+
+### Stopping
+
+```lisp
+(stop)
+```

@@ -1,5 +1,6 @@
 (ns repulse.audio
-  (:require [repulse.core :as core]))
+  (:require [repulse.core :as core]
+            [repulse.samples :as samples]))
 
 ;; Web Audio API scheduler
 ;; Based on Chris Wilson's "A Tale of Two Clocks"
@@ -81,9 +82,25 @@
 
 (defn play-event [ac t value]
   (cond
-    (= value :bd)   (make-kick ac t)
-    (= value :sd)   (make-snare ac t)
-    (= value :hh)   (make-hihat ac t)
+    ;; Silence / rest
+    (= value :_)    nil
+
+    ;; Map with :bank key — e.g. {:bank :bd :n 2} from (sound :bd 2)
+    (and (map? value) (:bank value))
+    (let [{:keys [bank n]} value]
+      (if (samples/has-bank? bank)
+        (samples/play! ac t bank n)
+        (make-sine ac t 440)))
+
+    ;; Keyword — look up in sample registry first, fall back to synth
+    (keyword? value)
+    (cond
+      (samples/has-bank? value) (samples/play! ac t value 0)
+      (= value :bd)             (make-kick ac t)
+      (= value :sd)             (make-snare ac t)
+      (= value :hh)             (make-hihat ac t)
+      :else                     (make-sine ac t 440))
+
     (number? value) (make-sine ac t value)
     :else           (make-sine ac t 440)))
 
@@ -93,10 +110,15 @@
   (atom {:playing?    false
          :pattern     nil
          :cycle       0
-         :cycle-dur   0.5   ; seconds per cycle (120 BPM, 1 cycle = 1 bar)
-         :lookahead   0.1   ; look-ahead in seconds
+         :cycle-dur   2.0   ; seconds per cycle — 120 BPM, 1 cycle = 1 bar (4 beats)
+         :lookahead   0.2   ; look-ahead in seconds
          :interval-id nil
          :on-beat     nil}))
+
+(defn set-bpm!
+  "Set the tempo in BPM. One cycle = one bar (4 beats)."
+  [bpm]
+  (swap! scheduler-state assoc :cycle-dur (/ 240.0 bpm)))
 
 (defn schedule-cycle! [ac state cycle]
   (let [{:keys [pattern cycle-dur on-beat]} state

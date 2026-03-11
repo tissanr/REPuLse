@@ -2,6 +2,7 @@
   (:require [repulse.lisp.core :as lisp]
             [repulse.lisp.eval :as leval]
             [repulse.audio :as audio]
+            [repulse.samples :as samples]
             ["@codemirror/view" :refer [EditorView keymap lineNumbers]]
             ["@codemirror/state" :refer [EditorState]]
             ["@codemirror/commands" :refer [defaultKeymap historyKeymap history]]
@@ -20,7 +21,12 @@
   (when-let [dot (el "playing-dot")]
     (if playing?
       (.add (.-classList dot) "active")
-      (.remove (.-classList dot) "active"))))
+      (.remove (.-classList dot) "active")))
+  (when-let [btn (el "play-btn")]
+    (set! (.-textContent btn) (if playing? "■ stop" "▶ play"))
+    (if playing?
+      (.add (.-classList btn) "active")
+      (.remove (.-classList btn) "active"))))
 
 (defn on-beat []
   (when-let [dot (el "playing-dot")]
@@ -40,7 +46,8 @@
 
 (defn ensure-env! []
   (when (nil? @env-atom)
-    (reset! env-atom (leval/make-env (make-stop-fn)))))
+    (samples/init!)
+    (reset! env-atom (leval/make-env (make-stop-fn) audio/set-bpm!))))
 
 ;;; Evaluation
 
@@ -68,6 +75,8 @@
           :else
           (set-output! (str "=> " (pr-str val)) :success))))))
 
+(defonce editor-view (atom nil))
+
 ;;; CodeMirror editor
 
 (defn make-editor [container initial-value on-eval]
@@ -91,20 +100,32 @@
 
 ;;; App bootstrap
 
+(defn on-play-btn-click []
+  (if (audio/playing?)
+    ;; Stop
+    (do (audio/stop!)
+        (set-playing! false)
+        (set-output! "stopped" :idle))
+    ;; Evaluate current editor content and start
+    (when-let [view @editor-view]
+      (evaluate! (.. view -state -doc (toString))))))
+
 (defn build-dom! []
   (let [app (el "app")]
     (set! (.-innerHTML app)
           (str "<header>"
                "  <h1>REPuLse</h1>"
-               "  <div id=\"playing-dot\" class=\"playing-dot\"></div>"
+               "  <div class=\"header-controls\">"
+               "    <button id=\"play-btn\" class=\"play-btn\">&#9654; play</button>"
+               "    <div id=\"playing-dot\" class=\"playing-dot\"></div>"
+               "  </div>"
                "</header>"
                "<div id=\"editor-container\" class=\"editor-container\"></div>"
                "<footer>"
-               "  <span id=\"output\" class=\"output\">ready &mdash; Ctrl+Enter to evaluate</span>"
-               "  <span class=\"hint\">Ctrl+Enter to eval &nbsp;&nbsp; (stop) to stop</span>"
-               "</footer>"))))
-
-(defonce editor-view (atom nil))
+               "  <span id=\"output\" class=\"output\">ready &mdash; Ctrl+Enter or click play</span>"
+               "  <span class=\"hint\">Ctrl+Enter to eval</span>"
+               "</footer>")))
+  (.addEventListener (el "play-btn") "click" on-play-btn-click))
 
 (defn init []
   (build-dom!)

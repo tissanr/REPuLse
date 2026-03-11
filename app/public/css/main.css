@@ -42,6 +42,34 @@ header h1 {
   color: var(--accent);
 }
 
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.play-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: 5px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.play-btn:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.play-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .playing-dot {
   width: 10px;
   height: 10px;
