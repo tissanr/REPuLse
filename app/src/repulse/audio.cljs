@@ -14,7 +14,9 @@
 (defn- init-wasm!
   "Load the WASM synthesis module. Falls back to JS synthesis on failure."
   [ac]
-  (-> ((.-default wasm))
+  ;; Pass the explicit URL so it works regardless of where shadow-cljs
+  ;; places the JS bundle (import.meta.url is /js/main.js, not /repulse_audio_bg.wasm).
+  (-> ((.-default wasm) "/repulse_audio_bg.wasm")
       (.then (fn [_]
                (reset! wasm-engine (wasm/AudioEngine. ac))
                (js/console.log "[REPuLse] audio backend: wasm")))

@@ -15,6 +15,7 @@ packages/audio/target/
 packages/audio/pkg/*.wasm
 packages/audio/pkg/*.js
 packages/audio/pkg/*.ts
+app/public/repulse_audio_bg.wasm
 
 # macOS
 .DS_Store
