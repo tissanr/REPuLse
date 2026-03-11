@@ -25,9 +25,18 @@ evaluate them with **Ctrl+Enter** (or the **▶ play** button), and hear them lo
 
 ```bash
 npm install
+
+# Build the Rust/WASM synthesis engine (first time only)
+npm run build:wasm
+
+# Start the dev server
 npx shadow-cljs watch app
 # open http://localhost:3000
 ```
+
+> If you skip `npm run build:wasm`, the app still works — it falls back to a JavaScript
+> synthesis engine automatically. You'll see `audio backend: clojurescript synthesis`
+> in the browser console instead of `audio backend: audioworklet+wasm`.
 
 Type an expression in the editor and press **Ctrl+Enter** (macOS: **Cmd+Enter**) or click **▶ play**.
 
@@ -197,7 +206,7 @@ Any keyword is looked up as a sample bank name:
 (seq :bass)               ; bass
 ```
 
-If the sample bank doesn't exist, REPuLse falls back to a 440 Hz sine tone.
+If the sample bank doesn't exist, REPuLse falls back to the synthesis engine (a sine tone at 440 Hz).
 
 ### Silence / rest
 
@@ -231,13 +240,15 @@ Most sample banks contain multiple variations (different kit sounds). Use `sound
 
 ### Built-in synthesis fallback
 
-These four keywords always work even if samples haven't loaded yet:
+These keywords always work even if samples haven't loaded yet — they are synthesized
+by the Rust/WASM engine (or the JS fallback if WASM is unavailable):
 
 | Keyword | Synthesis |
 |---|---|
-| `:bd` | Low sine burst (kick drum) |
-| `:sd` | Bandpass-filtered noise (snare) |
-| `:hh` | Highpass-filtered noise (hi-hat) |
+| `:bd` | Sine sweep kick (150 → 40 Hz) |
+| `:sd` | Bandpass-filtered noise + sine crack |
+| `:hh` | Highpass-filtered noise, 45 ms (closed) |
+| `:oh` | Highpass-filtered noise, 350 ms (open) |
 
 ---
 
