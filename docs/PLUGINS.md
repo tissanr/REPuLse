@@ -20,6 +20,7 @@ Two plugin types exist:
 4. [Effect plugins](#effect-plugins)
 5. [Registration and validation](#registration-and-validation)
 6. [Plain object style](#plain-object-style)
+7. [ClojureScript plugins](#clojurescript-plugins)
 
 ---
 
@@ -294,3 +295,131 @@ export default {
 Both styles pass the same validation. Use the base class for shorter code and clearer
 error messages when you forget an abstract method; use a plain object when you want
 zero dependencies or are porting an existing plugin.
+
+---
+
+## ClojureScript plugins
+
+Plugins don't have to be JavaScript files. The built-in compressor is implemented in
+ClojureScript (`app/src/repulse/plugins/compressor.cljs`). The protocol is identical —
+a JS-compatible object with the required methods — but CLJS gives you access to
+Clojure's immutable data model, persistent atoms, and the rest of the app namespaces.
+
+**When to choose CLJS over JS:**
+- The plugin needs to read or write app-level state (BPM atom, pattern registry, etc.)
+- You want Clojure data structures for internal plugin state
+- You want the plugin compiled into the main CLJS build rather than loaded as a separate module
+
+### Creating a protocol-compatible object: `#js {}`
+
+The plugin registry expects a plain JS object. In CLJS, use the `#js {}` literal reader
+macro — keys are keywords in source, string properties in the emitted JS:
+
+```clojure
+#js {:type    "effect"
+     :name    "my-effect"
+     :version "1.0.0"
+     :init        (fn [_host] nil)
+     :createNodes (fn [ctx] ...)
+     :setParam    (fn [param-name value] ...)
+     :bypass      (fn [on] ...)
+     :getParams   (fn [] #js {})
+     :destroy     (fn [] ...)}
+```
+
+`validate!` calls `(fn? (aget plugin "createNodes"))` — this resolves correctly to the
+ClojureScript function stored at that JS property.
+
+### Closure-based state instead of `this`
+
+JS plugins use `this._foo` for instance state, but `this` is unreliable in CLJS when
+methods are passed as values (the call site controls `this`). The idiomatic alternative
+is a **closure over a Clojure atom**:
+
+```clojure
+(defn make []
+  (let [state (atom nil)]      ; closed over by all method fns
+
+    #js {:type "effect"
+         :name "my-effect"
+         ...
+
+         :createNodes
+         (fn [ctx]
+           (let [input (.createGain ctx)
+                 out   (.createGain ctx)]
+             ;; store all nodes in the atom — never in `this`
+             (reset! state {:input input :out out})
+             #js {:inputNode input :outputNode out}))
+
+         :setParam
+         (fn [param-name value]
+           (when-let [{:keys [out]} @state]
+             (case param-name
+               "gain" (set! (.. out -gain -value) value)
+               nil)))
+
+         :destroy
+         (fn []
+           (when-let [{:keys [input out]} @state]
+             (.disconnect input)
+             (.disconnect out))
+           (reset! state nil))}))
+
+(def plugin (make))
+```
+
+`(make)` creates a fresh atom and a new set of closures. The `(def plugin (make))` at
+the bottom produces the singleton instance registered in `app.cljs`.
+
+### CLJS interop for Web Audio
+
+| Goal | CLJS expression |
+|---|---|
+| Create a GainNode | `(.createGain ctx)` |
+| Set a numeric property | `(set! (.. gain -gain -value) 0.5)` |
+| Read a chained property | `(.. comp -threshold -value)` |
+| Connect two nodes | `(.connect source destination)` |
+| Return a JS object to the host | `#js {:inputNode input :outputNode out}` |
+| Return JS `null` | `nil` |
+
+### How CLJS plugins are registered
+
+CLJS plugins compile into the main build — they don't need dynamic `import()`. Register
+them directly in `app.cljs` `init` after the audio context is ready:
+
+```clojure
+(ns repulse.app
+  (:require [repulse.plugins           :as plugins]
+            [repulse.fx                :as fx]
+            [repulse.plugins.compressor :as compressor]))
+
+;; In init:
+(plugins/register! compressor/plugin (make-host))
+(fx/add-effect!    compressor/plugin)
+```
+
+The same `validate!` runs — if the `#js {}` object is missing a required method, you
+get the same descriptive error as with any other plugin.
+
+### Complete example: the compressor
+
+`app/src/repulse/plugins/compressor.cljs` is the canonical reference. Key points:
+
+- All mutable state in one `(atom nil)`, reset to a map of Web Audio nodes after
+  `createNodes` runs
+- `case param-name` for dispatch in `setParam` — exhaustive, readable, fast
+- `(.. node -property -value)` chains for AudioParam access
+- `#js {}` for both the plugin object and the `getParams` return value
+- `(def plugin (make))` at the bottom creates the module-level singleton
+
+### Where to put CLJS plugins
+
+```
+app/src/repulse/plugins/
+├── compressor.cljs      ← existing built-in
+└── my-effect.cljs       ← add new ones here
+```
+
+All files under `app/src/` are on the shadow-cljs source path and compile automatically.
+Register the plugin in `app.cljs` `init` — no other wiring needed.
