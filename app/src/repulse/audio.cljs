@@ -44,11 +44,16 @@
                                            (js/console.log "[REPuLse] audio backend: audioworklet+wasm"))
                                "error" (js/console.warn "[REPuLse] Worklet WASM error:" (.-message d))
                                nil))))
-                   ;; Send WASM file URLs to the worklet for initialisation
-                   (.. node -port
-                       (postMessage #js {:type          "init"
-                                         :wasmJsUrl     "/repulse_audio.js"
-                                         :wasmBinaryUrl "/repulse_audio_bg.wasm"})))))
+                   ;; Compile WASM on the main thread — dynamic import() is banned in
+                   ;; AudioWorkletGlobalScope. Send the compiled WebAssembly.Module
+                   ;; (serialisable via structured clone) to the worklet instead.
+                   (-> (.compileStreaming js/WebAssembly (js/fetch "/repulse_audio_bg.wasm"))
+                       (.then (fn [wasm-module]
+                                (.. node -port
+                                    (postMessage #js {:type       "init"
+                                                      :wasmModule wasm-module}))))
+                       (.catch (fn [e]
+                                 (js/console.warn "[REPuLse] WASM compile failed:" e)))))))
         (.catch (fn [e]
                   (js/console.warn "[REPuLse] audio backend: clojurescript synthesis (Worklet load failed)" e))))
     (js/console.warn "[REPuLse] audio backend: clojurescript synthesis (AudioWorklet not supported)")))

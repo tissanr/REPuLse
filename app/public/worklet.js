@@ -2,6 +2,11 @@
 // Hosts the WASM PCM synthesis engine on the dedicated audio thread.
 // The process() callback generates raw PCM samples — no Web Audio API node creation
 // (OscillatorNode etc. are only available on the main thread).
+//
+// Dynamic import() is banned in AudioWorkletGlobalScope; only static imports work.
+// The main thread compiles the WebAssembly.Module and sends it here via postMessage
+// (WebAssembly.Module is serialisable via structured clone).
+import init, { AudioEngine } from '/repulse_audio.js';
 
 class RepulseProcessor extends AudioWorkletProcessor {
   constructor() {
@@ -13,9 +18,10 @@ class RepulseProcessor extends AudioWorkletProcessor {
   async _onMessage(msg) {
     if (msg.type === 'init') {
       try {
-        const module = await import(msg.wasmJsUrl);
-        await module.default(msg.wasmBinaryUrl);
-        this.engine = new module.AudioEngine(sampleRate);
+        // Passing a WebAssembly.Module to init() bypasses the fetch/import.meta.url
+        // path in the wasm-pack glue — safe to call on the audio thread.
+        await init(msg.wasmModule);
+        this.engine = new AudioEngine(sampleRate);
         this.port.postMessage({ type: 'ready' });
       } catch (err) {
         this.port.postMessage({ type: 'error', message: String(err) });

@@ -11,10 +11,10 @@
 ;; In-flight fetch promises: url -> Promise<AudioBuffer>
 (def in-flight (atom {}))
 
-;; Default Strudel CDN manifests
+;; Default sample manifests (hosted on dough-samples, Strudel's canonical source)
 (def DEFAULT-MANIFESTS
-  ["https://strudel.b-cdn.net/dirt-samples.json"
-   "https://strudel.b-cdn.net/tidal-drum-machines.json"])
+  ["https://raw.githubusercontent.com/felixroos/dough-samples/main/Dirt-Samples.json"
+   "https://raw.githubusercontent.com/felixroos/dough-samples/main/tidal-drum-machines.json"])
 
 (defn- parse-manifest
   "Parse a manifest JS object into {bank-name -> [full-url ...]}."
