@@ -75,6 +75,10 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(fx :compressor :threshold -18)` | Dynamics compressor |
 | `(fx :off :reverb)` | Bypass an effect (transparent) |
 | `(fx :on :reverb)` | Re-enable a bypassed effect |
+| `(samples! "github:owner/repo")` | Load sample banks from a public GitHub repo (auto-discovers audio files) |
+| `(samples! "https://…/samples.edn")` | Load banks from a REPuLse Lisp manifest |
+| `(samples! "https://…/samples.json")` | Load banks from a Strudel-compatible JSON manifest |
+| `(sample-banks)` | List all currently registered sample bank names |
 | `(load-plugin url)` | Load a visual or effect plugin from a URL |
 | `(stop)` | Stop playback |
 
@@ -167,18 +171,25 @@ repulse/
 │       └── src/lib.rs        # Kick, snare, hi-hat, tone via web-sys
 ├── app/             # Browser app
 │   ├── src/repulse/
-│   │   ├── app.cljs     # UI bootstrap + CodeMirror 6 editor
-│   │   ├── audio.cljs   # Web Audio scheduler + WASM integration
-│   │   ├── samples.cljs # Strudel CDN sample loader
-│   │   ├── plugins.cljs # Plugin registry
-│   │   └── fx.cljs      # Effect chain manager
+│   │   ├── app.cljs          # UI bootstrap + CodeMirror 6 editor
+│   │   ├── audio.cljs        # Web Audio scheduler + WASM integration
+│   │   ├── samples.cljs      # Sample loader (CDN + external manifests + GitHub)
+│   │   ├── plugins.cljs      # Plugin registry
+│   │   ├── fx.cljs           # Effect chain manager
+│   │   ├── plugins/
+│   │   │   └── compressor.cljs  # Dynamics compressor (CLJS implementation)
+│   │   └── lisp-lang/        # CodeMirror 6 language extension
+│   │       ├── repulse-lisp.grammar  # Lezer grammar source
+│   │       ├── parser.js             # Generated parser (committed)
+│   │       ├── highlight.js          # Syntax highlight tag mapping
+│   │       ├── rainbow.js            # Rainbow delimiter ViewPlugin
+│   │       └── index.js              # LanguageSupport export
 │   └── public/
 │       ├── plugins/
 │       │   ├── oscilloscope.js      # Built-in oscilloscope visual plugin
 │       │   ├── reverb.js            # Convolution reverb effect
 │       │   ├── delay.js             # Tape delay effect
 │       │   ├── filter.js            # Biquad filter effect
-│       │   ├── compressor.js        # Dynamics compressor effect
 │       │   └── dattorro-reverb.js   # Dattorro plate reverb (AudioWorklet)
 │       ├── worklets/
 │       │   └── dattorro-reverb-processor.js  # AudioWorkletProcessor
@@ -245,9 +256,13 @@ npx shadow-cljs compile test && node out/test.js
 
 ### Adding a new built-in
 
-1. Implement the function in [packages/core/src/repulse/core.cljs](packages/core/src/repulse/core.cljs)
-2. Add it to the env map in [packages/lisp/src/repulse/lisp/eval.cljs](packages/lisp/src/repulse/lisp/eval.cljs) — `make-env`
+**Pattern built-ins** (pure functions, no DOM or audio):
+1. Implement in [packages/core/src/repulse/core.cljs](packages/core/src/repulse/core.cljs)
+2. Add to `make-env` in [packages/lisp/src/repulse/lisp/eval.cljs](packages/lisp/src/repulse/lisp/eval.cljs)
 3. Add a test in [packages/core/src/repulse/core_test.cljs](packages/core/src/repulse/core_test.cljs)
+
+**Audio/UI built-ins** (touch audio, DOM, or network — e.g. `fx`, `load-plugin`, `samples!`):
+Add directly to the `assoc` in `ensure-env!` inside [app/src/repulse/app.cljs](app/src/repulse/app.cljs)
 
 ### Adding a new synthesized voice
 

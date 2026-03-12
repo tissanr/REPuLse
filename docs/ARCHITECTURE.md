@@ -193,15 +193,29 @@ Fetches two manifests from Strudel's CDN at startup:
 - `https://strudel.b-cdn.net/dirt-samples.json` — TidalCycles Dirt-Samples
 - `https://strudel.b-cdn.net/tidal-drum-machines.json` — Drum machine library
 
-Manifest format:
-```json
-{ "_base": "https://raw.githubusercontent.com/...",
-  "bd": ["bd/BT0AADA.wav", "bd/BT0AAD0.wav", ...] }
-```
-
 `get-buffer!` returns a `Promise<AudioBuffer>`, deduplicating concurrent requests
 and caching decoded buffers. `play!` uses `max(scheduledTime, currentTime)` to
 handle first-load latency gracefully.
+
+**External sample loading (Phase 9):**
+
+`load-external!` is the router called by the `(samples! url)` Lisp built-in:
+
+| URL form | Handler |
+|---|---|
+| `"github:owner/repo"` | `load-github!` — queries GitHub tree API, groups audio by folder |
+| `"github:owner/repo/branch"` | `load-github!` on the named branch |
+| `"https://…/samples.edn"` | `load-lisp-manifest!` — parses via `repulse.lisp.reader` |
+| any other URL | `load-manifest!` — existing Strudel JSON handler |
+
+REPuLse Lisp manifest format (`.edn`):
+```clojure
+{:_base "https://raw.githubusercontent.com/user/repo/main/samples/"
+ :kick  ["kick1.wav" "kick2.wav"]
+ :snare ["snare1.wav"]}
+```
+Keywords become bank names; `:_base` is prepended to relative filenames.
+Parsed by the existing reader — no new dependencies required.
 
 ### `plugins.cljs` — Plugin registry
 
@@ -283,11 +297,42 @@ All disconnections happen before reconnection to avoid duplicate signal paths.
 ### `app.cljs` — UI and wiring
 
 - Builds the DOM (header, CodeMirror editor, plugin panel, footer)
-- Creates the Lisp environment via `leval/make-env`; injects `load-plugin` and `fx` built-ins
+- Creates the Lisp environment via `leval/make-env`; injects `samples!`, `sample-banks`, `load-plugin`, and `fx` built-ins
 - On startup, auto-loads the oscilloscope (visual) and five effect plugins via dynamic `import()`
 - Effect plugins auto-loaded: `reverb`, `delay`, `filter`, `compressor`, `dattorro-reverb`
 - Routes evaluated results: Pattern → audio scheduler, other → output line
 - **▶ play / ■ stop** button evaluates the editor buffer or stops playback
+
+### `lisp-lang/` — CodeMirror 6 language extension
+
+**Source:** `app/src/repulse/lisp-lang/`
+
+Provides syntax highlighting, rainbow delimiters, bracket matching, and indentation
+for the CodeMirror 6 editor. Built with [Lezer](https://lezer.codemirror.net/).
+
+| File | Purpose |
+|---|---|
+| `repulse-lisp.grammar` | Lezer grammar source — tokens, precedence, node types |
+| `parser.js` + `parser.terms.js` | Pre-compiled parser (committed; no build step at dev time) |
+| `highlight.js` | `styleTags` mapping Lezer nodes → `@lezer/highlight` tags (oneDark colours) |
+| `rainbow.js` | `ViewPlugin` that walks the syntax tree and applies `rainbow-N` CSS classes by nesting depth |
+| `index.js` | `LRLanguage` + `LanguageSupport` export; includes indent/fold props and `rainbowBrackets` |
+
+Colour mapping (oneDark palette):
+
+| Token | Highlight tag | Colour |
+|---|---|---|
+| `:bd`, `:sd`, … | `tags.atom` | orange |
+| `seq`, `stack`, … | `tags.keyword` | purple |
+| numbers | `tags.number` | gold |
+| strings | `tags.string` | green |
+| `; comments` | `tags.lineComment` | grey |
+| `( )` depth 0–5 | `.rainbow-1` … `.rainbow-6` | red / gold / green / cyan / purple / blue |
+
+Regenerate the parser after grammar edits:
+```bash
+npm run gen:grammar
+```
 
 ---
 
