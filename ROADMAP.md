@@ -243,19 +243,32 @@ See full spec: [PROMPTS/phase-c-code-completion.md](PROMPTS/phase-c-code-complet
 
 ---
 
-## Phase A — More Effects 📋 *planned*
+## Phase A — More Effects ✅ *delivered*
 
 Additional effect plugins: chorus, phaser, tremolo, overdrive, and bitcrusher — all
 following the same dry/wet plugin interface, addressable via `(fx :name ...)`.
 
 **Key additions:**
-- **Chorus** — multi-voice LFO-modulated delay for width and depth
-- **Phaser** — all-pass filter chain with LFO sweep
-- **Tremolo** — amplitude LFO for rhythmic volume modulation
-- **Overdrive** — waveshaping soft-clip distortion
-- **Bitcrusher** — sample-rate and bit-depth reduction
+- **Chorus** — two LFO-modulated delay lines, 1% rate offset for stereo detuning
+- **Phaser** — 4 all-pass stages + LFO sweep + feedback delay node
+- **Tremolo** — amplitude LFO with DC bias so gain never inverts the signal
+- **Overdrive** — WaveShaperNode soft-clip with pre-gain boost and tone lowpass
+- **Bitcrusher** — AudioWorklet processor with per-sample bit and rate reduction
 
 See full spec: [PROMPTS/phase-a-more-effects.md](PROMPTS/phase-a-more-effects.md)
+
+---
+
+## Phase D — Editor Persistence ✅ *delivered*
+
+Editor content survives page reloads via `localStorage`.
+
+**Key additions:**
+- `save-listener` CodeMirror extension — writes to `localStorage` on every document change
+- `load-editor-content` — restores on startup, falls back to the default pattern
+- `try/catch` around both operations for private-mode Safari compatibility
+
+See full spec: [PROMPTS/phase-d-editor-persistence.md](PROMPTS/phase-d-editor-persistence.md)
 
 ---
 
