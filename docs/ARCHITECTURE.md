@@ -144,11 +144,23 @@ Implements the [lookahead clock pattern](https://web.dev/articles/audio-scheduli
 - Events are scheduled using `AudioContext.currentTime` (sample-accurate)
 - Cycle duration is configurable (`set-bpm!`); default 120 BPM = 2.0s/cycle
 
-At startup, `init-worklet!` is called with the `AudioContext`:
+At startup, `get-ctx` first calls `build-master-chain!` to create a permanent master
+signal chain:
+
+```
+WorkletNode ──► masterGain ──► analyser ──► destination
+```
+
+- `masterGain` (GainNode, value 1.0) — master volume control point
+- `analyser` (AnalyserNode, fftSize 2048, smoothing 0.8) — exposed to visual plugins
+
+Then `init-worklet!` is called:
 1. Calls `audioWorklet.addModule("/worklet.js")` to register the processor
-2. Creates an `AudioWorkletNode` connected to `destination`
+2. Creates an `AudioWorkletNode` connected to `masterGain` (not `destination` directly)
 3. Sends an `init` message with the WASM file URLs; the worklet loads WASM on the audio thread
 4. On `ready` reply, sets `worklet-ready?` to `true` and logs the active backend
+
+The JS fallback synth voices also connect to `masterGain` via the `output-node` helper.
 
 Sound dispatch in `play-event`:
 1. `:_` → silence (no-op)
@@ -191,10 +203,49 @@ Manifest format:
 and caching decoded buffers. `play!` uses `max(scheduledTime, currentTime)` to
 handle first-load latency gracefully.
 
+### `plugins.cljs` — Plugin registry
+
+Maintains a map of `plugin-name → {:plugin js-obj :type keyword}`.
+
+```clojure
+(register! plugin host)   ; calls .init, replaces existing registration
+(unregister! name)        ; calls .destroy, removes from registry
+(visual-plugins)          ; returns all registered :visual plugins
+```
+
+**Plugin interface** (plain JS object, ES module default export):
+
+```javascript
+{ type: "visual", name: "oscilloscope", version: "1.0.0",
+  init(host) { /* store host.analyser, host.audioCtx, … */ },
+  mount(container) { /* append canvas, start rAF loop */ },
+  unmount() { /* cancel rAF, remove canvas */ },
+  destroy() { /* unmount + release references */ } }
+```
+
+**Host API** passed to every plugin on `init`:
+
+| Property | Value |
+|---|---|
+| `audioCtx` | The `AudioContext` |
+| `analyser` | The permanent `AnalyserNode` on the master bus |
+| `masterGain` | The master `GainNode` |
+| `sampleRate` | `audioCtx.sampleRate` |
+| `registerLisp(name, fn)` | Add a new built-in to the Lisp environment |
+
+The built-in oscilloscope plugin lives at `app/public/plugins/oscilloscope.js` and is
+auto-loaded at startup. Third-party plugins can be loaded at runtime:
+
+```lisp
+(load-plugin "/plugins/oscilloscope.js")
+(load-plugin "https://example.com/my-spectrum.js")
+```
+
 ### `app.cljs` — UI and wiring
 
-- Builds the DOM (header, CodeMirror editor, footer)
-- Creates the Lisp environment via `leval/make-env`
+- Builds the DOM (header, CodeMirror editor, plugin panel, footer)
+- Creates the Lisp environment via `leval/make-env`; adds `load-plugin` built-in
+- On startup, auto-loads the oscilloscope plugin via dynamic `import()`
 - Routes evaluated results: Pattern → audio scheduler, other → output line
 - **▶ play / ■ stop** button evaluates the editor buffer or stops playback
 

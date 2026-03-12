@@ -20,3 +20,6 @@ app/public/repulse_audio.js
 
 # macOS
 .DS_Store
+
+# Claude Code session data
+.claude/

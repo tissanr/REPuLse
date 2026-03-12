@@ -166,7 +166,7 @@ npm run test:core        # cljs.test for packages/core
 | 3     | Rust/WASM moves into AudioWorklet                              | ✓ delivered  |
 | 4     | Live features — named slots, tap BPM, MIDI clock, session URLs | not started  |
 | 5     | Active code highlighting — editor flashes playing tokens       | ✓ delivered  |
-| 6a    | Plugin system + visual plugins (oscilloscope, AnalyserNode)    | not started  |
+| 6a    | Plugin system + visual plugins (oscilloscope, AnalyserNode)    | ✓ delivered  |
 | 6b    | Effect plugins — reverb, delay, filter via `(fx ...)`          | not started  |
 | 7     | Advanced plugins — per-pattern routing, MIDI out, recorder     | not started  |
 | 8     | Song arrangement — `arrange`, `play-scenes`, map literals      | ✓ delivered  |

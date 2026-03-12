@@ -65,7 +65,10 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(rev pat)` | Reverse a pattern within each cycle |
 | `(every 4 (fast 2) pat)` | Apply transform every 4th cycle |
 | `(fmap f pat)` | Apply a function to every event value |
+| `(arrange [[p 4] [q 8]])` | Play sections in order for N cycles each, then loop |
+| `(play-scenes [p q r])` | Play each pattern for 1 cycle in sequence, then loop |
 | `(bpm 140)` | Set the tempo in BPM (default: 120) |
+| `(load-plugin url)` | Load a visual plugin from a URL |
 | `(stop)` | Stop playback |
 
 ### Sound values
@@ -152,8 +155,12 @@ repulse/
 │   ├── src/repulse/
 │   │   ├── app.cljs     # UI bootstrap + CodeMirror 6 editor
 │   │   ├── audio.cljs   # Web Audio scheduler + WASM integration
-│   │   └── samples.cljs # Strudel CDN sample loader
-│   └── public/          # Static assets + compiled JS output
+│   │   ├── samples.cljs # Strudel CDN sample loader
+│   │   └── plugins.cljs # Plugin registry
+│   └── public/
+│       ├── plugins/
+│       │   └── oscilloscope.js  # Built-in oscilloscope visual plugin
+│       └── …            # Static assets + compiled JS output
 ├── package.json     # npm workspaces root
 └── shadow-cljs.edn  # Build config
 ```
@@ -198,7 +205,12 @@ npx shadow-cljs compile test && node out/test.js
 5. **`app/samples.cljs`** — fetches two JSON manifests from the Strudel CDN at startup and
    builds a lazy buffer cache. Buffers are decoded on first use and reused thereafter.
 
-6. **`app/app.cljs`** — mounts a CodeMirror 6 editor, wires **Ctrl+Enter** to `eval-string`,
+6. **`app/plugins.cljs`** — a lightweight plugin registry. Plugins are plain JS objects
+   (`{ type, name, init, mount, unmount, destroy }`). The built-in oscilloscope auto-loads
+   at startup. Load third-party plugins at runtime: `(load-plugin "https://…/plugin.js")`.
+   The `AnalyserNode` on the master bus feeds visual plugins.
+
+7. **`app/app.cljs`** — mounts a CodeMirror 6 editor, wires **Ctrl+Enter** to `eval-string`,
    and routes Pattern results to the audio scheduler vs. plain values to the output line.
 
 ### Editor keybindings

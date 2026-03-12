@@ -131,7 +131,7 @@ See full spec: [PROMPTS/phase-5-active-highlighting.md](PROMPTS/phase-5-active-h
 
 ---
 
-## Phase 6a — Plugin System + Visual Plugins 📋 *planned*
+## Phase 6a — Plugin System + Visual Plugins ✅ *delivered*
 
 A lightweight plugin API and the first plugin type: visual plugins that receive the audio
 stream and draw to a canvas — like Strudel's oscilloscope and spectrum views.

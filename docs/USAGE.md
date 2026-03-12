@@ -15,9 +15,11 @@ evaluate them with **Ctrl+Enter** (or the **▶ play** button), and hear them lo
 6. [Tempo control](#tempo-control)
 7. [Combining patterns](#combining-patterns)
 8. [Defining names](#defining-names)
-9. [Available sample banks](#available-sample-banks)
-10. [Error messages](#error-messages)
-11. [Examples](#examples)
+9. [Song arrangement](#song-arrangement)
+10. [Visual plugins](#visual-plugins)
+11. [Available sample banks](#available-sample-banks)
+12. [Error messages](#error-messages)
+13. [Examples](#examples)
 
 ---
 
@@ -85,8 +87,43 @@ nil         ; null
 
 ```lisp
 (+ 1 2)        ; => 3
+(- 10 3)       ; => 7
 (* 2 (+ 3 4))  ; => 14
 (/ 1 3)        ; => 0.333...
+```
+
+### Comparison and logic
+
+```lisp
+(= 1 1)        ; => true
+(not= 1 2)     ; => true
+(< 1 2)        ; => true
+(>= 4 4)       ; => true
+(not true)     ; => false
+```
+
+### Map literals and operations
+
+```lisp
+{:key "value" :n 42}         ; map literal
+
+(get {:a 1} :a)              ; => 1
+(get {:a 1} :b "default")    ; => "default"
+(assoc {:a 1} :b 2)          ; => {:a 1 :b 2}
+(merge {:a 1} {:b 2})        ; => {:a 1 :b 2}
+(keys {:a 1 :b 2})           ; => (:a :b)
+(vals {:a 1 :b 2})           ; => (1 2)
+```
+
+Maps are mainly used for parametric section factories:
+
+```lisp
+(def make-section
+  (fn [opts]
+    (let [dense? (get opts :dense false)]
+      (if dense? (stack kick snare hats) (stack kick snare)))))
+
+(make-section {:dense true})
 ```
 
 ### Local bindings — `let`
@@ -316,6 +353,91 @@ next cycle.
       base (seq :bd :sd :hh)]
   (every n (fast 2) base))
 ```
+
+---
+
+## Song arrangement
+
+`arrange` and `play-scenes` let you compose multi-section pieces that loop automatically.
+
+### `arrange` — section sequence with cycle counts
+
+```lisp
+(arrange [[intro  4]    ; intro plays for 4 cycles
+          [verse  8]    ; verse plays for 8 cycles
+          [chorus 8]])  ; chorus plays for 8 cycles, then loops
+```
+
+Each entry is `[pattern cycles]`. After the total duration the arrangement loops.
+
+### `play-scenes` — one cycle per section
+
+```lisp
+(play-scenes [verse verse chorus bridge chorus])
+```
+
+Shorthand where every section plays for exactly 1 cycle. Useful for short, bar-length patterns.
+
+### Parametric sections with maps
+
+```lisp
+(def motif-a (seq :bd :_ :bd :_))
+(def motif-b (seq :bd :bd :sd :_))
+
+(def make-verse
+  (fn [opts]
+    (let [dense? (get opts :dense false)]
+      (if dense? (stack motif-b hats) (stack motif-a hats)))))
+
+(def verse-1 (make-verse {}))
+(def verse-2 (make-verse {:dense true}))
+
+(arrange
+  [[intro   4]
+   [verse-1 8]
+   [chorus  8]
+   [verse-2 8]
+   [chorus  8]])
+```
+
+---
+
+## Visual plugins
+
+A permanent `AnalyserNode` sits on the master audio bus. Visual plugins read from it and
+draw to a canvas in the **plugin panel** that appears below the editor.
+
+The oscilloscope is loaded automatically at startup. You can reload it or load other plugins:
+
+```lisp
+(load-plugin "/plugins/oscilloscope.js")
+(load-plugin "https://example.com/my-spectrum.js")
+```
+
+### Plugin interface
+
+Plugins are ES module default exports with this shape:
+
+```javascript
+export default {
+  type:    "visual",        // required: "visual"
+  name:    "my-plugin",    // required: unique name
+  version: "1.0.0",
+
+  init(host) {
+    // host.analyser    — AnalyserNode (fftSize 2048)
+    // host.audioCtx    — AudioContext
+    // host.masterGain  — GainNode
+    // host.registerLisp(name, fn) — add a Lisp built-in
+  },
+
+  mount(container) { /* append canvas, start animation */ },
+  unmount()        { /* cancel animation, remove canvas */ },
+  destroy()        { /* unmount + release refs */ }
+};
+```
+
+Loading a plugin with the same name replaces the existing registration.
 
 ---
 
