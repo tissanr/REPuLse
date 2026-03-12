@@ -620,15 +620,14 @@ Use `(fx :off :name)` / `(fx :on :name)` for transparent bypass without removing
 
 ### Loading a custom effect
 
-Custom effect plugins follow the same plugin interface as the built-ins and can be
-loaded at runtime:
+Custom effect plugins follow the same interface as the built-ins and can be loaded at runtime:
 
 ```lisp
 (load-plugin "/plugins/my-effect.js")
 (load-plugin "https://example.com/chorus.js")
 ```
 
-See `docs/ARCHITECTURE.md` for the full effect plugin interface specification.
+See [docs/PLUGINS.md](PLUGINS.md) for the full effect plugin protocol, base classes, and worked examples.
 
 ---
 
@@ -644,30 +643,10 @@ The oscilloscope is loaded automatically at startup. You can reload it or load o
 (load-plugin "https://example.com/my-spectrum.js")
 ```
 
-### Plugin interface
-
-Plugins are ES module default exports with this shape:
-
-```javascript
-export default {
-  type:    "visual",        // required: "visual"
-  name:    "my-plugin",    // required: unique name
-  version: "1.0.0",
-
-  init(host) {
-    // host.analyser    — AnalyserNode (fftSize 2048)
-    // host.audioCtx    — AudioContext
-    // host.masterGain  — GainNode
-    // host.registerLisp(name, fn) — add a Lisp built-in
-  },
-
-  mount(container) { /* append canvas, start animation */ },
-  unmount()        { /* cancel animation, remove canvas */ },
-  destroy()        { /* unmount + release refs */ }
-};
-```
-
 Loading a plugin with the same name replaces the existing registration.
+
+For the full visual plugin protocol, the `VisualPlugin` base class, and worked examples,
+see [docs/PLUGINS.md](PLUGINS.md).
 
 ---
 

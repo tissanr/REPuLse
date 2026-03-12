@@ -179,13 +179,18 @@ The two-tier fallback chain:
 A plain JavaScript file (not processed by shadow-cljs/Closure Compiler) that runs on the
 dedicated audio render thread inside an `AudioWorkletGlobalScope`.
 
-- On `init` message: dynamically `import()`s the wasm-pack ES module, calls `module.default(wasmBinaryUrl)` to initialise WASM memory, constructs `AudioEngine(sampleRate)`, posts `ready`
+- On `init` message: calls `init(wasmModule)` with the pre-compiled `WebAssembly.Module`
+  received from the main thread, constructs `AudioEngine(sampleRate)`, posts `ready`
 - On `trigger` message: calls `engine.trigger(value, time)`
 - On `stop` message: calls `engine.stop_all()`
-- `process(_inputs, outputs)`: calls `engine.process_block(ch.length, currentTime)` and writes the returned `Float32Array` directly into the output channel buffer
+- `process(_inputs, outputs)`: calls `engine.process_block(ch.length, currentTime)` and writes
+  the returned `Float32Array` directly into the output channel buffer
 
-Using `import()` inside the worklet avoids the Closure Compiler limitation with `import.meta`
-in wasm-pack ES module output.
+The WASM module is compiled on the main thread via `WebAssembly.compileStreaming` and sent
+via `postMessage` (structured-clone serialises `WebAssembly.Module`). This avoids the
+`AudioWorkletGlobalScope` ban on dynamic `import()`. The worklet imports
+`worklet-polyfills.js` first to provide `TextDecoder`/`TextEncoder`, which the wasm-pack
+glue calls at module top-level before the worklet scope has them available.
 
 ### `samples.cljs` — Sample loader
 
@@ -222,44 +227,26 @@ Parsed by the existing reader — no new dependencies required.
 Maintains a map of `plugin-name → {:plugin js-obj :type keyword}`.
 
 ```clojure
-(register! plugin host)   ; calls .init, replaces existing registration
+(register! plugin host)   ; validate!, call .init, replace existing registration
 (unregister! name)        ; calls .destroy, removes from registry
 (visual-plugins)          ; returns all registered :visual plugins
 ```
 
-**Visual plugin interface** (plain JS object, ES module default export):
+`register!` validates that the plugin object exposes all required methods before
+calling `init`. Missing methods produce a descriptive error at load time rather
+than a silent failure later.
 
-```javascript
-{ type: "visual", name: "oscilloscope", version: "1.0.0",
-  init(host) { /* store host.analyser, host.audioCtx, … */ },
-  mount(container) { /* append canvas, start rAF loop */ },
-  unmount() { /* cancel rAF, remove canvas */ },
-  destroy() { /* unmount + release references */ } }
-```
+Plugins are ES module default exports. Two authoring styles are supported:
 
-**Effect plugin interface** (plain JS object, ES module default export):
+- **Class style** — extend `VisualPlugin` or `EffectPlugin` from `app/public/plugin-base.js`.
+  The base classes set `type` automatically and provide default no-op implementations for
+  optional methods.
+- **Plain object style** — export a literal object with the full method set.
 
-```javascript
-{ type: "effect", name: "reverb", version: "1.0.0",
-  init(host)      { /* called once — start async work (e.g. addModule) here */ },
-  createNodes(ctx){ /* synchronous — build Web Audio graph, return {inputNode, outputNode} */ },
-  setParam(name, value) { /* "wet"/"value" = mix; effect-specific params forwarded to nodes */ },
-  bypass(on)      { /* true → transparent pass-through; false → restore wet */ },
-  getParams()     { return { wet: … }; },
-  destroy()       { /* disconnect and release all nodes */ } }
-```
+See [`docs/PLUGINS.md`](PLUGINS.md) for the complete protocol, Host API, worked examples,
+and registration rules.
 
-**Host API** passed to every plugin on `init`:
-
-| Property | Value |
-|---|---|
-| `audioCtx` | The `AudioContext` |
-| `analyser` | The permanent `AnalyserNode` on the master bus |
-| `masterGain` | The master `GainNode` |
-| `sampleRate` | `audioCtx.sampleRate` |
-| `registerLisp(name, fn)` | Add a new built-in to the Lisp environment |
-
-The built-in oscilloscope plugin lives at `app/public/plugins/oscilloscope.js` and is
+The built-in oscilloscope lives at `app/public/plugins/oscilloscope.js` and is
 auto-loaded at startup. Third-party plugins can be loaded at runtime:
 
 ```lisp

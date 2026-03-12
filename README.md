@@ -238,10 +238,12 @@ npx shadow-cljs compile test && node out/test.js
 5. **`app/samples.cljs`** — fetches two JSON manifests from the Strudel CDN at startup and
    builds a lazy buffer cache. Buffers are decoded on first use and reused thereafter.
 
-6. **`app/plugins.cljs`** — a lightweight plugin registry. Plugins are plain JS objects
-   (`{ type, name, init, mount, unmount, destroy }`). The built-in oscilloscope auto-loads
+6. **`app/plugins.cljs`** — a plugin registry with protocol validation. Plugins are ES
+   module default exports — either a plain object or a class extending `VisualPlugin` /
+   `EffectPlugin` from `app/public/plugin-base.js`. The built-in oscilloscope auto-loads
    at startup. Load third-party plugins at runtime: `(load-plugin "https://…/plugin.js")`.
    The `AnalyserNode` on the master bus feeds visual plugins.
+   See [docs/PLUGINS.md](docs/PLUGINS.md) for the full plugin development guide.
 
 7. **`app/app.cljs`** — mounts a CodeMirror 6 editor, wires **Ctrl+Enter** to `eval-string`,
    and routes Pattern results to the audio scheduler vs. plain values to the output line.
