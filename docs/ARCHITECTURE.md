@@ -450,6 +450,7 @@ npm workspaces link the three packages together. The dev HTTP server serves
 | **10** | Syntax highlighting — Lezer grammar, bracket matching, oneDark | ✅ delivered |
 | **9** | External sample repos — `(samples! "github:owner/repo")` | ✅ delivered |
 | **A** | More effects — chorus, phaser, tremolo, overdrive, bitcrusher | ✅ delivered |
+| **D** | Editor persistence — localStorage save/restore across reloads | ✅ delivered |
 | **4** | Live features — named pattern slots, tap BPM, MIDI clock, session URLs | 📋 planned |
 | **B** | Richer visuals — audiomotion-analyzer spectrum, p5.js plugin support | 📋 planned |
 | **7** | Advanced plugins — per-pattern routing, MIDI out, recorder | 📋 planned |
