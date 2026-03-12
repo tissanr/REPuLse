@@ -247,6 +247,8 @@ npx shadow-cljs compile test && node out/test.js
 
 7. **`app/app.cljs`** — mounts a CodeMirror 6 editor, wires **Ctrl+Enter** to `eval-string`,
    and routes Pattern results to the audio scheduler vs. plain values to the output line.
+   A live context panel to the right of the editor shows BPM, user `def` bindings with inferred
+   types, and the active effect chain — updated reactively via `add-watch` on the relevant atoms.
 
 ### Editor keybindings
 

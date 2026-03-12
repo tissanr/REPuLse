@@ -76,6 +76,16 @@ each event flash amber at the moment they fire. This lets you see exactly which 
 code is being heard — useful for understanding how `every`, `fast`, and nested patterns behave
 in real time.
 
+### Context panel
+
+A sidebar to the right of the editor shows live session state:
+
+- **BPM** — current tempo, updates immediately when `(bpm N)` is evaluated
+- **Bindings** — all names you have defined with `def`, annotated with their inferred type (`pattern`, `fn`, `number`, etc.). Built-in names are not shown.
+- **Effects** — the active effect chain in order, with the key parameter value for each effect and an `off` indicator when an effect is bypassed
+
+The panel is read-only and updates reactively — no interaction required.
+
 ---
 
 ## Language basics

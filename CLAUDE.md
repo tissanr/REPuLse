@@ -173,6 +173,7 @@ npm run test:core        # cljs.test for packages/core
 | C     | Code completion — built-in docstrings + live `def` tracking    | ✓ delivered  |
 | A     | More effects — chorus, phaser, tremolo, overdrive, bitcrusher  | ✓ delivered  |
 | D     | Editor persistence — localStorage save/restore across reloads  | ✓ delivered  |
+| E     | Session context panel — live bindings, effects, BPM sidebar    | ✓ delivered  |
 | 4     | Live features — named slots, tap BPM, MIDI clock, session URLs | not started  |
 | B     | Richer visuals — audiomotion-analyzer spectrum, p5.js support  | not started  |
 | 7     | Advanced plugins — per-pattern routing, MIDI out, recorder     | not started  |

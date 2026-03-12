@@ -272,6 +272,21 @@ See full spec: [PROMPTS/phase-d-editor-persistence.md](PROMPTS/phase-d-editor-pe
 
 ---
 
+## Phase E — Session Context Panel ✅ *delivered*
+
+A live sidebar to the right of the editor showing the current session state at a glance.
+
+**Key additions:**
+- **Status bar** — BPM (updates live when `(bpm N)` is called) + playing/stopped indicator
+- **Bindings** — user `def`s with inferred type (`pattern`, `fn`, `number`, …); built-ins filtered out
+- **Effects** — active effect chain with first key param value, or `off` indicator when bypassed
+- `add-watch` on `env-atom`, `fx/chain`, and `scheduler-state` for zero-polling reactivity
+- `:bypassed?` field added to `fx/chain` entries so bypass state is observable
+
+See full spec: [PROMPTS/phase-e-context-panel.md](PROMPTS/phase-e-context-panel.md)
+
+---
+
 ## Phase 4 — Live Performance Features 📋 *planned*
 
 Named pattern slots, tap BPM, MIDI clock sync, and shareable session URLs — all
