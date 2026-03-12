@@ -7,6 +7,15 @@
 //
 // Signal graph: input → ampGain (modulated by LFO) → out
 
+function startWhenReady(osc, ctx) {
+  if (ctx.state === "running") {
+    osc.start();
+  } else {
+    const handler = () => { if (ctx.state === "running") { osc.start(); ctx.removeEventListener("statechange", handler); } };
+    ctx.addEventListener("statechange", handler);
+  }
+}
+
 export default {
   type: "effect", name: "tremolo", version: "1.0.0",
 
@@ -32,7 +41,7 @@ export default {
     // Signal path: input → ampGain
     this._input.connect(this._ampGain);
 
-    this._lfo.start();
+    startWhenReady(this._lfo, ctx);
 
     return { inputNode: this._input, outputNode: this._ampGain };
   },

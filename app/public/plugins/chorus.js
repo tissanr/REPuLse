@@ -7,6 +7,15 @@
 //           ├── delay2 (lfo2 modulated) ──┴── wet ──┬── out
 //           └── dry ──────────────────────────────────┘
 
+function startWhenReady(osc, ctx) {
+  if (ctx.state === "running") {
+    osc.start();
+  } else {
+    const handler = () => { if (ctx.state === "running") { osc.start(); ctx.removeEventListener("statechange", handler); } };
+    ctx.addEventListener("statechange", handler);
+  }
+}
+
 export default {
   type: "effect", name: "chorus", version: "1.0.0",
 
@@ -58,8 +67,8 @@ export default {
     this._dry.connect(this._out);
     this._wet.connect(this._out);
 
-    this._lfo1.start();
-    this._lfo2.start();
+    startWhenReady(this._lfo1, ctx);
+    startWhenReady(this._lfo2, ctx);
 
     return { inputNode: this._input, outputNode: this._out };
   },

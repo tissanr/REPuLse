@@ -8,6 +8,15 @@
 //                    ↑ feedback (0.5 × output, 1ms delay)
 // LFO → depthGain → all 4 filter.frequency AudioParams
 
+function startWhenReady(osc, ctx) {
+  if (ctx.state === "running") {
+    osc.start();
+  } else {
+    const handler = () => { if (ctx.state === "running") { osc.start(); ctx.removeEventListener("statechange", handler); } };
+    ctx.addEventListener("statechange", handler);
+  }
+}
+
 export default {
   type: "effect", name: "phaser", version: "1.0.0",
 
@@ -65,7 +74,7 @@ export default {
     this._dry.connect(this._out);
     this._wet.connect(this._out);
 
-    this._lfo.start();
+    startWhenReady(this._lfo, ctx);
 
     return { inputNode: this._input, outputNode: this._out };
   },
