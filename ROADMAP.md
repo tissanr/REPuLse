@@ -200,15 +200,24 @@ See full spec: [PROMPTS/phase-10-syntax-highlighting.md](PROMPTS/phase-10-syntax
 
 ## Phase 9 — External Sample Repository Import 📋 *planned*
 
-Load sample banks at runtime from any public GitHub repository or Strudel-compatible
-JSON manifest, directly from the REPL.
+Load sample banks at runtime from any public GitHub repository or a manifest file,
+directly from the REPL. Two manifest formats are supported.
 
 **Key additions:**
+- `(samples! "https://…/samples.edn")` — REPuLse Lisp manifest (native format, parsed by the existing reader)
+- `(samples! "https://…/samples.json")` — Strudel-compatible JSON manifest (ecosystem compat)
 - `(samples! "github:owner/repo")` — auto-discovers audio files via the GitHub public tree API, groups by folder name, registers as banks
 - `(samples! "github:owner/repo/branch")` — target a specific branch
-- `(samples! "https://…/samples.json")` — load any Strudel-format manifest JSON
 - `(sample-banks)` — list all currently registered bank names
 - After loading, new banks usable immediately: `(seq :my-kick :my-snare)`
+
+**REPuLse Lisp manifest format (`.edn`):**
+```clojure
+{:_base "https://raw.githubusercontent.com/user/repo/main/samples/"
+ :kick  ["kick1.wav" "kick2.wav"]
+ :snare ["snare1.wav" "snare2.wav"]}
+```
+Parsed by the existing `repulse.lisp.reader` — no new dependencies. Keywords become bank names.
 
 **How GitHub discovery works:**
 Queries `api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1`,
