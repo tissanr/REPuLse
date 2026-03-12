@@ -1,4 +1,6 @@
-(ns repulse.samples)
+(ns repulse.samples
+  (:require [repulse.lisp.reader :as reader]
+            [clojure.string :as str]))
 
 ;; Sample registry: bank-name (string) -> [full-url ...]
 (def registry (atom {}))
@@ -93,6 +95,108 @@
                    (.start src t'))))
         (.catch (fn [e]
                   (js/console.debug "[REPuLse] sample play failed:" (name bank) e))))))
+
+;;; External sample loading — Lisp manifest, JSON manifest, GitHub discovery
+
+(defn- unwrap-sv [x]
+  (if (instance? reader/SourcedVal x) (:v x) x))
+
+(defn- parse-lisp-manifest
+  "Parse a REPuLse Lisp (.edn) manifest string into {bank-name [url ...]} map.
+   Keys in the reader output are SourcedVal-wrapped keywords; values are vectors
+   of SourcedVal-wrapped strings. Unwraps both layers."
+  [text]
+  (try
+    (let [form (reader/read-one text)]
+      (when (map? form)
+        (let [raw-map (reduce-kv (fn [acc k v] (assoc acc (unwrap-sv k) v)) {} form)
+              base    (unwrap-sv (get raw-map :_base ""))
+              banks   (dissoc raw-map :_base)]
+          (reduce-kv
+            (fn [acc k v]
+              (assoc acc (name k) (mapv #(str base (unwrap-sv %)) v)))
+            {}
+            banks))))
+    (catch :default _ nil)))
+
+(defn load-lisp-manifest!
+  "Fetch a REPuLse Lisp (.edn) manifest, parse it, and register the banks."
+  [url]
+  (-> (js/fetch url)
+      (.then #(.text %))
+      (.then (fn [text]
+               (if-let [banks (parse-lisp-manifest text)]
+                 (do (swap! registry merge banks)
+                     (js/console.log (str "[REPuLse] loaded " (count banks)
+                                          " banks from " url)))
+                 (js/console.warn "[REPuLse] Lisp manifest parse failed:" url))))
+      (.catch (fn [e]
+                (js/console.warn "[REPuLse] Lisp manifest load failed:" url e)))))
+
+(def ^:private AUDIO-EXTS #{"wav" "mp3" "ogg" "flac" "aiff"})
+
+(defn- audio-ext? [path]
+  (contains? AUDIO-EXTS (str/lower-case (last (str/split path #"\.")))))
+
+(defn load-github!
+  "Discover audio files in a public GitHub repo and register them as sample banks.
+   Groups by immediate parent folder; files in the repo root go under repo-name."
+  [owner repo branch]
+  (let [api-url  (str "https://api.github.com/repos/" owner "/" repo
+                      "/git/trees/" branch "?recursive=1")
+        raw-base (str "https://raw.githubusercontent.com/"
+                      owner "/" repo "/" branch "/")]
+    (-> (js/fetch api-url)
+        (.then #(.json %))
+        (.then (fn [data]
+                 (let [tree    (js->clj (.-tree data) :keywordize-keys true)
+                       blobs   (filter #(and (= (:type %) "blob")
+                                             (audio-ext? (:path %)))
+                                       tree)
+                       grouped (group-by
+                                 (fn [{:keys [path]}]
+                                   (let [parts (str/split path #"/")]
+                                     (if (> (count parts) 1)
+                                       (nth parts (- (count parts) 2))
+                                       repo)))
+                                 blobs)
+                       banks   (reduce-kv
+                                 (fn [acc folder files]
+                                   (assoc acc folder
+                                          (mapv #(str raw-base (:path %)) files)))
+                                 {}
+                                 grouped)]
+                   (swap! registry merge banks)
+                   (js/console.log (str "[REPuLse] loaded " (count banks)
+                                        " banks from github:" owner "/" repo)))))
+        (.catch (fn [e]
+                  (js/console.warn "[REPuLse] GitHub load failed:"
+                                   (str owner "/" repo) e))))))
+
+(defn load-external!
+  "Load samples from url.
+   Dispatch:
+     'github:owner/repo'         — GitHub tree API, tries main then master
+     'github:owner/repo/branch'  — GitHub tree API, specific branch
+     'https://…/samples.edn'     — REPuLse Lisp manifest
+     anything else               — Strudel-compatible JSON manifest"
+  [url]
+  (cond
+    (str/starts-with? url "github:")
+    (let [parts  (str/split (subs url 7) #"/")
+          owner  (first parts)
+          repo   (second parts)
+          branch (nth parts 2 nil)]
+      (if branch
+        (load-github! owner repo branch)
+        (-> (load-github! owner repo "main")
+            (.catch (fn [_] (load-github! owner repo "master"))))))
+
+    (str/ends-with? (str/lower-case url) ".edn")
+    (load-lisp-manifest! url)
+
+    :else
+    (load-manifest! url)))
 
 (defn bank-names
   "Returns a sorted list of all registered bank names."

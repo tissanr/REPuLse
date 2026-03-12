@@ -130,6 +130,13 @@
     (samples/init!)
     (reset! env-atom
             (assoc (leval/make-env (make-stop-fn) audio/set-bpm!)
+                   "samples!"
+                   (fn [url]
+                     (let [url' (leval/unwrap url)]
+                       (samples/load-external! url')
+                       (str "loading " url' "…")))
+                   "sample-banks"
+                   (fn [] (samples/bank-names))
                    "load-plugin"
                    (fn [url]
                      (let [url' (leval/unwrap url)]

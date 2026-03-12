@@ -198,7 +198,7 @@ See full spec: [PROMPTS/phase-10-syntax-highlighting.md](PROMPTS/phase-10-syntax
 
 ---
 
-## Phase 9 — External Sample Repository Import 📋 *planned*
+## Phase 9 — External Sample Repository Import ✅ *delivered*
 
 Load sample banks at runtime from any public GitHub repository or a manifest file,
 directly from the REPL. Two manifest formats are supported.

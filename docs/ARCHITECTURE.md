@@ -416,7 +416,7 @@ npm workspaces link the three packages together. The dev HTTP server serves
 | **6b** | Effect plugins — reverb, delay, filter, compressor, dattorro-reverb | ✅ delivered |
 | **8** | Song arrangement — `arrange`, `play-scenes`, map literals | ✅ delivered |
 | **10** | Syntax highlighting — Lezer grammar, bracket matching, oneDark | ✅ delivered |
-| **9** | External sample repos — `(samples! "github:owner/repo")` | 📋 planned |
+| **9** | External sample repos — `(samples! "github:owner/repo")` | ✅ delivered |
 | **A** | More effects — chorus, phaser, tremolo, overdrive, bitcrusher | 📋 planned |
 | **4** | Live features — named pattern slots, tap BPM, MIDI clock, session URLs | 📋 planned |
 | **B** | Richer visuals — audiomotion-analyzer spectrum, p5.js plugin support | 📋 planned |
