@@ -61,7 +61,6 @@ they are collected here to capture intent without cluttering the active roadmap.
 
 | Idea | Description |
 |---|---|
-| Syntax highlighting | CodeMirror language extension for REPuLse-Lisp (bracket matching, keyword colouring) |
 | Tail-call optimisation | Enable deep recursion without stack overflow — needed for generative patterns |
 | Pattern macros | `defmacro`-style compile-time transforms — e.g. `(euclidean 5 8 :bd)` |
 | Number notation | Musical shorthand — `1/4` for quarter notes, `120bpm` as a literal |

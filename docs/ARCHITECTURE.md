@@ -420,5 +420,6 @@ npm workspaces link the three packages together. The dev HTTP server serves
 | **9** | External sample repos — `(samples! "github:owner/repo")` | 📋 planned |
 | **A** | More effects — chorus, phaser, tremolo, overdrive, bitcrusher | 📋 planned |
 | **B** | Richer visuals — audiomotion-analyzer spectrum, p5.js plugin support | 📋 planned |
+| **10** | Syntax highlighting — Lezer grammar, bracket matching, oneDark | 📋 planned |
 
 See `PROMPTS/` for detailed specifications of each phase.

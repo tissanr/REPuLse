@@ -230,6 +230,24 @@ See full spec: [PROMPTS/phase-9-external-sample-repos.md](PROMPTS/phase-9-extern
 
 ---
 
+## Phase 10 — Syntax Highlighting 📋 *planned*
+
+A CodeMirror 6 language extension for REPuLse-Lisp — bracket matching and colour-coded
+syntax using a hand-written Lezer grammar.
+
+**Key additions:**
+- Lezer grammar (`repulse-lisp.grammar`) — compiled once, parser committed to repo
+- Highlight spec mapping Lezer node types to `@lezer/highlight` tags that integrate
+  with the existing oneDark theme
+- Keywords (`:bd`, `:sd`, …) in orange; built-ins (`seq`, `stack`, …) in purple;
+  numbers gold; strings green; comments grey
+- `(bracketMatching)` — clicking a delimiter highlights its pair
+- `gen:grammar` npm script to regenerate the parser after grammar edits
+
+See full spec: [PROMPTS/phase-10-syntax-highlighting.md](PROMPTS/phase-10-syntax-highlighting.md)
+
+---
+
 ## Future ideas (unscheduled)
 
 See [docs/FUTURE-FEATURES.md](docs/FUTURE-FEATURES.md) for the full list, including
