@@ -6,6 +6,11 @@
 // Dynamic import() is banned in AudioWorkletGlobalScope; only static imports work.
 // The main thread compiles the WebAssembly.Module and sends it here via postMessage
 // (WebAssembly.Module is serialisable via structured clone).
+//
+// worklet-polyfills.js MUST be imported first — ES module evaluation is depth-first
+// in source order, so the polyfills run before repulse_audio.js top-level code
+// (which calls `new TextDecoder()` / `new TextEncoder()` unconditionally).
+import '/worklet-polyfills.js';
 import init, { AudioEngine } from '/repulse_audio.js';
 
 class RepulseProcessor extends AudioWorkletProcessor {
