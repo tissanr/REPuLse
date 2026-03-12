@@ -5,6 +5,7 @@
             [repulse.samples :as samples]
             [repulse.plugins :as plugins]
             [repulse.fx :as fx]
+            [repulse.plugins.compressor :as compressor-plugin]
             ["@codemirror/view" :refer [EditorView Decoration keymap lineNumbers]]
             ["@codemirror/state" :refer [EditorState StateEffect StateField]]
             ["@codemirror/commands" :refer [defaultKeymap historyKeymap history]]
@@ -267,10 +268,12 @@
       (.catch (fn [e]
                 (js/console.warn "[REPuLse] oscilloscope load failed:" e))))
   ;; Auto-load built-in effect plugins (wet mix starts at 0 — silent until (fx ...) is called)
+  ;; CLJS compressor registered synchronously — no dynamic import needed
+  (plugins/register! compressor-plugin/plugin (make-host))
+  (fx/add-effect!    compressor-plugin/plugin)
   (doseq [url ["/plugins/reverb.js"
                "/plugins/delay.js"
                "/plugins/filter.js"
-               "/plugins/compressor.js"
                "/plugins/dattorro-reverb.js"]]
     (-> (js* "import(~{})" url)
         (.then (fn [m]

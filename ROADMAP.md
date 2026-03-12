@@ -98,21 +98,6 @@ See full spec: [PROMPTS/phase-3-audioworklet.md](PROMPTS/phase-3-audioworklet.md
 
 ---
 
-## Phase 4 — Live Performance Features 📋 *planned*
-
-Named pattern slots, tap BPM, MIDI clock sync, session persistence, visual timeline.
-
-**Key additions:**
-- `(play :name pattern)` — run multiple named patterns simultaneously
-- `(mute :name)` / `(solo :name)` / `(clear)` — slot control
-- Tap tempo button + MIDI clock sync
-- URL-based session save/restore (Base64 encoded)
-- Mini piano-roll timeline per slot
-
-See full spec: [PROMPTS/phase-4-live-features.md](PROMPTS/phase-4-live-features.md)
-
----
-
 ## Phase 5 — Active Code Highlighting ✅ *delivered*
 
 As a pattern plays, the editor highlights the exact tokens in the source code that are
@@ -148,7 +133,7 @@ See full spec: [PROMPTS/phase-6a-plugins-visual.md](PROMPTS/phase-6a-plugins-vis
 
 ---
 
-## Phase 6b — Effect Plugins 📋 *planned*
+## Phase 6b — Effect Plugins ✅ *delivered*
 
 The second plugin type: Web Audio nodes inserted into the master signal chain, addressable
 from the Lisp REPL via `(fx :name ...)`.
@@ -156,25 +141,12 @@ from the Lisp REPL via `(fx :name ...)`.
 **Key additions:**
 - Effect plugin interface — `createNodes`, `setParam`, `bypass`, `destroy`
 - Graph manager (`fx.cljs`) — inserts/rewires effect nodes cleanly, with dry/wet bypass
-- Four built-in effects: **reverb**, **delay**, **filter**, **compressor**
-- `(fx :reverb 0.4)` / `(fx :delay 0.25 0.5)` / `(fx :off :reverb)` Lisp built-ins
+- Five built-in effects: **reverb**, **delay**, **filter**, **compressor**, **dattorro-reverb**
+- `(fx :reverb 0.4)` / `(fx :delay :wet 0.4 :time 0.25)` / `(fx :off :reverb)` Lisp built-ins
+- Compressor reimplemented in ClojureScript (`app/src/repulse/plugins/compressor.cljs`)
+- Dattorro plate reverb runs in its own `AudioWorkletProcessor` (high-quality, audio-thread)
 
 See full spec: [PROMPTS/phase-6b-plugins-effects.md](PROMPTS/phase-6b-plugins-effects.md)
-
----
-
-## Phase 7 — Advanced Plugins 📋 *planned*
-
-Per-pattern effect routing, MIDI output, and audio recording.
-
-**Key additions:**
-- Named pattern slots with independent gain nodes (`slots.cljs`)
-- `(with-fx :slot-name ...)` — per-slot effects chain before the master bus
-- **MIDI output plugin** — route pattern events to hardware via Web MIDI API
-- **Recorder plugin** — ⏺ record button captures master output to a downloadable file
-- `(record)` / `(record-stop)` Lisp built-ins
-
-See full spec: [PROMPTS/phase-7-plugins-advanced.md](PROMPTS/phase-7-plugins-advanced.md)
 
 ---
 
@@ -208,6 +180,24 @@ See full spec: [PROMPTS/phase-8-song-arrangement.md](PROMPTS/phase-8-song-arrang
 
 ---
 
+## Phase 10 — Syntax Highlighting 📋 *planned*
+
+A CodeMirror 6 language extension for REPuLse-Lisp — bracket matching and colour-coded
+syntax using a hand-written Lezer grammar.
+
+**Key additions:**
+- Lezer grammar (`repulse-lisp.grammar`) — compiled once, parser committed to repo
+- Highlight spec mapping Lezer node types to `@lezer/highlight` tags that integrate
+  with the existing oneDark theme
+- Keywords (`:bd`, `:sd`, …) in orange; built-ins (`seq`, `stack`, …) in purple;
+  numbers gold; strings green; comments grey
+- `(bracketMatching)` — clicking a delimiter highlights its pair
+- `gen:grammar` npm script to regenerate the parser after grammar edits
+
+See full spec: [PROMPTS/phase-10-syntax-highlighting.md](PROMPTS/phase-10-syntax-highlighting.md)
+
+---
+
 ## Phase 9 — External Sample Repository Import 📋 *planned*
 
 Load sample banks at runtime from any public GitHub repository or Strudel-compatible
@@ -230,21 +220,64 @@ See full spec: [PROMPTS/phase-9-external-sample-repos.md](PROMPTS/phase-9-extern
 
 ---
 
-## Phase 10 — Syntax Highlighting 📋 *planned*
+## Phase A — More Effects 📋 *planned*
 
-A CodeMirror 6 language extension for REPuLse-Lisp — bracket matching and colour-coded
-syntax using a hand-written Lezer grammar.
+Additional effect plugins: chorus, phaser, tremolo, overdrive, and bitcrusher — all
+following the same dry/wet plugin interface, addressable via `(fx :name ...)`.
 
 **Key additions:**
-- Lezer grammar (`repulse-lisp.grammar`) — compiled once, parser committed to repo
-- Highlight spec mapping Lezer node types to `@lezer/highlight` tags that integrate
-  with the existing oneDark theme
-- Keywords (`:bd`, `:sd`, …) in orange; built-ins (`seq`, `stack`, …) in purple;
-  numbers gold; strings green; comments grey
-- `(bracketMatching)` — clicking a delimiter highlights its pair
-- `gen:grammar` npm script to regenerate the parser after grammar edits
+- **Chorus** — multi-voice LFO-modulated delay for width and depth
+- **Phaser** — all-pass filter chain with LFO sweep
+- **Tremolo** — amplitude LFO for rhythmic volume modulation
+- **Overdrive** — waveshaping soft-clip distortion
+- **Bitcrusher** — sample-rate and bit-depth reduction
 
-See full spec: [PROMPTS/phase-10-syntax-highlighting.md](PROMPTS/phase-10-syntax-highlighting.md)
+See full spec: [PROMPTS/phase-a-more-effects.md](PROMPTS/phase-a-more-effects.md)
+
+---
+
+## Phase 4 — Live Performance Features 📋 *planned*
+
+Named pattern slots, tap BPM, MIDI clock sync, and shareable session URLs — all
+aimed at live performance on stage.
+
+**Key additions:**
+- Named pattern slots (`slots.cljs`) — multiple independent patterns playing simultaneously
+- `(slot :a (seq :bd :sd))` / `(mute :a)` / `(solo :a)` Lisp built-ins
+- Tap BPM button — click to set tempo from live tapping
+- MIDI clock input — sync the scheduler to external hardware
+- Session URL — encode the current editor buffer in the URL hash for instant sharing
+
+See full spec: [PROMPTS/phase-4-live-features.md](PROMPTS/phase-4-live-features.md)
+
+---
+
+## Phase B — Richer Visuals 📋 *planned*
+
+Two new visual plugin types: a high-quality spectrum analyser (audiomotion-analyzer)
+and a p5.js canvas plugin adapter for generative graphics driven by audio data.
+
+**Key additions:**
+- **Spectrum plugin** — audiomotion-analyzer frequency display with gradient colouring
+- **p5.js adapter** — `makeP5Plugin(sketchFn)` helper; sketch receives `{ analyser, p }` each frame
+- Both plugins loadable via `(load-plugin url)`
+
+See full spec: [PROMPTS/phase-b-richer-visuals.md](PROMPTS/phase-b-richer-visuals.md)
+
+---
+
+## Phase 7 — Advanced Plugins 📋 *planned*
+
+Per-pattern effect routing, MIDI output, and audio recording.
+
+**Key additions:**
+- Named pattern slots with independent gain nodes (`slots.cljs`)
+- `(with-fx :slot-name ...)` — per-slot effects chain before the master bus
+- **MIDI output plugin** — route pattern events to hardware via Web MIDI API
+- **Recorder plugin** — ⏺ record button captures master output to a downloadable file
+- `(record)` / `(record-stop)` Lisp built-ins
+
+See full spec: [PROMPTS/phase-7-plugins-advanced.md](PROMPTS/phase-7-plugins-advanced.md)
 
 ---
 
