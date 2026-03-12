@@ -50,34 +50,53 @@ This avoids clicks when toggling bypass and allows smooth crossfades.
 
 ## Effect plugin interface
 
-Extends the base plugin interface from Phase 6a:
+Effect plugins extend the base plugin system established in Phase 6a. Two authoring styles
+are supported — both pass the same `validate!` check in `plugins.cljs`:
+
+**Class style** (preferred for new plugins — import from `plugin-base.js`):
 
 ```javascript
-{
-  type: "effect",
-  name: "reverb",
-  version: "1.0.0",
+import { EffectPlugin } from '/plugin-base.js';
 
-  // Called once. Must create and return { inputNode, outputNode }.
-  // The graph manager connects: prev → inputNode, outputNode → next.
-  createNodes(audioCtx) {
-    // create Web Audio nodes here
-    return { inputNode: this._input, outputNode: this._output };
+export default class Reverb extends EffectPlugin {
+  constructor() { super({ name: "reverb", version: "1.0.0" }); }
+
+  createNodes(ctx) {
+    // Build Web Audio sub-graph synchronously.
+    // Must return { inputNode: AudioNode, outputNode: AudioNode }.
+    return { inputNode: this._input, outputNode: this._out };
   },
 
-  // Set a named parameter. Called by (fx :reverb paramName value ...).
-  // Param names are effect-specific.
-  setParam(name, value) { ... },
-
-  // Return current params as a plain JS object (for UI display).
-  getParams() { return { wet: this._wet, ... }; },
-
-  // Smoothly bypass the effect (wet = 0, dry = 1).
-  bypass(enabled) { ... },
-
-  destroy() { /* disconnect nodes */ }
+  setParam(name, value) { /* update named parameter */ },
+  bypass(on)            { /* true → transparent; false → restore wet */ },
+  getParams()           { return { wet: this._wet?.gain.value }; },
+  destroy()             { this._input?.disconnect(); this._out?.disconnect(); }
 }
 ```
+
+**Plain object style** (used by all built-ins in this phase — zero import dependency):
+
+```javascript
+export default {
+  type: "effect", name: "reverb", version: "1.0.0",
+  init(host)           {},
+  createNodes(ctx)     { /* ... */ return { inputNode, outputNode }; },
+  setParam(name, value){ /* ... */ },
+  bypass(on)           { /* ... */ },
+  getParams()          { return { wet: … }; },
+  destroy()            { /* disconnect nodes */ },
+};
+```
+
+The full protocol table (required vs. optional methods, defaults) is in `docs/PLUGINS.md`.
+
+**Required methods** (must be present or `validate!` throws at registration time):
+`init`, `createNodes`, `setParam`, `bypass`, `getParams`, `destroy`
+
+**`createNodes` contract:**
+- Called synchronously after `register!` → `add-effect!`
+- Must return `{ inputNode: AudioNode, outputNode: AudioNode }` immediately
+- The graph manager wires `prev.outputNode → inputNode` and `outputNode → next.inputNode`
 
 ---
 

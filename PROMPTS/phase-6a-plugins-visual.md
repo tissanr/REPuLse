@@ -65,24 +65,53 @@ Expose `analyser-node` publicly so plugins can read it.
 **New file: `app/src/repulse/plugins.cljs`**
 
 ```clojure
-(ns repulse.plugins)
+(ns repulse.plugins
+  (:require [clojure.string :as str]))
 
-;; Map of plugin-name → {:plugin js-obj :container dom-el :type keyword}
+;; Map of plugin-name → {:plugin js-obj :type keyword}
 (defonce registry (atom {}))
 
-(defn register! [plugin host]
-  (let [name (.-name plugin)]
-    (swap! registry assoc name {:plugin plugin :type (keyword (.-type plugin))})
+;; ─── Validation ──────────────────────────────────────────────────────────────
+
+(def ^:private visual-methods ["init" "mount" "unmount" "destroy"])
+(def ^:private effect-methods ["init" "createNodes" "setParam" "bypass" "getParams" "destroy"])
+
+(defn- validate! [^js plugin]
+  (let [ptype    (.-type plugin)
+        pname    (or (.-name plugin) "<unnamed>")
+        required (case ptype
+                   "visual" visual-methods
+                   "effect" effect-methods
+                   (throw (js/Error. (str "[REPuLse] Unknown plugin type: '" ptype
+                                         "' — expected \"visual\" or \"effect\""))))
+        missing  (filterv #(not (fn? (aget plugin %))) required)]
+    (when (seq missing)
+      (throw (js/Error. (str "[REPuLse] Plugin \"" pname
+                             "\" is missing required method(s): "
+                             (str/join ", " missing)))))))
+
+;; ─── Registry ────────────────────────────────────────────────────────────────
+
+(defn register! [^js plugin ^js host]
+  (validate! plugin)
+  (let [n (.-name plugin)]
+    ;; Destroy existing registration before replacing
+    (when-let [{old :plugin} (get @registry n)]
+      (.destroy ^js old))
+    (swap! registry assoc n {:plugin plugin :type (keyword (.-type plugin))})
     (.init plugin host)))
 
-(defn unregister! [name]
-  (when-let [{:keys [plugin]} (get @registry name)]
-    (.destroy plugin)
-    (swap! registry dissoc name)))
+(defn unregister! [plugin-name]
+  (when-let [{old :plugin} (get @registry plugin-name)]
+    (.destroy ^js old)
+    (swap! registry dissoc plugin-name)))
 
 (defn visual-plugins []
   (filter #(= :visual (:type %)) (vals @registry)))
 ```
+
+`validate!` uses `(fn? (aget plugin method))` which resolves via the JS prototype chain,
+so both plain objects and class instances pass the same check.
 
 ---
 
@@ -107,15 +136,57 @@ Plugins receive this object and can store whatever references they need from it.
 
 ---
 
-## Plugin interface (JavaScript)
+## Plugin base classes and the visual plugin interface
 
-Plugins are plain ES module default exports:
+**New file: `app/public/plugin-base.js`**
+
+Provides `VisualPlugin` and `EffectPlugin` base classes. Plugin authors extend these
+instead of writing plain objects to get:
+- Automatic `type` property
+- Default no-op `init` / `destroy` (visual) or `init` / `bypass` / `getParams` (effect)
+- Clear `throw` for abstract methods that must be overridden (`mount`, `unmount` for visual;
+  `createNodes`, `setParam`, `destroy` for effect)
+
+See `docs/PLUGINS.md` for the full base class source and protocol tables.
+
+### Authoring styles
+
+**Preferred for new plugins — class style:**
+
+```javascript
+import { VisualPlugin } from '/plugin-base.js';
+
+export default class MyVisual extends VisualPlugin {
+  constructor() { super({ name: "my-visual" }); }
+  init(host)      { this._analyser = host.analyser; }
+  mount(container){ /* append canvas, start rAF */ }
+  unmount()       { /* cancel rAF, remove canvas */ }
+}
+```
+
+**Also valid — plain object style** (used by the built-in oscilloscope for zero dependencies):
 
 ```javascript
 export default {
-  type:    "visual",
-  name:    "oscilloscope",
-  version: "1.0.0",
+  type: "visual", name: "oscilloscope", version: "1.0.0",
+  init(host)      { this._analyser = host.analyser; /* ... */ },
+  mount(container){ /* ... */ },
+  unmount()       { /* ... */ },
+  destroy()       { this.unmount(); this._analyser = null; },
+};
+```
+
+Both styles pass `validate!` identically — `(aget plugin method)` traverses the
+prototype chain, so class instance methods are found the same as own-property functions.
+
+### Built-in oscilloscope
+
+Ship as `app/public/plugins/oscilloscope.js` using the plain object style (no import
+dependency on plugin-base.js keeps the built-in self-contained):
+
+```javascript
+export default {
+  type: "visual", name: "oscilloscope", version: "1.0.0",
 
   init(host) {
     this._analyser = host.analyser;
@@ -125,8 +196,8 @@ export default {
   },
 
   mount(container) {
-    this._canvas = document.createElement("canvas");
-    this._canvas.width  = container.clientWidth  || 600;
+    this._canvas        = document.createElement("canvas");
+    this._canvas.width  = container.clientWidth || 600;
     this._canvas.height = 80;
     container.appendChild(this._canvas);
     this._running = true;
@@ -147,8 +218,8 @@ export default {
 
   _draw() {
     if (!this._running) return;
-    const ctx    = this._canvas.getContext("2d");
-    const buf    = new Uint8Array(this._analyser.fftSize);
+    const ctx = this._canvas.getContext("2d");
+    const buf = new Uint8Array(this._analyser.fftSize);
     this._analyser.getByteTimeDomainData(buf);
     const W = this._canvas.width, H = this._canvas.height;
     ctx.clearRect(0, 0, W, H);
@@ -165,8 +236,6 @@ export default {
   }
 };
 ```
-
-Ship this as `app/public/plugins/oscilloscope.js`.
 
 ---
 
@@ -263,12 +332,13 @@ In `app.cljs` `init`, auto-load the oscilloscope plugin after the audio context 
 ```
 app/
 ├── public/
+│   ├── plugin-base.js           NEW — VisualPlugin + EffectPlugin base classes
 │   └── plugins/
-│       └── oscilloscope.js     NEW — built-in oscilloscope visual plugin
+│       └── oscilloscope.js      NEW — built-in oscilloscope visual plugin
 └── src/repulse/
     ├── audio.cljs               updated — AnalyserNode tap, masterGain
     ├── app.cljs                 updated — plugin panel DOM, make-host, auto-load
-    └── plugins.cljs             NEW — plugin registry
+    └── plugins.cljs             NEW — plugin registry with validate!
 ```
 
 ---
@@ -279,9 +349,11 @@ app/
 - [ ] Oscilloscope draws a waveform in the plugin panel below the editor
 - [ ] `(load-plugin "/plugins/oscilloscope.js")` can be evaluated from the REPL
 - [ ] Loading the same plugin twice replaces the existing registration (no duplicates)
+- [ ] Loading a plugin with a missing method throws a clear error naming the missing methods
 - [ ] Plugin panel is hidden when no visual plugins are active
 - [ ] `(stop)` still works; oscilloscope continues drawing silence after stop
 - [ ] Browser console shows no errors on startup
+- [ ] `app/public/plugin-base.js` is served correctly (verify via browser devtools)
 
 ---
 

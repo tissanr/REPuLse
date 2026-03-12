@@ -23,41 +23,40 @@ peak indicators — far more capable than a hand-rolled FFT canvas draw loop.
 
 ### Implementation
 
-Create `app/public/plugins/spectrum.js` as a visual plugin that loads audiomotion-analyzer
-from a CDN and wraps it:
+Create `app/public/plugins/spectrum.js` as a visual plugin. Extend `VisualPlugin` from
+`plugin-base.js` — `destroy` and `init` defaults are inherited:
 
 ```javascript
-export default {
-  type: "visual", name: "spectrum", version: "1.0.0",
+import { VisualPlugin } from '/plugin-base.js';
+
+export default class Spectrum extends VisualPlugin {
+  constructor() { super({ name: "spectrum", version: "1.0.0" }); }
 
   init(host) {
     this._analyser = host.analyser;
-    // Load audiomotion-analyzer from jsDelivr (ESM build)
-    this._ready = import("https://cdn.jsdelivr.net/npm/audiomotion-analyzer@4/src/audiomotion-analyzer.js")
+    // Load audiomotion-analyzer from jsDelivr (ESM build, pinned version)
+    this._ready = import("https://cdn.jsdelivr.net/npm/audiomotion-analyzer@4.7/src/audiomotion-analyzer.js")
       .then(m => { this._AudioMotion = m.default; });
-  },
+  }
 
   mount(container) {
-    this._container = container;
     this._ready.then(() => {
       this._am = new this._AudioMotion(container, {
-        source:     this._analyser,
-        height:     120,
-        gradient:   "prism",
-        showPeaks:  true,
-        mode:       2,          // 1/24 octave bands
+        source:      this._analyser,
+        height:      120,
+        gradient:    "prism",
+        showPeaks:   true,
+        mode:        2,          // 1/24 octave bands
         showBgColor: false,
-        overlay:    true,
+        overlay:     true,
       });
     });
-  },
+  }
 
   unmount() {
     if (this._am) { this._am.destroy(); this._am = null; }
-  },
-
-  destroy() { this.unmount(); },
-};
+  }
+}
 ```
 
 **Key points:**
@@ -118,23 +117,32 @@ export function loadP5() {
 
 // Create a REPuLse visual plugin from a p5 instance-mode sketch function.
 // sketchFn: (p, analyser, audioCtx) => void   (sets up p.setup and p.draw)
+//
+// Returns a class that extends VisualPlugin so it passes validate! with full
+// protocol coverage (including the inherited destroy → unmount default).
 export function makeP5Plugin(name, version, sketchFn) {
-  return {
-    type: "visual", name, version,
+  // Import VisualPlugin lazily to avoid a hard CDN dependency at module load time.
+  // plugin-base.js is always served from the local dev server.
+  const { VisualPlugin } = await import('/plugin-base.js');
+
+  return class extends VisualPlugin {
+    constructor() { super({ name, version }); }
+
     init(host) {
-      this._analyser  = host.analyser;
-      this._audioCtx  = host.audioCtx;
-      this._ready = loadP5();
-    },
+      this._analyser = host.analyser;
+      this._audioCtx = host.audioCtx;
+      this._ready    = loadP5();
+    }
+
     mount(container) {
       this._ready.then(P5 => {
         this._p5 = new P5(p => sketchFn(p, this._analyser, this._audioCtx), container);
       });
-    },
+    }
+
     unmount() {
       if (this._p5) { this._p5.remove(); this._p5 = null; }
-    },
-    destroy() { this.unmount(); },
+    }
   };
 }
 ```

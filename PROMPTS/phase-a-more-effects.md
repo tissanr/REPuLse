@@ -10,25 +10,40 @@ All are accessible via the existing `(fx ...)` built-in — no new Lisp primitiv
 
 ## Effect plugin interface (recap)
 
-Every effect plugin is an ES module default export at `app/public/plugins/<name>.js`:
+Every effect plugin is an ES module default export at `app/public/plugins/<name>.js`.
+Two authoring styles are valid — both pass `validate!` in the plugin registry.
+
+**Class style** (preferred — extend `EffectPlugin` from `plugin-base.js`):
+
+```javascript
+import { EffectPlugin } from '/plugin-base.js';
+
+export default class MyEffect extends EffectPlugin {
+  constructor() { super({ name: "<name>", version: "1.0.0" }); }
+  // init(host)  {}            // inherited no-op — override only if needed
+  createNodes(ctx) { /* build Web Audio graph */ return { inputNode, outputNode }; }
+  setParam(name, value) { }   // name matches keyword in (fx :<name> :param value)
+  bypass(on)  { }             // true → transparent; false → restore
+  // getParams() { return {}; } // inherited — override to expose params
+  destroy()   { }             // disconnect and release all nodes
+}
+```
+
+**Plain object style** (also valid — all methods must be present explicitly):
 
 ```javascript
 export default {
-  type:    "effect",
-  name:    "<name>",        // matched by (fx :<name> ...)
-  version: "1.0.0",
-
-  init(host)  { },          // called once with the host API — start any async work here
-  createNodes(ctx) {        // called synchronously — must return immediately
-    // ... build Web Audio graph ...
-    return { inputNode: ..., outputNode: ... };
-  },
-  setParam(name, value) { }, // name matches the keyword in (fx :<name> :param value)
-  bypass(on)  { },           // true → transparent; false → restore
-  getParams() { return {}; },
-  destroy()   { },           // disconnect and release all nodes
+  type: "effect", name: "<name>", version: "1.0.0",
+  init(host)           {},
+  createNodes(ctx)     { /* ... */ return { inputNode, outputNode }; },
+  setParam(name, value){ },
+  bypass(on)           { },
+  getParams()          { return {}; },
+  destroy()            { },
 };
 ```
+
+The full protocol (required vs. optional, defaults) is in `docs/PLUGINS.md`.
 
 All plugins are registered in `app/src/repulse/app.cljs` `init` — add each new URL to
 the existing `doseq` that auto-loads effect plugins.

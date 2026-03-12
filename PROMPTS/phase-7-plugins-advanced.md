@@ -88,11 +88,26 @@ maps — they do not modify the global master chain.
 
 ## Feature 2 — MIDI output plugin
 
+### Design note — plugin type
+
+The plugin registry validates `type` as `"visual"` or `"effect"` only. MIDI output is
+neither: it has no audio graph nodes and no visual canvas. It should be loaded as a
+**self-initialising utility module** in `app.cljs` `init` rather than through
+`plugins/register!`, to avoid forcing it into a protocol it doesn't fit:
+
+```clojure
+;; In app.cljs init — load MIDI as a utility, not via plugins/register!
+(-> (js/import "/plugins/midi-out.js")
+    (.then (fn [m]
+             (let [midi (.-default m)]
+               ;; midi-out initialises itself and registers its Lisp built-ins
+               (.init midi (make-host))))))
+```
+
 ### Plugin file: `app/public/plugins/midi-out.js`
 
 ```javascript
 export default {
-  type: "midi",
   name: "midi-out",
   version: "1.0.0",
 
@@ -122,18 +137,14 @@ export default {
 
   _trigger(channel, value) {
     if (!this._output) return;
-    const note     = typeof value === "number" ? value
-                   : (this._noteMap[String(value)] ?? 60);
-    const ch       = typeof channel === "number" ? channel : this._channel;
-    const noteOn   = [0x90 | ch, note, 100];
-    const noteOff  = [0x80 | ch, note, 0];
-    const t        = performance.now();
-    this._output.send(noteOn, t);
-    this._output.send(noteOff, t + 100);
+    const note   = typeof value === "number" ? value
+                 : (this._noteMap[String(value)] ?? 60);
+    const ch     = typeof channel === "number" ? channel : this._channel;
+    const t      = performance.now();
+    this._output.send([0x90 | ch, note, 100], t);
+    this._output.send([0x80 | ch, note,   0], t + 100);
   },
 
-  mount()   { /* no visual component */ },
-  unmount() { },
   destroy() { this._output = null; }
 };
 ```
@@ -164,16 +175,29 @@ export default {
 
 ## Feature 3 — Recorder plugin
 
+### Design note — plugin type
+
+The recorder renders a button in the plugin panel, so it fits the `"visual"` plugin
+protocol (`mount` / `unmount` manage the button DOM). Extend `VisualPlugin` from
+`plugin-base.js`:
+
+```javascript
+import { VisualPlugin } from '/plugin-base.js';
+export default class Recorder extends VisualPlugin { ... }
+```
+
 ### Plugin file: `app/public/plugins/recorder.js`
+
+```javascript
+import { VisualPlugin } from '/plugin-base.js';
+
+export default class Recorder extends VisualPlugin {
+  constructor() { super({ name: "recorder" }); }
+```
 
 Uses the Web Audio `MediaRecorder` API by tapping the master bus through a `MediaStreamDestinationNode`:
 
 ```javascript
-export default {
-  type: "recorder",
-  name: "recorder",
-  version: "1.0.0",
-
   init(host) {
     this._ctx        = host.audioCtx;
     this._masterGain = host.masterGain;
@@ -231,9 +255,9 @@ export default {
     console.log("[REPuLse] Recording saved");
   },
 
-  unmount() { if (this._button) this._button.remove(); },
-  destroy() { this._stopRecording(); }
-};
+  unmount() { if (this._button) this._button.remove(); }
+  destroy() { this._stopRecording(); this.unmount(); }
+}
 ```
 
 ### ⏺ record button placement
