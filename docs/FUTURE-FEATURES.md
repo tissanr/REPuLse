@@ -57,6 +57,15 @@ they are collected here to capture intent without cluttering the active roadmap.
 
 ---
 
+## Editor features
+
+| Idea | Description |
+|---|---|
+| Env-aware completions | Drive the completion list directly from the live runtime `env-atom` — plugin-registered built-ins and dynamically added names appear automatically without re-scanning the source text. Requires a small JS/CLJS bridge to expose `env-atom` keys to the CM6 `CompletionSource`. This is the natural upgrade from Phase C's static + def-tracking approach. |
+| Signature / parameter hints | Pop-up showing argument names when the cursor is inside a call, e.g. `(fast [factor] [pattern])`. Requires hardcoded signatures per built-in and a custom `ViewPlugin` or tooltip. |
+
+---
+
 ## Language features
 
 | Idea | Description |

@@ -170,6 +170,7 @@ npm run test:core        # cljs.test for packages/core
 | 8     | Song arrangement — `arrange`, `play-scenes`, map literals      | ✓ delivered  |
 | 10    | Syntax highlighting — Lezer grammar, bracket matching, oneDark | ✓ delivered  |
 | 9     | External sample repos — `(samples! "github:owner/repo")`      | ✓ delivered  |
+| C     | Code completion — built-in docstrings + live `def` tracking    | ✓ delivered  |
 | A     | More effects — chorus, phaser, tremolo, overdrive, bitcrusher  | not started  |
 | 4     | Live features — named slots, tap BPM, MIDI clock, session URLs | not started  |
 | B     | Richer visuals — audiomotion-analyzer spectrum, p5.js support  | not started  |

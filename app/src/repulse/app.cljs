@@ -11,7 +11,8 @@
             ["@codemirror/commands" :refer [defaultKeymap historyKeymap history]]
             ["@codemirror/language" :refer [bracketMatching]]
             ["@codemirror/theme-one-dark" :refer [oneDark]]
-            ["./lisp-lang/index.js" :refer [lispLanguage]]))
+            ["./lisp-lang/index.js" :refer [lispLanguage]]
+            ["./lisp-lang/providers.js" :refer [setBankNamesProvider setFxNamesProvider]]))
 
 ;;; DOM helpers
 
@@ -136,7 +137,7 @@
                        (samples/load-external! url')
                        (str "loading " url' "…")))
                    "sample-banks"
-                   (fn [] (samples/bank-names))
+                   (fn [] (samples/format-banks))
                    "load-plugin"
                    (fn [url]
                      (let [url' (leval/unwrap url)]
@@ -205,6 +206,10 @@
           (nil? val)
           nil
 
+          ;; Pre-formatted string (e.g. sample-banks, samples!) — display as-is
+          (string? val)
+          (set-output! val :success)
+
           :else
           (set-output! (str "=> " (pr-str val)) :success))))))
 
@@ -266,6 +271,8 @@
 (defn init []
   (build-dom!)
   (ensure-env!)
+  (setBankNamesProvider (fn [] (clj->js (samples/bank-names))))
+  (setFxNamesProvider   (fn [] (clj->js (mapv :name @fx/chain))))
   (let [container (el "editor-container")
         view (make-editor container "(seq :bd :sd :bd :sd)" evaluate!)]
     (reset! editor-view view)

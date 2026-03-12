@@ -229,6 +229,20 @@ See full spec: [PROMPTS/phase-9-external-sample-repos.md](PROMPTS/phase-9-extern
 
 ---
 
+## Phase C — Code Completion ✅ *delivered*
+
+Autocompletion for the editor: all built-in names with docstrings, plus live tracking
+of user-defined `def` bindings as the code changes.
+
+**Key additions:**
+- `completions.js` — static list of all built-ins with `detail` strings shown in the popup
+- `defs-completion.js` — CM6 `CompletionSource` that walks the Lezer syntax tree to find `(def name …)` bindings and adds them dynamically
+- `@codemirror/autocomplete` wired into `lispLanguage` in `index.js` — no `app.cljs` changes
+
+See full spec: [PROMPTS/phase-c-code-completion.md](PROMPTS/phase-c-code-completion.md)
+
+---
+
 ## Phase A — More Effects 📋 *planned*
 
 Additional effect plugins: chorus, phaser, tremolo, overdrive, and bitcrusher — all

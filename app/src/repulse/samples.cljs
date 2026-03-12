@@ -202,3 +202,38 @@
   "Returns a sorted list of all registered bank names."
   []
   (sort (keys @registry)))
+
+(defn- mfr-of [name]
+  ;; Leading TitleCase word = manufacturer, e.g. "Roland" from "RolandTR808_bd"
+  (second (re-find #"^([A-Z][a-z]+)" name)))
+
+(defn format-banks
+  "Returns a human-readable grouped string of all registered sample banks."
+  []
+  (let [all (sort (keys @registry))]
+    (if (empty? all)
+      "No sample banks loaded yet."
+      (let [simple   (filterv #(not (str/includes? % "_")) all)
+            compound (filterv #(str/includes? % "_") all)
+            by-mfr   (group-by #(or (mfr-of %) "misc") compound)
+            mfrs     (sort (keys by-mfr))
+            sections (atom [])]
+        ;; General (Dirt Samples — no underscore in name)
+        (when (seq simple)
+          (swap! sections conj
+                 (str "general (" (count simple) "):\n  "
+                      (str/join "  " simple))))
+        ;; Per-manufacturer
+        (doseq [mfr mfrs]
+          (let [banks    (sort (get by-mfr mfr))
+                by-model (group-by #(first (str/split % #"_" 2)) banks)]
+            (swap! sections conj
+                   (str mfr " (" (count banks) "):\n"
+                        (str/join "\n"
+                          (map (fn [model]
+                                 (let [insts (sort (map #(second (str/split % #"_" 2))
+                                                        (get by-model model)))]
+                                   (str "  " model ": " (str/join "  " insts))))
+                               (sort (keys by-model))))))))
+        (str (count all) " sample banks\n\n"
+             (str/join "\n\n" @sections))))))
