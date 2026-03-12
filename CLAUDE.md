@@ -167,10 +167,12 @@ npm run test:core        # cljs.test for packages/core
 | 4     | Live features — named slots, tap BPM, MIDI clock, session URLs | not started  |
 | 5     | Active code highlighting — editor flashes playing tokens       | ✓ delivered  |
 | 6a    | Plugin system + visual plugins (oscilloscope, AnalyserNode)    | ✓ delivered  |
-| 6b    | Effect plugins — reverb, delay, filter via `(fx ...)`          | not started  |
+| 6b    | Effect plugins — reverb, delay, filter via `(fx ...)`          | ✓ delivered  |
 | 7     | Advanced plugins — per-pattern routing, MIDI out, recorder     | not started  |
 | 8     | Song arrangement — `arrange`, `play-scenes`, map literals      | ✓ delivered  |
 | 9     | External sample repos — `(samples! "github:owner/repo")`      | not started  |
+| A     | More effects — chorus, phaser, tremolo, overdrive, bitcrusher  | not started  |
+| B     | Richer visuals — audiomotion-analyzer spectrum, p5.js support  | not started  |
 
 See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full delivery notes.
 

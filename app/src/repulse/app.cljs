@@ -4,6 +4,7 @@
             [repulse.audio :as audio]
             [repulse.samples :as samples]
             [repulse.plugins :as plugins]
+            [repulse.fx :as fx]
             ["@codemirror/view" :refer [EditorView Decoration keymap lineNumbers]]
             ["@codemirror/state" :refer [EditorState StateEffect StateField]]
             ["@codemirror/commands" :refer [defaultKeymap historyKeymap history]]
@@ -128,14 +129,44 @@
             (assoc (leval/make-env (make-stop-fn) audio/set-bpm!)
                    "load-plugin"
                    (fn [url]
-                     (-> (js* "import(~{})" url)
-                         (.then (fn [m]
-                                  (let [plug (.-default m)]
-                                    (plugins/register! plug (make-host))
-                                    (when (= "visual" (.-type plug))
-                                      (mount-visual! plug)))))
-                         (.catch (fn [e]
-                                   (js/console.warn "[REPuLse] Plugin load failed:" e))))
+                     (let [url' (leval/unwrap url)]
+                       (-> (js* "import(~{})" url')
+                           (.then (fn [m]
+                                    (let [plug (.-default m)]
+                                      ;; If replacing an existing effect, remove it first
+                                      (when (= "effect" (.-type plug))
+                                        (fx/remove-effect! (.-name plug)))
+                                      (plugins/register! plug (make-host))
+                                      (if (= "visual" (.-type plug))
+                                        (mount-visual! plug)
+                                        (when (= "effect" (.-type plug))
+                                          (fx/add-effect! plug))))))
+                           (.catch (fn [e]
+                                     (js/console.warn "[REPuLse] Plugin load failed:" e))))
+                       nil))
+                   "fx"
+                   (fn [& args]
+                     (let [args'     (mapv leval/unwrap args)
+                           first-arg (first args')]
+                       (cond
+                         (= first-arg :off)
+                         (fx/bypass! (cljs.core/name (second args')) true)
+
+                         (= first-arg :on)
+                         (fx/bypass! (cljs.core/name (second args')) false)
+
+                         (= first-arg :remove)
+                         (fx/remove-effect! (cljs.core/name (second args')))
+
+                         :else
+                         (let [effect-name (cljs.core/name first-arg)
+                               rest-args   (rest args')]
+                           (if (keyword? (first rest-args))
+                             ;; Named params: (fx :reverb :wet 0.6 :dry 0.7)
+                             (doseq [[k v] (partition 2 rest-args)]
+                               (fx/set-param! effect-name (cljs.core/name k) v))
+                             ;; Positional: (fx :reverb 0.4) → set "value"
+                             (fx/set-param! effect-name "value" (first rest-args))))))
                      nil)))))
 
 ;;; Evaluation
@@ -227,14 +258,27 @@
         view (make-editor container "(seq :bd :sd :bd :sd)" evaluate!)]
     (reset! editor-view view)
     (.focus view))
-  ;; Auto-load built-in oscilloscope plugin
+  ;; Auto-load built-in visual plugins
   (-> (js* "import('/plugins/oscilloscope.js')")
       (.then (fn [m]
                (let [plug (.-default m)]
                  (plugins/register! plug (make-host))
                  (mount-visual! plug))))
       (.catch (fn [e]
-                (js/console.warn "[REPuLse] oscilloscope load failed:" e)))))
+                (js/console.warn "[REPuLse] oscilloscope load failed:" e))))
+  ;; Auto-load built-in effect plugins (wet mix starts at 0 — silent until (fx ...) is called)
+  (doseq [url ["/plugins/reverb.js"
+               "/plugins/delay.js"
+               "/plugins/filter.js"
+               "/plugins/compressor.js"
+               "/plugins/dattorro-reverb.js"]]
+    (-> (js* "import(~{})" url)
+        (.then (fn [m]
+                 (let [plug (.-default m)]
+                   (plugins/register! plug (make-host))
+                   (fx/add-effect! plug))))
+        (.catch (fn [e]
+                  (js/console.warn "[REPuLse] Effect load failed:" url e))))))
 
 (defn reload []
   ;; Hot-reload hook: re-attach evaluate! without rebuilding the DOM

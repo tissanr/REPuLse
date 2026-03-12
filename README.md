@@ -68,7 +68,14 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(arrange [[p 4] [q 8]])` | Play sections in order for N cycles each, then loop |
 | `(play-scenes [p q r])` | Play each pattern for 1 cycle in sequence, then loop |
 | `(bpm 140)` | Set the tempo in BPM (default: 120) |
-| `(load-plugin url)` | Load a visual plugin from a URL |
+| `(fx :reverb 0.4)` | Set reverb wet mix (built-in convolution reverb) |
+| `(fx :dattorro-reverb 0.5)` | Dattorro plate reverb (AudioWorklet, high quality) |
+| `(fx :delay :wet 0.4 :time 0.25)` | Tape delay with feedback |
+| `(fx :filter 800)` | Lowpass filter cutoff in Hz |
+| `(fx :compressor :threshold -18)` | Dynamics compressor |
+| `(fx :off :reverb)` | Bypass an effect (transparent) |
+| `(fx :on :reverb)` | Re-enable a bypassed effect |
+| `(load-plugin url)` | Load a visual or effect plugin from a URL |
 | `(stop)` | Stop playback |
 
 ### Sound values
@@ -115,6 +122,13 @@ Tidal Drum Machines) are loaded at startup. Use `(sound :bd 2)` for indexed acce
 
 ; Samples from the library
 (seq (sound :tabla 0) (sound :tabla 1) :_ :_)
+
+; Effect chain — reverb and filtered delay
+(do
+  (fx :reverb 0.3)
+  (fx :delay :wet 0.4 :time 0.25 :feedback 0.4)
+  (fx :filter 3000)
+  (seq :bd :sd :bd :sd))
 ```
 
 ### Language features
@@ -156,10 +170,18 @@ repulse/
 │   │   ├── app.cljs     # UI bootstrap + CodeMirror 6 editor
 │   │   ├── audio.cljs   # Web Audio scheduler + WASM integration
 │   │   ├── samples.cljs # Strudel CDN sample loader
-│   │   └── plugins.cljs # Plugin registry
+│   │   ├── plugins.cljs # Plugin registry
+│   │   └── fx.cljs      # Effect chain manager
 │   └── public/
 │       ├── plugins/
-│       │   └── oscilloscope.js  # Built-in oscilloscope visual plugin
+│       │   ├── oscilloscope.js      # Built-in oscilloscope visual plugin
+│       │   ├── reverb.js            # Convolution reverb effect
+│       │   ├── delay.js             # Tape delay effect
+│       │   ├── filter.js            # Biquad filter effect
+│       │   ├── compressor.js        # Dynamics compressor effect
+│       │   └── dattorro-reverb.js   # Dattorro plate reverb (AudioWorklet)
+│       ├── worklets/
+│       │   └── dattorro-reverb-processor.js  # AudioWorkletProcessor
 │       └── …            # Static assets + compiled JS output
 ├── package.json     # npm workspaces root
 └── shadow-cljs.edn  # Build config

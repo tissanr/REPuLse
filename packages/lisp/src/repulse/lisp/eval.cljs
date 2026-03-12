@@ -5,7 +5,7 @@
 ;;; Source-tracking helpers
 
 (defn- sourced? [x] (instance? reader/SourcedVal x))
-(defn- unwrap  [x] (if (sourced? x) (:v x) x))
+(defn unwrap [x] (if (sourced? x) (:v x) x))
 (defn- source-of [x]
   (if (sourced? x)
     (:source x)

@@ -213,7 +213,7 @@ Maintains a map of `plugin-name → {:plugin js-obj :type keyword}`.
 (visual-plugins)          ; returns all registered :visual plugins
 ```
 
-**Plugin interface** (plain JS object, ES module default export):
+**Visual plugin interface** (plain JS object, ES module default export):
 
 ```javascript
 { type: "visual", name: "oscilloscope", version: "1.0.0",
@@ -221,6 +221,18 @@ Maintains a map of `plugin-name → {:plugin js-obj :type keyword}`.
   mount(container) { /* append canvas, start rAF loop */ },
   unmount() { /* cancel rAF, remove canvas */ },
   destroy() { /* unmount + release references */ } }
+```
+
+**Effect plugin interface** (plain JS object, ES module default export):
+
+```javascript
+{ type: "effect", name: "reverb", version: "1.0.0",
+  init(host)      { /* called once — start async work (e.g. addModule) here */ },
+  createNodes(ctx){ /* synchronous — build Web Audio graph, return {inputNode, outputNode} */ },
+  setParam(name, value) { /* "wet"/"value" = mix; effect-specific params forwarded to nodes */ },
+  bypass(on)      { /* true → transparent pass-through; false → restore wet */ },
+  getParams()     { return { wet: … }; },
+  destroy()       { /* disconnect and release all nodes */ } }
 ```
 
 **Host API** passed to every plugin on `init`:
@@ -241,13 +253,86 @@ auto-loaded at startup. Third-party plugins can be loaded at runtime:
 (load-plugin "https://example.com/my-spectrum.js")
 ```
 
+### `fx.cljs` — Effect chain manager
+
+**Source:** `app/src/repulse/fx.cljs`
+
+Maintains an ordered vector of effect plugin entries and manages the audio graph wiring
+between them.
+
+```clojure
+(defonce chain (atom []))   ; [{:name "reverb" :plugin js-obj :input node :output node} ...]
+
+(add-effect! plugin)              ; call createNodes, append to chain, rewire
+(remove-effect! effect-name)      ; destroy plugin, remove from chain, rewire
+(set-param! effect-name param value) ; forward to plugin.setParam
+(bypass! effect-name enabled)     ; forward to plugin.bypass
+```
+
+`rewire!` rebuilds the audio graph after any change:
+
+```
+masterGain → effect1.input → effect1.output
+           → effect2.input → effect2.output
+           → …
+           → analyser → destination
+```
+
+All disconnections happen before reconnection to avoid duplicate signal paths.
+
 ### `app.cljs` — UI and wiring
 
 - Builds the DOM (header, CodeMirror editor, plugin panel, footer)
-- Creates the Lisp environment via `leval/make-env`; adds `load-plugin` built-in
-- On startup, auto-loads the oscilloscope plugin via dynamic `import()`
+- Creates the Lisp environment via `leval/make-env`; injects `load-plugin` and `fx` built-ins
+- On startup, auto-loads the oscilloscope (visual) and five effect plugins via dynamic `import()`
+- Effect plugins auto-loaded: `reverb`, `delay`, `filter`, `compressor`, `dattorro-reverb`
 - Routes evaluated results: Pattern → audio scheduler, other → output line
 - **▶ play / ■ stop** button evaluates the editor buffer or stops playback
+
+---
+
+## Audio graph topology
+
+At runtime the master signal chain is:
+
+```
+AudioWorkletNode (synthesis)
+        │
+        ▼
+   masterGain
+        │
+        ▼  (rewired by fx.cljs whenever effects are added/removed)
+  reverb.input → reverb.output
+        │
+        ▼
+  delay.input  → delay.output
+        │
+        ▼
+  filter.input → filter.output
+        │
+        ▼
+  compressor.input → compressor.output
+        │
+        ▼
+  dattorro-reverb.input → dattorro-reverb.output
+        │
+        ▼
+   analyser (AnalyserNode — tapped by visual plugins)
+        │
+        ▼
+   destination
+```
+
+Each effect plugin internally routes through a dry/wet topology so bypassing any
+single effect is click-free and transparent:
+
+```
+inputNode ─┬─── dry GainNode ───────────────────────┬── outputNode
+           └─── processing (conv/delay/etc) ─ wet GainNode ─┘
+```
+
+When `wet = 0` (default for delay, dattorro-reverb) the effect is inaudible but
+in the chain; the dry signal passes unchanged.
 
 ---
 
@@ -329,9 +414,11 @@ npm workspaces link the three packages together. The dev HTTP server serves
 | **4** | Live features — named pattern slots, tap BPM, MIDI clock, session URLs | 📋 planned |
 | **5** | Active code highlighting — editor flashes source tokens as they play | ✅ delivered |
 | **6a** | Plugin system + visual plugins — AnalyserNode tap, oscilloscope | ✅ delivered |
-| **6b** | Effect plugins — reverb, delay, filter, compressor via `(fx ...)` | 📋 planned |
+| **6b** | Effect plugins — reverb, delay, filter, compressor via `(fx ...)` | ✅ delivered |
 | **7** | Advanced plugins — per-pattern routing, MIDI out, recorder | 📋 planned |
 | **8** | Song arrangement — `arrange`, `play-scenes`, map literals | ✅ delivered |
 | **9** | External sample repos — `(samples! "github:owner/repo")` | 📋 planned |
+| **A** | More effects — chorus, phaser, tremolo, overdrive, bitcrusher | 📋 planned |
+| **B** | Richer visuals — audiomotion-analyzer spectrum, p5.js plugin support | 📋 planned |
 
 See `PROMPTS/` for detailed specifications of each phase.

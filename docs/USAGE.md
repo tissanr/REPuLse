@@ -10,16 +10,27 @@ evaluate them with **Ctrl+Enter** (or the **▶ play** button), and hear them lo
 1. [Getting started](#getting-started)
 2. [The editor](#the-editor)
 3. [Language basics](#language-basics)
+   - [Comments](#comments)
+   - [Literals](#literals)
+   - [Arithmetic](#arithmetic)
+   - [Comparison and logic](#comparison-and-logic)
+   - [Map literals](#map-literals-and-operations)
+   - [Local bindings — `let`](#local-bindings--let)
+   - [Anonymous functions — `fn`](#anonymous-functions--fn)
+   - [Conditionals — `if`](#conditionals--if)
+   - [Sequential evaluation — `do`](#sequential-evaluation--do)
+   - [Top-level definitions — `def`](#top-level-definitions--def)
 4. [Pattern functions](#pattern-functions)
 5. [Sound and samples](#sound-and-samples)
 6. [Tempo control](#tempo-control)
 7. [Combining patterns](#combining-patterns)
 8. [Defining names](#defining-names)
 9. [Song arrangement](#song-arrangement)
-10. [Visual plugins](#visual-plugins)
-11. [Available sample banks](#available-sample-banks)
-12. [Error messages](#error-messages)
-13. [Examples](#examples)
+10. [Effect plugins](#effect-plugins)
+11. [Visual plugins](#visual-plugins)
+12. [Available sample banks](#available-sample-banks)
+13. [Error messages](#error-messages)
+14. [Examples](#examples)
 
 ---
 
@@ -60,11 +71,25 @@ when a pattern is playing.
 The **▶ play** / **■ stop** button in the header evaluates the current editor content and
 toggles playback.
 
+**Active code highlighting:** while a pattern plays, the tokens in the editor that produced
+each event flash amber at the moment they fire. This lets you see exactly which part of your
+code is being heard — useful for understanding how `every`, `fast`, and nested patterns behave
+in real time.
+
 ---
 
 ## Language basics
 
 REPuLse-Lisp is a minimal Lisp. Every expression is either a literal or a function call.
+
+### Comments
+
+```lisp
+; this is a line comment — everything after ; is ignored
+(seq :bd :sd)  ; inline comment after an expression
+```
+
+Comments run to the end of the line. There are no block comments.
 
 ### Literals
 
@@ -76,6 +101,11 @@ REPuLse-Lisp is a minimal Lisp. Every expression is either a literal or a functi
 true false  ; booleans
 nil         ; null
 ```
+
+Strings support the standard escape sequences: `\n` (newline), `\t` (tab), `\\` (backslash),
+`\"` (double quote).
+
+Commas are treated as whitespace — `{:a 1, :b 2}` is the same as `{:a 1 :b 2}`.
 
 ### Function calls
 
@@ -134,10 +164,74 @@ Maps are mainly used for parametric section factories:
   (fast x (seq :bd :sd)))
 ```
 
+The body of a `let` may contain multiple expressions; the last is returned:
+
+```lisp
+(let [n 3
+      base (seq :bd :sd)]
+  (fast n base))    ; this is the return value
+```
+
+Later bindings may reference earlier ones in the same `let`:
+
+```lisp
+(let [base (seq :bd :sd)
+      fast-base (fast 2 base)]
+  fast-base)
+```
+
 ### Anonymous functions — `fn`
 
 ```lisp
 (fn [x] (fast x (seq :bd :sd)))
+```
+
+A function body may contain multiple expressions; the last one is the return value:
+
+```lisp
+(fn [n]
+  (def base (seq :bd :sd))   ; side effect: binds 'base'
+  (fast n base))             ; return value
+```
+
+`lambda` is an alias for `fn`:
+
+```lisp
+(lambda [x] (* x 2))        ; same as (fn [x] (* x 2))
+```
+
+### Conditionals — `if`
+
+```lisp
+(if condition then-expr else-expr)
+(if condition then-expr)     ; else is optional — returns nil when false
+```
+
+```lisp
+(if true  :yes :no)          ; => :yes
+(if false :yes :no)          ; => :no
+(if false :yes)              ; => nil
+
+; Common pattern inside fmap:
+(fmap (fn [x] (if (= x :bd) 80 440)) (seq :bd :sd))
+```
+
+### Sequential evaluation — `do`
+
+`do` evaluates a sequence of expressions and returns the value of the last one:
+
+```lisp
+(do (bpm 140) (seq :bd :sd)) ; set BPM then return the pattern
+```
+
+This is useful when you want to perform a side effect (like `bpm`) before returning a pattern.
+`def` inside `do` works as expected:
+
+```lisp
+(do
+  (def kick (seq :bd :_ :bd :_))
+  (def snare (seq :_ :sd :_ :sd))
+  (stack kick snare))
 ```
 
 ### Top-level definitions — `def`
@@ -399,6 +493,142 @@ Shorthand where every section plays for exactly 1 cycle. Useful for short, bar-l
    [verse-2 8]
    [chorus  8]])
 ```
+
+---
+
+## Effect plugins
+
+REPuLse has a built-in effect chain between the synthesis engine and the audio output.
+Five effects are loaded automatically at startup, all silent by default (wet = 0).
+Control them with the `fx` built-in.
+
+### `fx` — effect control
+
+```lisp
+; Set wet mix (positional — shorthand)
+(fx :reverb 0.4)           ; reverb wet = 0.4
+(fx :delay 0.5)            ; delay wet = 0.5
+
+; Set named parameters
+(fx :reverb :wet 0.4 :room 0.8)
+(fx :delay  :wet 0.5 :time 0.25 :feedback 0.4)
+(fx :filter :freq 800 :q 2)
+
+; Bypass (mute) an effect
+(fx :off :reverb)          ; bypass reverb — dry signal passes unchanged
+(fx :on  :reverb)          ; un-bypass reverb
+
+; Remove an effect from the chain
+(fx :remove :delay)
+```
+
+### Built-in effects
+
+#### `reverb` — convolution reverb
+
+Stereo convolution reverb using a procedurally generated impulse response.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Wet mix   | `wet` / positional | `0.3` | 0–1 |
+
+```lisp
+(fx :reverb 0.4)
+```
+
+#### `delay` — tape delay
+
+Stereo feedback delay with a tempo-synced default time.
+
+| Parameter | Key | Default | Description |
+|-----------|-----|---------|-------------|
+| Wet mix   | `wet` / positional | `0.0` | Overall delay level |
+| Delay time | `time` | `0.375` s | Delay in seconds |
+| Feedback  | `feedback` | `0.35` | Repeat amount (max 0.95) |
+
+```lisp
+(fx :delay 0.4)
+(fx :delay :wet 0.4 :time 0.25 :feedback 0.5)
+```
+
+#### `filter` — biquad filter
+
+A `BiquadFilterNode` with configurable type, cutoff, and resonance.
+
+| Parameter | Key | Default | Description |
+|-----------|-----|---------|-------------|
+| Cutoff freq | `freq` / positional | `20000` Hz | Filter cutoff (20000 = fully open) |
+| Resonance   | `q`   | `1.0` | Q / resonance |
+| Filter type | `type` | `"lowpass"` | `"lowpass"` `"highpass"` `"bandpass"` `"notch"` |
+
+```lisp
+(fx :filter 800)                          ; lowpass at 800 Hz
+(fx :filter :freq 1200 :q 4)             ; resonant lowpass
+(fx :filter :freq 500 :type "highpass")  ; highpass
+```
+
+#### `compressor` — dynamics compressor
+
+A `DynamicsCompressorNode` with full dry/wet control.
+
+| Parameter | Key | Default | Description |
+|-----------|-----|---------|-------------|
+| Wet mix   | `wet` / positional | `1.0` | Compressed signal level |
+| Threshold | `threshold` | `-24` dB | Level above which compression starts |
+| Ratio     | `ratio` | `4` | Compression ratio |
+| Attack    | `attack` | `0.003` s | |
+| Release   | `release` | `0.25` s | |
+| Knee      | `knee` | `10` dB | Soft-knee width |
+
+```lisp
+(fx :compressor 0.8)
+(fx :compressor :threshold -18 :ratio 6)
+```
+
+#### `dattorro-reverb` — Dattorro plate reverb
+
+A high-quality plate reverb implemented as an AudioWorkletProcessor, based on the
+algorithm published by Jon Dattorro (AES 1997). Uses a network of all-pass filters,
+delay lines, and LFO modulation for a lush, shimmer-free tail.
+
+| Parameter | Key | Default | Description |
+|-----------|-----|---------|-------------|
+| Wet mix   | `wet` / positional | `0.0` | Reverb return level |
+| Decay     | `decay` | `0.5` | Tail length (0 = dead, 0.99 = very long) |
+| Damping   | `damping` | `0.0005` | High-frequency absorption (0 = bright, 0.9 = dark) |
+| Bandwidth | `bandwidth` | `0.9999` | Input high-frequency rolloff |
+| Pre-delay | `predelay` | `0.0` s | Delay before the reverb begins (0–0.5 s) |
+
+```lisp
+(fx :dattorro-reverb 0.5)
+(fx :dattorro-reverb :wet 0.5 :decay 0.8 :damping 0.2)
+(fx :dattorro-reverb :predelay 0.02)   ; 20 ms pre-delay
+```
+
+Note: the worklet loads asynchronously. Reverb becomes active a few milliseconds
+after startup — this is inaudible in practice.
+
+### Effect chain order
+
+The fixed signal chain is:
+```
+synthesis → reverb → delay → filter → compressor → dattorro-reverb → output
+```
+
+Use `(fx :remove :name)` to take an effect out of the chain entirely.
+Use `(fx :off :name)` / `(fx :on :name)` for transparent bypass without removing.
+
+### Loading a custom effect
+
+Custom effect plugins follow the same plugin interface as the built-ins and can be
+loaded at runtime:
+
+```lisp
+(load-plugin "/plugins/my-effect.js")
+(load-plugin "https://example.com/chorus.js")
+```
+
+See `docs/ARCHITECTURE.md` for the full effect plugin interface specification.
 
 ---
 
