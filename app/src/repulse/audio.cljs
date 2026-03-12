@@ -174,12 +174,13 @@
         (or (worklet-trigger! (name bank) t)
             (make-sine ac t 440))))
 
-    ;; Keyword — sample registry first, Worklet synth second, JS fallback
+    ;; Keyword — resolve prefix, then sample registry → Worklet → JS fallback
     (keyword? value)
-    (cond
-      (samples/has-bank? value) (samples/play! ac t value 0)
-      :else (or (worklet-trigger! (name value) t)
-                (js-synth ac t value)))
+    (let [resolved (samples/resolve-keyword value)]
+      (cond
+        (samples/has-bank? resolved) (samples/play! ac t resolved 0)
+        :else (or (worklet-trigger! (name value) t)
+                  (js-synth ac t value))))
 
     ;; Number — frequency in Hz
     (number? value)

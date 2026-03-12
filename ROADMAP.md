@@ -287,6 +287,31 @@ See full spec: [PROMPTS/phase-e-context-panel.md](PROMPTS/phase-e-context-panel.
 
 ---
 
+## Phase F — Drum Machine Bank Prefix ✅ *delivered*
+
+A `(bank :MachineName)` built-in that sets a global drum machine prefix for the session.
+After `(bank :AkaiLinn)`, a bare `:bd` resolves to the `AkaiLinn_bd` sample bank
+automatically — no need to spell out the full name every time.
+
+```lisp
+(do
+  (bank :AkaiLinn)
+  (seq :bd :sd :_ :sd))
+```
+
+**Key additions:**
+- `active-bank-prefix` atom in `samples.cljs` — nil or a prefix string like `"AkaiLinn"`
+- `set-bank-prefix!` — sets or clears the prefix; logs to console
+- `resolve-keyword` — tries `<prefix>_<kw>` first; falls through silently if bank absent
+- `play-event` in `audio.cljs` updated to call `resolve-keyword` before sample lookup
+- `(bank :Name)` / `(bank nil)` Lisp built-in registered in `ensure-env!`
+- Context panel status bar shows the active bank name (in purple); hidden when cleared
+- `add-watch` on `active-bank-prefix` so the panel updates reactively
+
+See full spec: [PROMPTS/phase-f-bank-prefix.md](PROMPTS/phase-f-bank-prefix.md)
+
+---
+
 ## Phase 4 — Live Performance Features 📋 *planned*
 
 Named pattern slots, tap BPM, MIDI clock sync, and shareable session URLs — all

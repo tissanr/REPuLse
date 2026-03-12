@@ -203,6 +203,7 @@ footer {
 }
 
 .ctx-bpm     { color: #e5c07b; font-weight: bold; }
+.ctx-bank    { color: #c678dd; font-weight: bold; }
 .ctx-playing { color: #98c379; }
 .ctx-stopped { color: var(--dim); }
 

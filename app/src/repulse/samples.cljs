@@ -11,6 +11,16 @@
 ;; In-flight fetch promises: url -> Promise<AudioBuffer>
 (def in-flight (atom {}))
 
+;; Active drum machine prefix — nil means no prefix active.
+;; When set, keyword :kw is looked up as "<prefix>_<kw>" first.
+(defonce active-bank-prefix (atom nil))
+
+(defn set-bank-prefix!
+  "Set the global drum machine prefix. Pass nil to clear."
+  [prefix]
+  (reset! active-bank-prefix (when prefix (name prefix)))
+  (js/console.log (str "[REPuLse] bank prefix: " (or @active-bank-prefix "none"))))
+
 ;; Default sample manifests (hosted on dough-samples, Strudel's canonical source)
 (def DEFAULT-MANIFESTS
   ["https://raw.githubusercontent.com/felixroos/dough-samples/main/Dirt-Samples.json"
@@ -52,6 +62,16 @@
   "Returns true if the named bank is registered."
   [bank]
   (boolean (seq (get @registry (name bank)))))
+
+(defn resolve-keyword
+  "Resolve a keyword against the active prefix.
+   If a prefix is active and \"<prefix>_<kw>\" is a registered bank, returns that
+   prefixed keyword. Otherwise returns kw unchanged."
+  [kw]
+  (if-let [pfx @active-bank-prefix]
+    (let [candidate (keyword (str pfx "_" (name kw)))]
+      (if (has-bank? candidate) candidate kw))
+    kw))
 
 (defn get-url
   "Get the URL for the nth sample in a bank. Wraps around if n >= count."

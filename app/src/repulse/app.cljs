@@ -158,6 +158,10 @@
                            (.catch (fn [e]
                                      (js/console.warn "[REPuLse] Plugin load failed:" e))))
                        nil))
+                   "bank"
+                   (fn [prefix]
+                     (samples/set-bank-prefix! (leval/unwrap prefix))
+                     (str "bank: " (if prefix (name (leval/unwrap prefix)) "cleared")))
                    "fx"
                    (fn [& args]
                      (let [args'     (mapv leval/unwrap args)
@@ -240,6 +244,8 @@
           playing? (audio/playing?)]
       (set! (.-innerHTML status-el)
             (str "<span class=\"ctx-bpm\">" bpm " BPM</span>"
+                 (when-let [pfx @samples/active-bank-prefix]
+                   (str "<span class=\"ctx-bank\">" pfx "</span>"))
                  "<span class=\"" (if playing? "ctx-playing" "ctx-stopped") "\">"
                  (if playing? "&#9679; playing" "&#9675; stopped")
                  "</span>"))))
@@ -267,7 +273,7 @@
                    (apply str
                           (map (fn [{:keys [name plugin bypassed?]}]
                                  (let [params    (when plugin
-                                                   (try (js->clj (.getParams plugin))
+                                                   (try (js->clj (.getParams ^js plugin))
                                                         (catch :default _ {})))
                                        first-kv  (first (seq params))
                                        param-str (when first-kv
@@ -397,9 +403,10 @@
         (.catch (fn [e]
                   (js/console.warn "[REPuLse] Effect load failed:" url e)))))
   ;; Context panel — reactive updates
-  (add-watch env-atom             ::ctx (fn [_ _ _ _] (render-context-panel!)))
-  (add-watch fx/chain             ::ctx (fn [_ _ _ _] (render-context-panel!)))
-  (add-watch audio/scheduler-state ::ctx (fn [_ _ _ _] (render-context-panel!)))
+  (add-watch env-atom                    ::ctx (fn [_ _ _ _] (render-context-panel!)))
+  (add-watch fx/chain                    ::ctx (fn [_ _ _ _] (render-context-panel!)))
+  (add-watch audio/scheduler-state       ::ctx (fn [_ _ _ _] (render-context-panel!)))
+  (add-watch samples/active-bank-prefix  ::ctx (fn [_ _ _ _] (render-context-panel!)))
   (render-context-panel!))
 
 (defn reload []
