@@ -292,7 +292,12 @@
   (doseq [url ["/plugins/reverb.js"
                "/plugins/delay.js"
                "/plugins/filter.js"
-               "/plugins/dattorro-reverb.js"]]
+               "/plugins/dattorro-reverb.js"
+               "/plugins/chorus.js"
+               "/plugins/phaser.js"
+               "/plugins/tremolo.js"
+               "/plugins/overdrive.js"
+               "/plugins/bitcrusher.js"]]
     (-> (js* "import(~{})" url)
         (.then (fn [m]
                  (let [plug (.-default m)]

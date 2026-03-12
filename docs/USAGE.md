@@ -608,11 +608,91 @@ delay lines, and LFO modulation for a lush, shimmer-free tail.
 Note: the worklet loads asynchronously. Reverb becomes active a few milliseconds
 after startup — this is inaudible in practice.
 
+#### `chorus` — stereo chorus
+
+Two LFO-modulated delay lines creating stereo width and shimmer.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Wet mix   | `wet` / positional | `0.0` | 0–1 |
+| Rate      | `rate` | `1.5` Hz | 0.1–8 Hz |
+| Depth     | `depth` | `0.003` s | 0–0.02 s |
+| Delay     | `delay` | `0.025` s | 0.005–0.05 s |
+
+```lisp
+(fx :chorus 0.5)
+(fx :chorus :wet 0.5 :rate 2)
+```
+
+#### `phaser` — phase shifter
+
+All-pass filter chain swept by an LFO for classic swirling effect.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Wet mix   | `wet` / positional | `0.0` | 0–1 |
+| Rate      | `rate` | `0.5` Hz | 0.01–8 Hz |
+| Depth     | `depth` | `0.7` | 0–1 |
+| Base freq | `freq` | `1000` Hz | 100–8000 Hz |
+
+```lisp
+(fx :phaser 0.6)
+(fx :phaser :rate 0.8 :depth 0.9)
+```
+
+#### `tremolo` — amplitude tremolo
+
+Amplitude modulation at low frequencies — the sound pulses rhythmically.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Depth     | `depth` / positional | `0.0` | 0–1 |
+| Rate      | `rate` | `4.0` Hz | 0.1–20 Hz |
+| Shape     | `shape` | `"sine"` | `"sine"` `"square"` `"sawtooth"` |
+
+```lisp
+(fx :tremolo 0.8)
+(fx :tremolo :depth 0.8 :rate 6)
+(fx :tremolo :shape "square")
+```
+
+#### `overdrive` — soft-clip distortion
+
+Waveshaper saturation with a tone control.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Drive     | `drive` / positional | `0.0` | 0–1 |
+| Tone      | `tone` | `20000` Hz | 500–12000 Hz |
+| Wet mix   | `wet` | `0.0` | 0–1 |
+
+```lisp
+(fx :overdrive 0.7)
+(fx :overdrive :drive 0.8 :tone 4000)
+```
+
+#### `bitcrusher` — lo-fi bit/sample-rate reduction
+
+Reduces bit depth and sample rate for crunchy, glitchy textures. Uses an AudioWorklet.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Bits      | `bits` / positional | `16` | 1–16 |
+| Rate      | `rate` | `1.0` | 0.01–1.0 |
+| Wet mix   | `wet` | `0.0` | 0–1 |
+
+```lisp
+(fx :bitcrusher 0.8)
+(fx :bitcrusher :bits 6)
+(fx :bitcrusher :bits 4 :rate 0.25)
+```
+
 ### Effect chain order
 
 The fixed signal chain is:
 ```
-synthesis → reverb → delay → filter → compressor → dattorro-reverb → output
+synthesis → reverb → delay → filter → compressor → dattorro-reverb
+         → chorus → phaser → tremolo → overdrive → bitcrusher → output
 ```
 
 Use `(fx :remove :name)` to take an effect out of the chain entirely.
