@@ -1,6 +1,7 @@
 import { parser } from "./parser.js";
 import { LRLanguage, LanguageSupport, indentNodeProp, foldNodeProp } from "@codemirror/language";
 import { repulseLispHighlight } from "./highlight.js";
+import { rainbowBrackets } from "./rainbow.js";
 
 const lispParser = parser.configure({
   props: [
@@ -18,5 +19,6 @@ const lispParser = parser.configure({
 });
 
 export const lispLanguage = new LanguageSupport(
-  LRLanguage.define({ parser: lispParser, languageData: { commentTokens: { line: ";" } } })
+  LRLanguage.define({ parser: lispParser, languageData: { commentTokens: { line: ";" } } }),
+  [rainbowBrackets]
 );

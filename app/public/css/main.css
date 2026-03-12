@@ -148,6 +148,14 @@ footer {
   border-radius: 3px;
 }
 
+/* Rainbow delimiters — 6 depth levels, cycling through the oneDark palette */
+.rainbow-1 { color: #e06c75; } /* red    */
+.rainbow-2 { color: #e5c07b; } /* gold   */
+.rainbow-3 { color: #98c379; } /* green  */
+.rainbow-4 { color: #56b6c2; } /* cyan   */
+.rainbow-5 { color: #c678dd; } /* purple */
+.rainbow-6 { color: #61afef; } /* blue   */
+
 /* Active code highlighting — flashes when a pattern event fires */
 .active-event {
   background-color: rgba(255, 200, 50, 0.35);
