@@ -103,6 +103,9 @@
 (defonce env-atom
   (atom nil))
 
+;; Keys present in the initial env — used to filter built-ins from user defs
+(defonce ^:private builtin-names (atom #{}))
+
 ;;; Plugin support
 
 (defn make-host []
@@ -178,7 +181,9 @@
                                (fx/set-param! effect-name (cljs.core/name k) v))
                              ;; Positional: (fx :reverb 0.4) → set "value"
                              (fx/set-param! effect-name "value" (first rest-args))))))
-                     nil)))))
+                     nil)))
+    ;; Snapshot built-in names so render-context-panel! can filter them out
+    (reset! builtin-names (set (keys @env-atom)))))
 
 ;;; Evaluation
 
@@ -212,6 +217,70 @@
 
           :else
           (set-output! (str "=> " (pr-str val)) :success))))))
+
+;;; Context panel
+
+(defn- infer-type [v]
+  (cond
+    (and (map? v) (fn? (:query v))) "pattern"
+    (fn? v)                          "fn"
+    (number? v)                      "number"
+    (string? v)                      "string"
+    (keyword? v)                     "keyword"
+    :else                            "value"))
+
+(defn- fmt-pv [v]
+  (if (number? v)
+    (if (== v (Math/round v)) (str (int v)) (.toFixed v 2))
+    (str v)))
+
+(defn- render-context-panel! []
+  (when-let [status-el (el "ctx-status")]
+    (let [bpm     (Math/round (/ 240.0 (:cycle-dur @audio/scheduler-state)))
+          playing? (audio/playing?)]
+      (set! (.-innerHTML status-el)
+            (str "<span class=\"ctx-bpm\">" bpm " BPM</span>"
+                 "<span class=\"" (if playing? "ctx-playing" "ctx-stopped") "\">"
+                 (if playing? "&#9679; playing" "&#9675; stopped")
+                 "</span>"))))
+  (when-let [bindings-el (el "ctx-bindings")]
+    (let [env       (or @env-atom {})
+          builtins  @builtin-names
+          user-defs (sort (remove builtins (keys env)))]
+      (set! (.-innerHTML bindings-el)
+            (str "<div class=\"ctx-section-title\">Bindings</div>"
+                 (if (empty? user-defs)
+                   "<div class=\"ctx-empty\">—</div>"
+                   (apply str
+                          (map (fn [k]
+                                 (str "<div class=\"ctx-row\">"
+                                      "<span class=\"ctx-name\">" k "</span>"
+                                      "<span class=\"ctx-type\">" (infer-type (get env k)) "</span>"
+                                      "</div>"))
+                               user-defs)))))))
+  (when-let [effects-el (el "ctx-effects")]
+    (let [chain @fx/chain]
+      (set! (.-innerHTML effects-el)
+            (str "<div class=\"ctx-section-title\">Effects</div>"
+                 (if (empty? chain)
+                   "<div class=\"ctx-empty\">—</div>"
+                   (apply str
+                          (map (fn [{:keys [name plugin bypassed?]}]
+                                 (let [params    (when plugin
+                                                   (try (js->clj (.getParams plugin))
+                                                        (catch :default _ {})))
+                                       first-kv  (first (seq params))
+                                       param-str (when first-kv
+                                                   (str (first first-kv) ": "
+                                                        (fmt-pv (second first-kv))))]
+                                   (str "<div class=\"ctx-row\">"
+                                        "<span class=\"ctx-name\">" name "</span>"
+                                        (cond
+                                          bypassed?  "<span class=\"ctx-bypass\">off</span>"
+                                          param-str  (str "<span class=\"ctx-param\">" param-str "</span>")
+                                          :else      "")
+                                        "</div>")))
+                               chain))))))))
 
 ;;; CodeMirror editor
 
@@ -275,7 +344,14 @@
                "    <div id=\"playing-dot\" class=\"playing-dot\"></div>"
                "  </div>"
                "</header>"
-               "<div id=\"editor-container\" class=\"editor-container\"></div>"
+               "<div class=\"main-area\">"
+               "  <div id=\"editor-container\" class=\"editor-container\"></div>"
+               "  <div id=\"context-panel\" class=\"context-panel\">"
+               "    <div id=\"ctx-status\" class=\"ctx-status\"></div>"
+               "    <div id=\"ctx-bindings\" class=\"ctx-section\"></div>"
+               "    <div id=\"ctx-effects\" class=\"ctx-section\"></div>"
+               "  </div>"
+               "</div>"
                "<div id=\"plugin-panel\" class=\"plugin-panel hidden\"></div>"
                "<footer>"
                "  <span id=\"output\" class=\"output\">ready &mdash; Ctrl+Enter or click play</span>"
@@ -319,7 +395,12 @@
                    (plugins/register! plug (make-host))
                    (fx/add-effect! plug))))
         (.catch (fn [e]
-                  (js/console.warn "[REPuLse] Effect load failed:" url e))))))
+                  (js/console.warn "[REPuLse] Effect load failed:" url e)))))
+  ;; Context panel — reactive updates
+  (add-watch env-atom             ::ctx (fn [_ _ _ _] (render-context-panel!)))
+  (add-watch fx/chain             ::ctx (fn [_ _ _ _] (render-context-panel!)))
+  (add-watch audio/scheduler-state ::ctx (fn [_ _ _ _] (render-context-panel!)))
+  (render-context-panel!))
 
 (defn reload []
   ;; Hot-reload hook: re-attach evaluate! without rebuilding the DOM

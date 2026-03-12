@@ -25,10 +25,11 @@
 (defn add-effect! [^js plugin]
   (let [ac    (audio/get-ctx)
         nodes (.createNodes plugin ac)]
-    (swap! chain conj {:name   (.-name plugin)
-                       :plugin plugin
-                       :input  (.-inputNode nodes)
-                       :output (.-outputNode nodes)})
+    (swap! chain conj {:name      (.-name plugin)
+                       :plugin    plugin
+                       :input     (.-inputNode nodes)
+                       :output    (.-outputNode nodes)
+                       :bypassed? false})
     (rewire!)))
 
 (defn remove-effect! [effect-name]
@@ -43,4 +44,5 @@
 
 (defn bypass! [effect-name enabled]
   (when-let [entry (some #(when (= effect-name (:name %)) %) @chain)]
-    (.bypass ^js (:plugin entry) enabled)))
+    (.bypass ^js (:plugin entry) enabled)
+    (swap! chain (fn [c] (mapv #(if (= effect-name (:name %)) (assoc % :bypassed? enabled) %) c)))))
