@@ -168,7 +168,7 @@ npm run test:core        # cljs.test for packages/core
 | 6a    | Plugin system + visual plugins (oscilloscope, AnalyserNode)    | ✓ delivered  |
 | 6b    | Effect plugins — reverb, delay, filter, compressor, dattorro  | ✓ delivered  |
 | 8     | Song arrangement — `arrange`, `play-scenes`, map literals      | ✓ delivered  |
-| 10    | Syntax highlighting — Lezer grammar, bracket matching, oneDark | not started  |
+| 10    | Syntax highlighting — Lezer grammar, bracket matching, oneDark | ✓ delivered  |
 | 9     | External sample repos — `(samples! "github:owner/repo")`      | not started  |
 | A     | More effects — chorus, phaser, tremolo, overdrive, bitcrusher  | not started  |
 | 4     | Live features — named slots, tap BPM, MIDI clock, session URLs | not started  |

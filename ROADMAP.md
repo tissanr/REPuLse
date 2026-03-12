@@ -180,7 +180,7 @@ See full spec: [PROMPTS/phase-8-song-arrangement.md](PROMPTS/phase-8-song-arrang
 
 ---
 
-## Phase 10 — Syntax Highlighting 📋 *planned*
+## Phase 10 — Syntax Highlighting ✅ *delivered*
 
 A CodeMirror 6 language extension for REPuLse-Lisp — bracket matching and colour-coded
 syntax using a hand-written Lezer grammar.

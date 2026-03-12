@@ -1,0 +1,38 @@
+@top Program { expr* }
+
+expr {
+  List | Vector | Map |
+  LineComment | Number | String | Keyword | BuiltinName | Symbol
+}
+
+List   { "(" expr* ")" }
+Vector { "[" expr* "]" }
+Map    { "{" expr* "}" }
+
+@tokens {
+  LineComment { ";" ![\\n]* }
+
+  Number { @digit+ ("." @digit+)? }
+
+  String { '"' (![\"\\] | "\\" _)* '"' }
+
+  Keyword { ":" identChar+ }
+
+  BuiltinName {
+    "seq" | "stack" | "pure" | "fast" | "slow" | "rev" | "every" | "fmap" |
+    "def" | "let" | "fn" | "lambda" | "if" | "do" |
+    "bpm" | "stop" | "fx" | "load-plugin" | "arrange" | "play-scenes" | "sound" |
+    "get" | "assoc" | "merge" | "not" | "and" | "or"
+  }
+
+  Symbol { identStart identChar* }
+
+  identStart { @asciiLetter | "-" | "_" | "!" | "?" | "+" | "*" | "/" | "=" | "<" | ">" | "." | "'" }
+  identChar  { @asciiLetter | @digit | "-" | "_" | "!" | "?" | "+" | "*" | "/" | "=" | "<" | ">" | "." | "'" }
+
+  @precedence { BuiltinName, Symbol }
+
+  space { @whitespace+ | "," }
+}
+
+@skip { space }

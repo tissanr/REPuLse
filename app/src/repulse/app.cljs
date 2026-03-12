@@ -9,7 +9,9 @@
             ["@codemirror/view" :refer [EditorView Decoration keymap lineNumbers]]
             ["@codemirror/state" :refer [EditorState StateEffect StateField]]
             ["@codemirror/commands" :refer [defaultKeymap historyKeymap history]]
-            ["@codemirror/theme-one-dark" :refer [oneDark]]))
+            ["@codemirror/language" :refer [bracketMatching]]
+            ["@codemirror/theme-one-dark" :refer [oneDark]]
+            ["./lisp-lang/index.js" :refer [lispLanguage]]))
 
 ;;; DOM helpers
 
@@ -209,6 +211,8 @@
         extensions #js [(history)
                         (lineNumbers)
                         oneDark
+                        lispLanguage
+                        (bracketMatching)
                         highlights-field
                         (.-lineWrapping EditorView)
                         (.of keymap (.concat
