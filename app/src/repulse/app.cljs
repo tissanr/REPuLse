@@ -215,6 +215,20 @@
 
 ;;; CodeMirror editor
 
+(def ^:private storage-key "repulse-editor")
+
+(defn- load-editor-content [fallback]
+  (or (try (.getItem js/localStorage storage-key) (catch :default _ nil))
+      fallback))
+
+(def ^:private save-listener
+  (.of EditorView.updateListener
+       (fn [^js update]
+         (when (.-docChanged update)
+           (try (.setItem js/localStorage storage-key
+                          (.. update -state -doc (toString)))
+                (catch :default _))))))
+
 (defn make-editor [container initial-value on-eval]
   (let [eval-cmd (fn [view]
                    (on-eval (.. view -state -doc (toString)))
@@ -226,13 +240,14 @@
                         lispLanguage
                         (bracketMatching)
                         highlights-field
+                        save-listener
                         (.-lineWrapping EditorView)
                         (.of keymap (.concat
                                      (clj->js defaultKeymap)
                                      (clj->js historyKeymap)
                                      #js [eval-binding]))]
         state (.. EditorState
-                  (create #js {:doc initial-value
+                  (create #js {:doc (load-editor-content initial-value)
                                :extensions extensions}))
         view (EditorView. #js {:state state :parent container})]
     view))
