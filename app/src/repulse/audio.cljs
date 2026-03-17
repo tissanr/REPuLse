@@ -79,21 +79,24 @@
 (defn- output-node [ac]
   (or @master-gain (.-destination ac)))
 
-(defn- make-kick [ac t amp]
-  (let [osc  (.createOscillator ac)
-        gain (.createGain ac)
-        pk   (float amp)]
+(defn- make-kick [ac t amp pan]
+  (let [osc    (.createOscillator ac)
+        gain   (.createGain ac)
+        panner (.createStereoPanner ac)
+        pk     (float amp)]
     (set! (.-type osc) "sine")
     (.setValueAtTime (.-frequency osc) 150 t)
     (.exponentialRampToValueAtTime (.-frequency osc) 40 (+ t 0.06))
     (.setValueAtTime (.-gain gain) pk t)
     (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t 0.4))
+    (.setValueAtTime (.-pan panner) (float pan) t)
     (.connect osc gain)
-    (.connect gain (output-node ac))
+    (.connect gain panner)
+    (.connect panner (output-node ac))
     (.start osc t)
     (.stop osc (+ t 0.4))))
 
-(defn- make-snare [ac t amp]
+(defn- make-snare [ac t amp pan]
   (let [buf-size 4096
         buf  (.createBuffer ac 1 buf-size (.-sampleRate ac))
         data (.getChannelData buf 0)
@@ -102,19 +105,22 @@
         src  (.createBufferSource ac)
         bpf  (.createBiquadFilter ac)
         gain (.createGain ac)
+        panner (.createStereoPanner ac)
         pk   (* 0.9 (float amp))]
     (set! (.-buffer src) buf)
     (set! (.-type bpf) "bandpass")
     (.setValueAtTime (.-frequency bpf) 200 t)
     (.setValueAtTime (.-gain gain) pk t)
     (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t 0.2))
+    (.setValueAtTime (.-pan panner) (float pan) t)
     (.connect src bpf)
     (.connect bpf gain)
-    (.connect gain (output-node ac))
+    (.connect gain panner)
+    (.connect panner (output-node ac))
     (.start src t)
     (.stop src (+ t 0.2))))
 
-(defn- make-hihat [ac t amp]
+(defn- make-hihat [ac t amp pan]
   (let [buf-size 2048
         buf  (.createBuffer ac 1 buf-size (.-sampleRate ac))
         data (.getChannelData buf 0)
@@ -123,15 +129,18 @@
         src  (.createBufferSource ac)
         hpf  (.createBiquadFilter ac)
         gain (.createGain ac)
+        panner (.createStereoPanner ac)
         pk   (* 0.5 (float amp))]
     (set! (.-buffer src) buf)
     (set! (.-type hpf) "highpass")
     (.setValueAtTime (.-frequency hpf) 8000 t)
     (.setValueAtTime (.-gain gain) pk t)
     (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t 0.045))
+    (.setValueAtTime (.-pan panner) (float pan) t)
     (.connect src hpf)
     (.connect hpf gain)
-    (.connect gain (output-node ac))
+    (.connect gain panner)
+    (.connect panner (output-node ac))
     (.start src t)
     (.stop src (+ t 0.045))))
 
@@ -139,25 +148,28 @@
   "JS-synthesis fallback for when the AudioWorklet/WASM is unavailable.
    dur     — decay duration in seconds (default 1.5)
    amp     — peak amplitude 0.0–1.0 (default 1.0; scaled by 0.5 internally)
-   attack  — linear ramp-up time in seconds (default 0.001 = instant)"
-  ([ac t freq] (make-sine ac t freq 1.5 1.0 0.001))
-  ([ac t freq dur] (make-sine ac t freq dur 1.0 0.001))
-  ([ac t freq dur amp] (make-sine ac t freq dur amp 0.001))
-  ([ac t freq dur amp attack]
+   attack  — linear ramp-up time in seconds (default 0.001 = instant)
+   pan     — stereo position -1.0 (left) to 1.0 (right), default 0.0"
+  ([ac t freq] (make-sine ac t freq 1.5 1.0 0.001 0.0))
+  ([ac t freq dur] (make-sine ac t freq dur 1.0 0.001 0.0))
+  ([ac t freq dur amp] (make-sine ac t freq dur amp 0.001 0.0))
+  ([ac t freq dur amp attack] (make-sine ac t freq dur amp attack 0.0))
+  ([ac t freq dur amp attack pan]
    (let [osc    (.createOscillator ac)
          gain   (.createGain ac)
+         panner (.createStereoPanner ac)
          peak   (* 0.5 (float amp))    ; headroom for polyphony
          atk    (max 0.001 (float attack))
          stop-t (+ t atk (float dur))]
      (set! (.-type osc) "sine")
      (.setValueAtTime (.-frequency osc) freq t)
-     ;; Start near-silence, ramp linearly to peak over attack time,
-     ;; then exponentially decay to silence over dur seconds.
      (.setValueAtTime (.-gain gain) 0.0001 t)
      (.linearRampToValueAtTime (.-gain gain) peak (+ t atk))
      (.exponentialRampToValueAtTime (.-gain gain) 0.0001 stop-t)
+     (.setValueAtTime (.-pan panner) (float pan) t)
      (.connect osc gain)
-     (.connect gain (output-node ac))
+     (.connect gain panner)
+     (.connect panner (output-node ac))
      (.start osc t)
      (.stop osc stop-t))))
 
@@ -182,13 +194,14 @@
 
 (defn- js-synth
   "JS synthesis fallback — used when AudioWorklet is unavailable."
-  ([ac t value] (js-synth ac t value 1.0))
-  ([ac t value amp]
+  ([ac t value] (js-synth ac t value 1.0 0.0))
+  ([ac t value amp] (js-synth ac t value amp 0.0))
+  ([ac t value amp pan]
    (case value
-     :bd (make-kick ac t amp)
-     :sd (make-snare ac t amp)
-     :hh (make-hihat ac t amp)
-     (make-sine ac t 440 1.5 amp 0.001))))
+     :bd (make-kick ac t amp pan)
+     :sd (make-snare ac t amp pan)
+     :hh (make-hihat ac t amp pan)
+     (make-sine ac t 440 1.5 amp 0.001 pan))))
 
 (defn play-event [ac t value]
   (cond
@@ -209,15 +222,15 @@
         (if (theory/note-keyword? note)
           (let [hz (theory/note->hz note)]
             (or (worklet-trigger-v2! (str hz) t amp-v attack-v decay-v pan-v)
-                (make-sine ac t hz decay-v amp-v attack-v)))
+                (make-sine ac t hz decay-v amp-v attack-v pan-v)))
           (let [resolved (samples/resolve-keyword note)]
             (cond
               (samples/has-bank? resolved) (samples/play! ac t resolved 0 amp-v)
               :else (or (worklet-trigger-v2! (name note) t amp-v attack-v decay-v pan-v)
-                        (js-synth ac t note amp-v)))))
+                        (js-synth ac t note amp-v pan-v)))))
         (number? note)
         (or (worklet-trigger-v2! (str note) t amp-v attack-v decay-v pan-v)
-            (make-sine ac t note decay-v amp-v attack-v))))
+            (make-sine ac t note decay-v amp-v attack-v pan-v))))
 
     ;; Map {:bank :bd :n 2} from (sound :bd 2) — always use samples
     (and (map? value) (:bank value))
