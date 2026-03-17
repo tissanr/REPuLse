@@ -21,7 +21,8 @@ evaluate them with **Ctrl+Enter** (or the **▶ play** button), and hear them lo
    - [Sequential evaluation — `do`](#sequential-evaluation--do)
    - [Top-level definitions — `def`](#top-level-definitions--def)
 4. [Pattern functions](#pattern-functions)
-5. [Sound and samples](#sound-and-samples)
+5. [Per-event parameters](#per-event-parameters)
+6. [Sound and samples](#sound-and-samples)
 6. [Tempo control](#tempo-control)
 7. [Combining patterns](#combining-patterns)
 8. [Defining names](#defining-names)
@@ -420,6 +421,93 @@ Shifts all numeric (Hz) values in a pattern up or down by `n` semitones. Keyword
   ;; drums
   (seq :bd :_ :bd :_)
   (seq :_ :sd :_ :sd))
+```
+
+---
+
+## Per-event parameters
+
+Attach synthesis parameters to any pattern using `amp`, `attack`, `decay`, `release`, and
+`pan`. Each parameter function accepts a scalar value or a pattern of values, and can be
+applied directly or returned as a transformer for composition.
+
+### Thread-last: `->>`
+
+Chain multiple parameters with `->>` (thread-last). The result of each step is passed as
+the **last** argument to the next form — consistent with REPuLse's existing convention of
+putting the pattern last:
+
+```lisp
+(->> (seq :c4 :e4 :g4)
+     (amp 0.7)
+     (attack 0.02)
+     (decay 0.5))
+; ≡ (decay 0.5 (attack 0.02 (amp 0.7 (seq :c4 :e4 :g4))))
+```
+
+### `amp` — amplitude (0.0–1.0)
+
+```lisp
+(amp 0.8 (seq :c4 :e4 :g4))              ; all notes at 80%
+(amp (seq 0.9 0.4 0.9 0.4) kick)         ; accent pattern — 1st and 3rd louder
+```
+
+### `attack` — onset time in seconds
+
+```lisp
+(attack 0.001 melody)   ; percussive / instant
+(attack 0.3 pad)        ; slow swell
+```
+
+### `decay` — decay time in seconds
+
+```lisp
+(decay 0.08 (chord :major :c4))   ; short stab
+(decay 2.0 (pure :c3))            ; long bass tone
+```
+
+### `release` — release time in seconds
+
+```lisp
+(release 0.5 melody)   ; tail after note-off
+```
+
+### `pan` — stereo position (-1.0 to 1.0)
+
+```lisp
+(pan -0.5 melody)                      ; slightly left
+(pan (seq -0.8 0.8) (fast 2 hihat))    ; ping-pong hi-hat
+```
+
+### Named voice presets
+
+One-argument forms return `(pat → pat)` transformers, enabling reusable presets with `def`
+and `comp`:
+
+```lisp
+(def pluck  (comp (amp 0.8) (attack 0.003) (decay 0.15)))
+(def pad    (comp (amp 0.4) (attack 0.3)   (decay 1.5)))
+(def punchy (comp (amp 1.0) (attack 0.001) (decay 0.08)))
+
+(stack
+  (pluck (scale :minor :a3 (seq 0 2 4 7)))
+  (pad   (chord :minor :a3))
+  (punchy (seq :bd :_ :bd :_)))
+```
+
+### Patterned parameters
+
+Parameters can be patterns themselves — they are combined with the note pattern
+cycle-aligned, so different densities create polyrhythmic parameter changes:
+
+```lisp
+; 2-step amp pattern over a 3-step melody — creates shifting accents
+(amp (seq 0.9 0.4) (seq :c4 :e4 :g4))
+
+; independent amp and attack patterns stacked with melody
+(->> (scale :dorian :d3 (fast 3 (seq 0 2 4 5 6)))
+     (amp (slow 2 (seq 0.8 0.5 1.0 0.3)))
+     (attack 0.01))
 ```
 
 ---

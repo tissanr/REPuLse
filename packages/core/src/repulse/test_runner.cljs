@@ -1,7 +1,8 @@
 (ns repulse.test-runner
   (:require [cljs.test :as test]
             [repulse.core-test]
-            [repulse.theory-test]))
+            [repulse.theory-test]
+            [repulse.params-test]))
 
 (defn main []
-  (test/run-tests 'repulse.core-test 'repulse.theory-test))
+  (test/run-tests 'repulse.core-test 'repulse.theory-test 'repulse.params-test))

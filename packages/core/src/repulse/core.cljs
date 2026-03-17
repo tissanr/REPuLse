@@ -99,6 +99,23 @@
    (fn [sp]
      (map (fn [e] (update e :value f)) (query pat sp)))))
 
+(defn combine
+  "Applicative liftA2: pair events from pat-a and pat-b that overlap in time.
+   For each (ea, eb) pair whose :part spans intersect, produce an event with
+   value (f va vb) at the intersection. Uses eb's :whole."
+  [f pat-a pat-b]
+  (pattern
+   (fn [sp]
+     (let [evs-a (query pat-a sp)
+           evs-b (query pat-b sp)]
+       (for [ea evs-a
+             eb evs-b
+             :let [isect (span-intersect (:part ea) (:part eb))]
+             :when isect]
+         (event (f (:value ea) (:value eb))
+                (:whole eb)
+                isect))))))
+
 (defn fast [factor pat]
   (let [fr (if (vector? factor) factor (int->rat factor))]
     (pattern

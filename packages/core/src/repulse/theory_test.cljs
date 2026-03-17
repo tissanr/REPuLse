@@ -128,6 +128,19 @@
         freq   (:value (first result))]
     (is (< (js/Math.abs (- (* 2.0 hz) freq)) 0.01))))
 
+(deftest transpose-note-keyword-up-octave
+  ;; :c4 transposed up 12 semitones should produce 2× the Hz of :c4
+  (let [c4-hz  (theory/note->hz :c4)
+        result (core/query (theory/transpose 12 (core/pure :c4)) one-cycle)
+        freq   (:value (first result))]
+    (is (< (js/Math.abs (- (* 2.0 c4-hz) freq)) 0.01))))
+
+(deftest transpose-note-keyword-down
+  ;; :a4 (440 Hz) transposed down 12 semitones → 220 Hz
+  (let [result (core/query (theory/transpose -12 (core/pure :a4)) one-cycle)
+        freq   (:value (first result))]
+    (is (< (js/Math.abs (- 220.0 freq)) 0.01))))
+
 (deftest transpose-passes-keywords
   (let [result (core/query (theory/transpose 5 (core/pure :bd)) one-cycle)]
     (is (= :bd (:value (first result))))))
@@ -135,3 +148,13 @@
 (deftest transpose-passes-rests
   (let [result (core/query (theory/transpose 7 (core/pure :_)) one-cycle)]
     (is (= :_ (:value (first result))))))
+
+(deftest transpose-param-map
+  ;; transpose should shift the :note field inside a parameter map
+  (let [c4-hz  (theory/note->hz :c4)
+        m      {:note :c4 :amp 0.8}
+        result (core/query (theory/transpose 12 (core/pure m)) one-cycle)
+        v      (:value (first result))]
+    (is (map? v))
+    (is (= 0.8 (:amp v)))
+    (is (< (js/Math.abs (- (* 2.0 c4-hz) (:note v))) 0.01))))
