@@ -1,178 +1,186 @@
 # REPuLse — Future Features
 
-Unscheduled ideas beyond the current roadmap. Organised by architectural concept so each
-section maps cleanly to a potential implementation phase. Features are grouped into
-**must-have** (competitive parity with Strudel / TidalCycles) and **differentiators**
-(capabilities neither competitor offers).
-
-Priority markers: **[must-have]** or **[differentiator]**.
+Prioritised feature backlog. Each tier is ordered by **impact per development effort** —
+cheap pure functions before complex audio plumbing, onboarding before niche integrations.
+Tiers are designed so each one can become a phase prompt.
 
 ---
 
-## Pattern combinators & stochastic transforms
+## Tier 1 — Pattern expressiveness
 
-REPuLse currently has 10 combinators: `seq`, `stack`, `pure`, `fast`, `slow`, `rev`,
-`every`, `fmap`, `combine`, `arrange`. Tidal has 100+, Strudel ~80. This is the single
-most impactful area for enriching the language — every function here is pure, testable,
-and lives in `packages/core`. No audio, no DOM, no external dependencies.
+**Why first:** Every function here is pure, testable, lives in `packages/core`, and takes
+hours not days. This is where REPuLse's Lisp nature becomes an *advantage* over
+Strudel/Tidal — not by copying mini-notation, but by making S-expressions more powerful
+than any string DSL. After this tier, `(jux rev (euclidean 5 8 :bd))` works and feels
+magical.
 
-| Idea | Priority | Description |
+**Scope:** `packages/core/src/repulse/core.cljs` + `packages/lisp/src/repulse/lisp/eval.cljs`
+(env bindings) + grammar/completions. No audio changes. No DOM changes.
+
+| Function | Effort | Description |
 |---|---|---|
-| Euclidean rhythms | **must-have** | `(euclidean 5 8 :bd)` — distribute k onsets across n steps using the Björklund algorithm. Returns a `seq` of values and `:_` rests. Table stakes for algorithmic music; both Tidal and Strudel have it. Pure function in `core.cljs`, ~20 lines. |
-| `cat` (concatenate) | **must-have** | `(cat p1 p2 p3)` — play patterns one after another, each lasting one cycle, then loop. Different from `seq` (which divides one cycle). `(cat verse chorus)` = 2-cycle loop. In Tidal: `cat`. In Strudel: `cat`. |
-| `sometimes` / probability | **must-have** | `(sometimes (fast 2) pat)` — apply a transform ~50% of cycles. Family: `(often f pat)` ~75%, `(rarely f pat)` ~25%, `(almostNever f pat)` ~10%, `(almostAlways f pat)` ~90%. Use cycle number as PRNG seed → deterministic per cycle, reproducible when shared. Tidal's most-used expressive tool. |
-| `degrade` | **must-have** | `(degrade pat)` — randomly drop ~50% of events. `(degrade-by 0.3 pat)` — drop 30%. Seed from cycle position for reproducibility. Essential for humanisation. |
-| `choose` / `wchoose` | **must-have** | `(choose [:bd :sd :hh])` — random element per cycle. `(wchoose [[:bd 0.5] [:sd 0.3] [:hh 0.2]])` — weighted. Again, cycle-seeded PRNG. |
-| `off` (offset layer) | **must-have** | `(off 0.25 (fast 2) pat)` — layer a transformed copy shifted by a fraction of a cycle. Creates canons, echoes, phasing. Requires `late`/`early` (time shift). In Tidal: `off`. |
-| `late` / `early` | **must-have** | `(late 0.25 pat)` — shift events forward in time by a fraction of a cycle. `(early 0.25 pat)` — shift back. Building block for `off`, swing, and humanisation. In Tidal: `late`, `early`. |
-| `jux` (juxtapose) | **must-have** | `(jux rev pat)` — play original panned left, transformed copy panned right. Built on `pan` (Phase H) + `stack`. In Tidal: `jux`. One of the most-used stereo tools. |
-| `struct` (structural rhythm) | nice-to-have | `(struct (seq true true false true) (pure :bd))` — use a boolean pattern as a rhythmic mask. Events only fire where the structure is `true`. In Tidal: `struct`. |
-| `ply` (replicate) | nice-to-have | `(ply 3 pat)` — subdivide each event into n copies. `(ply (seq 1 2 3 1) pat)` — variable subdivision. In Tidal: `ply`. |
-| `chunk` | nice-to-have | `(chunk 4 rev pat)` — apply transform to one quarter of the pattern per cycle, rotating which quarter. In Tidal: `chunk`. Creates evolving variations. |
-| `range` / `segment` | nice-to-have | `(range 200 800 (slow 4 (pure 0)))` — map a 0–1 pattern to a numeric range. `(segment 16 pat)` — sample a continuous pattern at n evenly-spaced points. Useful for LFO-style modulation. |
-| Polymeter helpers | nice-to-have | `(polymeter 4 (seq :a :b :c))` — fit 3 events into 4 beats, creating polymetric tension. Currently achievable with `(fast 3/4 ...)` but a dedicated function is more readable. |
+| `euclidean` | S | `(euclidean 5 8 :bd)` — Björklund algorithm, distribute k onsets across n steps. ~20 lines. Table stakes for algorithmic music. |
+| `cat` | S | `(cat p1 p2 p3)` — play patterns one after another, each lasting one cycle. Different from `seq` (which subdivides *within* one cycle). |
+| `late` / `early` | S | `(late 0.25 pat)` — shift events forward/back by a fraction of a cycle. Building block for `off`, swing, humanisation. |
+| `sometimes` | S | `(sometimes f pat)` — apply transform ~50% of cycles. Family: `often` ~75%, `rarely` ~25%. Cycle-seeded PRNG for reproducibility. |
+| `degrade` | S | `(degrade pat)` — randomly drop ~50% of events. `(degrade-by 0.3 pat)` — drop 30%. Cycle-seeded. |
+| `choose` / `wchoose` | S | `(choose [:bd :sd :hh])` — random element per cycle. `(wchoose [[:bd 0.5] [:sd 0.3] [:hh 0.2]])` — weighted. |
+| `jux` | S | `(jux rev pat)` — original panned left, transformed panned right. Built on `pan` (Phase H) + `stack`. |
+| `off` | S | `(off 0.25 (fast 2) pat)` — layer a shifted, transformed copy. Canons, echoes, phasing. Depends on `late`. |
+
+**Effort key:** S = small (~20–50 lines in core), M = medium (100–300 lines), L = large (new subsystem).
 
 ---
 
-## Language & notation
+## Tier 2 — Onboarding & first-60-seconds
 
-The Lisp is REPuLse's identity. These features lean into that — making the language more
-expressive without abandoning S-expressions.
+**Why second:** Tier 1 gives the language power; Tier 2 lets newcomers *discover* it
+without reading docs. Zero architecture changes — just curated content and a few Lisp
+strings. Lowers activation energy while preserving the Lisp identity (no mini-notation
+needed to start jamming).
 
-| Idea | Priority | Description |
+| Feature | Effort | Description |
 |---|---|---|
-| Mini-notation | **must-have** | The single biggest usability gap. A reader macro `(~ "bd sd [bd bd] sd")` that parses a compact string into a `seq`/`stack` tree — brackets for subdivision, `*` for repetition, `<>` for alternation, `?` for random, `~` for rest. Implemented as a function in `packages/lisp` that calls existing `seq*`/`stack*` combinators. The Lisp stays the host language; mini-notation is sugar inside it, not a replacement. |
-| Pattern macros | **differentiator** | `(defmacro name [args] body)` — compile-time transforms in the evaluator. Lisp's homoiconicity makes this natural — Strudel and Tidal cannot offer user-defined syntax transforms. |
-| Tail-call optimisation | **differentiator** | `loop`/`recur` or trampoline-based TCO in the evaluator. Enables infinite recursive generative patterns that are impossible in Haskell/JS without stack overflows. A genuine Lisp advantage. |
-| Number notation | nice-to-have | Musical shorthand: `1/4` as a rational literal (not float division), `120bpm` as syntactic sugar for `(bpm 120)`. Reader-level feature. |
-| Multi-buffer editor | nice-to-have | Multiple named code buffers, each associated with a track. Switch with tabs or `(buffer :name)`. Requires CM6 multi-editor management in `app.cljs`. |
+| Starter templates | S | `(demo :techno)` / `(demo :ambient)` / `(demo :dnb)` — loads a curated multi-track pattern into the editor. 5–10 genre presets showcasing different combinators. A dropdown or `(demo)` that lists them. Just Lisp strings + a lookup map in `ensure-env!`. |
+| Hover documentation | M | CM6 `hoverTooltip` on built-in names — shows signature + docstring on mouse-over. Reuse the existing `completions.js` data. |
+| Interactive tutorial | M | `(tutorial)` / `(tutorial 3)` — loads progressive chapters into the editor: `seq` → `stack` → `fast` → `every` → `def` → `play`. Each chapter is playable. |
 
 ---
 
-## Synthesis & voice engine
+## Tier 3 — Mini-notation & sharing
 
-Expanding what REPuLse can sound like — all within the WASM AudioWorklet + Web Audio
-architecture.
+**Why third:** Now that Tier 1 makes the Lisp expressive and Tier 2 gets people playing,
+mini-notation becomes opt-in sugar for conciseness — not a crutch for a weak language.
+Sharing completes the viral loop.
 
-| Idea | Priority | Description |
+| Feature | Effort | Description |
 |---|---|---|
-| Custom synth definitions | **must-have** | `(defsynth name [freq amp] (-> (saw freq) (lpf (* freq 2)) (env-perc 0.01 decay)))` — user-defined synthesis graphs in the Lisp layer. Each UGen keyword (`saw`, `sin`, `lpf`, `env-perc`) maps to a Web Audio node or AudioWorklet DSP block. The `defsynth` form compiles to a node-graph factory; `(name :c4)` instantiates it at play time. This is the most architecturally complex feature — requires a UGen registry and a graph builder, but it's the path to genuine sound design. |
-| More oscillator voices | nice-to-have | Additional WASM voices: sawtooth, pulse/square (with PWM), band-limited variants via PolyBLEP, white/pink noise, FM pair (carrier + modulator with index parameter). Extend `trigger_v2` match arms in `lib.rs`. |
-| Granular synthesis | nice-to-have | Split an audio buffer into short overlapping grains; control pitch, density, spread, and position. AudioWorklet-based — similar architecture to the Dattorro reverb processor. |
+| Mini-notation | M | `(~ "bd sd [bd bd] sd")` — reader function that parses a compact string into `seq*`/`stack*` calls. `[]` subdivision, `*` repetition, `<>` alternation, `?` random, `~` rest. Lives in `packages/lisp`. The Lisp stays the host; mini-notation is sugar inside it. |
+| Gist import | S | `(load-gist "https://gist.github.com/…")` — fetch raw content, eval as REPuLse-Lisp. Pairs with the existing `share!` button for a full share/import loop. |
+| WAV export | M | `(export 8)` — render N cycles via `OfflineAudioContext` to a downloadable WAV. Caveat: `OfflineAudioContext` + `AudioWorklet` has browser gaps; may need JS synthesis fallback for export path. |
 
 ---
 
-## Per-track audio routing
+## Tier 4 — Per-track audio & sample control
 
-Currently all effects are global (master bus). These features give each track independent
-audio control — the standard expectation in any multi-track live coding tool.
+**Why fourth:** Makes multi-track patterns sound professional. Requires audio graph
+changes in `app/audio.cljs` and `app/fx.cljs`, but the pattern algebra (Tier 1) and
+user-facing language are already in place.
 
-| Idea | Priority | Description |
+| Feature | Effort | Description |
 |---|---|---|
-| Per-track effect chains | **must-have** | Independent effect chain per track (before the master bus). `(play :bass (seq :c2 :e2) {:fx [:filter 400 :overdrive 0.3]})` or `(track-fx :bass :reverb 0.4)`. Each track's `GainNode` feeds its own chain → master. Extends `scheduler-state` to hold per-track `AudioNode` graphs. Already sketched in Phase 7 spec. |
-| Per-event sample parameters | **must-have** | Per-event control over sample playback: `:rate` (pitch-shift via `playbackRate`), `:begin`/`:end` (start/end points as 0–1 fractions), `:loop` (boolean). Extend the event-map pattern from Phase H: `(->> (sound :tabla 0) (rate 1.5) (begin 0.2) (end 0.8))`. Dispatch in `play-event` sets `AudioBufferSourceNode` properties. |
-| Sidechain compressor | **differentiator** | Pattern-aware ducking: the master bus gain ducks exactly when a `:bd` event fires, using the scheduler's event timing directly — no audio-level detection needed. `(fx :sidechain :trigger :bd :amount 0.8 :release 0.1)`. REPuLse knows event times ahead of the audio clock, so this can be sample-accurate. Impossible in traditional DAW sidechaining without routing hacks. |
+| Per-track effect chains | L | Independent FX chain per track before the master bus. `(track-fx :bass :reverb 0.4)` or inline `(play :bass pat {:fx [...]})`. Each track's `GainNode` → per-track FX → master. Extends `scheduler-state` and `fx.cljs`. Already sketched in Phase 7 spec. |
+| Per-event sample params | M | `:rate` (pitch via `playbackRate`), `:begin`/`:end` (0–1 slice), `:loop` on sample events. Extends the Phase H event-map pattern: `(->> (sound :tabla 0) (rate 1.5) (begin 0.2))`. Dispatch in `play-event`. |
+| Sidechain compressor | M | Pattern-aware ducking: `(fx :sidechain :trigger :bd :amount 0.8)`. Uses scheduler event timing for sample-accurate ducking — no audio detection. REPuLse's unfair advantage: it knows event times *before* they sound. |
+| More oscillator voices | M | Sawtooth, pulse/square (PWM), white/pink noise, FM pair. Extend WASM `trigger_v2` in `lib.rs`. Makes melodic patterns sound less "sine-only". |
 
 ---
 
-## Connectivity & I/O
+## Tier 5 — Lisp superpowers
 
-Bridging REPuLse to external hardware, software, and services. Platform constraints noted
-where relevant — Web MIDI is Chrome/Edge only; WebSerial is Chrome only.
+**Why fifth:** These are the long-term differentiators that no competitor can match — but
+they need the foundation from Tiers 1–4 to have an audience. Each is a significant
+language-level feature.
 
-| Idea | Priority | Platform | Description |
+| Feature | Effort | Description |
+|---|---|---|
+| `defsynth` | L | `(defsynth pluck [freq] (-> (saw freq) (lpf (* freq 2)) (env-perc 0.01 0.3)))` — user-defined synthesis graphs. Each UGen keyword maps to a Web Audio node or AudioWorklet DSP block. Compiles to a node-graph factory. The most architecturally complex feature — requires a UGen registry and graph builder. The path to genuine sound design in a Lisp. |
+| Pattern macros | M | `(defmacro name [args] body)` — compile-time transforms in the evaluator. Homoiconicity makes user-defined syntax transforms natural. Neither Strudel nor Tidal can offer this. |
+| Tail-call optimisation | M | `loop`/`recur` or trampoline in the evaluator. Enables infinite recursive generative patterns without stack overflow. The Lisp advantage for algorithmic composition. |
+| Number notation | S | `1/4` as a rational literal, `120bpm` as sugar. Reader-level. |
+
+---
+
+## Tier 6 — MIDI & external I/O
+
+**Why sixth:** Important for studio integration and hardware users, but Chrome/Edge only
+(Web MIDI API). Matters most to power users who are already hooked.
+
+| Feature | Effort | Platform | Description |
 |---|---|---|---|
-| MIDI controller input | **must-have** | Chrome, Edge | Receive Note On/Off and CC messages from a controller. Map CC to parameters: `(midi-map :cc1 :filter)`. Map notes to pattern triggers. Extends the existing `midi-sync!` Web MIDI infrastructure. |
-| MIDI note output | **must-have** | Chrome, Edge | Route pattern events to hardware synths via MIDI Note On/Off + velocity. `(play :ext (midi-out :channel 1 (seq :c4 :e4 :g4)))`. Enables REPuLse as a sequencer for external gear. |
-| MIDI clock output | **must-have** | Chrome, Edge | Send 24ppqn clock + Start/Stop/Continue to drive external hardware at REPuLse's BPM. |
-| OSC output | nice-to-have | requires bridge | Forward pattern events to SuperCollider, Ableton, or Max/MSP via a WebSocket→UDP bridge. `(osc-out "localhost:57120" "/trigger" pat)`. Bridge is a ~30-line Node.js relay. |
-| OSC input | nice-to-have | requires bridge | Receive OSC to modulate parameters in real time. Same bridge, reverse direction. |
-| Ableton Link | nice-to-have | requires bridge | Tempo sync with Link-enabled apps (Ableton, Traktor, etc.). Requires a local WebSocket bridge daemon wrapping the Link C++ SDK. **Trade-off:** breaks REPuLse's zero-install browser-only philosophy. Worth it for studio integration, but should be optional. |
-| Freesound API | **differentiator** | all browsers | Search and load samples from freesound.org directly from Lisp: `(freesound! "kick 808")`. Fetches via the Freesound REST API (CORS-enabled), decodes to `AudioBuffer`, registers as a bank. Extends the existing `samples!` infrastructure. Neither Strudel nor Tidal have built-in Freesound integration. |
-| CV/Gate via WebSerial | nice-to-have | Chrome only | Send gate/pitch voltages to modular synths via WebSerial or WebUSB. `(cv-out :channel 1 pat)`. Extremely niche audience but technically feasible and unique to browser-based tools. |
+| MIDI controller input | M | Chrome, Edge | Note On/Off + CC mapping: `(midi-map :cc1 :filter)`. Extends existing `midi-sync!` infrastructure. |
+| MIDI note output | M | Chrome, Edge | Route events to hardware synths: `(midi-out :channel 1 (seq :c4 :e4 :g4))`. REPuLse as a sequencer for external gear. |
+| MIDI clock output | S | Chrome, Edge | 24ppqn clock + Start/Stop/Continue at current BPM. |
+| MIDI file export | M | all | Export pattern as `.mid` file for DAW import. Simple binary format, ~100 lines. |
+| Freesound API | M | all | `(freesound! "kick 808")` — search + load samples from freesound.org. Extends `samples!` infrastructure. |
 
 ---
 
-## Sharing & export
+## Tier 7 — Platform & deployment
 
-Getting music out of REPuLse and into other people's hands.
+**Why seventh:** These expand *where* REPuLse runs and *who* can access it, but require
+the core experience (Tiers 1–5) to be worth deploying.
 
-| Idea | Priority | Description |
+| Feature | Effort | Description |
 |---|---|---|
-| Gist import | **must-have** | Load a pattern from a GitHub Gist URL: `(load-gist "https://gist.github.com/...")`. Fetch raw content, eval as REPuLse-Lisp. Pairs with the existing `share!` button — share via URL, import via Gist. |
-| WAV export via OfflineAudioContext | **must-have** | Render N cycles faster-than-real-time to a downloadable WAV blob. `(export 8)` renders 8 cycles. **Caveat:** `OfflineAudioContext` does not support `AudioWorklet` in all browsers (Safari, older Firefox). May need a JS-only rendering path as fallback — acceptable since export is not real-time. |
-| MIDI file export | nice-to-have | Export a pattern as a `.mid` file: query N cycles, map events to Note On/Off messages, write the SMF binary format. Enables getting REPuLse patterns into a DAW offline. MIDI files are a simple binary spec; no external library needed (~100 lines). |
-| FLAC export | nice-to-have | Higher quality offline export using a WASM FLAC encoder. Build on top of the WAV export infrastructure. |
-| Community pattern library | nice-to-have | Browse and import shared patterns from a hosted repository. Could be as simple as a curated JSON index of Gist URLs. |
+| PWA / offline | M | Service worker + manifest. Cache CLJS bundle, WASM, and built-in samples. "Download for offline" flow for Strudel CDN banks. Neither Strudel nor Tidal work offline. |
+| Embeddable component | L | `<repulse-editor code="(seq :bd :sd)">` — custom element for blogs/tutorials. Bundle everything into a single JS file via shadow-cljs `:esm`. |
+| Collaborative sessions | L | WebRTC co-editing via Yjs (CRDT, native CM6 binding). Deterministic patterns mean shared code = shared audio. Hard part: latency-compensated sync. |
+| Mobile layout | M | Touch-optimised editor, larger buttons, drum-pad input mode. CM6 has basic mobile support; main work is CSS + input abstraction. |
 
 ---
 
-## Platform & deployment
+## Backlog — nice-to-haves
 
-Making REPuLse available in more contexts.
+Features that are valuable but not blocking. Pick from here when a tier is done and
+there's energy for side quests.
 
-| Idea | Priority | Description |
-|---|---|---|
-| PWA / offline mode | **differentiator** | Service worker + Web App Manifest → installable desktop app that works without internet. Cache the compiled CLJS bundle, WASM module, and built-in samples at install time. The Strudel CDN samples (~100 banks) would need a "download for offline" flow. Neither Strudel nor Tidal work offline. |
-| Embeddable web component | **differentiator** | `<repulse-editor code="(seq :bd :sd)">` custom element for embedding live REPuLse instances in blog posts, tutorials, or documentation. Bundle CLJS output + CM6 + WASM into a single self-contained JS file via shadow-cljs `:esm` target. |
-| Collaborative sessions | **differentiator** | WebRTC peer-to-peer co-editing via Yjs (CRDT library with native CM6 binding). Both peers evaluate the same code → same deterministic pattern output → synchronised audio. The hardest part is latency-compensated audio sync, not code sync. |
-| Mobile layout | nice-to-have | Touch-optimised editor, larger buttons, virtual keyboard for `:bd`/`:sd` etc. CodeMirror 6 has reasonable mobile support already; main work is CSS layout and a drum-pad input mode. |
-
----
-
-## Onboarding & discoverability
-
-REPuLse has code completion with docstrings, but no guided entry point for new users.
-These features reduce the "blank page" problem.
-
-| Idea | Priority | Description |
-|---|---|---|
-| Starter templates | **must-have** | A `(demo :techno)` / `(demo :ambient)` / `(demo :dnb)` command that loads a curated multi-track pattern into the editor. 5–10 genre presets that showcase different combinators. Alternatively, a dropdown/palette in the UI. Almost zero code — just curated Lisp strings. |
-| Interactive tutorial | nice-to-have | A guided walkthrough that progressively introduces `seq` → `stack` → `fast` → `every` → `def` → `play`, with each step playable. Could be a special `(tutorial)` command that loads chapters into the editor, or a sidebar panel. |
-| Hover documentation | nice-to-have | CM6 tooltip on hover over a built-in name showing its signature and docstring. Extends the existing `completions.js` data with a `hoverTooltip` extension. |
-
----
-
-## Editor features
-
-| Idea | Description |
+### Additional combinators
+| Function | Description |
 |---|---|
-| Env-aware completions | Drive the completion list from the live `env-atom` — plugin-registered built-ins and dynamically added names appear automatically. Requires a JS/CLJS bridge to expose `env-atom` keys to CM6's `CompletionSource`. Natural upgrade from Phase C's static approach. |
-| Signature / parameter hints | Tooltip showing argument names inside a call: `(fast [factor] [pattern])`. Requires a signature table per built-in and a CM6 `ViewPlugin` or tooltip extension. |
+| `struct` | `(struct (seq true true false true) (pure :bd))` — boolean pattern as rhythmic mask |
+| `ply` | `(ply 3 pat)` — subdivide each event into n copies |
+| `chunk` | `(chunk 4 rev pat)` — apply transform to rotating quarter of pattern |
+| `range` / `segment` | Map 0–1 to numeric range; sample continuous pattern at n points |
+| Polymeter | `(polymeter 4 (seq :a :b :c))` — fit n events into m beats |
 
----
-
-## Timing & performance diagnostics
-
-Live coding demands tight timing. These features expose scheduling health so performers
-can catch problems before the audience does.
-
-| Idea | Description |
+### Connectivity
+| Feature | Description |
 |---|---|
-| Latency monitor | `(latency)` — display current scheduling stats: lookahead window, actual vs expected event times, drift. Could also be a small always-visible indicator in the context panel (green/yellow/red). |
-| Jitter histogram | Visual plugin showing per-event timing deviation over the last N cycles. Reads `AudioContext.currentTime` at trigger vs scheduled time. |
+| OSC output | `(osc-out "localhost:57120" "/trigger" pat)` via WebSocket→UDP bridge (~30-line Node relay) |
+| OSC input | Receive OSC to modulate parameters. Same bridge, reverse direction. |
+| Ableton Link | Tempo sync via WebSocket bridge wrapping Link C++ SDK. Breaks zero-install; optional. |
+| CV/Gate | WebSerial/WebUSB for modular synths. Chrome only. Niche. |
 
----
-
-## Visual plugins
-
-| Idea | Description |
+### Synthesis
+| Feature | Description |
 |---|---|
-| Spectrum analyser | FFT frequency bars from `AnalyserNode.getByteFrequencyData()` |
-| Punchcard timeline | Per-track step grid: 16 cells per bar, ● = event ○ = silence. Reads scheduler state. |
-| Cycle clock | Rotating circle showing position within the current cycle — a visual metronome |
-| Piano roll | 2D grid: time on X, pitch on Y, events as rectangles |
-| Event log | Scrolling list of events as they fire — useful for debugging |
-| Lissajous scope | X/Y plot of left vs. right channel (stereo) |
-| VU meters | Per-track level meters using `getFloatTimeDomainData` RMS |
+| Granular synthesis | AudioWorklet-based grain engine: pitch, density, spread, position |
+| Multi-buffer editor | Multiple named code buffers per track |
 
----
-
-## Effect plugins
-
-| Idea | Description |
+### Editor
+| Feature | Description |
 |---|---|
-| Ring modulator | Multiply signal by a carrier sine — metallic, robotic textures |
-| Parametric EQ | Multi-band `BiquadFilterNode` chain with frequency/gain/Q per band |
-| Wavefolder | Soft-clip / fold wave shaping — aggressive harmonic saturation |
-| Granular processor | Chop incoming audio into grains and scatter — AudioWorklet-based |
+| Env-aware completions | Drive completion list from live `env-atom` instead of static list |
+| Signature hints | Tooltip showing argument names inside a call |
+
+### Timing
+| Feature | Description |
+|---|---|
+| Latency monitor | `(latency)` — scheduling stats in context panel (green/yellow/red) |
+| Jitter histogram | Visual plugin: per-event timing deviation over last N cycles |
+
+### Visual plugins
+| Feature | Description |
+|---|---|
+| Spectrum analyser | FFT frequency bars from `AnalyserNode` |
+| Punchcard timeline | Per-track step grid (16th-note resolution) |
+| Cycle clock | Rotating circle — visual metronome |
+| Piano roll | 2D grid: time × pitch, events as rectangles |
+| Event log | Scrolling list of events as they fire |
+| Lissajous scope | X/Y stereo plot |
+| VU meters | Per-track RMS level meters |
+
+### Effect plugins
+| Feature | Description |
+|---|---|
+| Ring modulator | Signal × carrier sine — metallic textures |
+| Parametric EQ | Multi-band BiquadFilter chain |
+| Wavefolder | Soft-clip / fold wave shaping |
+| Granular processor | Chop + scatter incoming audio — AudioWorklet |
+
+### Export
+| Feature | Description |
+|---|---|
+| FLAC export | WASM FLAC encoder on top of WAV export |
+| Community library | Curated JSON index of shared pattern Gist URLs |
