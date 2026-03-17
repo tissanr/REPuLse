@@ -327,6 +327,17 @@
       (swap! scheduler-state assoc :interval-id id))
     (tick!)))
 
+(defn stop! []
+  (when-let [node @worklet-node]
+    (.. node -port (postMessage #js {:type "stop"})))
+  (when-let [id (:interval-id @scheduler-state)]
+    (js/clearInterval id))
+  (swap! scheduler-state assoc
+         :playing?     false
+         :interval-id  nil
+         :tracks       {}
+         :muted        #{}))
+
 (defn play-track!
   "Add or replace a named track. Starts the scheduler if not already running."
   [track-name pattern on-beat-fn on-event-fn]
@@ -372,17 +383,6 @@
     (let [id (js/setInterval tick! 25)]
       (swap! scheduler-state assoc :interval-id id))
     (tick!)))
-
-(defn stop! []
-  (when-let [node @worklet-node]
-    (.. node -port (postMessage #js {:type "stop"})))
-  (when-let [id (:interval-id @scheduler-state)]
-    (js/clearInterval id))
-  (swap! scheduler-state assoc
-         :playing?     false
-         :interval-id  nil
-         :tracks       {}
-         :muted        #{}))
 
 (defn playing? []
   (:playing? @scheduler-state))

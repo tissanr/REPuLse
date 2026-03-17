@@ -312,17 +312,62 @@ See full spec: [PROMPTS/phase-f-bank-prefix.md](PROMPTS/phase-f-bank-prefix.md)
 
 ---
 
-## Phase 4 — Live Performance Features 📋 *planned*
+## Phase G — Music Theory ✅ *delivered*
 
-Named pattern slots, tap BPM, MIDI clock sync, and shareable session URLs — all
-aimed at live performance on stage.
+A music theory layer: note keywords, scales, chords, and semitone transposition —
+making melodic patterns as natural to write as rhythmic ones.
 
 **Key additions:**
-- Named pattern slots (`slots.cljs`) — multiple independent patterns playing simultaneously
-- `(slot :a (seq :bd :sd))` / `(mute :a)` / `(solo :a)` Lisp built-ins
-- Tap BPM button — click to set tempo from live tapping
-- MIDI clock input — sync the scheduler to external hardware
-- Session URL — encode the current editor buffer in the URL hash for instant sharing
+- `packages/core/src/repulse/theory.cljs` — new namespace with note parsing, scale/chord/transpose
+- Note keywords `:c4`, `:eb3`, `:fs5` etc. resolve directly to Hz in the audio dispatcher
+- `(scale kw root pat)` — maps degree integers to Hz using named scales (major, minor, dorian, etc.)
+- `(chord kw root)` — stacks chord tones as a simultaneous pattern of Hz values
+- `(transpose n pat)` — shifts all Hz values by n semitones; drum keywords pass through unchanged
+- 10 supported scales, 13 chord types; equal-temperament with A4 = 440 Hz
+- Unit tests in `packages/core/test/repulse/theory_test.cljs`
+- Syntax highlighting and code completion for all three functions
+
+See full spec: [PROMPTS/phase-g-music-theory.md](PROMPTS/phase-g-music-theory.md)
+
+---
+
+## Phase H — Per-Event Parameters ✅ *delivered*
+
+Amplitude, envelope shape, and stereo position attached directly to pattern events as
+first-class parameters that compose freely with all combinators.
+
+**Key additions:**
+- `combine` in `packages/core/src/repulse/core.cljs` — applicative liftA2 over patterns
+- `packages/core/src/repulse/params.cljs` — `amp`, `attack`, `decay`, `release`, `pan`
+- Each parameter function is curried: `(amp 0.8 pat)` applies directly; `(amp 0.8)` returns a transformer
+- `->>` thread-last special form in the evaluator — chains transformers, pattern as last arg
+- `comp` built-in — compose transformers right-to-left for reusable voice presets
+- Map-value routing in `play-event` — `{:note :c4 :amp 0.8}` dispatched to WASM with full params
+- WASM `trigger_v2` API extended with amp, attack, decay, pan
+- `StereoPannerNode` in the JS synthesis fallback for pan support
+- Unit tests in `packages/core/test/repulse/params_test.cljs`
+
+See full spec: [PROMPTS/phase-h-per-event-params.md](PROMPTS/phase-h-per-event-params.md)
+
+---
+
+## Phase 4 — Live Performance Features ✅ *delivered*
+
+Multiple named pattern tracks, a bash-style command bar for imperative commands,
+tap BPM, MIDI clock sync, a visual track timeline, and session URL sharing.
+
+**Key additions:**
+- `scheduler-state` extended: `:tracks {kw → Pattern}` + `:muted #{kw}` replaces single `:pattern`
+- `(play :name pattern)` — starts or replaces a named track; `ensure-running!` starts the interval only once
+- `(mute! :name)`, `(unmute! :name)`, `(solo! :name)` — track mute controls; `!` marks side effects (Clojure convention)
+- `(clear! :name)` / `(clear!)` — remove one or all tracks; `(tracks)` — list active track names
+- `(upd)` — hot-swap: re-evaluates the editor buffer and updates running tracks without stopping; for raw patterns replaces the anonymous `:_` track; for `(play ...)` calls updates named tracks in-place
+- **Command bar** — separate single-line CodeMirror editor below the main buffer for imperative one-shot commands; Enter evaluates + clears, Escape clears, Cmd+A selects all; not saved to localStorage; includes syntax highlighting + completions
+- **Tap BPM** — rolling window of last 8 taps within 4 seconds; `(tap!)` Lisp built-in or tap button
+- **MIDI clock sync** — `(midi-sync! true/false)` enables Web MIDI API 24ppqn clock handler
+- **Session URLs** — `#v1:<base64-JSON>` URL hash encoding `{v, bpm, editor}`; share button copies URL
+- **Track timeline** — SVG per-track rows with proportional event bars and RAF playhead sweep
+- BPM auto-saved to `localStorage`; restored on reload
 
 See full spec: [PROMPTS/phase-4-live-features.md](PROMPTS/phase-4-live-features.md)
 

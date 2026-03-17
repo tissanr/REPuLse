@@ -10,7 +10,7 @@
             [clojure.string :as cstr]
             ["@codemirror/view" :refer [EditorView Decoration keymap lineNumbers]]
             ["@codemirror/state" :refer [EditorState StateEffect StateField]]
-            ["@codemirror/commands" :refer [defaultKeymap historyKeymap history]]
+            ["@codemirror/commands" :refer [defaultKeymap historyKeymap history selectAll]]
             ["@codemirror/language" :refer [bracketMatching]]
             ["@codemirror/theme-one-dark" :refer [oneDark]]
             ["./lisp-lang/index.js" :refer [lispLanguage]]
@@ -274,6 +274,25 @@
                        (if (seq ks)
                          (str "=> (" (cstr/join " " (map #(str ":" (name %)) ks)) ")")
                          "=> ()")))
+                   ;; --- Hot-swap update ---
+                   "upd"
+                   (fn []
+                     (when-let [view @editor-view]
+                       (let [code   (.. view -state -doc (toString))
+                             env    (assoc @env-atom "stop" (make-stop-fn))
+                             result (lisp/eval-string code env)]
+                         (if-let [err (:error result)]
+                           (do (clear-highlights!)
+                               (set-output! (str "Error: " err) :error))
+                           (let [val (:result result)]
+                             (cond
+                               (and (map? val) (fn? (:query val)))
+                               (do (audio/play-track! :_ val on-beat highlight-range!)
+                                   (set-playing! true)
+                                   (set-output! "updated" :success))
+                               (nil? val) nil
+                               (string? val) (set-output! val :success)
+                               :else (set-output! (str "=> " (pr-str val)) :success)))))))
                    ;; --- Tap tempo ---
                    "tap!"
                    (fn []
@@ -479,7 +498,8 @@
                       true)
         extensions  #js [oneDark
                          lispLanguage
-                         (.of keymap #js [#js {:key "Enter"  :run eval-cmd}
+                         (.of keymap #js [#js {:key "Mod-a"  :run selectAll}
+                                          #js {:key "Enter"  :run eval-cmd}
                                           #js {:key "Escape" :run clear-view!}])]
         state (.. EditorState (create #js {:doc "" :extensions extensions}))
         view  (EditorView. #js {:state state :parent container})]

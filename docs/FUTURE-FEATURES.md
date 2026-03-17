@@ -19,6 +19,18 @@ they are collected here to capture intent without cluttering the active roadmap.
 
 ---
 
+## Synthesis
+
+| Idea | Description |
+|---|---|
+| More voice types | Additional WASM oscillator voices: sawtooth, pulse/square, band-limited variants, white/pink noise, FM pair (carrier + modulator with index parameter) |
+| Granular synthesis | Split an audio buffer into short overlapping grains; control pitch, density, spread, and position — AudioWorklet-based |
+| Custom synth definition | `(defsynth name params body)` — let users define named synthesis graphs in the Lisp layer, similar to Overtone's `defsynth` / `definstrument` |
+| Per-voice effects routing | Independent effect chains per track (before the master bus), addressable via `(track-fx :name :reverb 0.4)` — currently all effects are global |
+| Sample playback parameters | Per-event control over sample pitch-shift, playback rate, start/end points, and loop mode — currently `(sound :bank n)` uses fixed playback |
+
+---
+
 ## Effect plugins
 
 | Idea | Description |
@@ -35,11 +47,13 @@ they are collected here to capture intent without cluttering the active roadmap.
 
 | Idea | Type | Description |
 |---|---|---|
-| MIDI input | `midi` | Receive Note On messages from a controller, map to pattern triggers |
-| MIDI clock in | `midi` | Sync REPuLse BPM to an incoming MIDI clock signal |
-| MIDI clock out | `midi` | Send MIDI clock messages at the current BPM |
+| MIDI input | `midi` | Receive Note On/Off and CC messages from a controller or keyboard, map to pattern triggers or parameter modulation |
+| MIDI clock out | `midi` | Send MIDI clock messages at the current BPM to drive external hardware |
+| MIDI note out | `midi` | Route pattern events to hardware synths via MIDI Note On/Off |
 | Ableton Link | `sync` | Tempo sync with other Link-enabled apps via a local WebSocket bridge daemon |
-| OSC output | `osc` | Forward pattern events to OSC (via a WebSocket→UDP bridge, e.g. to SuperCollider) |
+| OSC output | `osc` | Forward pattern events to OSC (via a WebSocket→UDP bridge, e.g. to SuperCollider or Ableton) |
+| OSC input | `osc` | Receive OSC messages to modulate patterns or parameters in real time |
+| Freesound API | `samples` | Search and load samples from freesound.org via `(freesound! "query")` — similar to Overtone's built-in Freesound helpers |
 | CV/Gate | `io` | Send gate/pitch voltages via WebSerial or WebUSB (for modular synths) |
 
 ---
@@ -50,7 +64,6 @@ they are collected here to capture intent without cluttering the active roadmap.
 |---|---|
 | Export via OfflineAudioContext | Render a fixed number of cycles faster-than-real-time to a WAV blob |
 | FLAC export | Higher quality offline export using a WASM FLAC encoder |
-| Session URL | Encode current editor content + BPM as a Base64 URL hash for sharing |
 | Community library | Browse and import shared patterns from a hosted repository |
 | Gist import | Load a pattern from a GitHub Gist URL with `(load-gist "https://gist.github.com/...")` |
 

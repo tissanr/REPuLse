@@ -25,7 +25,8 @@ Map    { "{" expr* "}" }
     "def" | "let" | "fn" | "lambda" | "if" | "do" |
     "bpm" | "stop" | "fx" | "load-plugin" | "arrange" | "play-scenes" | "sound" |
     "get" | "assoc" | "merge" | "not" | "and" | "or" | "comp" |
-    "play" | "mute!" | "unmute!" | "solo!" | "clear!" | "tracks" | "tap!" | "midi-sync!"
+    "play" | "mute!" | "unmute!" | "solo!" | "clear!" | "tracks" | "tap!" | "midi-sync!" |
+    "upd"
   }
 
   Symbol { identStart identChar* }

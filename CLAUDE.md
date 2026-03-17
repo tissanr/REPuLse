@@ -153,7 +153,31 @@ npm run dev              # build:wasm + shadow-cljs watch app
 
 # Tests
 npm run test:core        # cljs.test for packages/core
+
+# Lezer grammar (syntax highlighting) — run after editing repulse-lisp.grammar
+npm run gen:grammar      # regenerates parser.js + parser.terms.js
 ```
+
+### Syntax highlighting + completions checklist
+
+When adding a new built-in name that should be highlighted and autocompleted in the editor:
+
+1. Add the name to `BuiltinName` in `app/src/repulse/lisp-lang/repulse-lisp.grammar`
+2. **Run `npm run gen:grammar`** — this overwrites the committed `parser.js`
+3. Add a `{ label, type, detail }` entry in `app/src/repulse/lisp-lang/completions.js`
+4. Commit both `repulse-lisp.grammar` **and** the regenerated `parser.js`
+
+Skipping step 2 means the grammar change has no effect at runtime.
+
+---
+
+## Dev server
+
+The user runs the dev server themselves (`npm run dev` or `npx shadow-cljs watch app`,
+always on port 3000). **Do not call `preview_start`** — it will fail with a port
+conflict since port 3000 is already held by the shadow-cljs Java process.
+
+To verify UI changes, describe what to check or ask the user to reload the browser.
 
 ---
 
@@ -177,7 +201,7 @@ npm run test:core        # cljs.test for packages/core
 | F     | Drum machine bank prefix — `(bank :AkaiLinn)` scope shorthand  | ✓ delivered  |
 | G     | Music theory — note keywords, `scale`, `chord`, `transpose`    | ✓ delivered  |
 | H     | Per-event parameters — `amp`, `attack`, `decay`, `pan`, `->>`  | ✓ delivered  |
-| 4     | Live features — named slots, tap BPM, MIDI clock, session URLs | not started  |
+| 4     | Named tracks, command bar, tap BPM, MIDI clock, session URLs   | ✓ delivered  |
 | B     | Richer visuals — audiomotion-analyzer spectrum, p5.js support  | not started  |
 | 7     | Advanced plugins — per-pattern routing, MIDI out, recorder     | not started  |
 
