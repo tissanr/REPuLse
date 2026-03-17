@@ -287,6 +287,8 @@ impl AudioEngine {
             },
             other => {
                 let freq = other.parse::<f64>().unwrap_or(440.0);
+                // amp is the peak gain (0.0–1.0). Scale by 0.5 to leave headroom
+                // for polyphony — identical to make-sine JS fallback.
                 let peak = amp * 0.5;
                 let attack_samples = (p.attack * sr).max(1.0);
                 Voice::Tone {
