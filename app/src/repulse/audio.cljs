@@ -134,22 +134,29 @@
 
 (defn- make-sine
   "JS-synthesis fallback for when the AudioWorklet/WASM is unavailable.
-   dur defaults to 1.5s so bare note keywords sustain for most of a cycle.
-   amp defaults to 0.5 (half volume to prevent clipping)."
-  ([ac t freq] (make-sine ac t freq 1.5 0.5))
-  ([ac t freq dur] (make-sine ac t freq dur 0.5))
-  ([ac t freq dur amp]
-   (let [osc  (.createOscillator ac)
-         gain (.createGain ac)
-         peak (* 0.5 (float amp))]   ; scale by 0.5 to match WASM headroom
+   dur     — decay duration in seconds (default 1.5)
+   amp     — peak amplitude 0.0–1.0 (default 1.0; scaled by 0.5 internally)
+   attack  — linear ramp-up time in seconds (default 0.001 = instant)"
+  ([ac t freq] (make-sine ac t freq 1.5 1.0 0.001))
+  ([ac t freq dur] (make-sine ac t freq dur 1.0 0.001))
+  ([ac t freq dur amp] (make-sine ac t freq dur amp 0.001))
+  ([ac t freq dur amp attack]
+   (let [osc    (.createOscillator ac)
+         gain   (.createGain ac)
+         peak   (* 0.5 (float amp))    ; headroom for polyphony
+         atk    (max 0.001 (float attack))
+         stop-t (+ t atk (float dur))]
      (set! (.-type osc) "sine")
      (.setValueAtTime (.-frequency osc) freq t)
-     (.setValueAtTime (.-gain gain) peak t)
-     (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t dur))
+     ;; Start near-silence, ramp linearly to peak over attack time,
+     ;; then exponentially decay to silence over dur seconds.
+     (.setValueAtTime (.-gain gain) 0.0001 t)
+     (.linearRampToValueAtTime (.-gain gain) peak (+ t atk))
+     (.exponentialRampToValueAtTime (.-gain gain) 0.0001 stop-t)
      (.connect osc gain)
      (.connect gain (output-node ac))
      (.start osc t)
-     (.stop osc (+ t dur)))))
+     (.stop osc stop-t))))
 
 ;;; Synthesis dispatch
 
@@ -198,7 +205,7 @@
         (if (theory/note-keyword? note)
           (let [hz (theory/note->hz note)]
             (or (worklet-trigger-v2! (str hz) t amp-v attack-v decay-v pan-v)
-                (make-sine ac t hz decay-v amp-v)))
+                (make-sine ac t hz decay-v amp-v attack-v)))
           (let [resolved (samples/resolve-keyword note)]
             (cond
               (samples/has-bank? resolved) (samples/play! ac t resolved 0)
@@ -206,7 +213,7 @@
                         (js-synth ac t note)))))
         (number? note)
         (or (worklet-trigger-v2! (str note) t amp-v attack-v decay-v pan-v)
-            (make-sine ac t note decay-v amp-v))))
+            (make-sine ac t note decay-v amp-v attack-v))))
 
     ;; Map {:bank :bd :n 2} from (sound :bd 2) — always use samples
     (and (map? value) (:bank value))
