@@ -72,7 +72,9 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(amp 0.8 pat)` | Set amplitude 0.0–1.0; `(amp 0.8)` returns a transformer |
 | `(attack 0.05 pat)` | Envelope attack time in seconds |
 | `(decay 0.4 pat)` | Envelope decay time in seconds |
+| `(release 0.5 pat)` | Envelope release time in seconds |
 | `(pan -0.5 pat)` | Stereo panning -1.0 (left) to 1.0 (right) |
+| `(comp f g …)` | Compose transformers right-to-left: `(def pluck (comp (amp 0.8) (decay 0.15)))` |
 | `(arrange [[p 4] [q 8]])` | Play sections in order for N cycles each, then loop |
 | `(play-scenes [p q r])` | Play each pattern for 1 cycle in sequence, then loop |
 | `(bpm 140)` | Set the tempo in BPM (default: 120) |
