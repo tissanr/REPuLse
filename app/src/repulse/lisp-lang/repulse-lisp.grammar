@@ -21,6 +21,7 @@ Map    { "{" expr* "}" }
   BuiltinName {
     "seq" | "stack" | "pure" | "fast" | "slow" | "rev" | "every" | "fmap" |
     "scale" | "chord" | "transpose" |
+    "->>" | "amp" | "attack" | "decay" | "release" | "pan" |
     "def" | "let" | "fn" | "lambda" | "if" | "do" |
     "bpm" | "stop" | "fx" | "load-plugin" | "arrange" | "play-scenes" | "sound" |
     "get" | "assoc" | "merge" | "not" | "and" | "or"

@@ -34,7 +34,8 @@
   (if-let [worklet (.-audioWorklet ac)]
     (-> (.addModule worklet "/worklet.js")
         (.then (fn []
-                 (let [node (js/AudioWorkletNode. ac "repulse-processor")]
+                 (let [node (js/AudioWorkletNode. ac "repulse-processor"
+                                                  #js {:outputChannelCount #js [2]})]
                    (.connect node @master-gain)
                    (reset! worklet-node node)
                    (set! (.. node -port -onmessage)
@@ -153,6 +154,15 @@
         (postMessage #js {:type "trigger" :value value :time t}))
     true))
 
+(defn- worklet-trigger-v2!
+  "Send a trigger_v2 message with explicit synthesis parameters. Returns true if ready."
+  [value t amp attack decay pan]
+  (when (and @worklet-ready? @worklet-node)
+    (.. @worklet-node -port
+        (postMessage #js {:type "trigger_v2" :value value :time t
+                          :amp amp :attack attack :decay decay :pan pan}))
+    true))
+
 (defn- js-synth
   "JS synthesis fallback — used when AudioWorklet is unavailable."
   [ac t value]
@@ -166,6 +176,30 @@
   (cond
     ;; Silence / rest
     (= value :_) nil
+
+    ;; Parameter map {:note … :amp … :attack … :decay … :pan …}
+    ;; from amp/attack/decay/release/pan transformers
+    (and (map? value) (:note value))
+    (let [note     (:note value)
+          amp-v    (float (:amp value 1.0))
+          attack-v (float (:attack value 0.001))
+          decay-v  (float (:decay value 0.3))
+          pan-v    (float (:pan value 0.0))]
+      (cond
+        (= note :_) nil
+        (keyword? note)
+        (if (theory/note-keyword? note)
+          (let [hz (theory/note->hz note)]
+            (or (worklet-trigger-v2! (str hz) t amp-v attack-v decay-v pan-v)
+                (make-sine ac t hz)))
+          (let [resolved (samples/resolve-keyword note)]
+            (cond
+              (samples/has-bank? resolved) (samples/play! ac t resolved 0)
+              :else (or (worklet-trigger-v2! (name note) t amp-v attack-v decay-v pan-v)
+                        (js-synth ac t note)))))
+        (number? note)
+        (or (worklet-trigger-v2! (str note) t amp-v attack-v decay-v pan-v)
+            (make-sine ac t note))))
 
     ;; Map {:bank :bd :n 2} from (sound :bd 2) — always use samples
     (and (map? value) (:bank value))

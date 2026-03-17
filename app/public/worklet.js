@@ -33,18 +33,39 @@ class RepulseProcessor extends AudioWorkletProcessor {
       }
     } else if (msg.type === 'trigger') {
       if (this.engine) this.engine.trigger(msg.value, msg.time);
+    } else if (msg.type === 'trigger_v2') {
+      if (this.engine) {
+        this.engine.trigger_v2(
+          msg.value, msg.time,
+          msg.amp, msg.attack, msg.decay, msg.pan
+        );
+      }
     } else if (msg.type === 'stop') {
       if (this.engine) this.engine.stop_all();
     }
   }
 
   process(_inputs, outputs) {
-    const ch = outputs[0]?.[0];
-    if (!ch || !this.engine) return true;
-    const samples = this.engine.process_block(ch.length, currentTime);
-    ch.set(samples);
-    // Duplicate mono to additional channels (e.g. stereo output)
-    for (let i = 1; i < outputs[0].length; i++) outputs[0][i].set(ch);
+    if (!this.engine) return true;
+    const out = outputs[0];
+    if (!out || out.length === 0) return true;
+
+    const n = out[0].length;
+    // process_block returns interleaved stereo: [L0, R0, L1, R1, …]
+    const raw = this.engine.process_block(n, currentTime);
+
+    if (out.length >= 2) {
+      // Stereo output — split interleaved channels
+      for (let i = 0; i < n; i++) {
+        out[0][i] = raw[i * 2];      // L
+        out[1][i] = raw[i * 2 + 1]; // R
+      }
+    } else {
+      // Mono fallback — average L + R
+      for (let i = 0; i < n; i++) {
+        out[0][i] = (raw[i * 2] + raw[i * 2 + 1]) * 0.5;
+      }
+    }
     return true;
   }
 }

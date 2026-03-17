@@ -68,6 +68,11 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(scale :minor :c4 pat)` | Map degree integers in pat to Hz using a named scale |
 | `(chord :major7 :c4)` | Stack chord tones as a pattern of Hz values |
 | `(transpose 7 pat)` | Shift all Hz values by n semitones (keywords pass through) |
+| `(->> pat (amp 0.8) (attack 0.02))` | Thread pattern through parameter transformers |
+| `(amp 0.8 pat)` | Set amplitude 0.0–1.0; `(amp 0.8)` returns a transformer |
+| `(attack 0.05 pat)` | Envelope attack time in seconds |
+| `(decay 0.4 pat)` | Envelope decay time in seconds |
+| `(pan -0.5 pat)` | Stereo panning -1.0 (left) to 1.0 (right) |
 | `(arrange [[p 4] [q 8]])` | Play sections in order for N cycles each, then loop |
 | `(play-scenes [p q r])` | Play each pattern for 1 cycle in sequence, then loop |
 | `(bpm 140)` | Set the tempo in BPM (default: 120) |

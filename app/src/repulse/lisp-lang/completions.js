@@ -15,6 +15,13 @@ const BUILTINS = [
   { label: "scale",        type: "function", detail: "(scale kw root pat) — map degree integers to Hz (e.g. (scale :minor :c4 (seq 0 2 4)))" },
   { label: "chord",        type: "function", detail: "(chord kw root) — stack chord tones as Hz (e.g. (chord :major7 :c4))" },
   { label: "transpose",    type: "function", detail: "(transpose n pat) — shift Hz values by n semitones" },
+  // --- Per-event parameters ---
+  { label: "->>",          type: "keyword",  detail: "(->> pat (amp 0.8) (attack 0.02)) — thread pattern through transformers (last arg)" },
+  { label: "amp",          type: "function", detail: "(amp val pat) — amplitude 0.0–1.0; (amp val) returns transformer" },
+  { label: "attack",       type: "function", detail: "(attack secs pat) — envelope attack time in seconds; (attack secs) returns transformer" },
+  { label: "decay",        type: "function", detail: "(decay secs pat) — envelope decay time in seconds; (decay secs) returns transformer" },
+  { label: "release",      type: "function", detail: "(release secs pat) — envelope release time in seconds; (release secs) returns transformer" },
+  { label: "pan",          type: "function", detail: "(pan pos pat) — stereo pan -1.0 (left) to 1.0 (right); (pan pos) returns transformer" },
   // --- Sound ---
   { label: "sound",        type: "function", detail: "(sound bank n) — select sample n from bank" },
   { label: "bpm",          type: "function", detail: "(bpm n) — set tempo in beats per minute" },

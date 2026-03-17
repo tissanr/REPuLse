@@ -1,6 +1,7 @@
 (ns repulse.lisp.eval
   (:require [repulse.core :as core]
             [repulse.theory :as theory]
+            [repulse.params :as params]
             [repulse.lisp.reader :as reader]))
 
 ;;; Source-tracking helpers
@@ -109,6 +110,30 @@
         "do"
         (last (map #(eval-form % env) tail))
 
+        "->>"
+        ;; Thread-last: evaluate the first expression, then pass it as the
+        ;; last argument to each subsequent call form in sequence.
+        ;; (->> melody (amp 0.8) (attack 0.01))
+        ;; ≡ (attack 0.01 (amp 0.8 melody))
+        (reduce
+          (fn [acc form]
+            (if (seq? form)
+              (let [[fhead & fargs] form
+                    f    (eval-form fhead env)
+                    args (mapv #(eval-form % env) fargs)]
+                (if (fn? f)
+                  (apply f (concat args [acc]))
+                  (throw (ex-info (str (pr-str fhead) " is not a function")
+                                  {:type :eval-error}))))
+              ;; Bare symbol — call as unary function
+              (let [f (eval-form form env)]
+                (if (fn? f)
+                  (f acc)
+                  (throw (ex-info (str (pr-str form) " is not a function")
+                                  {:type :eval-error}))))))
+          (eval-form (first tail) env)
+          (rest tail))
+
         ;; Function call
         (let [f (eval-form head env)]
           (if (fn? f)
@@ -138,6 +163,22 @@
                    (theory/chord (unwrap kw) (unwrap root)))
      "transpose" (fn [n pat]
                    (theory/transpose (unwrap n) (unwrap pat)))
+     ;; Per-event parameters — curried: one arg returns a (pat → pat) transformer
+     "amp"     (fn
+                 ([v]   (params/amp (unwrap v)))
+                 ([v p] (params/amp (unwrap v) (unwrap p))))
+     "attack"  (fn
+                 ([v]   (params/attack (unwrap v)))
+                 ([v p] (params/attack (unwrap v) (unwrap p))))
+     "decay"   (fn
+                 ([v]   (params/decay (unwrap v)))
+                 ([v p] (params/decay (unwrap v) (unwrap p))))
+     "release" (fn
+                 ([v]   (params/release (unwrap v)))
+                 ([v p] (params/release (unwrap v) (unwrap p))))
+     "pan"     (fn
+                 ([v]   (params/pan (unwrap v)))
+                 ([v p] (params/pan (unwrap v) (unwrap p))))
      ;; Sound helpers
      "sound"  (fn [bank n] {:bank (unwrap bank) :n (or (unwrap n) 0)})
      "bpm"    (fn [b] (bpm-fn (unwrap b)) nil)
