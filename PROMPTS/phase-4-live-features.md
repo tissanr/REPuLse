@@ -16,7 +16,7 @@ By the end of this session:
 2. A track can be muted, soloed, or removed without stopping others
 3. The BPM can be tapped or synced to MIDI clock
 4. The session (all active tracks + BPM) can be saved to a URL and restored
-5. A punchcard visual timeline shows active tracks and their cycle positions
+5. A visual timeline shows active tracks and their cycle positions
 
 ---
 
@@ -83,20 +83,16 @@ The footer area expands to show the active track panel:
 │  (play :kick (seq :bd :_ :bd :_))        │  ← editor
 │                                          │
 ├──────────────────────────────────────────┤
-│  :kick  ● ○ ● ○ ● ○ ● ○   ● ●           │  ← punchcard + beats
-│  :snare ○ ● ○ ● ○ ● ○ ●   ●             │
-│  :hats  ● ● ● ● ● ● ● ●   ● ● ● ●       │
+│  :kick  ████░░██░░  ● ●                  │  ← timeline
+│  :snare ░░██░░░░██  ●                    │
+│  :hats  ████████    ● ● ● ●              │
 ├──────────────────────────────────────────┤
 │  => playing 3 tracks                     │  ← output
 └──────────────────────────────────────────┘
 ```
 
-Each track row shows:
-- **Track name** — click to mute/unmute
-- **Punchcard** — a row of filled/empty dots, one per beat subdivision. Filled ● = event
-  fires on that step; empty ○ = silence. Resolution: 16th notes (16 dots per bar).
-  Muted tracks show dimmed dots. The playhead sweeps left-to-right each cycle.
-- **Beat indicators** — dots that flash as events actually fire in real time
+Each track row shows: name, a mini piano-roll of the current cycle, and beat indicators.
+Click a track name to mute/unmute.
 
 ---
 
@@ -175,55 +171,24 @@ if no URL fragment is present.
 
 ---
 
-## Feature 4: Punchcard visual timeline
+## Feature 4: Visual timeline
 
-A punchcard-style step grid below the editor showing all active tracks in real time.
+A mini piano-roll / step-sequencer view below the editor showing all active tracks.
 
-### What a punchcard is
+Each track shows:
+- The events in the current cycle as coloured blocks
+- The current playhead position
+- Beat numbers (1–4)
 
-Each track occupies one row. The row is divided into **16 cells** (16th-note resolution
-per bar). A filled cell (●) means at least one event fires on that step; empty (○)
-means silence. This mirrors the look of classic drum machine step sequencers and
-physical punched-tape / punchcard notation — immediately readable without knowing any
-REPuLse syntax.
-
-```
-beat:   1 . . . 2 . . . 3 . . . 4 . . .
-:kick   ● ○ ○ ○ ● ○ ○ ○ ● ○ ● ○ ● ○ ○ ○
-:snare  ○ ○ ○ ○ ● ○ ○ ○ ○ ○ ○ ○ ● ○ ○ ○
-:hats   ● ○ ● ○ ● ○ ● ○ ● ○ ● ○ ● ○ ● ○
-```
-
-### Implementation
+The timeline is read-only — editing is done in the REPL. It updates every cycle.
 
 ```clojure
-(defn render-track-punchcard [track-name pattern cycle]
-  ;; Query pattern for current cycle, quantise to 16th-note grid
-  (let [sp      {:start [cycle 1] :end [(inc cycle) 1]}
-        evs     (core/query pattern sp)
-        ;; Map event onset to one of 16 buckets
-        buckets (reduce (fn [acc ev]
-                          (let [pos   (core/rat->float (:start (:part ev)))
-                                frac  (- pos cycle)
-                                step  (int (* frac 16))]
-                            (assoc acc step true)))
-                        (vec (repeat 16 false))
-                        evs)]
-    ;; Render 16 dots: filled or empty
-    buckets))
-```
-
-The punchcard updates on every cycle boundary (not on every animation frame) since
-the pattern doesn't change within a cycle. The playhead is a thin vertical line that
-sweeps across the 16 columns in real time using `requestAnimationFrame`.
-
-### Visual details
-
-- Each cell is a small circle: ● (event) or ○ (silence)
-- Muted tracks: all cells dimmed / greyed out, track name struck-through
-- Soloed track: all other rows dimmed
-- Cells for the currently playing step briefly highlight amber (synced to the beat flash)
-- Track name on the left is clickable: click → mute/unmute
+(defn render-track-timeline [track-name pattern cycle]
+  ;; Query pattern for current cycle
+  (let [sp  {:start [cycle 1] :end [(inc cycle) 1]}
+        evs (core/query pattern sp)]
+    ;; Draw SVG bars proportional to event position and duration
+    ))
 
 ---
 
@@ -256,7 +221,7 @@ Add a new section **"Tracks (multi-pattern playback)"** to `docs/USAGE.md` that:
    > The difference is naming: in REPuLse you give tracks meaningful keyword names
    > (`:kick`, `:bass`, `:lead`) rather than numbers.
 
-3. Shows the punchcard timeline screenshot or ASCII art so users know what to expect
+3. Shows the timeline ASCII art so users know what to expect
 
 ---
 
@@ -265,9 +230,7 @@ Add a new section **"Tracks (multi-pattern playback)"** to `docs/USAGE.md` that:
 - `scheduler-state` becomes the source of truth for all tracks — the timeline reads from it
 - `play` and `mute` mutate `scheduler-state` atoms, just like `stop` does now
 - Session encode/decode is pure (no side effects) — easy to unit test
-- Punchcard rendering: recalculate bucket array once per cycle on cycle boundary;
-  use `requestAnimationFrame` only for the playhead sweep line
-- The punchcard is a Svelte component that `$:` reacts to `scheduler-state` changes
+- Timeline rendering uses `requestAnimationFrame` at ~30fps, not on every audio tick
 
 ---
 
@@ -281,9 +244,7 @@ Add a new section **"Tracks (multi-pattern playback)"** to `docs/USAGE.md` that:
 - [ ] `(tracks)` returns the list of currently active track names
 - [ ] BPM tap sets tempo within ±2 BPM accuracy over 4 taps
 - [ ] Share button copies a URL that restores the full session when opened in a new tab
-- [ ] Punchcard shows correct 16th-note grid for current cycle; updates each cycle
-- [ ] Punchcard playhead sweeps in real time
-- [ ] Muted tracks are visually dimmed in the punchcard
+- [ ] Timeline shows current cycle events and scrolling playhead
 - [ ] `localStorage` restore works after browser refresh
 
 ---
@@ -294,4 +255,3 @@ Add a new section **"Tracks (multi-pattern playback)"** to `docs/USAGE.md` that:
 - No collaborative / multi-user session
 - No mobile-specific layout (keep it desktop-first)
 - No export to audio file
-- No editable punchcard (the grid is read-only — editing is done in the REPL)
