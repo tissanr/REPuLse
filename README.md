@@ -65,6 +65,9 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(rev pat)` | Reverse a pattern within each cycle |
 | `(every 4 (fast 2) pat)` | Apply transform every 4th cycle |
 | `(fmap f pat)` | Apply a function to every event value |
+| `(scale :minor :c4 pat)` | Map degree integers in pat to Hz using a named scale |
+| `(chord :major7 :c4)` | Stack chord tones as a pattern of Hz values |
+| `(transpose 7 pat)` | Shift all Hz values by n semitones (keywords pass through) |
 | `(arrange [[p 4] [q 8]])` | Play sections in order for N cycles each, then loop |
 | `(play-scenes [p q r])` | Play each pattern for 1 cycle in sequence, then loop |
 | `(bpm 140)` | Set the tempo in BPM (default: 120) |
@@ -92,6 +95,7 @@ function from a time span to a list of events — the same model used by TidalCy
 | `:oh` | Open hi-hat |
 | `:_` | Rest (silence) |
 | `440` | Sine tone at that frequency in Hz |
+| `:c4`, `:eb3`, `:fs5` | Note keyword — sine tone at that pitch (s=sharp, b=flat) |
 | `(sound :bank n)` | Sample from the Strudel CDN library by name and index |
 | any loaded keyword | Plays the matching sample bank (e.g. `:cp`, `:bass`, `:tabla`) |
 

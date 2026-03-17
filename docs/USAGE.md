@@ -332,6 +332,98 @@ Apply a function to every event value:
 
 ---
 
+## Music theory
+
+REPuLse has a built-in music theory layer that lets you write melodies, scales, and chords
+without hand-computing frequencies. Note keywords, `scale`, `chord`, and `transpose` all
+work with every existing pattern function — they are pure pattern combinators like `fast`
+or `fmap`.
+
+### Note keywords
+
+Write pitches directly as keywords. The format is **note letter** (`a`–`g`) + optional
+**accidental** (`s` = sharp, `b` = flat) + **octave number**:
+
+```lisp
+(seq :c4 :d4 :e4 :f4)          ; C D E F, one octave 4
+(seq :eb3 :g3 :bb3)             ; E-flat G B-flat minor triad
+(seq :fs4 :gs4 :bb4 :cs5)       ; chromatic run
+```
+
+Note keywords play as sine tones via the WASM synth. Middle C is `:c4`, concert A is `:a4`
+(440 Hz). Drum keywords like `:bd` and `:sd` are unaffected.
+
+### `scale` — melodic patterns from scale degrees
+
+Map zero-indexed degree integers to frequencies in a named scale:
+
+```lisp
+(scale :major :c4 (seq 0 1 2 3 4 5 6))   ; C major scale
+(scale :minor :a3 (seq 0 2 4))            ; A minor triad
+(scale :pentatonic :g3 (fast 2 (seq 0 1 2 3 4)))
+
+;; Degrees wrap into higher octaves
+(scale :major :c4 (seq 0 7 14))           ; C4, C5, C6
+```
+
+Degree 0 = root, degree 1 = second scale tone, etc. Values beyond the scale length wrap
+into higher octaves; negative values wrap into lower octaves.
+
+Available scales: `:major` (`:ionian`), `:minor` (`:aeolian`), `:dorian`, `:phrygian`,
+`:lydian`, `:mixolydian`, `:locrian`, `:pentatonic`, `:minor-pentatonic`, `:blues`.
+
+### `chord` — stacked chord voicings
+
+Returns a `stack` of the chord tones as Hz values — all voices sound simultaneously for
+one full cycle:
+
+```lisp
+(chord :major :c4)              ; C E G
+(chord :minor7 :a3)             ; A C E G
+(chord :dom7 :g3)               ; G B D F
+
+;; Layer a chord under a melody
+(stack
+  (slow 4 (chord :minor :a3))
+  (scale :minor :a3 (fast 2 (seq 0 2 4 5 4 2))))
+```
+
+Available chords: `:major`, `:minor`, `:major7`, `:minor7`, `:dom7`, `:m7b5`
+(half-diminished), `:dim`, `:dim7`, `:aug`, `:aug7`, `:maj7s11`, `:sus2`, `:sus4`.
+
+### `transpose` — semitone shifting
+
+Shifts all numeric (Hz) values in a pattern up or down by `n` semitones. Keyword values
+(`:bd`, `:sd`, etc.) pass through unchanged:
+
+```lisp
+(transpose 12 (seq :c4 :e4 :g4))          ; up one octave → C5 E5 G5
+(transpose -7 (scale :major :c5 (seq 0 1 2 3)))
+(transpose 5 (chord :major :c4))           ; same voicing, up a fourth
+
+;; drum keywords are untouched
+(transpose 12 (seq :bd :sd))               ; still :bd :sd
+```
+
+### Putting it together
+
+```lisp
+(bpm 120)
+(stack
+  ;; chord progression: Am - F - C - G (one chord per 4 cycles)
+  (slow 4 (arrange [[(chord :minor :a3) 4]
+                    [(chord :major :f3) 4]
+                    [(chord :major :c4) 4]
+                    [(chord :major :g3) 4]]))
+  ;; melody over the top
+  (scale :minor :a3 (seq 0 2 4 5 4 2 0 2))
+  ;; drums
+  (seq :bd :_ :bd :_)
+  (seq :_ :sd :_ :sd))
+```
+
+---
+
 ## Sound and samples
 
 REPuLse loads the **TidalCycles Dirt-Samples** and the **Tidal Drum Machines** sample library
