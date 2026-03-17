@@ -132,17 +132,21 @@
     (.start src t)
     (.stop src (+ t 0.045))))
 
-(defn- make-sine [ac t freq]
-  (let [osc  (.createOscillator ac)
-        gain (.createGain ac)]
-    (set! (.-type osc) "sine")
-    (.setValueAtTime (.-frequency osc) freq t)
-    (.setValueAtTime (.-gain gain) 0.5 t)
-    (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t 0.3))
-    (.connect osc gain)
-    (.connect gain (output-node ac))
-    (.start osc t)
-    (.stop osc (+ t 0.3))))
+(defn- make-sine
+  "JS-synthesis fallback for when the AudioWorklet/WASM is unavailable.
+   dur defaults to 1.5s so bare note keywords sustain for most of a cycle."
+  ([ac t freq] (make-sine ac t freq 1.5))
+  ([ac t freq dur]
+   (let [osc  (.createOscillator ac)
+         gain (.createGain ac)]
+     (set! (.-type osc) "sine")
+     (.setValueAtTime (.-frequency osc) freq t)
+     (.setValueAtTime (.-gain gain) 0.5 t)
+     (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t dur))
+     (.connect osc gain)
+     (.connect gain (output-node ac))
+     (.start osc t)
+     (.stop osc (+ t dur)))))
 
 ;;; Synthesis dispatch
 
@@ -191,7 +195,7 @@
         (if (theory/note-keyword? note)
           (let [hz (theory/note->hz note)]
             (or (worklet-trigger-v2! (str hz) t amp-v attack-v decay-v pan-v)
-                (make-sine ac t hz)))
+                (make-sine ac t hz decay-v)))
           (let [resolved (samples/resolve-keyword note)]
             (cond
               (samples/has-bank? resolved) (samples/play! ac t resolved 0)
@@ -199,7 +203,7 @@
                         (js-synth ac t note)))))
         (number? note)
         (or (worklet-trigger-v2! (str note) t amp-v attack-v decay-v pan-v)
-            (make-sine ac t note))))
+            (make-sine ac t note decay-v))))
 
     ;; Map {:bank :bd :n 2} from (sound :bd 2) — always use samples
     (and (map? value) (:bank value))
