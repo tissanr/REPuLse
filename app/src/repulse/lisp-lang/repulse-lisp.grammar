@@ -24,7 +24,7 @@ Map    { "{" expr* "}" }
     "->>" | "amp" | "attack" | "decay" | "release" | "pan" |
     "def" | "let" | "fn" | "lambda" | "if" | "do" |
     "bpm" | "stop" | "fx" | "load-plugin" | "arrange" | "play-scenes" | "sound" |
-    "get" | "assoc" | "merge" | "not" | "and" | "or"
+    "get" | "assoc" | "merge" | "not" | "and" | "or" | "comp"
   }
 
   Symbol { identStart identChar* }

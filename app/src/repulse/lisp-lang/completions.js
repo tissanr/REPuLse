@@ -22,6 +22,7 @@ const BUILTINS = [
   { label: "decay",        type: "function", detail: "(decay secs pat) — envelope decay time in seconds; (decay secs) returns transformer" },
   { label: "release",      type: "function", detail: "(release secs pat) — envelope release time in seconds; (release secs) returns transformer" },
   { label: "pan",          type: "function", detail: "(pan pos pat) — stereo pan -1.0 (left) to 1.0 (right); (pan pos) returns transformer" },
+  { label: "comp",         type: "function", detail: "(comp f g …) — compose transformers right-to-left, e.g. (def pluck (comp (amp 0.8) (decay 0.15)))" },
   // --- Sound ---
   { label: "sound",        type: "function", detail: "(sound bank n) — select sample n from bank" },
   { label: "bpm",          type: "function", detail: "(bpm n) — set tempo in beats per minute" },

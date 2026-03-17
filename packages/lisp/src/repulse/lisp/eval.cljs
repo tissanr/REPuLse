@@ -179,6 +179,7 @@
      "pan"     (fn
                  ([v]   (params/pan (unwrap v)))
                  ([v p] (params/pan (unwrap v) (unwrap p))))
+     "comp"    (fn [& fs] (apply comp fs))
      ;; Sound helpers
      "sound"  (fn [bank n] {:bank (unwrap bank) :n (or (unwrap n) 0)})
      "bpm"    (fn [b] (bpm-fn (unwrap b)) nil)

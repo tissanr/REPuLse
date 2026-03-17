@@ -225,7 +225,7 @@
                 (make-sine ac t hz decay-v amp-v attack-v pan-v)))
           (let [resolved (samples/resolve-keyword note)]
             (cond
-              (samples/has-bank? resolved) (samples/play! ac t resolved 0 amp-v)
+              (samples/has-bank? resolved) (samples/play! ac t resolved 0 amp-v pan-v)
               :else (or (worklet-trigger-v2! (name note) t amp-v attack-v decay-v pan-v)
                         (js-synth ac t note amp-v pan-v)))))
         (number? note)
