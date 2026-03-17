@@ -463,6 +463,28 @@
                           (.. update -state -doc (toString)))
                 (catch :default _))))))
 
+(defn make-cmd-editor [container]
+  "Single-line CodeMirror editor for the command bar. Enter evaluates + clears."
+  (let [clear-view! (fn [view]
+                      (.dispatch view
+                                 #js {:changes #js {:from 0
+                                                    :to   (.. view -state -doc -length)
+                                                    :insert ""}})
+                      true)
+        eval-cmd    (fn [view]
+                      (let [code (.. view -state -doc (toString))]
+                        (when (seq (cstr/trim code))
+                          (evaluate! code)
+                          (clear-view! view)))
+                      true)
+        extensions  #js [oneDark
+                         lispLanguage
+                         (.of keymap #js [#js {:key "Enter"  :run eval-cmd}
+                                          #js {:key "Escape" :run clear-view!}])]
+        state (.. EditorState (create #js {:doc "" :extensions extensions}))
+        view  (EditorView. #js {:state state :parent container})]
+    view))
+
 (defn make-editor [container initial-value on-eval]
   (let [eval-cmd (fn [view]
                    (on-eval (.. view -state -doc (toString)))
@@ -521,9 +543,7 @@
                "</div>"
                "<div id=\"cmd-bar\" class=\"cmd-bar\">"
                "  <span class=\"cmd-prompt\">&gt;</span>"
-               "  <input id=\"cmd-input\" class=\"cmd-input\" type=\"text\""
-               "    placeholder=\"(mute! :kick)  (clear!)  (tracks) …\""
-               "    spellcheck=\"false\" autocomplete=\"off\">"
+               "  <div id=\"cmd-container\" class=\"cmd-container\"></div>"
                "</div>"
                "<div id=\"track-panel\" class=\"track-panel\"></div>"
                "<div id=\"plugin-panel\" class=\"plugin-panel hidden\"></div>"
@@ -533,18 +553,7 @@
                "</footer>")))
   (.addEventListener (el "play-btn")  "click" on-play-btn-click)
   (.addEventListener (el "tap-btn")   "click" (fn [] (evaluate! "(tap!)")))
-  (.addEventListener (el "share-btn") "click" share!)
-  ;; Command bar — Enter evaluates, Escape clears
-  (.addEventListener (el "cmd-input") "keydown"
-    (fn [e]
-      (cond
-        (= (.-key e) "Enter")
-        (let [code (.-value (el "cmd-input"))]
-          (when (seq (cstr/trim code))
-            (evaluate! code)
-            (set! (.-value (el "cmd-input")) "")))
-        (= (.-key e) "Escape")
-        (set! (.-value (el "cmd-input")) "")))))
+  (.addEventListener (el "share-btn") "click" share!))
 
 (defn init []
   (build-dom!)
@@ -571,6 +580,8 @@
             (if (contains? (:muted @audio/scheduler-state) kw)
               (audio/unmute-track! kw)
               (audio/mute-track! kw)))))
+
+  (make-cmd-editor (el "cmd-container"))
 
   (let [container (el "editor-container")
         view (make-editor container "(seq :bd :sd :bd :sd)" evaluate!)]

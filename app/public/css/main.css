@@ -252,18 +252,30 @@ footer {
   user-select: none;
 }
 
-.cmd-input {
+.cmd-container {
   flex: 1;
-  background: transparent;
-  border: none;
-  color: var(--text);
-  font-family: var(--font-mono);
+  min-width: 0;
   font-size: 0.85rem;
-  outline: none;
-  caret-color: var(--accent);
 }
 
-.cmd-input::placeholder { color: var(--dim); font-size: 0.8rem; }
+/* Strip the oneDark background so it blends with the cmd-bar */
+.cmd-container .cm-editor {
+  background: transparent;
+}
+
+.cmd-container .cm-scroller {
+  background: transparent;
+  overflow: hidden;       /* no scroll — single line */
+  max-height: 1.6em;
+}
+
+.cmd-container .cm-content {
+  padding: 0;
+}
+
+.cmd-container .cm-editor.cm-focused {
+  outline: none;
+}
 
 /* ── Track panel ── */
 .track-panel {
