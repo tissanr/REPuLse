@@ -1,5 +1,6 @@
 (ns repulse.lisp.eval
   (:require [repulse.core :as core]
+            [repulse.theory :as theory]
             [repulse.lisp.reader :as reader]))
 
 ;;; Source-tracking helpers
@@ -130,7 +131,13 @@
      "slow"   (fn [f p] (core/slow (unwrap f) (unwrap p)))
      "rev"    (fn [p] (core/rev (unwrap p)))
      "every"  (fn [n t p] (core/every (unwrap n) t (unwrap p)))
-     "fmap"   (fn [f p] (core/fmap (fn [v] (unwrap (f v))) (unwrap p)))
+     "fmap"      (fn [f p] (core/fmap (fn [v] (unwrap (f v))) (unwrap p)))
+     "scale"     (fn [kw root pat]
+                   (theory/scale (unwrap kw) (unwrap root) (unwrap pat)))
+     "chord"     (fn [kw root]
+                   (theory/chord (unwrap kw) (unwrap root)))
+     "transpose" (fn [n pat]
+                   (theory/transpose (unwrap n) (unwrap pat)))
      ;; Sound helpers
      "sound"  (fn [bank n] {:bank (unwrap bank) :n (or (unwrap n) 0)})
      "bpm"    (fn [b] (bpm-fn (unwrap b)) nil)

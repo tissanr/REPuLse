@@ -11,6 +11,10 @@ const BUILTINS = [
   { label: "rev",          type: "function", detail: "(rev pat) — reverse a pattern" },
   { label: "every",        type: "function", detail: "(every n f pat) — apply f every n cycles" },
   { label: "fmap",         type: "function", detail: "(fmap f pat) — map a function over pattern values" },
+  // --- Music theory ---
+  { label: "scale",        type: "function", detail: "(scale kw root pat) — map degree integers to Hz (e.g. (scale :minor :c4 (seq 0 2 4)))" },
+  { label: "chord",        type: "function", detail: "(chord kw root) — stack chord tones as Hz (e.g. (chord :major7 :c4))" },
+  { label: "transpose",    type: "function", detail: "(transpose n pat) — shift Hz values by n semitones" },
   // --- Sound ---
   { label: "sound",        type: "function", detail: "(sound bank n) — select sample n from bank" },
   { label: "bpm",          type: "function", detail: "(bpm n) — set tempo in beats per minute" },

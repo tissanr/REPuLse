@@ -20,6 +20,7 @@ Map    { "{" expr* "}" }
 
   BuiltinName {
     "seq" | "stack" | "pure" | "fast" | "slow" | "rev" | "every" | "fmap" |
+    "scale" | "chord" | "transpose" |
     "def" | "let" | "fn" | "lambda" | "if" | "do" |
     "bpm" | "stop" | "fx" | "load-plugin" | "arrange" | "play-scenes" | "sound" |
     "get" | "assoc" | "merge" | "not" | "and" | "or"

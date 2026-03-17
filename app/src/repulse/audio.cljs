@@ -1,5 +1,6 @@
 (ns repulse.audio
   (:require [repulse.core :as core]
+            [repulse.theory :as theory]
             [repulse.samples :as samples]))
 
 ;; Web Audio API scheduler
@@ -174,13 +175,17 @@
         (or (worklet-trigger! (name bank) t)
             (make-sine ac t 440))))
 
-    ;; Keyword — resolve prefix, then sample registry → Worklet → JS fallback
+    ;; Keyword — note name (c4, eb3, …) → Hz tone, or bank prefix → sample → synth fallback
     (keyword? value)
-    (let [resolved (samples/resolve-keyword value)]
-      (cond
-        (samples/has-bank? resolved) (samples/play! ac t resolved 0)
-        :else (or (worklet-trigger! (name value) t)
-                  (js-synth ac t value))))
+    (if (theory/note-keyword? value)
+      (let [hz (theory/note->hz value)]
+        (or (worklet-trigger! (str hz) t)
+            (make-sine ac t hz)))
+      (let [resolved (samples/resolve-keyword value)]
+        (cond
+          (samples/has-bank? resolved) (samples/play! ac t resolved 0)
+          :else (or (worklet-trigger! (name value) t)
+                    (js-synth ac t value)))))
 
     ;; Number — frequency in Hz
     (number? value)

@@ -175,6 +175,7 @@ npm run test:core        # cljs.test for packages/core
 | D     | Editor persistence — localStorage save/restore across reloads  | ✓ delivered  |
 | E     | Session context panel — live bindings, effects, BPM sidebar    | ✓ delivered  |
 | F     | Drum machine bank prefix — `(bank :AkaiLinn)` scope shorthand  | ✓ delivered  |
+| G     | Music theory — note keywords, `scale`, `chord`, `transpose`    | ✓ delivered  |
 | 4     | Live features — named slots, tap BPM, MIDI clock, session URLs | not started  |
 | B     | Richer visuals — audiomotion-analyzer spectrum, p5.js support  | not started  |
 | 7     | Advanced plugins — per-pattern routing, MIDI out, recorder     | not started  |
