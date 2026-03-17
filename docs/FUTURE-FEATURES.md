@@ -10,11 +10,12 @@ they are collected here to capture intent without cluttering the active roadmap.
 | Idea | Description |
 |---|---|
 | Spectrum analyser | FFT frequency bars from `AnalyserNode.getByteFrequencyData()` |
+| Punchcard timeline | Per-track step grid: 16 cells per bar at 16th-note resolution, ● = event ○ = silence. Reads scheduler state (not AnalyserNode). Playhead sweeps via `requestAnimationFrame`. |
 | Cycle clock | Rotating circle indicating position within the current cycle — a visual metronome |
 | Piano roll | 2D grid: time on X, pitch/keyword on Y, events rendered as rectangles |
 | Event log | Scrolling list of events as they fire — useful for debugging complex patterns |
 | Lissajous scope | X/Y plot of left vs. right channel (stereo) |
-| VU meters | Per-slot level meters using `getFloatTimeDomainData` RMS |
+| VU meters | Per-track level meters using `getFloatTimeDomainData` RMS |
 
 ---
 
@@ -22,8 +23,6 @@ they are collected here to capture intent without cluttering the active roadmap.
 
 | Idea | Description |
 |---|---|
-| Chorus / Flanger | Modulated delay lines for classic ensemble effects |
-| Bitcrusher | Sample rate and bit depth reduction via `WaveShaperNode` or custom Worklet |
 | Ring modulator | Multiply signal by a carrier sine — metallic, robotic textures |
 | Parametric EQ | Multi-band `BiquadFilterNode` chain with frequency/gain/Q per band |
 | Wavefolder | Soft-clip / fold wave shaping — aggressive harmonic saturation |
