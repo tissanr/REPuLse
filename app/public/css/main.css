@@ -234,6 +234,37 @@ footer {
 .ctx-bypass { color: #e06c75; flex-shrink: 0; font-size: 10px; }
 .ctx-empty { padding: 2px 10px; color: var(--dim); }
 
+/* ── Command bar ── */
+.cmd-bar {
+  display: flex;
+  align-items: center;
+  padding: 5px 12px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.cmd-prompt {
+  color: var(--accent);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.cmd-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  outline: none;
+  caret-color: var(--accent);
+}
+
+.cmd-input::placeholder { color: var(--dim); font-size: 0.8rem; }
+
 /* ── Track panel ── */
 .track-panel {
   border-top: 1px solid var(--border);

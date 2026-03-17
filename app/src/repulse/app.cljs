@@ -240,22 +240,22 @@
                            (set-playing! true)
                            (str "=> track :" (name name') " playing"))
                          "Error: second argument to play must be a pattern")))
-                   "mute"
+                   "mute!"
                    (fn [track-name]
                      (let [name' (leval/unwrap track-name)]
                        (audio/mute-track! name')
                        (str "=> muted :" (name name'))))
-                   "unmute"
+                   "unmute!"
                    (fn [track-name]
                      (let [name' (leval/unwrap track-name)]
                        (audio/unmute-track! name')
                        (str "=> unmuted :" (name name'))))
-                   "solo"
+                   "solo!"
                    (fn [track-name]
                      (let [name' (leval/unwrap track-name)]
                        (audio/solo-track! name')
                        (str "=> solo :" (name name'))))
-                   "clear"
+                   "clear!"
                    (fn
                      ([]
                       (audio/stop!)
@@ -275,13 +275,13 @@
                          (str "=> (" (cstr/join " " (map #(str ":" (name %)) ks)) ")")
                          "=> ()")))
                    ;; --- Tap tempo ---
-                   "tap"
+                   "tap!"
                    (fn []
                      (if-let [bpm (audio/tap!)]
                        (str "=> " (.toFixed bpm 1) " BPM")
                        "=> tap again…"))
                    ;; --- MIDI clock ---
-                   "midi-sync"
+                   "midi-sync!"
                    (fn [enabled?]
                      (let [on? (leval/unwrap enabled?)]
                        (audio/set-midi-sync! on?)
@@ -519,6 +519,12 @@
                "    <div id=\"ctx-effects\" class=\"ctx-section\"></div>"
                "  </div>"
                "</div>"
+               "<div id=\"cmd-bar\" class=\"cmd-bar\">"
+               "  <span class=\"cmd-prompt\">&gt;</span>"
+               "  <input id=\"cmd-input\" class=\"cmd-input\" type=\"text\""
+               "    placeholder=\"(mute! :kick)  (clear!)  (tracks) …\""
+               "    spellcheck=\"false\" autocomplete=\"off\">"
+               "</div>"
                "<div id=\"track-panel\" class=\"track-panel\"></div>"
                "<div id=\"plugin-panel\" class=\"plugin-panel hidden\"></div>"
                "<footer>"
@@ -526,8 +532,19 @@
                "  <span class=\"hint\">Ctrl+Enter to eval</span>"
                "</footer>")))
   (.addEventListener (el "play-btn")  "click" on-play-btn-click)
-  (.addEventListener (el "tap-btn")   "click" (fn [] (evaluate! "(tap)")))
-  (.addEventListener (el "share-btn") "click" share!))
+  (.addEventListener (el "tap-btn")   "click" (fn [] (evaluate! "(tap!)")))
+  (.addEventListener (el "share-btn") "click" share!)
+  ;; Command bar — Enter evaluates, Escape clears
+  (.addEventListener (el "cmd-input") "keydown"
+    (fn [e]
+      (cond
+        (= (.-key e) "Enter")
+        (let [code (.-value (el "cmd-input"))]
+          (when (seq (cstr/trim code))
+            (evaluate! code)
+            (set! (.-value (el "cmd-input")) "")))
+        (= (.-key e) "Escape")
+        (set! (.-value (el "cmd-input")) "")))))
 
 (defn init []
   (build-dom!)
