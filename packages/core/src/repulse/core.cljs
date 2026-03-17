@@ -112,9 +112,10 @@
              eb evs-b
              :let [isect (span-intersect (:part ea) (:part eb))]
              :when isect]
-         (event (f (:value ea) (:value eb))
-                (:whole eb)
-                isect))))))
+         (let [base (event (f (:value ea) (:value eb)) (:whole eb) isect)]
+           (if-let [src (:source eb)]
+             (assoc base :source src)
+             base)))))))
 
 (defn fast [factor pat]
   (let [fr (if (vector? factor) factor (int->rat factor))]
