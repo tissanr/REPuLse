@@ -168,7 +168,7 @@ struct Pending {
     value:  String,
     amp:    f32,   // 0.0–1.0, default 1.0
     attack: f32,   // seconds, default 0.001
-    decay:  f32,   // seconds, default 0.3
+    decay:  f32,   // seconds, default 1.5 for tones
     pan:    f32,   // -1.0–1.0, default 0.0
 }
 
@@ -194,7 +194,7 @@ impl AudioEngine {
     pub fn trigger(&mut self, value: &str, time: f64) {
         self.pending.push(Pending {
             time, value: value.to_string(),
-            amp: 1.0, attack: 0.001, decay: 0.3, pan: 0.0,
+            amp: 1.0, attack: 0.001, decay: 1.5, pan: 0.0,
         });
     }
 

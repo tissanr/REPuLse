@@ -183,7 +183,7 @@
     (let [note     (:note value)
           amp-v    (float (:amp value 1.0))
           attack-v (float (:attack value 0.001))
-          decay-v  (float (:decay value 0.3))
+          decay-v  (float (:decay value 1.5))
           pan-v    (float (:pan value 0.0))]
       (cond
         (= note :_) nil
