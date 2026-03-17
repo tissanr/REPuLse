@@ -138,11 +138,21 @@
     (core/stack* (mapv core/pure freqs))))
 
 (defn transpose
-  "Shift all numeric (Hz) values in pat up or down by n semitones.
-   Keyword values (drum sounds, rests) are passed through unchanged.
+  "Shift note values in pat up or down by n semitones.
+   Works on Hz numbers, note keywords (:c4, :eb3, …), and parameter maps
+   with a :note key. Non-note keywords (drums, rests) are passed through.
 
    (transpose 12 (seq :c4 :e4 :g4))   ; up one octave
    (transpose -7 (scale :major :c5 (seq 0 1 2 3)))"
   [semitones pat]
-  (let [ratio (js/Math.pow 2 (/ semitones 12))]
-    (core/fmap (fn [v] (if (number? v) (* v ratio) v)) pat)))
+  (let [ratio  (js/Math.pow 2 (/ semitones 12))
+        shift  (fn [v]
+                 (cond
+                   (number? v)       (* v ratio)
+                   (note-keyword? v) (* (note->hz v) ratio)
+                   :else             v))]
+    (core/fmap (fn [v]
+                 (if (and (map? v) (:note v))
+                   (update v :note shift)
+                   (shift v)))
+               pat)))

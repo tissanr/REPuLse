@@ -79,20 +79,21 @@
 (defn- output-node [ac]
   (or @master-gain (.-destination ac)))
 
-(defn- make-kick [ac t]
+(defn- make-kick [ac t amp]
   (let [osc  (.createOscillator ac)
-        gain (.createGain ac)]
+        gain (.createGain ac)
+        pk   (float amp)]
     (set! (.-type osc) "sine")
     (.setValueAtTime (.-frequency osc) 150 t)
     (.exponentialRampToValueAtTime (.-frequency osc) 40 (+ t 0.06))
-    (.setValueAtTime (.-gain gain) 1.0 t)
+    (.setValueAtTime (.-gain gain) pk t)
     (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t 0.4))
     (.connect osc gain)
     (.connect gain (output-node ac))
     (.start osc t)
     (.stop osc (+ t 0.4))))
 
-(defn- make-snare [ac t]
+(defn- make-snare [ac t amp]
   (let [buf-size 4096
         buf  (.createBuffer ac 1 buf-size (.-sampleRate ac))
         data (.getChannelData buf 0)
@@ -100,11 +101,12 @@
                (aset data i (- (* 2 (Math/random)) 1)))
         src  (.createBufferSource ac)
         bpf  (.createBiquadFilter ac)
-        gain (.createGain ac)]
+        gain (.createGain ac)
+        pk   (* 0.9 (float amp))]
     (set! (.-buffer src) buf)
     (set! (.-type bpf) "bandpass")
     (.setValueAtTime (.-frequency bpf) 200 t)
-    (.setValueAtTime (.-gain gain) 0.9 t)
+    (.setValueAtTime (.-gain gain) pk t)
     (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t 0.2))
     (.connect src bpf)
     (.connect bpf gain)
@@ -112,7 +114,7 @@
     (.start src t)
     (.stop src (+ t 0.2))))
 
-(defn- make-hihat [ac t]
+(defn- make-hihat [ac t amp]
   (let [buf-size 2048
         buf  (.createBuffer ac 1 buf-size (.-sampleRate ac))
         data (.getChannelData buf 0)
@@ -120,11 +122,12 @@
                (aset data i (- (* 2 (Math/random)) 1)))
         src  (.createBufferSource ac)
         hpf  (.createBiquadFilter ac)
-        gain (.createGain ac)]
+        gain (.createGain ac)
+        pk   (* 0.5 (float amp))]
     (set! (.-buffer src) buf)
     (set! (.-type hpf) "highpass")
     (.setValueAtTime (.-frequency hpf) 8000 t)
-    (.setValueAtTime (.-gain gain) 0.5 t)
+    (.setValueAtTime (.-gain gain) pk t)
     (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t 0.045))
     (.connect src hpf)
     (.connect hpf gain)
@@ -179,12 +182,13 @@
 
 (defn- js-synth
   "JS synthesis fallback — used when AudioWorklet is unavailable."
-  [ac t value]
-  (case value
-    :bd (make-kick ac t)
-    :sd (make-snare ac t)
-    :hh (make-hihat ac t)
-    (make-sine ac t 440)))
+  ([ac t value] (js-synth ac t value 1.0))
+  ([ac t value amp]
+   (case value
+     :bd (make-kick ac t amp)
+     :sd (make-snare ac t amp)
+     :hh (make-hihat ac t amp)
+     (make-sine ac t 440 1.5 amp 0.001))))
 
 (defn play-event [ac t value]
   (cond
@@ -208,9 +212,9 @@
                 (make-sine ac t hz decay-v amp-v attack-v)))
           (let [resolved (samples/resolve-keyword note)]
             (cond
-              (samples/has-bank? resolved) (samples/play! ac t resolved 0)
+              (samples/has-bank? resolved) (samples/play! ac t resolved 0 amp-v)
               :else (or (worklet-trigger-v2! (name note) t amp-v attack-v decay-v pan-v)
-                        (js-synth ac t note)))))
+                        (js-synth ac t note amp-v)))))
         (number? note)
         (or (worklet-trigger-v2! (str note) t amp-v attack-v decay-v pan-v)
             (make-sine ac t note decay-v amp-v attack-v))))

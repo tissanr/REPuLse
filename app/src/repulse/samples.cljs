@@ -102,19 +102,22 @@
 
 (defn play!
   "Schedule playback of the nth sample from bank at audio time t.
-   Returns a Promise. Fire-and-forget is fine."
-  [ac t bank n]
-  (when-let [url (get-url bank n)]
-    (-> (get-buffer! url ac)
-        (.then (fn [buf]
-                 (let [src (.createBufferSource ac)
-                       ;; If loading took longer than scheduled, play now
-                       t'  (max t (.-currentTime ac))]
-                   (set! (.-buffer src) buf)
-                   (.connect src (.-destination ac))
-                   (.start src t'))))
-        (.catch (fn [e]
-                  (js/console.debug "[REPuLse] sample play failed:" (name bank) e))))))
+   amp (0.0–1.0, default 1.0) scales the playback gain."
+  ([ac t bank n] (play! ac t bank n 1.0))
+  ([ac t bank n amp]
+   (when-let [url (get-url bank n)]
+     (-> (get-buffer! url ac)
+         (.then (fn [buf]
+                  (let [src  (.createBufferSource ac)
+                        gain (.createGain ac)
+                        t'   (max t (.-currentTime ac))]
+                    (set! (.-buffer src) buf)
+                    (.setValueAtTime (.-gain gain) (float amp) t')
+                    (.connect src gain)
+                    (.connect gain (.-destination ac))
+                    (.start src t'))))
+         (.catch (fn [e]
+                   (js/console.debug "[REPuLse] sample play failed:" (name bank) e)))))))
 
 ;;; External sample loading — Lisp manifest, JSON manifest, GitHub discovery
 
