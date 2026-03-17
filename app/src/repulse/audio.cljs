@@ -263,37 +263,42 @@
 
 (def scheduler-state
   (atom {:playing?    false
-         :pattern     nil
+         :tracks      {}     ; keyword → Pattern
+         :muted       #{}    ; set of muted track keywords
          :cycle       0
-         :cycle-dur   2.0   ; seconds per cycle — 120 BPM, 1 cycle = 1 bar (4 beats)
-         :lookahead   0.2   ; look-ahead in seconds
+         :cycle-dur   2.0    ; seconds per cycle — 120 BPM, 1 cycle = 1 bar (4 beats)
+         :lookahead   0.2    ; look-ahead in seconds
          :interval-id nil
          :on-beat     nil
-         :on-event    nil}))  ; (fn [{:keys [from to]}]) called per event at event time
+         :on-event    nil}))
 
 (defn set-bpm!
   "Set the tempo in BPM. One cycle = one bar (4 beats)."
   [bpm]
   (swap! scheduler-state assoc :cycle-dur (/ 240.0 bpm)))
 
+(defn get-bpm []
+  (/ 240.0 (:cycle-dur @scheduler-state)))
+
 (defn schedule-cycle! [ac state cycle]
-  (let [{:keys [pattern cycle-dur on-beat on-event]} state
+  (let [{:keys [tracks muted cycle-dur on-beat on-event]} state
         sp {:start [cycle 1] :end [(inc cycle) 1]}]
-    (when pattern
-      (let [evs (core/query pattern sp)]
-        (doseq [ev evs]
-          (let [part-start (core/rat->float (:start (:part ev)))
-                cycle-audio-start (* cycle cycle-dur)
-                event-offset (* (- part-start cycle) cycle-dur)
-                t (+ cycle-audio-start event-offset)]
-            (when (> t (.-currentTime ac))
-              (play-event ac t (:value ev))
-              (when (and on-event (:source ev))
-                (let [delay-ms (max 0 (* 1000 (- t (.-currentTime ac))))]
-                  (js/setTimeout #(on-event (:source ev)) delay-ms)))
-              (when on-beat
-                (let [delay-ms (* 1000 (- t (.-currentTime ac)))]
-                  (js/setTimeout on-beat delay-ms))))))))))
+    (doseq [[track-name pattern] tracks]
+      (when (and pattern (not (contains? muted track-name)))
+        (let [evs (core/query pattern sp)]
+          (doseq [ev evs]
+            (let [part-start        (core/rat->float (:start (:part ev)))
+                  cycle-audio-start (* cycle cycle-dur)
+                  event-offset      (* (- part-start cycle) cycle-dur)
+                  t                 (+ cycle-audio-start event-offset)]
+              (when (> t (.-currentTime ac))
+                (play-event ac t (:value ev))
+                (when (and on-event (:source ev))
+                  (let [delay-ms (max 0 (* 1000 (- t (.-currentTime ac))))]
+                    (js/setTimeout #(on-event (:source ev)) delay-ms)))
+                (when on-beat
+                  (let [delay-ms (* 1000 (- t (.-currentTime ac)))]
+                    (js/setTimeout on-beat delay-ms)))))))))))
 
 (defn tick! []
   (let [ac    (get-ctx)
@@ -306,18 +311,15 @@
           (schedule-cycle! ac state cycle)
           (swap! scheduler-state update :cycle inc))))))
 
-(defn start! [pattern on-beat-fn on-event-fn]
-  (let [ac (get-ctx)]
-    ;; Always call resume — Safari suspends the context even when state = "running"
-    (.resume ac)
+(defn- ensure-running!
+  "Start the scheduler tick loop if not already running."
+  [ac on-beat-fn on-event-fn]
+  (when-not (:interval-id @scheduler-state)
     (let [now       (.-currentTime ac)
           cycle-dur (:cycle-dur @scheduler-state)
-          ;; Use floor so we start at the current cycle, not next one.
-          ;; tick! will skip events already in the past via the (> t now) guard.
           start-cycle (int (Math/floor (/ now cycle-dur)))]
       (swap! scheduler-state assoc
              :playing?    true
-             :pattern     pattern
              :cycle       start-cycle
              :on-beat     on-beat-fn
              :on-event    on-event-fn))
@@ -333,7 +335,122 @@
   (swap! scheduler-state assoc
          :playing?     false
          :interval-id  nil
-         :pattern      nil))
+         :tracks       {}
+         :muted        #{}))
+
+(defn play-track!
+  "Add or replace a named track. Starts the scheduler if not already running."
+  [track-name pattern on-beat-fn on-event-fn]
+  (let [ac (get-ctx)]
+    (.resume ac)
+    (swap! scheduler-state update :tracks assoc track-name pattern)
+    (ensure-running! ac on-beat-fn on-event-fn)))
+
+(defn mute-track! [track-name]
+  (swap! scheduler-state update :muted conj track-name))
+
+(defn unmute-track! [track-name]
+  (swap! scheduler-state update :muted disj track-name))
+
+(defn solo-track! [track-name]
+  (let [others (remove #{track-name} (keys (:tracks @scheduler-state)))]
+    (swap! scheduler-state assoc :muted (set others))))
+
+(defn clear-track! [track-name]
+  (swap! scheduler-state (fn [s]
+    (-> s
+        (update :tracks dissoc track-name)
+        (update :muted disj track-name))))
+  (when (empty? (:tracks @scheduler-state))
+    (stop!)))
+
+(defn start!
+  "Legacy single-pattern start: stops all tracks, starts fresh with one anonymous pattern."
+  [pattern on-beat-fn on-event-fn]
+  (stop!)
+  (let [ac (get-ctx)]
+    (.resume ac)
+    (let [now       (.-currentTime ac)
+          cycle-dur (:cycle-dur @scheduler-state)
+          start-cycle (int (Math/floor (/ now cycle-dur)))]
+      (swap! scheduler-state assoc
+             :playing?    true
+             :tracks      {:_ pattern}
+             :muted       #{}
+             :cycle       start-cycle
+             :on-beat     on-beat-fn
+             :on-event    on-event-fn))
+    (let [id (js/setInterval tick! 25)]
+      (swap! scheduler-state assoc :interval-id id))
+    (tick!)))
 
 (defn playing? []
   (:playing? @scheduler-state))
+
+;;; Tap tempo
+
+(defonce ^:private tap-times (atom []))
+
+(defn tap!
+  "Register a tap for BPM detection. Returns computed BPM or nil if fewer than 2 taps."
+  []
+  (let [now (js/Date.now)]
+    (swap! tap-times (fn [ts]
+      (->> (conj ts now)
+           (filterv #(> % (- now 4000)))
+           (take-last 8)
+           vec)))
+    (let [ts @tap-times]
+      (when (>= (count ts) 2)
+        (let [diffs (map - (rest ts) ts)
+              avg   (/ (reduce + diffs) (count diffs))
+              bpm   (/ 60000.0 avg)]
+          (set-bpm! bpm)
+          bpm)))))
+
+;;; MIDI clock sync
+
+(defonce ^:private midi-sync-enabled? (atom false))
+(defonce ^:private clock-pulses (atom []))
+
+(defn- handle-clock-pulse! []
+  (let [now (js/Date.now)]
+    (swap! clock-pulses (fn [ps]
+      (->> (conj ps now)
+           (filterv #(> % (- now 2000)))
+           (take-last 48)
+           vec)))
+    (let [ps @clock-pulses]
+      ;; Need at least 25 samples for 24 inter-pulse intervals
+      (when (>= (count ps) 25)
+        (let [diffs (map - (rest ps) ps)
+              avg   (/ (reduce + diffs) (count diffs))
+              bpm   (/ 60000.0 (* avg 24))]
+          (set-bpm! bpm))))))
+
+(defn- handle-clock-start! [] (reset! clock-pulses []))
+(defn- handle-clock-stop!  [] (reset! clock-pulses []))
+
+(defn- handle-midi-msg! [event]
+  (let [data (.-data event)]
+    (case (aget data 0)
+      0xF8 (handle-clock-pulse!)
+      0xFA (handle-clock-start!)
+      0xFC (handle-clock-stop!)
+      nil)))
+
+(defn set-midi-sync!
+  "Enable or disable MIDI clock sync. Requests MIDI access on first enable."
+  [enabled?]
+  (reset! midi-sync-enabled? enabled?)
+  (if enabled?
+    (if (.-requestMIDIAccess js/navigator)
+      (-> (.requestMIDIAccess js/navigator)
+          (.then (fn [access]
+            (doseq [input (array-seq (.values (.-inputs access)))]
+              (set! (.-onmidimessage input) handle-midi-msg!))
+            (js/console.log "[REPuLse] MIDI clock sync enabled")))
+          (.catch (fn [e]
+            (js/console.warn "[REPuLse] MIDI access failed:" e))))
+      (js/console.warn "[REPuLse] Web MIDI not supported"))
+    (reset! clock-pulses [])))

@@ -33,6 +33,16 @@ const BUILTINS = [
   // --- Effects ---
   { label: "fx",           type: "function", detail: "(fx :name param val …) — set effect parameters" },
   { label: "load-plugin",  type: "function", detail: "(load-plugin url) — load a REPuLse plugin from URL" },
+  // --- Tracks (multi-pattern) ---
+  { label: "play",        type: "function", detail: "(play :name pattern) — start or replace a named track (use in editor buffer)" },
+  { label: "mute!",       type: "function", detail: "(mute! :name) — silence a track without removing it (use in command bar)" },
+  { label: "unmute!",     type: "function", detail: "(unmute! :name) — re-enable a muted track (use in command bar)" },
+  { label: "solo!",       type: "function", detail: "(solo! :name) — play only this track, mute all others (use in command bar)" },
+  { label: "clear!",      type: "function", detail: "(clear! :name) — remove a track; (clear!) removes all tracks (use in command bar)" },
+  { label: "tracks",      type: "function", detail: "(tracks) — list active track names" },
+  { label: "upd",         type: "function", detail: "(upd) — hot-swap: re-evaluate editor buffer and update running tracks without stopping" },
+  { label: "tap!",        type: "function", detail: "(tap!) — register a BPM tap; 4 taps sets tempo (or click tap button)" },
+  { label: "midi-sync!",  type: "function", detail: "(midi-sync! true/false) — enable/disable MIDI clock sync" },
   // --- Arrangement ---
   { label: "arrange",      type: "function", detail: "(arrange [[pat cycles] …]) — sequence patterns by duration" },
   { label: "play-scenes",  type: "function", detail: "(play-scenes [pat …]) — play patterns as 1-cycle scenes" },

@@ -72,7 +72,9 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(amp 0.8 pat)` | Set amplitude 0.0–1.0; `(amp 0.8)` returns a transformer |
 | `(attack 0.05 pat)` | Envelope attack time in seconds |
 | `(decay 0.4 pat)` | Envelope decay time in seconds |
+| `(release 0.5 pat)` | Envelope release time in seconds |
 | `(pan -0.5 pat)` | Stereo panning -1.0 (left) to 1.0 (right) |
+| `(comp f g …)` | Compose transformers right-to-left: `(def pluck (comp (amp 0.8) (decay 0.15)))` |
 | `(arrange [[p 4] [q 8]])` | Play sections in order for N cycles each, then loop |
 | `(play-scenes [p q r])` | Play each pattern for 1 cycle in sequence, then loop |
 | `(bpm 140)` | Set the tempo in BPM (default: 120) |
@@ -83,6 +85,16 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(fx :compressor :threshold -18)` | Dynamics compressor |
 | `(fx :off :reverb)` | Bypass an effect (transparent) |
 | `(fx :on :reverb)` | Re-enable a bypassed effect |
+| `(play :name pattern)` | Start or replace a named track — use in the editor buffer |
+| `(mute! :name)` | Silence a track without removing it — use in the command bar |
+| `(unmute! :name)` | Re-enable a muted track — use in the command bar |
+| `(solo! :name)` | Play only this track, mute all others — use in the command bar |
+| `(clear! :name)` | Remove a named track — use in the command bar |
+| `(clear!)` | Remove all tracks and stop — use in the command bar |
+| `(tracks)` | Return list of active track names |
+| `(upd)` | Hot-swap: re-evaluate the editor buffer and update running tracks without stopping — use in the command bar |
+| `(tap!)` | Register a BPM tap; 4 taps sets tempo (or click the tap button) |
+| `(midi-sync! true)` | Enable MIDI clock sync from external hardware |
 | `(samples! "github:owner/repo")` | Load sample banks from a public GitHub repo (auto-discovers audio files) |
 | `(samples! "https://…/samples.edn")` | Load banks from a REPuLse Lisp manifest |
 | `(samples! "https://…/samples.json")` | Load banks from a Strudel-compatible JSON manifest |
@@ -254,10 +266,12 @@ npx shadow-cljs compile test && node out/test.js
    The `AnalyserNode` on the master bus feeds visual plugins.
    See [docs/PLUGINS.md](docs/PLUGINS.md) for the full plugin development guide.
 
-7. **`app/app.cljs`** — mounts a CodeMirror 6 editor, wires **Ctrl+Enter** to `eval-string`,
-   and routes Pattern results to the audio scheduler vs. plain values to the output line.
-   A live context panel to the right of the editor shows BPM, user `def` bindings with inferred
-   types, and the active effect chain — updated reactively via `add-watch` on the relevant atoms.
+7. **`app/app.cljs`** — mounts a CodeMirror 6 main editor and a single-line command bar
+   editor; wires **Ctrl+Enter** to `eval-string` and routes Pattern results to the audio
+   scheduler vs. plain values to the output line. A live context panel shows BPM, user `def`
+   bindings, and the active effect chain; a track timeline panel below the editor shows all
+   active tracks with SVG event bars and a `requestAnimationFrame` playhead sweep. All panels
+   update reactively via `add-watch` on the relevant atoms.
 
 ### Editor keybindings
 
@@ -266,6 +280,20 @@ npx shadow-cljs compile test && node out/test.js
 | Ctrl+Enter / Cmd+Enter | Evaluate buffer |
 | Ctrl+Z / Cmd+Z | Undo |
 | Ctrl+Shift+Z / Cmd+Shift+Z | Redo |
+
+### Command bar
+
+Below the editor is a single-line **command bar** (bash-style REPL) for imperative
+commands that shouldn't live in the buffer — `mute!`, `unmute!`, `solo!`, `clear!`,
+`tap!`, `tracks`, `upd`, etc.
+
+| Key | Action |
+|---|---|
+| Enter | Evaluate and clear |
+| Escape | Clear without evaluating |
+
+The command bar has full syntax highlighting and autocompletion (same as the main editor),
+but its content is not saved to `localStorage`.
 
 ### Adding a new built-in
 
@@ -276,6 +304,19 @@ npx shadow-cljs compile test && node out/test.js
 
 **Audio/UI built-ins** (touch audio, DOM, or network — e.g. `fx`, `load-plugin`, `samples!`):
 Add directly to the `assoc` in `ensure-env!` inside [app/src/repulse/app.cljs](app/src/repulse/app.cljs)
+
+**Syntax highlighting + autocompletion for any new built-in:**
+
+The Lezer grammar controls which names are coloured as built-ins in the editor.
+The compiled parser is committed to the repo — edit the source, then regenerate:
+
+1. Add the new name to `BuiltinName` in
+   [app/src/repulse/lisp-lang/repulse-lisp.grammar](app/src/repulse/lisp-lang/repulse-lisp.grammar)
+2. Run `npm run gen:grammar` — this overwrites `parser.js` and `parser.terms.js`
+3. Add a completion entry (with `detail` docstring) to
+   [app/src/repulse/lisp-lang/completions.js](app/src/repulse/lisp-lang/completions.js)
+
+The generated `parser.js` must be committed alongside the grammar source.
 
 ### Adding a new synthesized voice
 
