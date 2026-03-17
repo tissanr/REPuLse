@@ -1,11 +1,13 @@
 (ns repulse.app
   (:require [repulse.lisp.core :as lisp]
             [repulse.lisp.eval :as leval]
+            [repulse.core :as core]
             [repulse.audio :as audio]
             [repulse.samples :as samples]
             [repulse.plugins :as plugins]
             [repulse.fx :as fx]
             [repulse.plugins.compressor :as compressor-plugin]
+            [clojure.string :as cstr]
             ["@codemirror/view" :refer [EditorView Decoration keymap lineNumbers]]
             ["@codemirror/state" :refer [EditorState StateEffect StateField]]
             ["@codemirror/commands" :refer [defaultKeymap historyKeymap history]]
@@ -98,6 +100,99 @@
   (when-let [view @editor-view]
     (rebuild-decorations! view)))
 
+;;; Track timeline rendering
+
+(defn- render-track-row [track-name pattern cycle muted?]
+  (let [sp   {:start [cycle 1] :end [(inc cycle) 1]}
+        evs  (try (core/query pattern sp) (catch :default _ []))
+        bars (mapv (fn [ev]
+                     (let [part (:part ev)
+                           pos  (- (core/rat->float (:start part)) cycle)
+                           dur  (- (core/rat->float (:end part))
+                                   (core/rat->float (:start part)))]
+                       {:pos pos :dur (max 0.01 dur)}))
+                   evs)
+        kw-name (name track-name)]
+    (str "<div class=\"track-row" (when muted? " track-muted") "\">"
+         "<span class=\"track-name\" onclick=\"window._repulseMuteToggle('" kw-name "')\">"
+         kw-name
+         "</span>"
+         "<div class=\"track-timeline-wrap\">"
+         "<svg class=\"track-timeline\" viewBox=\"0 0 100 10\" preserveAspectRatio=\"none\">"
+         (apply str (map (fn [{:keys [pos dur]}]
+                           (str "<rect x=\"" (* pos 100) "\" y=\"0.5\" "
+                                "width=\"" (* dur 100) "\" height=\"9\" "
+                                "rx=\"0.5\"/>"))
+                         bars))
+         "</svg>"
+         "<div class=\"track-playhead\" id=\"ph-" kw-name "\"></div>"
+         "</div>"
+         "</div>")))
+
+(defn- render-track-panel! []
+  (when-let [panel (el "track-panel")]
+    (let [{:keys [tracks muted playing? cycle]} @audio/scheduler-state]
+      (if (or (not playing?) (empty? tracks))
+        (set! (.-innerHTML panel) "")
+        (set! (.-innerHTML panel)
+              (apply str (map (fn [[track-name pattern]]
+                                (render-track-row track-name pattern cycle
+                                                  (contains? muted track-name)))
+                              tracks)))))))
+
+;;; Playhead RAF loop
+
+(defn- start-playhead-raf! []
+  (letfn [(frame []
+    (let [ac    (when (audio/playing?) @audio/ctx)
+          state @audio/scheduler-state]
+      (when ac
+        (let [now      (.-currentTime ac)
+              cyc-dur  (:cycle-dur state)
+              frac     (mod (/ now cyc-dur) 1.0)
+              pct      (str (* frac 100) "%")]
+          (doseq [ph (array-seq (.querySelectorAll js/document ".track-playhead"))]
+            (set! (.. ph -style -left) pct)))))
+    (js/requestAnimationFrame frame))]
+    (js/requestAnimationFrame frame)))
+
+;;; Session persistence
+
+(defn- encode-session []
+  (let [bpm    (js/Math.round (audio/get-bpm))
+        editor (when-let [v @editor-view]
+                 (.. v -state -doc (toString)))
+        obj    (clj->js {:v 1 :bpm bpm :editor (or editor "")})]
+    (str "#v1:" (js/btoa (js/JSON.stringify obj)))))
+
+(defn- decode-session [hash]
+  (try
+    (when (and hash (cstr/starts-with? hash "#v1:"))
+      (let [b64 (subs hash 4)
+            obj (js->clj (js/JSON.parse (js/atob b64)))]
+        obj))
+    (catch :default _ nil)))
+
+(defn- restore-session! [session]
+  (when session
+    (when-let [bpm (get session "bpm")]
+      (audio/set-bpm! bpm))
+    (when-let [ed (get session "editor")]
+      (when-let [view @editor-view]
+        (.dispatch view
+                   #js {:changes #js {:from   0
+                                      :to     (.. view -state -doc -length)
+                                      :insert ed}})))))
+
+(defn share! []
+  (let [session (encode-session)
+        url     (str (.-origin js/location) (.-pathname js/location) session)]
+    (if (.-clipboard js/navigator)
+      (-> (.writeText (.-clipboard js/navigator) url)
+          (.then (fn [] (set-output! (str "URL copied to clipboard") :success)))
+          (.catch (fn [_] (js/prompt "Copy this URL:" url))))
+      (js/prompt "Copy this URL:" url))))
+
 ;;; Environment — created once, reused across evaluations
 
 (defonce env-atom
@@ -134,6 +229,64 @@
     (samples/init!)
     (reset! env-atom
             (assoc (leval/make-env (make-stop-fn) audio/set-bpm!)
+                   ;; --- Multi-track ---
+                   "play"
+                   (fn [track-name pat]
+                     (let [name' (leval/unwrap track-name)
+                           pat'  (leval/unwrap pat)]
+                       (if (and (map? pat') (fn? (:query pat')))
+                         (do
+                           (audio/play-track! name' pat' on-beat highlight-range!)
+                           (set-playing! true)
+                           (str "=> track :" (name name') " playing"))
+                         "Error: second argument to play must be a pattern")))
+                   "mute"
+                   (fn [track-name]
+                     (let [name' (leval/unwrap track-name)]
+                       (audio/mute-track! name')
+                       (str "=> muted :" (name name'))))
+                   "unmute"
+                   (fn [track-name]
+                     (let [name' (leval/unwrap track-name)]
+                       (audio/unmute-track! name')
+                       (str "=> unmuted :" (name name'))))
+                   "solo"
+                   (fn [track-name]
+                     (let [name' (leval/unwrap track-name)]
+                       (audio/solo-track! name')
+                       (str "=> solo :" (name name'))))
+                   "clear"
+                   (fn
+                     ([]
+                      (audio/stop!)
+                      (clear-highlights!)
+                      (set-playing! false)
+                      "=> cleared all tracks")
+                     ([track-name]
+                      (let [name' (leval/unwrap track-name)]
+                        (audio/clear-track! name')
+                        (when (not (:playing? @audio/scheduler-state))
+                          (set-playing! false))
+                        (str "=> cleared :" (name name')))))
+                   "tracks"
+                   (fn []
+                     (let [ks (keys (:tracks @audio/scheduler-state))]
+                       (if (seq ks)
+                         (str "=> (" (cstr/join " " (map #(str ":" (name %)) ks)) ")")
+                         "=> ()")))
+                   ;; --- Tap tempo ---
+                   "tap"
+                   (fn []
+                     (if-let [bpm (audio/tap!)]
+                       (str "=> " (.toFixed bpm 1) " BPM")
+                       "=> tap again…"))
+                   ;; --- MIDI clock ---
+                   "midi-sync"
+                   (fn [enabled?]
+                     (let [on? (leval/unwrap enabled?)]
+                       (audio/set-midi-sync! on?)
+                       (str "=> MIDI sync " (if on? "enabled" "disabled"))))
+                   ;; --- Samples ---
                    "samples!"
                    (fn [url]
                      (let [url' (leval/unwrap url)]
@@ -141,13 +294,13 @@
                        (str "loading " url' "…")))
                    "sample-banks"
                    (fn [] (samples/format-banks))
+                   ;; --- Plugins ---
                    "load-plugin"
                    (fn [url]
                      (let [url' (leval/unwrap url)]
                        (-> (js* "import(~{})" url')
                            (.then (fn [m]
                                     (let [plug (.-default m)]
-                                      ;; If replacing an existing effect, remove it first
                                       (when (= "effect" (.-type plug))
                                         (fx/remove-effect! (.-name plug)))
                                       (plugins/register! plug (make-host))
@@ -180,10 +333,8 @@
                          (let [effect-name (cljs.core/name first-arg)
                                rest-args   (rest args')]
                            (if (keyword? (first rest-args))
-                             ;; Named params: (fx :reverb :wet 0.6 :dry 0.7)
                              (doseq [[k v] (partition 2 rest-args)]
                                (fx/set-param! effect-name (cljs.core/name k) v))
-                             ;; Positional: (fx :reverb 0.4) → set "value"
                              (fx/set-param! effect-name "value" (first rest-args))))))
                      nil)))
     ;; Snapshot built-in names so render-context-panel! can filter them out
@@ -202,7 +353,7 @@
         (set-output! (str "Error: " err) :error))
       (let [val (:result result)]
         (cond
-          ;; Pattern — start playing
+          ;; Pattern — start playing (legacy single-pattern mode)
           (and (map? val) (fn? (:query val)))
           (do
             (audio/stop!)
@@ -215,7 +366,7 @@
           (nil? val)
           nil
 
-          ;; Pre-formatted string (e.g. sample-banks, samples!) — display as-is
+          ;; Pre-formatted string (e.g. sample-banks, track ops) — display as-is
           (string? val)
           (set-output! val :success)
 
@@ -291,10 +442,18 @@
 ;;; CodeMirror editor
 
 (def ^:private storage-key "repulse-editor")
+(def ^:private bpm-storage-key "repulse-bpm")
 
 (defn- load-editor-content [fallback]
   (or (try (.getItem js/localStorage storage-key) (catch :default _ nil))
       fallback))
+
+(defn- load-saved-bpm []
+  (try
+    (when-let [s (.getItem js/localStorage bpm-storage-key)]
+      (let [n (js/parseFloat s)]
+        (when-not (js/isNaN n) n)))
+    (catch :default _ nil)))
 
 (def ^:private save-listener
   (.of EditorView.updateListener
@@ -346,6 +505,8 @@
           (str "<header>"
                "  <h1>REPuLse</h1>"
                "  <div class=\"header-controls\">"
+               "    <button id=\"tap-btn\" class=\"tap-btn\">tap</button>"
+               "    <button id=\"share-btn\" class=\"share-btn\">share</button>"
                "    <button id=\"play-btn\" class=\"play-btn\">&#9654; play</button>"
                "    <div id=\"playing-dot\" class=\"playing-dot\"></div>"
                "  </div>"
@@ -358,22 +519,47 @@
                "    <div id=\"ctx-effects\" class=\"ctx-section\"></div>"
                "  </div>"
                "</div>"
+               "<div id=\"track-panel\" class=\"track-panel\"></div>"
                "<div id=\"plugin-panel\" class=\"plugin-panel hidden\"></div>"
                "<footer>"
                "  <span id=\"output\" class=\"output\">ready &mdash; Ctrl+Enter or click play</span>"
                "  <span class=\"hint\">Ctrl+Enter to eval</span>"
                "</footer>")))
-  (.addEventListener (el "play-btn") "click" on-play-btn-click))
+  (.addEventListener (el "play-btn")  "click" on-play-btn-click)
+  (.addEventListener (el "tap-btn")   "click" (fn [] (evaluate! "(tap)")))
+  (.addEventListener (el "share-btn") "click" share!))
 
 (defn init []
   (build-dom!)
   (ensure-env!)
   (setBankNamesProvider (fn [] (clj->js (samples/bank-names))))
   (setFxNamesProvider   (fn [] (clj->js (mapv :name @fx/chain))))
+
+  ;; Restore saved BPM from localStorage
+  (when-let [bpm (load-saved-bpm)]
+    (audio/set-bpm! bpm))
+
+  ;; Restore session from URL hash if present
+  (let [hash (.-hash js/location)]
+    (when-let [session (decode-session hash)]
+      ;; Remove hash from URL without reload
+      (.replaceState js/history nil nil (.-pathname js/location))
+      ;; Editor isn't mounted yet — defer restore
+      (js/setTimeout #(restore-session! session) 0)))
+
+  ;; Register global mute-toggle for track panel onclick
+  (set! (.-_repulseMuteToggle js/window)
+        (fn [track-name-str]
+          (let [kw (keyword track-name-str)]
+            (if (contains? (:muted @audio/scheduler-state) kw)
+              (audio/unmute-track! kw)
+              (audio/mute-track! kw)))))
+
   (let [container (el "editor-container")
         view (make-editor container "(seq :bd :sd :bd :sd)" evaluate!)]
     (reset! editor-view view)
     (.focus view))
+
   ;; Auto-load built-in visual plugins
   (-> (js* "import('/plugins/oscilloscope.js')")
       (.then (fn [m]
@@ -382,8 +568,8 @@
                  (mount-visual! plug))))
       (.catch (fn [e]
                 (js/console.warn "[REPuLse] oscilloscope load failed:" e))))
-  ;; Auto-load built-in effect plugins (wet mix starts at 0 — silent until (fx ...) is called)
-  ;; CLJS compressor registered synchronously — no dynamic import needed
+
+  ;; Auto-load built-in effect plugins
   (plugins/register! compressor-plugin/plugin (make-host))
   (fx/add-effect!    compressor-plugin/plugin)
   (doseq [url ["/plugins/reverb.js"
@@ -402,14 +588,23 @@
                    (fx/add-effect! plug))))
         (.catch (fn [e]
                   (js/console.warn "[REPuLse] Effect load failed:" url e)))))
-  ;; Context panel — reactive updates
-  (add-watch env-atom                    ::ctx (fn [_ _ _ _] (render-context-panel!)))
-  (add-watch fx/chain                    ::ctx (fn [_ _ _ _] (render-context-panel!)))
-  (add-watch audio/scheduler-state       ::ctx (fn [_ _ _ _] (render-context-panel!)))
-  (add-watch samples/active-bank-prefix  ::ctx (fn [_ _ _ _] (render-context-panel!)))
-  (render-context-panel!))
+
+  ;; Reactive context panel + track panel
+  (add-watch env-atom               ::ctx (fn [_ _ _ _] (render-context-panel!)))
+  (add-watch fx/chain               ::ctx (fn [_ _ _ _] (render-context-panel!)))
+  (add-watch audio/scheduler-state  ::ctx (fn [_ _ _ _]
+                                            (render-context-panel!)
+                                            (render-track-panel!)
+                                            ;; Persist BPM
+                                            (try
+                                              (.setItem js/localStorage bpm-storage-key
+                                                        (str (audio/get-bpm)))
+                                              (catch :default _))))
+  (add-watch samples/active-bank-prefix ::ctx (fn [_ _ _ _] (render-context-panel!)))
+
+  (render-context-panel!)
+  (start-playhead-raf!))
 
 (defn reload []
   ;; Hot-reload hook: re-attach evaluate! without rebuilding the DOM
-  ;; The editor persists; we just need to make sure the env is fresh.
   )
