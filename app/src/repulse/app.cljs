@@ -493,10 +493,11 @@
                                                     :insert ""}})
                       true)
         eval-cmd    (fn [view]
-                      (let [code (.. view -state -doc (toString))]
-                        (when (seq (cstr/trim code))
-                          (evaluate! code)
-                          (clear-view! view)))
+                      (let [raw (cstr/trim (.. view -state -doc (toString)))]
+                        (when (seq raw)
+                          (let [code (if (cstr/starts-with? raw "(") raw (str "(" raw ")"))]
+                            (evaluate! code)
+                            (clear-view! view))))
                       true)
         clear+return! (fn [view]
                         (clear-view! view)
