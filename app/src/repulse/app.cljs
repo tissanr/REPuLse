@@ -839,7 +839,7 @@
                                             (.revokeObjectURL js/URL url)))))
                                (.catch (fn [e]
                                          (js/console.error "[REPuLse] export failed:" e))))
-                           (str "exporting " n-cycles " cycles…"))))))
+                           (str "exporting " n-cycles " cycles…")))))))
     ;; Snapshot built-in names so render-context-panel! can filter them out
     (reset! builtin-names (set (keys @env-atom)))))
 
