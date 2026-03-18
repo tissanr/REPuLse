@@ -380,7 +380,7 @@
             (clear-highlights!)
             (audio/start! val on-beat highlight-range!)
             (set-playing! true)
-            (set-output! "playing pattern — Ctrl+Enter to re-evaluate, (stop) to stop" :success))
+            (set-output! "playing pattern — Alt+Enter to re-evaluate, (stop) to stop" :success))
 
           ;; stop fn was called directly — handled inside stop fn
           (nil? val)
@@ -516,7 +516,10 @@
   (let [eval-cmd (fn [view]
                    (on-eval (.. view -state -doc (toString)))
                    true)
-        eval-binding    #js {:key "Mod-Enter" :run eval-cmd}
+        eval-binding    #js {:key "Alt-Enter" :run eval-cmd}
+        upd-fn          (fn [_] (evaluate! "(upd)") true)
+        upd-binding     #js {:key "Ctrl-." :run upd-fn}
+        upd-f9-binding  #js {:key "F9"     :run upd-fn}
         escape-binding  #js {:key "Escape"
                              :run (fn [_]
                                     (when-let [cv @cmd-view] (.focus cv))
@@ -530,10 +533,9 @@
                         save-listener
                         (.-lineWrapping EditorView)
                         (.of keymap (.concat
-                                     #js [escape-binding]
+                                     #js [escape-binding eval-binding upd-binding upd-f9-binding]
                                      (clj->js defaultKeymap)
-                                     (clj->js historyKeymap)
-                                     #js [eval-binding]))]
+                                     (clj->js historyKeymap)))]
         state (.. EditorState
                   (create #js {:doc (load-editor-content initial-value)
                                :extensions extensions}))
@@ -580,8 +582,8 @@
                "<div id=\"track-panel\" class=\"track-panel\"></div>"
                "<div id=\"plugin-panel\" class=\"plugin-panel hidden\"></div>"
                "<footer>"
-               "  <span id=\"output\" class=\"output\">ready &mdash; Ctrl+Enter or click play</span>"
-               "  <span class=\"hint\">Ctrl+Enter to eval</span>"
+               "  <span id=\"output\" class=\"output\">ready &mdash; Alt+Enter or click play</span>"
+               "  <span class=\"hint\">Alt+Enter to eval</span>"
                "</footer>")))
   (.addEventListener (el "play-btn")  "click" on-play-btn-click)
   (.addEventListener (el "tap-btn")   "click" (fn [] (evaluate! "(tap!)")))
@@ -620,29 +622,37 @@
     (reset! editor-view view)
     (.focus view))
 
-  ;; Global keyboard shortcuts — fire regardless of where focus is.
+  ;; Global keyboard shortcuts — capture phase so we fire before any child handler
+  ;; (including CodeMirror) can stop propagation.
   (.addEventListener js/document "keydown"
     (fn [e]
-      (when (or (.-metaKey e) (.-ctrlKey e))
-        (when-let [view @editor-view]
-          (let [target     (.-target e)
-                editor-dom (.-dom view)
-                cmd-dom    (el "cmd-container")
-                in-editor? (.contains editor-dom target)
-                in-cmd?    (and cmd-dom (.contains cmd-dom target))]
-            (cond
-              ;; Ctrl/Cmd+Enter — evaluate main buffer from anywhere
-              (= "Enter" (.-key e))
-              (do (.preventDefault e)
-                  (evaluate! (.. view -state -doc (toString))))
+      (when-let [view @editor-view]
+        (let [target     (.-target e)
+              editor-dom (.-dom view)
+              cmd-dom    (el "cmd-container")
+              in-editor? (.contains editor-dom target)
+              in-cmd?    (and cmd-dom (.contains cmd-dom target))]
+          (cond
+            ;; Alt/Option+Enter — evaluate main buffer from anywhere.
+            (and (.-altKey e) (= "Enter" (.-key e)))
+            (do (.preventDefault e)
+                (evaluate! (.. view -state -doc (toString))))
 
-              ;; Ctrl/Cmd+A — focus editor + select all when outside both editors
-              (and (= "a" (.-key e))
-                   (not in-editor?)
-                   (not in-cmd?))
-              (do (.preventDefault e)
-                  (.focus view)
-                  (selectAll view)))))))
+            ;; Ctrl+. or F9 — run (upd) from anywhere
+            (or (and (.-ctrlKey e) (= "." (.-key e)))
+                (= "F9" (.-key e)))
+            (do (.preventDefault e)
+                (evaluate! "(upd)"))
+
+            ;; Ctrl/Cmd+A — focus editor + select all when outside both editors
+            (and (or (.-metaKey e) (.-ctrlKey e))
+                 (= "a" (.-key e))
+                 (not in-editor?)
+                 (not in-cmd?))
+            (do (.preventDefault e)
+                (.focus view)
+                (selectAll view))))))
+    true) ;; true = capture phase
 
   ;; Auto-load built-in visual plugins
   (-> (js* "import('/plugins/oscilloscope.js')")
