@@ -10,7 +10,7 @@ Vector { "[" expr* "]" }
 Map    { "{" expr* "}" }
 
 @tokens {
-  LineComment { ";" ![\\n]* }
+  LineComment { ";" ![\n]* }
 
   Number { @digit+ ("." @digit+)? }
 
