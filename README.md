@@ -277,9 +277,9 @@ npx shadow-cljs compile test && node out/test.js
 
 | Key | Action |
 |---|---|
-| Ctrl+Enter / Cmd+Enter | Evaluate buffer |
+| Ctrl+Enter / Cmd+Enter | Evaluate buffer (global — works even when editor is not focused) |
 | Escape | Focus command bar |
-| Ctrl+A / Cmd+A | Select all code (works even when editor is not focused) |
+| Ctrl+A / Cmd+A | Select all code (global — works even when editor is not focused) |
 | Ctrl+Z / Cmd+Z | Undo |
 | Ctrl+Shift+Z / Cmd+Shift+Z | Redo |
 

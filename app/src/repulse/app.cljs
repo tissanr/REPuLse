@@ -620,21 +620,29 @@
     (reset! editor-view view)
     (.focus view))
 
-  ;; Global Cmd/Ctrl+A — focus main editor and select all when pressed
-  ;; outside both the main editor and the command bar.
+  ;; Global keyboard shortcuts — fire regardless of where focus is.
   (.addEventListener js/document "keydown"
     (fn [e]
-      (when (and (or (.-metaKey e) (.-ctrlKey e))
-                 (= "a" (.-key e)))
+      (when (or (.-metaKey e) (.-ctrlKey e))
         (when-let [view @editor-view]
           (let [target     (.-target e)
                 editor-dom (.-dom view)
-                cmd-dom    (el "cmd-container")]
-            (when-not (or (.contains editor-dom target)
-                          (and cmd-dom (.contains cmd-dom target)))
-              (.preventDefault e)
-              (.focus view)
-              (selectAll view)))))))
+                cmd-dom    (el "cmd-container")
+                in-editor? (.contains editor-dom target)
+                in-cmd?    (and cmd-dom (.contains cmd-dom target))]
+            (cond
+              ;; Ctrl/Cmd+Enter — evaluate main buffer from anywhere
+              (= "Enter" (.-key e))
+              (do (.preventDefault e)
+                  (evaluate! (.. view -state -doc (toString))))
+
+              ;; Ctrl/Cmd+A — focus editor + select all when outside both editors
+              (and (= "a" (.-key e))
+                   (not in-editor?)
+                   (not in-cmd?))
+              (do (.preventDefault e)
+                  (.focus view)
+                  (selectAll view)))))))
 
   ;; Auto-load built-in visual plugins
   (-> (js* "import('/plugins/oscilloscope.js')")
