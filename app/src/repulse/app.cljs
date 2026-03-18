@@ -691,6 +691,34 @@
                                (fx/set-param! effect-name (cljs.core/name k) v))
                              (fx/set-param! effect-name "value" (first rest-args))))))
                      nil)
+                   ;; --- Per-track FX --- Phase L
+                   "track-fx"
+                   (fn [& args]
+                     (let [args'      (mapv leval/unwrap args)
+                           track-name (first args')
+                           rest-args  (vec (rest args'))]
+                       (cond
+                         ;; (track-fx :bass :off) — clear all effects from track
+                         (and (= (first rest-args) :off) (= 1 (count rest-args)))
+                         (fx/clear-track-effects! track-name)
+
+                         ;; (track-fx :bass :off :reverb) — remove specific effect
+                         (= (first rest-args) :off)
+                         (fx/remove-track-effect! track-name (cljs.core/name (second rest-args)))
+
+                         ;; (track-fx :bass :reverb 0.4) — add/set effect
+                         :else
+                         (let [effect-name (cljs.core/name (first rest-args))
+                               params      (rest rest-args)]
+                           (when-not (some #(= effect-name (:name %))
+                                           (:fx-chain (get @audio/track-nodes track-name)))
+                             (fx/add-track-effect! track-name effect-name))
+                           (if (keyword? (first params))
+                             (doseq [[k v] (partition 2 params)]
+                               (fx/set-track-param! track-name effect-name (cljs.core/name k) v))
+                             (when (seq params)
+                               (fx/set-track-param! track-name effect-name "value" (first params))))))
+                       nil))
                    ;; --- Demo templates ---
                    "demo"
                    (fn [& args]
@@ -857,6 +885,8 @@
                            (str "exporting "
                                 (if track-kw (str ":" (name track-kw)) "all tracks")
                                 " — " n-cycles " cycles…")))))))
+    ;; Wire the FX event notification callback (used by sidechain plugin)
+    (swap! audio/scheduler-state assoc :on-fx-event fx/notify-fx-event!)
     ;; Snapshot built-in names so render-context-panel! can filter them out
     (reset! builtin-names (set (keys @env-atom)))))
 

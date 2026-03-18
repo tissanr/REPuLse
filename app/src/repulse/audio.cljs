@@ -16,6 +16,9 @@
 (defonce master-gain   (atom nil))
 (defonce analyser-node (atom nil))
 
+;; Per-track audio routing: keyword → {:gain-node GainNode :fx-chain [...]}
+(defonce track-nodes (atom {}))
+
 (defn- build-master-chain! [ac]
   (let [gain (doto (.createGain ac)
                (-> .-gain (.setValueAtTime 1.0 (.-currentTime ac))))
@@ -74,6 +77,33 @@
         (init-worklet! c)
         c)))
 
+;;; Per-track routing helpers
+
+(defn- ensure-track-node!
+  "Create a GainNode for a track if it doesn't exist; connect it to masterGain."
+  [ac track-name]
+  (when (and track-name (not (get @track-nodes track-name)))
+    (let [gain (doto (.createGain ac)
+                 (-> .-gain (.setValueAtTime 1.0 (.-currentTime ac))))]
+      (.connect gain @master-gain)
+      (swap! track-nodes assoc track-name {:gain-node gain :fx-chain []}))))
+
+(defn- output-for-track
+  "Returns the AudioNode that a source should connect to for the given track.
+   Falls back to masterGain (or destination for offline) when track-name is nil."
+  [ac track-name]
+  (if (and track-name (not (instance? js/OfflineAudioContext ac)))
+    (if-let [tn (get @track-nodes track-name)]
+      (if-let [first-fx (first (:fx-chain tn))]
+        (:input first-fx)
+        (:gain-node tn))
+      ;; track-name given but no node yet — fallback
+      (or @master-gain (.-destination ac)))
+    ;; no track-name or offline render
+    (if (instance? js/OfflineAudioContext ac)
+      (.-destination ac)
+      (or @master-gain (.-destination ac)))))
+
 ;;; Synthesized voices (JS fallback when AudioWorklet is unavailable)
 
 (defn- output-node [ac]
@@ -82,7 +112,7 @@
     (.-destination ac)
     (or @master-gain (.-destination ac))))
 
-(defn- make-kick [ac t amp pan]
+(defn- make-kick [ac t amp pan dest]
   (let [osc    (.createOscillator ac)
         gain   (.createGain ac)
         panner (.createStereoPanner ac)
@@ -95,11 +125,11 @@
     (.setValueAtTime (.-pan panner) (float pan) t)
     (.connect osc gain)
     (.connect gain panner)
-    (.connect panner (output-node ac))
+    (.connect panner dest)
     (.start osc t)
     (.stop osc (+ t 0.4))))
 
-(defn- make-snare [ac t amp pan]
+(defn- make-snare [ac t amp pan dest]
   (let [buf-size 4096
         buf  (.createBuffer ac 1 buf-size (.-sampleRate ac))
         data (.getChannelData buf 0)
@@ -119,14 +149,14 @@
     (.connect src bpf)
     (.connect bpf gain)
     (.connect gain panner)
-    (.connect panner (output-node ac))
+    (.connect panner dest)
     (.start src t)
     (.stop src (+ t 0.2))))
 
 (defn- make-hihat
   "Noise burst through a highpass filter. dur controls envelope length."
-  ([ac t amp pan] (make-hihat ac t amp pan 0.045 0.5 8000))
-  ([ac t amp pan dur gain-scale hpf-freq]
+  ([ac t amp pan dest] (make-hihat ac t amp pan dest 0.045 0.5 8000))
+  ([ac t amp pan dest dur gain-scale hpf-freq]
    (let [buf-size 2048
          buf  (.createBuffer ac 1 buf-size (.-sampleRate ac))
          data (.getChannelData buf 0)
@@ -147,7 +177,7 @@
      (.connect src hpf)
      (.connect hpf gain)
      (.connect gain panner)
-     (.connect panner (output-node ac))
+     (.connect panner dest)
      (.start src t)
      (.stop src (+ t dur)))))
 
@@ -156,12 +186,14 @@
    dur     — decay duration in seconds (default 1.5)
    amp     — peak amplitude 0.0–1.0 (default 1.0; scaled by 0.5 internally)
    attack  — linear ramp-up time in seconds (default 0.001 = instant)
-   pan     — stereo position -1.0 (left) to 1.0 (right), default 0.0"
-  ([ac t freq] (make-sine ac t freq 1.5 1.0 0.001 0.0))
-  ([ac t freq dur] (make-sine ac t freq dur 1.0 0.001 0.0))
-  ([ac t freq dur amp] (make-sine ac t freq dur amp 0.001 0.0))
-  ([ac t freq dur amp attack] (make-sine ac t freq dur amp attack 0.0))
-  ([ac t freq dur amp attack pan]
+   pan     — stereo position -1.0 (left) to 1.0 (right), default 0.0
+   dest    — AudioNode to connect to (default: output-node)"
+  ([ac t freq] (make-sine ac t freq 1.5 1.0 0.001 0.0 (output-node ac)))
+  ([ac t freq dur] (make-sine ac t freq dur 1.0 0.001 0.0 (output-node ac)))
+  ([ac t freq dur amp] (make-sine ac t freq dur amp 0.001 0.0 (output-node ac)))
+  ([ac t freq dur amp attack] (make-sine ac t freq dur amp attack 0.0 (output-node ac)))
+  ([ac t freq dur amp attack pan] (make-sine ac t freq dur amp attack pan (output-node ac)))
+  ([ac t freq dur amp attack pan dest]
    (let [osc    (.createOscillator ac)
          gain   (.createGain ac)
          panner (.createStereoPanner ac)
@@ -176,9 +208,67 @@
      (.setValueAtTime (.-pan panner) (float pan) t)
      (.connect osc gain)
      (.connect gain panner)
-     (.connect panner (output-node ac))
+     (.connect panner dest)
      (.start osc t)
      (.stop osc stop-t))))
+
+(defn- make-saw [ac t freq dur amp attack pan dest]
+  (let [osc    (.createOscillator ac)
+        gain   (.createGain ac)
+        panner (.createStereoPanner ac)
+        peak   (* 0.5 (float amp))
+        atk    (max 0.001 (float attack))
+        stop-t (+ t atk (float dur))]
+    (set! (.-type osc) "sawtooth")
+    (.setValueAtTime (.-frequency osc) freq t)
+    (.setValueAtTime (.-gain gain) 0.0001 t)
+    (.linearRampToValueAtTime (.-gain gain) peak (+ t atk))
+    (.exponentialRampToValueAtTime (.-gain gain) 0.0001 stop-t)
+    (.setValueAtTime (.-pan panner) (float pan) t)
+    (.connect osc gain)
+    (.connect gain panner)
+    (.connect panner dest)
+    (.start osc t)
+    (.stop osc stop-t)))
+
+(defn- make-square [ac t freq dur amp attack pan dest]
+  (let [osc    (.createOscillator ac)
+        gain   (.createGain ac)
+        panner (.createStereoPanner ac)
+        peak   (* 0.5 (float amp))
+        atk    (max 0.001 (float attack))
+        stop-t (+ t atk (float dur))]
+    (set! (.-type osc) "square")
+    (.setValueAtTime (.-frequency osc) freq t)
+    (.setValueAtTime (.-gain gain) 0.0001 t)
+    (.linearRampToValueAtTime (.-gain gain) peak (+ t atk))
+    (.exponentialRampToValueAtTime (.-gain gain) 0.0001 stop-t)
+    (.setValueAtTime (.-pan panner) (float pan) t)
+    (.connect osc gain)
+    (.connect gain panner)
+    (.connect panner dest)
+    (.start osc t)
+    (.stop osc stop-t)))
+
+(defn- make-noise [ac t dur amp pan dest]
+  (let [buf-size (max 1 (* (.-sampleRate ac) (int (Math/ceil dur))))
+        buf  (.createBuffer ac 1 buf-size (.-sampleRate ac))
+        data (.getChannelData buf 0)
+        _    (dotimes [i buf-size]
+               (aset data i (- (* 2 (Math/random)) 1)))
+        src  (.createBufferSource ac)
+        gain (.createGain ac)
+        panner (.createStereoPanner ac)
+        pk   (* 0.3 (float amp))]
+    (set! (.-buffer src) buf)
+    (.setValueAtTime (.-gain gain) pk t)
+    (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t dur))
+    (.setValueAtTime (.-pan panner) (float pan) t)
+    (.connect src gain)
+    (.connect gain panner)
+    (.connect panner dest)
+    (.start src t)
+    (.stop src (+ t dur))))
 
 ;;; Synthesis dispatch
 
@@ -201,100 +291,148 @@
 
 (defn- js-synth
   "JS synthesis fallback — used when AudioWorklet is unavailable."
-  ([ac t value] (js-synth ac t value 1.0 0.0))
-  ([ac t value amp] (js-synth ac t value amp 0.0))
-  ([ac t value amp pan]
+  ([ac t value dest] (js-synth ac t value 1.0 0.0 dest))
+  ([ac t value amp pan dest]
    (case value
-     :bd (make-kick ac t amp pan)
-     :sd (make-snare ac t amp pan)
-     :hh (make-hihat ac t amp pan)
-     :oh (make-hihat ac t amp pan 1.0 0.4 8000)
-     (make-sine ac t 440 1.5 amp 0.001 pan))))
+     :bd (make-kick ac t amp pan dest)
+     :sd (make-snare ac t amp pan dest)
+     :hh (make-hihat ac t amp pan dest)
+     :oh (make-hihat ac t amp pan dest 1.0 0.4 8000)
+     (make-sine ac t 440 1.5 amp 0.001 pan dest))))
 
-(defn play-event [ac t value]
-  ;; OfflineAudioContext has no worklet — skip to JS fallbacks for rendering.
-  (let [offline? (instance? js/OfflineAudioContext ac)]
-    (cond
-      ;; Silence / rest
-      (= value :_) nil
+(defn play-event
+  ([ac t value] (play-event ac t value nil))
+  ([ac t value track-name]
+   ;; OfflineAudioContext has no worklet — skip to JS fallbacks for rendering.
+   (let [offline? (instance? js/OfflineAudioContext ac)
+         dest     (output-for-track ac track-name)]
+     (cond
+       ;; Silence / rest
+       (= value :_) nil
 
-      ;; Parameter map {:note … :amp … :attack … :decay … :pan …}
-      ;; from amp/attack/decay/release/pan transformers
-      (and (map? value) (:note value))
-      (let [note     (:note value)
-            amp-v    (float (:amp value 1.0))
-            attack-v (float (:attack value 0.001))
-            decay-v  (float (:decay value 1.5))
-            pan-v    (float (:pan value 0.0))]
-        (cond
-          (= note :_) nil
-          (keyword? note)
-          (if (theory/note-keyword? note)
-            (let [hz (theory/note->hz note)]
-              (if offline?
-                (make-sine ac t hz decay-v amp-v attack-v pan-v)
-                (or (worklet-trigger-v2! (str hz) t amp-v attack-v decay-v pan-v)
-                    (make-sine ac t hz decay-v amp-v attack-v pan-v))))
-            (let [resolved (samples/resolve-keyword note)]
-              (cond
-                (samples/has-bank? resolved) (samples/play! ac t resolved 0 amp-v pan-v)
-                :else (if offline?
-                        (js-synth ac t note amp-v pan-v)
-                        (or (worklet-trigger-v2! (name note) t amp-v attack-v decay-v pan-v)
-                            (js-synth ac t note amp-v pan-v))))))
-          (number? note)
-          (if offline?
-            (make-sine ac t note decay-v amp-v attack-v pan-v)
-            (or (worklet-trigger-v2! (str note) t amp-v attack-v decay-v pan-v)
-                (make-sine ac t note decay-v amp-v attack-v pan-v)))))
+       ;; Parameter map {:note … :amp … :attack … :decay … :pan … :synth …}
+       ;; from amp/attack/decay/release/pan/saw/square/noise/fm transformers
+       (and (map? value) (:note value))
+       (let [note     (:note value)
+             amp-v    (float (:amp value 1.0))
+             attack-v (float (:attack value 0.001))
+             decay-v  (float (:decay value 1.5))
+             pan-v    (float (:pan value 0.0))
+             synth    (:synth value)]
+         (cond
+           (= note :_) nil
 
-      ;; Map {:bank :bd :n 2} from (sound :bd 2) — always use samples
-      (and (map? value) (:bank value))
-      (let [{:keys [bank n]} value]
-        (if (samples/has-bank? bank)
-          (samples/play! ac t bank n)
-          (if offline?
-            (make-sine ac t 440)
-            (or (worklet-trigger! (name bank) t)
-                (make-sine ac t 440)))))
+           ;; New synth voices dispatched by :synth key
+           (= synth :saw)
+           (let [hz (if (theory/note-keyword? note) (theory/note->hz note) (double note))]
+             (or (when-not offline?
+                   (worklet-trigger-v2! (str "saw:" hz) t amp-v attack-v decay-v pan-v))
+                 (make-saw ac t hz decay-v amp-v attack-v pan-v dest)))
 
-      ;; Keyword — note name (c4, eb3, …) → Hz tone, or bank prefix → sample → synth fallback
-      (keyword? value)
-      (if (theory/note-keyword? value)
-        (let [hz (theory/note->hz value)]
-          (if offline?
-            (make-sine ac t hz)
-            (or (worklet-trigger! (str hz) t)
-                (make-sine ac t hz))))
-        (let [resolved (samples/resolve-keyword value)]
-          (cond
-            (samples/has-bank? resolved) (samples/play! ac t resolved 0)
-            :else (if offline?
-                    (js-synth ac t value)
-                    (or (worklet-trigger! (name value) t)
-                        (js-synth ac t value))))))
+           (= synth :square)
+           (let [hz (if (theory/note-keyword? note) (theory/note->hz note) (double note))]
+             (or (when-not offline?
+                   (worklet-trigger-v2! (str "square:" hz ":" (or (:pw value) 0.5))
+                                        t amp-v attack-v decay-v pan-v))
+                 (make-square ac t hz decay-v amp-v attack-v pan-v dest)))
 
-      ;; Number — frequency in Hz
-      (number? value)
-      (if offline?
-        (make-sine ac t value)
-        (or (worklet-trigger! (str value) t)
-            (make-sine ac t value)))
+           (= synth :fm)
+           (let [hz    (if (theory/note-keyword? note) (theory/note->hz note) (double note))
+                 index (or (:index value) 1.0)
+                 ratio (or (:ratio value) 2.0)]
+             (or (when-not offline?
+                   (worklet-trigger-v2! (str "fm:" hz ":" index ":" ratio)
+                                        t amp-v attack-v decay-v pan-v))
+                 ;; JS fallback: sine (FM needs two connected oscillators — WASM only)
+                 (make-sine ac t hz decay-v amp-v attack-v pan-v dest)))
 
-      :else (make-sine ac t 440))))
+           ;; Standard note/sample dispatch
+           (keyword? note)
+           (if (theory/note-keyword? note)
+             (let [hz (theory/note->hz note)]
+               (if offline?
+                 (make-sine ac t hz decay-v amp-v attack-v pan-v dest)
+                 (or (worklet-trigger-v2! (str hz) t amp-v attack-v decay-v pan-v)
+                     (make-sine ac t hz decay-v amp-v attack-v pan-v dest))))
+             (let [resolved (samples/resolve-keyword note)
+                   extra    {:rate  (:rate value)
+                             :begin (:begin value)
+                             :end   (:end value)
+                             :loop  (:loop value)}]
+               (cond
+                 (samples/has-bank? resolved)
+                 (samples/play! ac t resolved 0 amp-v pan-v extra dest)
+                 :else
+                 (if offline?
+                   (js-synth ac t note amp-v pan-v dest)
+                   (or (worklet-trigger-v2! (name note) t amp-v attack-v decay-v pan-v)
+                       (js-synth ac t note amp-v pan-v dest))))))
+
+           (number? note)
+           (if offline?
+             (make-sine ac t note decay-v amp-v attack-v pan-v dest)
+             (or (worklet-trigger-v2! (str note) t amp-v attack-v decay-v pan-v)
+                 (make-sine ac t note decay-v amp-v attack-v pan-v dest)))))
+
+       ;; Map {:bank :bd :n 2} from (sound :bd 2) — always use samples
+       (and (map? value) (:bank value))
+       (let [{:keys [bank n]} value
+             extra {:rate  (:rate value) :begin (:begin value)
+                    :end   (:end value)  :loop  (:loop value)}]
+         (if (samples/has-bank? bank)
+           (samples/play! ac t bank n 1.0 0.0 extra dest)
+           (if offline?
+             (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)
+             (or (worklet-trigger! (name bank) t)
+                 (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)))))
+
+       ;; Keyword — note name → Hz tone, or sample bank
+       (keyword? value)
+       (if (theory/note-keyword? value)
+         (let [hz (theory/note->hz value)]
+           (if offline?
+             (make-sine ac t hz 1.5 1.0 0.001 0.0 dest)
+             (or (worklet-trigger! (str hz) t)
+                 (make-sine ac t hz 1.5 1.0 0.001 0.0 dest))))
+         (let [resolved (samples/resolve-keyword value)]
+           (cond
+             (samples/has-bank? resolved) (samples/play! ac t resolved 0 1.0 0.0 {} dest)
+             :else (if offline?
+                     (js-synth ac t value dest)
+                     (or (worklet-trigger! (name value) t)
+                         (js-synth ac t value dest))))))
+
+       ;; Map with :synth :noise — no :note key
+       (and (map? value) (= (:synth value) :noise))
+       (let [amp-v  (float (:amp value 1.0))
+             decay-v (float (:decay value 0.3))
+             pan-v  (float (:pan value 0.0))]
+         (or (when-not offline?
+               (worklet-trigger-v2! "noise" t amp-v 0.001 decay-v pan-v))
+             (make-noise ac t decay-v amp-v pan-v dest)))
+
+       ;; Number — frequency in Hz
+       (number? value)
+       (if offline?
+         (make-sine ac t value 1.5 1.0 0.001 0.0 dest)
+         (or (worklet-trigger! (str value) t)
+             (make-sine ac t value 1.5 1.0 0.001 0.0 dest)))
+
+       :else (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)))))
 
 ;;; Scheduler state
 
 (def scheduler-state
-  (atom {:playing?    false
-         :tracks      {}     ; keyword → Pattern
-         :muted       #{}    ; set of muted track keywords
-         :cycle       0
-         :cycle-dur   2.0    ; seconds per cycle — 120 BPM, 1 cycle = 1 bar (4 beats)
-         :lookahead   0.2    ; look-ahead in seconds
-         :interval-id nil
-         :on-beat     nil
-         :on-event    nil}))
+  (atom {:playing?     false
+         :tracks       {}     ; keyword → Pattern
+         :muted        #{}    ; set of muted track keywords
+         :cycle        0
+         :cycle-dur    2.0    ; seconds per cycle — 120 BPM, 1 cycle = 1 bar (4 beats)
+         :lookahead    0.2    ; look-ahead in seconds
+         :interval-id  nil
+         :on-beat      nil
+         :on-event     nil
+         :on-fx-event  nil})) ; callback for sidechain/plugin event notifications
 
 (defn set-bpm!
   "Set the tempo in BPM. One cycle = one bar (4 beats)."
@@ -305,7 +443,7 @@
   (/ 240.0 (:cycle-dur @scheduler-state)))
 
 (defn schedule-cycle! [ac state cycle]
-  (let [{:keys [tracks muted cycle-dur on-beat on-event]} state
+  (let [{:keys [tracks muted cycle-dur on-beat on-event on-fx-event]} state
         sp {:start [cycle 1] :end [(inc cycle) 1]}]
     (doseq [[track-name pattern] tracks]
       (when (and pattern (not (contains? muted track-name)))
@@ -316,7 +454,9 @@
                   event-offset      (* (- part-start cycle) cycle-dur)
                   t                 (+ cycle-audio-start event-offset)]
               (when (> t (.-currentTime ac))
-                (play-event ac t (:value ev))
+                (play-event ac t (:value ev) track-name)
+                (when on-fx-event
+                  (on-fx-event (:value ev) t))
                 (when (and on-event (:source ev))
                   (let [delay-ms (max 0 (* 1000 (- t (.-currentTime ac))))]
                     (js/setTimeout #(on-event (:source ev)) delay-ms)))
@@ -356,6 +496,12 @@
     (.. node -port (postMessage #js {:type "stop"})))
   (when-let [id (:interval-id @scheduler-state)]
     (js/clearInterval id))
+  ;; Disconnect and clean up all per-track nodes
+  (doseq [[_ {:keys [gain-node fx-chain]}] @track-nodes]
+    (try (.disconnect gain-node) (catch :default _))
+    (doseq [{:keys [plugin]} fx-chain]
+      (try (.destroy ^js plugin) (catch :default _))))
+  (reset! track-nodes {})
   (swap! scheduler-state assoc
          :playing?     false
          :interval-id  nil
@@ -363,10 +509,12 @@
          :muted        #{}))
 
 (defn play-track!
-  "Add or replace a named track. Starts the scheduler if not already running."
+  "Add or replace a named track. Creates a per-track GainNode if needed.
+   Starts the scheduler if not already running."
   [track-name pattern on-beat-fn on-event-fn]
   (let [ac (get-ctx)]
     (.resume ac)
+    (ensure-track-node! ac track-name)
     (swap! scheduler-state update :tracks assoc track-name pattern)
     (ensure-running! ac on-beat-fn on-event-fn)))
 
@@ -381,6 +529,12 @@
     (swap! scheduler-state assoc :muted (set others))))
 
 (defn clear-track! [track-name]
+  ;; Disconnect and remove per-track node and its FX chain
+  (when-let [tn (get @track-nodes track-name)]
+    (try (.disconnect (:gain-node tn)) (catch :default _))
+    (doseq [{:keys [plugin]} (:fx-chain tn)]
+      (try (.destroy ^js plugin) (catch :default _)))
+    (swap! track-nodes dissoc track-name))
   (swap! scheduler-state (fn [s]
     (-> s
         (update :tracks dissoc track-name)

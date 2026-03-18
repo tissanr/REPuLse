@@ -72,6 +72,36 @@
   [f pat]
   (core/stack* [(pan -1 pat) (pan 1 (f pat))]))
 
+(defn rate
+  "Playback rate multiplier. 1.0 = normal, 2.0 = double speed (octave up),
+   0.5 = half speed (octave down).
+   (rate 1.5 pat)  — apply directly
+   (rate 1.5)      — return transformer"
+  ([r]     (fn [pat] (rate r pat)))
+  ([r pat] (apply-param :rate r pat)))
+
+(defn begin
+  "Sample start position as a fraction of buffer duration (0.0–1.0).
+   (begin 0.25 pat)  — start at 25% into the sample
+   (begin 0.25)      — return transformer"
+  ([t]     (fn [pat] (begin t pat)))
+  ([t pat] (apply-param :begin t pat)))
+
+(defn end*
+  "Sample end position as a fraction of buffer duration (0.0–1.0).
+   Named end* to avoid conflict with cljs.core/end.
+   (end* 0.75 pat)  — stop at 75% into the sample
+   (end* 0.75)      — return transformer"
+  ([t]     (fn [pat] (end* t pat)))
+  ([t pat] (apply-param :end t pat)))
+
+(defn loop-sample
+  "Enable sample looping.
+   (loop-sample true pat)  — loop the sample
+   (loop-sample true)      — return transformer"
+  ([on?]     (fn [pat] (loop-sample on? pat)))
+  ([on? pat] (apply-param :loop on? pat)))
+
 (defn jux-by
   "Like jux but with adjustable stereo width.
    width 0.0 = both copies centre (mono), 1.0 = full left/right.

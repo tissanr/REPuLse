@@ -216,6 +216,34 @@
      "jux-by"       (fn [w f p]     (params/jux-by (unwrap w) (unwrap f) (unwrap p)))
      "off"          (fn [a f p]     (core/off (unwrap a) (unwrap f) (unwrap p)))
      "comp"    (fn [& fs] (apply comp fs))
+     ;; Sample playback control — Phase L
+     "rate"        (fn
+                     ([v]   (params/rate (unwrap v)))
+                     ([v p] (params/rate (unwrap v) (unwrap p))))
+     "begin"       (fn
+                     ([v]   (params/begin (unwrap v)))
+                     ([v p] (params/begin (unwrap v) (unwrap p))))
+     "end"         (fn
+                     ([v]   (params/end* (unwrap v)))
+                     ([v p] (params/end* (unwrap v) (unwrap p))))
+     "loop-sample" (fn
+                     ([v]   (params/loop-sample (unwrap v)))
+                     ([v p] (params/loop-sample (unwrap v) (unwrap p))))
+     ;; New synth voices — Phase L
+     "saw"    (fn [note]
+                {:note (unwrap note) :synth :saw})
+     "square" (fn [note & opts]
+                (let [n    (unwrap note)
+                      opts' (apply hash-map (mapv unwrap opts))
+                      pw   (get opts' :pw 0.5)]
+                  {:note n :synth :square :pw pw}))
+     "noise"  (fn [] {:synth :noise})
+     "fm"     (fn [note & opts]
+                (let [n     (unwrap note)
+                      opts' (apply hash-map (mapv unwrap opts))
+                      idx   (get opts' :index 1.0)
+                      ratio (get opts' :ratio 2.0)]
+                  {:note n :synth :fm :index idx :ratio ratio}))
      ;; Mini-notation
      "~"       (fn [s]
                  (let [src         (source-of s)

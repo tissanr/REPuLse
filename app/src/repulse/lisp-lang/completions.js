@@ -44,7 +44,19 @@ const BUILTINS = [
   { label: "alt",          type: "function", detail: "(alt pat-a pat-b …) — cycle-based alternation: play pat-a on cycle 0, pat-b on cycle 1, …" },
   // --- Sharing ---
   { label: "load-gist",    type: "function", detail: "(load-gist url) — fetch a Gist and load into editor" },
-  { label: "export",       type: "function", detail: "(export n) — render n cycles to downloadable WAV file" },
+  { label: "export",       type: "function", detail: "(export) — render all tracks to WAV; (export n) — n cycles; (export :track) — single track" },
+  // --- Per-track effects ---
+  { label: "track-fx",    type: "function", detail: "(track-fx :track :effect param …) — add/set effect on a specific track" },
+  // --- Sample playback control ---
+  { label: "rate",        type: "function", detail: "(rate n pat) — playback rate: 1.0 = normal, 2.0 = octave up; (rate n) returns transformer" },
+  { label: "begin",       type: "function", detail: "(begin frac pat) — sample start offset 0.0–1.0; (begin frac) returns transformer" },
+  { label: "end",         type: "function", detail: "(end frac pat) — sample end offset 0.0–1.0; (end frac) returns transformer" },
+  { label: "loop-sample", type: "function", detail: "(loop-sample true pat) — loop sample playback; (loop-sample bool) returns transformer" },
+  // --- Synth voices ---
+  { label: "saw",         type: "function", detail: "(saw :c4) — sawtooth oscillator; works with amp/attack/decay/pan" },
+  { label: "square",      type: "function", detail: "(square :c4) — square wave; (square :c4 :pw 0.25) — pulse width" },
+  { label: "noise",       type: "function", detail: "(noise) — white noise burst; works with amp/decay/pan" },
+  { label: "fm",          type: "function", detail: "(fm :c4 :index 3 :ratio 2) — FM synthesis pair" },
   // --- Sound ---
   { label: "sound",        type: "function", detail: "(sound bank n) — select sample n from bank" },
   { label: "bpm",          type: "function", detail: "(bpm n) — set tempo in beats per minute" },
