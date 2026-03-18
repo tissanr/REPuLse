@@ -373,7 +373,7 @@ See full spec: [PROMPTS/phase-4-live-features.md](PROMPTS/phase-4-live-features.
 
 ---
 
-## Phase I — Pattern Combinators 📋 *planned*
+## Phase I — Pattern Combinators ✅ *delivered*
 
 Eight new pure pattern functions that complete REPuLse's expressive vocabulary.
 Highest-value additions: cheap to implement (pure CLJS, no DOM/audio), immediate

@@ -434,28 +434,4 @@ processed by the ClojureScript build pipeline.
 npm workspaces link the three packages together. The dev HTTP server serves
 `app/public/` at port 3000.
 
----
-
-## Phase status
-
-| Phase | Focus | Status |
-|---|---|---|
-| **1** | First sound — CLJS pattern engine, Web Audio synthesis, CodeMirror editor | ✅ delivered |
-| **2** | Rust/WASM synthesis — better drum sounds via `wasm-pack` | ✅ delivered |
-| **3** | AudioWorklet — WASM on the audio thread, zero main-thread jank | ✅ delivered |
-| **5** | Active code highlighting — editor flashes source tokens as they play | ✅ delivered |
-| **6a** | Plugin system + visual plugins — AnalyserNode tap, oscilloscope | ✅ delivered |
-| **6b** | Effect plugins — reverb, delay, filter, compressor, dattorro-reverb | ✅ delivered |
-| **8** | Song arrangement — `arrange`, `play-scenes`, map literals | ✅ delivered |
-| **10** | Syntax highlighting — Lezer grammar, bracket matching, oneDark | ✅ delivered |
-| **9** | External sample repos — `(samples! "github:owner/repo")` | ✅ delivered |
-| **C** | Code completion — built-in docstrings + live `def` tracking | ✅ delivered |
-| **A** | More effects — chorus, phaser, tremolo, overdrive, bitcrusher | ✅ delivered |
-| **D** | Editor persistence — localStorage save/restore across reloads | ✅ delivered |
-| **E** | Session context panel — live bindings, effects, BPM sidebar | ✅ delivered |
-| **F** | Drum machine bank prefix — `(bank :AkaiLinn)` scope shorthand | ✅ delivered |
-| **4** | Live features — named pattern slots, tap BPM, MIDI clock, session URLs | 📋 planned |
-| **B** | Richer visuals — audiomotion-analyzer spectrum, p5.js plugin support | 📋 planned |
-| **7** | Advanced plugins — per-pattern routing, MIDI out, recorder | 📋 planned |
-
-See `PROMPTS/` for detailed specifications of each phase.
+See `ROADMAP.md` for the full phase history and delivery status.
