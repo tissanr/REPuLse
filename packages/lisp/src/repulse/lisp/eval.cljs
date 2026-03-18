@@ -164,7 +164,7 @@
      "scale"     (fn [kw root pat]
                    (theory/scale (unwrap kw) (unwrap root) (unwrap pat)))
      "chord"     (fn [kw root]
-                   (theory/chord (unwrap kw) (unwrap root)))
+                   (theory/chord (unwrap kw) (unwrap root) (source-of kw)))
      "transpose" (fn
                    ([n]     (fn [p] (theory/transpose (unwrap n) (unwrap p))))
                    ([n pat] (theory/transpose (unwrap n) (unwrap pat))))

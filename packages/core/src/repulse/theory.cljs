@@ -130,14 +130,16 @@
 (defn chord
   "Return a stacked pattern of the chord tones as Hz values.
    Each tone is a (pure hz) pattern lasting one full cycle.
+   Optional source map is attached to every event for editor highlighting.
 
    (chord :major :c4)    ; C E G stacked
    (chord :m7b5 :b3)     ; half-diminished on B3"
-  [chord-kw root]
-  (let [root-midi (note->midi root)
-        semitones (resolve-intervals (get chord-intervals chord-kw [1 3 5]))
-        freqs     (map #(midi->hz (+ root-midi %)) semitones)]
-    (core/stack* (mapv core/pure freqs))))
+  ([chord-kw root] (chord chord-kw root nil))
+  ([chord-kw root source]
+   (let [root-midi (note->midi root)
+         semitones (resolve-intervals (get chord-intervals chord-kw [1 3 5]))
+         freqs     (map #(midi->hz (+ root-midi %)) semitones)]
+     (core/stack* (mapv #(core/pure % source) freqs)))))
 
 (defn transpose
   "Shift note values in pat up or down by n semitones.
