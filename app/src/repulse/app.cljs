@@ -482,8 +482,9 @@
                           (.. update -state -doc (toString)))
                 (catch :default _))))))
 
-(defn make-cmd-editor [container]
+(defn make-cmd-editor 
   "Single-line CodeMirror editor for the command bar. Enter evaluates + clears."
+  [container]
   (let [clear-view! (fn [view]
                       (.dispatch view
                                  #js {:changes #js {:from 0
