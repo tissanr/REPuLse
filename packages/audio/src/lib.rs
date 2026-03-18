@@ -283,7 +283,7 @@ impl AudioEngine {
             },
             "oh" => Voice::Hihat {
                 noise_state: seed, hpf: Biquad::highpass(8000.0, 0.7, sr),
-                gain: 0.35 * amp, gain_decay: decay_rate(0.35, sr),
+                gain: 0.4 * amp, gain_decay: decay_rate(1.0, sr),
             },
             other => {
                 let freq = other.parse::<f64>().unwrap_or(440.0);

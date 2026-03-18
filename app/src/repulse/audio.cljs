@@ -120,29 +120,33 @@
     (.start src t)
     (.stop src (+ t 0.2))))
 
-(defn- make-hihat [ac t amp pan]
-  (let [buf-size 2048
-        buf  (.createBuffer ac 1 buf-size (.-sampleRate ac))
-        data (.getChannelData buf 0)
-        _    (dotimes [i buf-size]
-               (aset data i (- (* 2 (Math/random)) 1)))
-        src  (.createBufferSource ac)
-        hpf  (.createBiquadFilter ac)
-        gain (.createGain ac)
-        panner (.createStereoPanner ac)
-        pk   (* 0.5 (float amp))]
-    (set! (.-buffer src) buf)
-    (set! (.-type hpf) "highpass")
-    (.setValueAtTime (.-frequency hpf) 8000 t)
-    (.setValueAtTime (.-gain gain) pk t)
-    (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t 0.045))
-    (.setValueAtTime (.-pan panner) (float pan) t)
-    (.connect src hpf)
-    (.connect hpf gain)
-    (.connect gain panner)
-    (.connect panner (output-node ac))
-    (.start src t)
-    (.stop src (+ t 0.045))))
+(defn- make-hihat
+  "Noise burst through a highpass filter. dur controls envelope length."
+  ([ac t amp pan] (make-hihat ac t amp pan 0.045 0.5 8000))
+  ([ac t amp pan dur gain-scale hpf-freq]
+   (let [buf-size 2048
+         buf  (.createBuffer ac 1 buf-size (.-sampleRate ac))
+         data (.getChannelData buf 0)
+         _    (dotimes [i buf-size]
+                (aset data i (- (* 2 (Math/random)) 1)))
+         src  (.createBufferSource ac)
+         hpf  (.createBiquadFilter ac)
+         gain (.createGain ac)
+         panner (.createStereoPanner ac)
+         pk   (* gain-scale (float amp))]
+     (set! (.-buffer src) buf)
+     (set! (.-loop src) true)          ; loop noise for sustained tails
+     (set! (.-type hpf) "highpass")
+     (.setValueAtTime (.-frequency hpf) hpf-freq t)
+     (.setValueAtTime (.-gain gain) pk t)
+     (.exponentialRampToValueAtTime (.-gain gain) 0.001 (+ t dur))
+     (.setValueAtTime (.-pan panner) (float pan) t)
+     (.connect src hpf)
+     (.connect hpf gain)
+     (.connect gain panner)
+     (.connect panner (output-node ac))
+     (.start src t)
+     (.stop src (+ t dur)))))
 
 (defn- make-sine
   "JS-synthesis fallback for when the AudioWorklet/WASM is unavailable.
@@ -201,6 +205,7 @@
      :bd (make-kick ac t amp pan)
      :sd (make-snare ac t amp pan)
      :hh (make-hihat ac t amp pan)
+     :oh (make-hihat ac t amp pan 1.0 0.4 8000)
      (make-sine ac t 440 1.5 amp 0.001 pan))))
 
 (defn play-event [ac t value]
