@@ -202,7 +202,7 @@ To verify UI changes, describe what to check or ask the user to reload the brows
 | G     | Music theory — note keywords, `scale`, `chord`, `transpose`    | ✓ delivered  |
 | H     | Per-event parameters — `amp`, `attack`, `decay`, `pan`, `->>`  | ✓ delivered  |
 | 4     | Named tracks, command bar, tap BPM, MIDI clock, session URLs   | ✓ delivered  |
-| I     | Pattern combinators — euclidean, cat, late, sometimes, jux, off | planned      |
+| I     | Pattern combinators — euclidean, cat, late, sometimes, jux, off | ✓ delivered  |
 | J     | Onboarding — demo templates, hover docs, interactive tutorial  | planned      |
 | K     | Mini-notation & sharing — `(~ "bd sd")`, gist import, WAV export | planned    |
 | L     | Per-track audio — track FX chains, sample params, sidechain   | planned      |

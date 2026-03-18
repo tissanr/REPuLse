@@ -116,3 +116,18 @@
         pat   (core/pure :c4 src)
         evs   (core/query (params/amp 0.7 pat) one-cycle)]
     (is (= src (:source (first evs))))))
+
+;;; ── jux ─────────────────────────────────────────────────────────────
+
+(deftest jux-stacks-panned
+  ;; jux should produce events panned left and right
+  (let [evs  (core/query (params/jux core/rev (core/seq* [:a :b])) one-cycle)
+        pans (set (map #(get (:value %) :pan) evs))]
+    (is (contains? pans -1))
+    (is (contains? pans 1))))
+
+(deftest jux-by-half-width
+  (let [evs  (core/query (params/jux-by 0.5 core/rev (core/seq* [:a :b])) one-cycle)
+        pans (set (map #(get (:value %) :pan) evs))]
+    (is (contains? pans -0.5))
+    (is (contains? pans 0.5))))

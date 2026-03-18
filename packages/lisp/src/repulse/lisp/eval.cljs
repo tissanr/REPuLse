@@ -179,6 +179,25 @@
      "pan"     (fn
                  ([v]   (params/pan (unwrap v)))
                  ([v p] (params/pan (unwrap v) (unwrap p))))
+     ;; Pattern combinators — Phase I
+     "euclidean"    (fn
+                      ([k n v]   (core/euclidean (unwrap k) (unwrap n) (unwrap v)))
+                      ([k n v r] (core/euclidean (unwrap k) (unwrap n) (unwrap v) (unwrap r))))
+     "cat"          (fn [& ps]      (core/cat* (mapv unwrap ps)))
+     "late"         (fn [a p]       (core/late (unwrap a) (unwrap p)))
+     "early"        (fn [a p]       (core/early (unwrap a) (unwrap p)))
+     "sometimes"    (fn [f p]       (core/sometimes (unwrap f) (unwrap p)))
+     "often"        (fn [f p]       (core/often (unwrap f) (unwrap p)))
+     "rarely"       (fn [f p]       (core/rarely (unwrap f) (unwrap p)))
+     "sometimes-by" (fn [prob f p]  (core/sometimes-by (unwrap prob) (unwrap f) (unwrap p)))
+     "degrade"      (fn [p]         (core/degrade (unwrap p)))
+     "degrade-by"   (fn [prob p]    (core/degrade-by (unwrap prob) (unwrap p)))
+     "choose"       (fn [xs]        (core/choose (mapv unwrap (unwrap xs))))
+     "wchoose"      (fn [pairs]     (core/wchoose (mapv (fn [[w v]] [(unwrap w) (unwrap v)])
+                                                        (unwrap pairs))))
+     "jux"          (fn [f p]       (params/jux (unwrap f) (unwrap p)))
+     "jux-by"       (fn [w f p]     (params/jux-by (unwrap w) (unwrap f) (unwrap p)))
+     "off"          (fn [a f p]     (core/off (unwrap a) (unwrap f) (unwrap p)))
      "comp"    (fn [& fs] (apply comp fs))
      ;; Sound helpers
      "sound"  (fn [bank n] {:bank (unwrap bank) :n (or (unwrap n) 0)})

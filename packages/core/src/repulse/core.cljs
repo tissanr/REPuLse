@@ -158,7 +158,7 @@
          (query pat sp))))))
 
 (defn arrange*
-  "plan: [[pattern cycles] ...]
+  "plan: [[pattern cycles] …]
    Returns a Pattern that plays each section in order, looping after the total duration."
   [plan]
   (let [timeline (reduce
@@ -186,3 +186,186 @@
                         (update :part  #(span (rat+ (:start %) [offset 1])
                                               (rat+ (:end   %) [offset 1])))))
                   evs))))))))
+
+;;; ── Phase I: Pattern Combinators ───────────────────────────────────
+
+(defn euclidean
+  "Björklund's algorithm: distribute k onsets across n steps as evenly as possible.
+   Returns a seq pattern of val and :_ rests.
+   (euclidean 5 8 :bd)     — 5 hits in 8 steps
+   (euclidean 5 8 :bd 2)   — rotated 2 steps"
+  ([k n val] (euclidean k n val 0))
+  ([k n val rotation]
+   (let [;; Björklund algorithm — iteratively distribute remainders
+         result
+         (loop [groups  (into (vec (repeat k [true]))
+                              (repeat (- n k) [false]))]
+           (let [cnt-a (count (filter #(= (first %) (first (first groups))) groups))
+                 cnt-b (- (count groups) cnt-a)]
+             (if (or (<= cnt-b 1) (= (count groups) n))
+               (vec (mapcat identity groups))
+               (let [take-n (min cnt-a cnt-b)
+                     head   (subvec groups 0 take-n)
+                     mid    (subvec groups take-n cnt-a)
+                     tail   (subvec groups cnt-a)]
+                 (recur (into (mapv (fn [a b] (into a b))
+                                    head (subvec tail 0 take-n))
+                              (into mid (subvec tail take-n))))))))
+         ;; Apply rotation
+         rotated (let [r (mod rotation n)
+                       v (vec result)]
+                   (into (subvec v r) (subvec v 0 r)))
+         ;; Map booleans to values
+         values (mapv #(if % val :_) rotated)]
+     (seq* values))))
+
+(defn cat*
+  "Concatenate patterns: each plays for one full cycle, then the whole sequence loops.
+   Unlike seq* (which subdivides one cycle), cat* gives each pattern its own cycle.
+   (cat* [p1 p2 p3]) — 3-cycle loop: p1 for cycle 0, p2 for cycle 1, p3 for cycle 2."
+  [pats]
+  (let [n (count pats)]
+    (if (zero? n)
+      (pattern (fn [_] []))
+      (pattern
+       (fn [{:keys [start end] :as sp}]
+         (let [cycle  (int (Math/floor (rat->float start)))
+               idx    (mod cycle n)
+               pat    (nth pats idx)]
+           (query pat sp)))))))
+
+(defn late
+  "Shift all events forward in time by amount (fraction of a cycle).
+   Queries the pattern at (start - offset, end - offset), then shifts events
+   back by +offset. Preserves :source for editor highlighting.
+   (late 0.25 pat) — delay by 1/4 cycle"
+  [amount pat]
+  (let [off (if (vector? amount) amount (rat (int (* amount 1000)) 1000))]
+    (pattern
+     (fn [{:keys [start end]}]
+       (let [q-start (rat- start off)
+             q-end   (rat- end off)
+             evs     (query pat (span q-start q-end))]
+         (map (fn [e]
+                (-> e
+                    (update :whole #(span (rat+ (:start %) off)
+                                          (rat+ (:end %) off)))
+                    (update :part  #(span (rat+ (:start %) off)
+                                          (rat+ (:end %) off)))))
+              evs))))))
+
+(defn early
+  "Shift all events backward in time by amount (fraction of a cycle).
+   Equivalent to (late (- amount) pat).
+   (early 0.25 pat) — advance by 1/4 cycle"
+  [amount pat]
+  (let [neg-off (if (vector? amount)
+                  [(- (first amount)) (second amount)]
+                  (rat (- (int (* amount 1000))) 1000))]
+    (late neg-off pat)))
+
+(defn- cycle-hash
+  "Deterministic hash of a cycle number. Returns 0–99."
+  [cycle]
+  (mod (+ (* (Math/abs cycle) 48271) 12345) 100))
+
+(defn sometimes-by
+  "Apply transform f to pat on cycles where (cycle-hash cycle) < (prob * 100).
+   prob is 0.0–1.0. Deterministic: same cycle number always makes the same choice.
+   (sometimes-by 0.5 rev pat) — reverse ~50% of cycles"
+  [prob f pat]
+  (let [threshold (int (* prob 100))]
+    (pattern
+     (fn [sp]
+       (let [cycle (int (Math/floor (rat->float (:start sp))))]
+         (if (< (cycle-hash cycle) threshold)
+           (query (f pat) sp)
+           (query pat sp)))))))
+
+(defn sometimes
+  "Apply transform on ~50% of cycles.
+   (sometimes rev pat)"
+  [f pat]
+  (sometimes-by 0.5 f pat))
+
+(defn often
+  "Apply transform on ~75% of cycles.
+   (often (fast 2) pat)"
+  [f pat]
+  (sometimes-by 0.75 f pat))
+
+(defn rarely
+  "Apply transform on ~25% of cycles.
+   (rarely rev pat)"
+  [f pat]
+  (sometimes-by 0.25 f pat))
+
+(defn- event-hash
+  "Deterministic hash of an event's start position. Returns 0–99.
+   Uses the :whole start [numerator denominator] to seed."
+  [event]
+  (let [[n d] (:start (:whole event))]
+    (mod (+ (* (Math/abs n) 48271) (* (Math/abs d) 22543) 9137) 100)))
+
+(defn degrade-by
+  "Randomly drop events from pat with probability prob (0.0–1.0).
+   Uses deterministic hash of each event's time position.
+   (degrade-by 0.3 pat) — drop ~30% of events"
+  [prob pat]
+  (let [threshold (int (* prob 100))]
+    (pattern
+     (fn [sp]
+       (filter #(>= (event-hash %) threshold) (query pat sp))))))
+
+(defn degrade
+  "Drop ~50% of events randomly. Shorthand for (degrade-by 0.5 pat).
+   (degrade (fast 4 (seq :hh :oh :hh :oh)))"
+  [pat]
+  (degrade-by 0.5 pat))
+
+(defn choose
+  "Pick one value from xs per cycle (deterministic based on cycle number).
+   Returns a pattern that produces one event per cycle.
+   (choose [:bd :sd :hh :oh])"
+  [xs]
+  (let [n (count xs)]
+    (pattern
+     (fn [{:keys [start end] :as sp}]
+       (let [start-c (int (Math/floor (rat->float start)))
+             end-c   (int (Math/ceil  (rat->float end)))]
+         (for [c (range start-c end-c)
+               :let [idx   (mod (cycle-hash c) n)
+                     whole (cycle-span c)
+                     part  (span-intersect whole (span start end))]
+               :when part]
+           (event (nth xs idx) whole part)))))))
+
+(defn wchoose
+  "Weighted random choice per cycle. Takes a vector of [weight value] pairs.
+   Weights are relative (don't need to sum to 1.0).
+   (wchoose [[0.5 :bd] [0.3 :sd] [0.2 :hh]])"
+  [pairs]
+  (let [total      (reduce + (map first pairs))
+        cumulative (reductions + (map #(* 100 (/ (first %) total)) pairs))
+        values     (mapv second pairs)]
+    (pattern
+     (fn [{:keys [start end] :as sp}]
+       (let [start-c (int (Math/floor (rat->float start)))
+             end-c   (int (Math/ceil  (rat->float end)))]
+         (for [c (range start-c end-c)
+               :let [h     (cycle-hash c)
+                     idx   (or (first (keep-indexed
+                                        (fn [i thresh]
+                                          (when (< h thresh) i))
+                                        cumulative))
+                               (dec (count values)))
+                     whole (cycle-span c)
+                     part  (span-intersect whole (span start end))]
+               :when part]
+           (event (nth values idx) whole part)))))))
+
+(defn off
+  "Layer the original pattern with a time-shifted, transformed copy.
+   (off 0.125 (fast 2) pat) — original + 1/8-cycle-shifted double-speed copy"
+  [amount f pat]
+  (stack* [pat (late amount (f pat))]))
