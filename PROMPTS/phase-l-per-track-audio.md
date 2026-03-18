@@ -610,10 +610,14 @@ plugins that implement `onEvent`:
 
 ```clojure
 ;; After (play-event ac t (:value ev) track-name):
-(notify-fx-event! (:value ev) t)
+(when-let [on-fx (:on-fx-event @scheduler-state)]
+  (on-fx (:value ev) t))
 ```
 
-Add the notification helper:
+Add the notification helper **in `fx.cljs`** (not in `audio.cljs` — `audio` cannot
+require `fx` without creating a circular dependency, since `fx` already requires `audio`):
+
+In `app/src/repulse/fx.cljs`, add:
 
 ```clojure
 (defn- event-name
@@ -625,12 +629,50 @@ Add the notification helper:
     :else nil))
 
 (defn notify-fx-event!
-  "Notify all effect plugins (global and per-track) of a fired event."
+  "Notify all effect plugins (global and per-track) of a fired event.
+   Called from the scheduler in audio.cljs — audio passes the event,
+   fx knows about the chain. This keeps the dependency one-way: fx → audio."
   [value t]
   (when-let [evt-name (event-name value)]
-    (doseq [{:keys [plugin]} @fx/chain]
-      (when (.-onEvent plugin)
-        (.onEvent ^js plugin evt-name t)))))
+    ;; Global effects
+    (doseq [{:keys [plugin]} @chain]
+      (when (.-onEvent ^js plugin)
+        (.onEvent ^js plugin evt-name t)))
+    ;; Per-track effects
+    (doseq [[_ {:keys [fx-chain]}] @audio/track-nodes]
+      (doseq [{:keys [plugin]} fx-chain]
+        (when (.-onEvent ^js plugin)
+          (.onEvent ^js plugin evt-name t))))))
+```
+
+Then in `audio.cljs`, the scheduler calls `fx/notify-fx-event!`. This requires
+`audio.cljs` to add `[repulse.fx :as fx]` to its namespace requires.
+
+**Wait — that would also be circular** (`audio → fx → audio`).
+
+**Solution:** Use `app.cljs` as the mediator. The scheduler in `audio.cljs` accepts
+an optional `:on-fx-event` callback when starting playback. `app.cljs` passes
+`fx/notify-fx-event!` as this callback. Neither `audio.cljs` nor `fx.cljs` requires
+the other's namespace directly.
+
+In `audio.cljs`, `schedule-cycle!`:
+```clojure
+;; After (play-event ac t (:value ev) track-name):
+(when-let [on-fx (:on-fx-event @scheduler-state)]
+  (on-fx (:value ev) t))
+```
+
+In `app.cljs`, when starting playback:
+```clojure
+(swap! audio/scheduler-state assoc :on-fx-event fx/notify-fx-event!)
+```
+
+This keeps the dependency graph acyclic:
+```
+app.cljs → audio.cljs
+app.cljs → fx.cljs
+fx.cljs  → audio.cljs   (one-way, reads track-nodes/master-gain)
+audio.cljs → (nothing in fx)
 ```
 
 ---
@@ -1061,10 +1103,10 @@ After editing, run `npm run gen:grammar`.
 
 | File | Change |
 |---|---|
-| `app/src/repulse/audio.cljs` | Per-track GainNode routing; `play-event` gains track-name param + dest routing; `ensure-track-node!`; new JS fallback synths (`make-saw`, `make-square`, `make-noise`); `notify-fx-event!`; track cleanup in `stop!`/`clear-track!` |
-| `app/src/repulse/fx.cljs` | `rewire-track!`, `add-track-effect!`, `remove-track-effect!`, `clear-track-effects!`, `set-track-param!`, `bypass-track-effect!` |
+| `app/src/repulse/audio.cljs` | Per-track GainNode routing; `play-event` gains track-name param + dest routing; `ensure-track-node!`; new JS fallback synths (`make-saw`, `make-square`, `make-noise`); `:on-fx-event` callback slot in scheduler-state; track cleanup in `stop!`/`clear-track!` |
+| `app/src/repulse/fx.cljs` | `rewire-track!`, `add-track-effect!`, `remove-track-effect!`, `clear-track-effects!`, `set-track-param!`, `bypass-track-effect!`, `notify-fx-event!` (event notification for sidechain) |
+| `app/src/repulse/app.cljs` | Wire `fx/notify-fx-event!` into scheduler via `:on-fx-event` callback; `track-fx` binding in `ensure-env!`; auto-load sidechain plugin; `saw`/`square`/`noise`/`fm` bindings |
 | `app/src/repulse/samples.cljs` | `play!` gains `:rate`, `:begin`, `:end`, `:loop` support + destination node param |
-| `app/src/repulse/app.cljs` | `track-fx` binding in `ensure-env!`; auto-load sidechain plugin; `saw`/`square`/`noise`/`fm` bindings |
 | `packages/core/src/repulse/params.cljs` | `rate`, `begin`, `end*`, `loop-sample` |
 | `packages/core/test/repulse/params_test.cljs` | Tests for new param functions |
 | `packages/lisp/src/repulse/lisp/eval.cljs` | `rate`, `begin`, `end`, `loop-sample`, `saw`, `square`, `noise`, `fm` bindings in `make-env` |

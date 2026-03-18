@@ -420,7 +420,7 @@ The complete mini-notation parser and compiler. Requires only `repulse.core`.
 
 (declare compile-node)
 
-(defn- alt*
+(defn alt*
   "Alternation: on cycle N, play the (mod N count)-th pattern."
   [pats]
   (let [n (count pats)]
@@ -429,6 +429,55 @@ The complete mini-notation parser and compiler. Requires only `repulse.core`.
         (let [cycle (int (Math/floor (core/rat->float (:start sp))))
               idx   (mod cycle n)]
           (core/query (nth pats idx) sp))))))
+
+(defn- weighted-seq*
+  "Proportional sequence: each child plays for (weight / total) of the cycle.
+   Uses time-windowing: queries each child within its proportional slice,
+   then adjusts event times to fit the slice's position in the cycle.
+
+   Example: [{:pat bd :weight 3} {:pat sd :weight 1}] total=4
+     → bd plays in [0, 3/4), sd plays in [3/4, 1)"
+  [pairs total-weight]
+  (core/pattern
+    (fn [sp]
+      (let [sp-start (core/rat->float (:start sp))
+            sp-end   (core/rat->float (:end sp))
+            cycle-start (Math/floor sp-start)]
+        (loop [remaining pairs
+               offset   [0 1]  ; rational offset within cycle
+               result   []]
+          (if (empty? remaining)
+            result
+            (let [{:keys [pat weight]} (first remaining)
+                  frac-start offset
+                  frac-end   (core/rat-add offset [(int weight) (int total-weight)])
+                  ;; Absolute time boundaries for this child
+                  abs-start (+ cycle-start (core/rat->float frac-start))
+                  abs-end   (+ cycle-start (core/rat->float frac-end))
+                  ;; Only query if this slice overlaps the requested span
+                  child-evs
+                  (when (and (< abs-start sp-end) (> abs-end sp-start))
+                    ;; Query the child as if it owns the full cycle,
+                    ;; then scale+shift events into the slice
+                    (let [child-sp {:start [0 1] :end [1 1]}
+                          raw-evs  (core/query pat child-sp)]
+                      (for [ev raw-evs
+                            :let [ev-start (core/rat->float (:start (:part ev)))
+                                  ev-end   (core/rat->float (:end (:part ev)))
+                                  ;; Scale from [0,1) to [abs-start, abs-end)
+                                  dur      (- abs-end abs-start)
+                                  new-start (+ abs-start (* ev-start dur))
+                                  new-end   (+ abs-start (* ev-end dur))]
+                            ;; Clip to requested span
+                            :when (and (< new-start sp-end) (> new-end sp-start))]
+                        (assoc ev
+                          :whole {:start (core/float->rat new-start)
+                                  :end   (core/float->rat new-end)}
+                          :part  {:start (core/float->rat (max new-start sp-start))
+                                  :end   (core/float->rat (min new-end sp-end))}))))]
+              (recur (rest remaining)
+                     frac-end
+                     (into result child-evs)))))))))
 
 (defn- degrade
   "Randomly gate events — each event has a 50% chance of being dropped."
@@ -460,14 +509,17 @@ The complete mini-notation parser and compiler. Requires only `repulse.core`.
           (if all-unit?
             ;; Simple case: all weights are 1 — use seq*
             (core/seq* (mapv compile-node children))
-            ;; Weighted case: use fast + stack to give proportional time slices
-            ;; Each child of weight w gets w/total-weight of the cycle.
-            ;; Implementation: slow the whole seq by total-weight, then use
-            ;; arrange* to give each child its proportional share.
-            (core/arrange*
-              (mapv (fn [child]
-                      [(compile-node child) (or (:weight child) 1)])
-                    children))))))
+            ;; Weighted case: each child of weight w gets w/total of the cycle.
+            ;; Build by stacking time-shifted, speed-adjusted patterns:
+            ;;   child_i plays for (w_i / total) of the cycle,
+            ;;   starting at (sum of preceding weights / total).
+            ;; Uses core/fast to compress each child into its fraction,
+            ;; then core/late to shift it to the right start position.
+            (let [pairs (mapv (fn [child]
+                               {:pat    (compile-node child)
+                                :weight (or (:weight child) 1)})
+                             children)]
+              (weighted-seq* pairs total-weight))))))
 
     :alt
     (let [children (:children node)]
@@ -616,10 +668,16 @@ Unit tests for the tokeniser, parser, and compiler.
 
 (deftest weight-simple
   ;; "bd@3 sd" → bd takes 3/4 of the cycle, sd takes 1/4
-  ;; Total of 2 events (bd over 3 cycles + sd over 1 cycle via arrange*)
+  ;; Both events play within a single cycle with proportional timing
   (let [evs (core/query (mini/parse "bd@3 sd") one-cycle)]
-    ;; The arrange* will play bd on cycle 0 (which falls in the 3-cycle section)
-    (is (= :bd (:value (first evs))))))
+    (is (= 2 (count evs)))
+    (is (= :bd (:value (first evs))))
+    (is (= :sd (:value (second evs))))
+    ;; bd occupies [0, 3/4), sd occupies [3/4, 1)
+    (let [bd-end (core/rat->float (:end (:part (first evs))))
+          sd-start (core/rat->float (:start (:part (second evs))))]
+      (is (< (Math/abs (- bd-end 0.75)) 0.01))
+      (is (< (Math/abs (- sd-start 0.75)) 0.01)))))
 
 ;;; ── Composition with Lisp ──────────────────────────────────────────
 
@@ -810,6 +868,9 @@ Add to `make-env`, after the `"comp"` entry:
 ```clojure
 ;; Mini-notation
 "~"      (fn [s] (mini/parse (unwrap s)))
+
+;; Alternation — useful outside mini-notation too: (alt pat-a pat-b pat-c)
+"alt"    (fn [& pats] (mini/alt* (mapv unwrap pats)))
 ```
 
 ---
@@ -821,6 +882,7 @@ Add after the `"comp"` entry in the BUILTINS array:
 ```javascript
 // --- Mini-notation ---
 { label: "~",           type: "function", detail: "(~ \"bd sd [hh hh] bd\") — parse mini-notation string into pattern" },
+{ label: "alt",         type: "function", detail: "(alt pat-a pat-b) — cycle-based alternation: play pat-a on cycle 0, pat-b on cycle 1, …" },
 // --- Sharing ---
 { label: "load-gist",   type: "function", detail: "(load-gist url) — fetch a Gist and load into editor" },
 { label: "export",       type: "function", detail: "(export n) — render n cycles to downloadable WAV file" },
@@ -833,7 +895,7 @@ Add after the `"comp"` entry in the BUILTINS array:
 Add to the existing `BuiltinName` token alternatives:
 
 ```
-"~" | "load-gist" | "export" |
+"~" | "alt" | "load-gist" | "export" |
 ```
 
 The `~` token needs to be recognized by the tokeniser. Since `~` is not in `identStart`
@@ -899,10 +961,10 @@ If the existing config already includes both, no change is needed.
 |---|---|
 | `packages/lisp/src/repulse/lisp/mini.cljs` | **New** — tokeniser, parser, compiler for mini-notation |
 | `packages/lisp/test/repulse/lisp/mini_test.cljs` | **New** — unit tests for mini-notation |
-| `packages/lisp/src/repulse/lisp/eval.cljs` | Require `mini`; add `~` binding to `make-env` |
+| `packages/lisp/src/repulse/lisp/eval.cljs` | Require `mini`; add `~` and `alt` bindings to `make-env` |
 | `app/src/repulse/app.cljs` | Add `load-gist` and `export` bindings in `ensure-env!` |
-| `app/src/repulse/lisp-lang/completions.js` | Add 3 entries (`~`, `load-gist`, `export`) |
-| `app/src/repulse/lisp-lang/repulse-lisp.grammar` | Add `~`, `load-gist`, `export` to BuiltinName; add `~` to identStart/identChar |
+| `app/src/repulse/lisp-lang/completions.js` | Add 4 entries (`~`, `alt`, `load-gist`, `export`) |
+| `app/src/repulse/lisp-lang/repulse-lisp.grammar` | Add `~`, `alt`, `load-gist`, `export` to BuiltinName; add `~` to identStart/identChar |
 | `packages/core/src/repulse/test_runner.cljs` | Require `mini-test` |
 | `shadow-cljs.edn` | Verify lisp package paths in test build (may be no-op) |
 | `docs/USAGE.md` | New "Mini-notation", "Gist import", and "WAV export" sections |
@@ -956,6 +1018,12 @@ No changes to `packages/core/src/repulse/core.cljs`, `packages/audio/`, or
 - [ ] `(~ "")` returns an empty pattern (no events)
 - [ ] `(~ "  bd   sd  ")` handles extra whitespace
 - [ ] `(~ "[bd sd]*2")` repeats the group: 4 events total
+
+### Alternation (Lisp-level)
+
+- [ ] `(alt (seq :bd :bd) (seq :sd :sd))` plays first pattern on even cycles, second on odd
+- [ ] `(alt p1 p2 p3)` rotates through 3 patterns across cycles
+- [ ] `alt` appears in autocomplete and receives syntax highlighting
 
 ### Composition with Lisp
 
