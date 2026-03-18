@@ -194,6 +194,9 @@
           (.catch (fn [_] (js/prompt "Copy this URL:" url))))
       (js/prompt "Copy this URL:" url))))
 
+;;; Forward declarations
+(declare evaluate!)
+
 ;;; Environment — created once, reused across evaluations
 
 (defonce env-atom
