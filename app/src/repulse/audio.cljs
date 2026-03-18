@@ -77,7 +77,10 @@
 ;;; Synthesized voices (JS fallback when AudioWorklet is unavailable)
 
 (defn- output-node [ac]
-  (or @master-gain (.-destination ac)))
+  ;; OfflineAudioContext has no master-gain — route directly to its destination.
+  (if (instance? js/OfflineAudioContext ac)
+    (.-destination ac)
+    (or @master-gain (.-destination ac))))
 
 (defn- make-kick [ac t amp pan]
   (let [osc    (.createOscillator ac)

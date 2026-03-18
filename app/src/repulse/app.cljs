@@ -838,8 +838,10 @@
                                                 a    (.createElement js/document "a")]
                                             (set! (.-href a) url)
                                             (set! (.-download a) (str "repulse-" n-cycles "cycles.wav"))
+                                            (.appendChild (.-body js/document) a)
                                             (.click a)
-                                            (.revokeObjectURL js/URL url)))))
+                                            (.removeChild (.-body js/document) a)
+                                            (js/setTimeout #(.revokeObjectURL js/URL url) 1000)))))
                                (.catch (fn [e]
                                          (js/console.error "[REPuLse] export failed:" e))))
                            (str "exporting " n-cycles " cycles…")))))))
