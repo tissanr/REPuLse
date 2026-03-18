@@ -117,6 +117,26 @@
         evs   (core/query (params/amp 0.7 pat) one-cycle)]
     (is (= src (:source (first evs))))))
 
+(deftest params-chain-preserves-source
+  ;; :source must survive a full amp→attack→decay chain
+  (let [src {:from 1 :to 3}
+        pat (core/pure :c4 src)
+        evs (core/query (->> pat
+                             (params/amp 0.7)
+                             (params/attack 0.02)
+                             (params/decay 0.5))
+                        one-cycle)]
+    (is (= src (:source (first evs))))))
+
+(deftest seq-source-preserved-through-amp
+  ;; :source on individual events from seq* must survive amp transform
+  (let [src-a {:from 1 :to 3}
+        src-b {:from 4 :to 6}
+        pat   (core/seq* [:c4 :e4] [src-a src-b])
+        evs   (core/query (params/amp 0.7 pat) one-cycle)]
+    (is (= src-a (:source (first evs))))
+    (is (= src-b (:source (second evs))))))
+
 ;;; ── jux ─────────────────────────────────────────────────────────────
 
 (deftest jux-stacks-panned
