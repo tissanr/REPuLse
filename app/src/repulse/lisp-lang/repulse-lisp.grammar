@@ -10,7 +10,7 @@ Vector { "[" expr* "]" }
 Map    { "{" expr* "}" }
 
 @tokens {
-  LineComment { ";" ![\\n]* }
+  LineComment { ";" ![\n]* }
 
   Number { @digit+ ("." @digit+)? }
 
@@ -31,7 +31,7 @@ Map    { "{" expr* "}" }
     "bpm" | "stop" | "fx" | "load-plugin" | "arrange" | "play-scenes" | "sound" |
     "get" | "assoc" | "merge" | "not" | "and" | "or" | "comp" |
     "play" | "mute!" | "unmute!" | "solo!" | "clear!" | "tracks" | "tap!" | "midi-sync!" |
-    "upd"
+    "upd" | "demo" | "tutorial"
   }
 
   Symbol { identStart identChar* }

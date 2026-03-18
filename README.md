@@ -101,6 +101,10 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(sample-banks)` | List all currently registered sample bank names |
 | `(load-plugin url)` | Load a visual or effect plugin from a URL |
 | `(stop)` | Stop playback |
+| `(demo :techno)` | Load and play a starter template (`:techno`, `:ambient`, `:dnb`, `:minimal`, `:house`, `:dub`, `:experimental`) |
+| `(demo)` | List all available demo templates |
+| `(tutorial)` | Load tutorial chapter 1 into the editor (does not auto-play) |
+| `(tutorial 3)` | Load tutorial chapter 3 (chapters 1–8) |
 
 ### Sound values
 

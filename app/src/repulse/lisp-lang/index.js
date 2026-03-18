@@ -6,6 +6,7 @@ import { rainbowBrackets } from "./rainbow.js";
 import { builtinCompletions } from "./completions.js";
 import { defsCompletionSource } from "./defs-completion.js";
 import { keywordsCompletionSource } from "./keywords-completion.js";
+import { lispHoverTooltip } from "./hover.js";
 
 const lispParser = parser.configure({
   props: [
@@ -26,6 +27,7 @@ export const lispLanguage = new LanguageSupport(
   LRLanguage.define({ parser: lispParser, languageData: { commentTokens: { line: ";" } } }),
   [
     rainbowBrackets,
+    lispHoverTooltip,
     autocompletion({ override: [builtinCompletions, defsCompletionSource, keywordsCompletionSource] }),
   ]
 );

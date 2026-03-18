@@ -218,6 +218,337 @@
     (.mount plugin panel)
     (.remove (.-classList panel) "hidden")))
 
+;;; ── Demo templates ────────────────────────────────────────────────────
+
+(def demo-templates
+  {:techno
+   {:bpm 130
+    :code
+";; TECHNO — four-on-the-floor kick, offbeat hats, snare on 2/4, acid bassline
+(bpm 130)
+
+(play :kick
+  (seq :bd :bd :bd :bd))
+
+(play :hat
+  (->> (fast 2 (seq :_ :oh :_ :oh))
+       (amp (seq 0.5 0.7 0.5 0.9))))
+
+(play :snare
+  (seq :_ :sd :_ :sd))
+
+(play :bass
+  (->> (scale :minor :c2 (seq 0 0 3 5))
+       (fast 2)
+       (decay 0.15)
+       (amp 0.8)))
+"}
+
+   :ambient
+   {:bpm 72
+    :code
+";; AMBIENT — slow pad chords with reverb, gentle melodic line
+(bpm 72)
+
+(play :pad
+  (->> (chord :minor7 :a3)
+       (amp 0.3)
+       (attack 0.4)
+       (decay 3.0)))
+
+(play :melody
+  (->> (scale :minor :a4 (seq 0 2 4 7 4 2))
+       (slow 2)
+       (amp 0.4)
+       (attack 0.1)
+       (decay 1.5)))
+
+(play :pulse
+  (->> (seq :c5 :_ :e5 :_)
+       (slow 4)
+       (amp 0.15)
+       (decay 0.8)))
+"}
+
+   :dnb
+   {:bpm 174
+    :code
+";; DRUM & BASS — fast breakbeat, sub bass, amen-style rhythm
+(bpm 174)
+
+(play :break
+  (seq :bd :_ :_ :bd :_ :_ :sd :_
+       :bd :_ :bd :_ :_ :sd :_ :_))
+
+(play :hat
+  (->> (fast 2 (seq :hh :hh :oh :hh))
+       (amp (seq 0.6 0.4 0.8 0.4))))
+
+(play :sub
+  (->> (scale :minor :e1 (seq 0 :_ 0 :_ 3 :_ 5 :_))
+       (amp 0.9)
+       (decay 0.2)))
+"}
+
+   :minimal
+   {:bpm 120
+    :code
+";; MINIMAL — sparse kick, subtle hi-hats, one-note bass
+(bpm 120)
+
+(play :kick
+  (seq :bd :_ :_ :_ :bd :_ :_ :_))
+
+(play :hat
+  (->> (seq :_ :hh :_ :hh :_ :hh :_ :_)
+       (amp 0.35)))
+
+(play :bass
+  (->> (pure :c2)
+       (amp 0.6)
+       (decay 0.12)))
+"}
+
+   :house
+   {:bpm 124
+    :code
+";; HOUSE — classic four-on-the-floor, organ stab chords, open hat
+(bpm 124)
+
+(play :kick
+  (seq :bd :bd :bd :bd))
+
+(play :hat
+  (->> (seq :_ :oh :_ :oh)
+       (amp 0.5)))
+
+(play :clap
+  (seq :_ :sd :_ :sd))
+
+(play :chord
+  (->> (every 4 (fast 2) (chord :dom7 :c4))
+       (amp 0.4)
+       (attack 0.02)
+       (decay 0.25)))
+
+(play :bass
+  (->> (scale :minor :c2 (seq 0 0 3 0 5 0 3 0))
+       (amp 0.7)
+       (decay 0.1)))
+"}
+
+   :dub
+   {:bpm 140
+    :code
+";; DUB — heavy bass, delay-heavy snare, sparse hats
+(bpm 140)
+
+(play :kick
+  (seq :bd :_ :_ :_ :_ :_ :bd :_))
+
+(play :snare
+  (->> (seq :_ :_ :_ :sd :_ :_ :_ :_)
+       (amp 0.8)
+       (decay 0.3)))
+
+(play :hat
+  (->> (seq :_ :hh :_ :_ :_ :_ :hh :_)
+       (amp 0.3)))
+
+(play :bass
+  (->> (scale :minor :g1 (seq 0 :_ :_ 0 :_ 3 :_ :_))
+       (amp 0.9)
+       (attack 0.01)
+       (decay 0.4)))
+"}
+
+   :experimental
+   {:bpm 110
+    :code
+";; EXPERIMENTAL — algorithmic patterns using every, rev, fmap
+(bpm 110)
+
+(play :rhythm
+  (every 3 rev
+    (seq :bd :_ :sd :_ :bd :bd :_ :sd)))
+
+(play :texture
+  (->> (every 2 (fast 2) (seq :hh :oh :hh :_))
+       (amp (seq 0.3 0.6 0.4 0.8))))
+
+(play :melody
+  (->> (scale :dorian :d3 (seq 0 2 4 6 7 4 2 0))
+       (every 4 rev)
+       (every 3 (fast 2))
+       (amp 0.5)
+       (decay 0.6)))
+
+(play :drone
+  (->> (chord :sus4 :d2)
+       (amp 0.2)
+       (attack 0.5)
+       (decay 2.5)))
+"}})
+
+;;; ── Tutorial chapters ──────────────────────────────────────────────────
+
+(def tutorial-chapters
+  [
+   ;; Chapter 1: First sound
+   ";; === Tutorial 1/8 — First Sound ===
+;;
+;; Welcome to REPuLse! Let's make some noise.
+;;
+;; `seq` creates a sequence of sounds.  Each value plays
+;; for one equal subdivision of the cycle:
+;;   :bd = bass drum   :sd = snare   :hh = hi-hat
+;;
+;; Press Alt+Enter (Option+Enter on Mac) to hear this:
+
+(seq :bd :sd :bd :sd)
+
+;; Try changing :sd to :hh and press Alt+Enter again.
+;; When you're ready, type (tutorial 2) in the command bar."
+
+   ;; Chapter 2: Layering
+   ";; === Tutorial 2/8 — Layering with stack ===
+;;
+;; `stack` plays multiple patterns at the same time.
+;; Each pattern runs in parallel, like tracks in a mixer.
+
+(stack
+  (seq :bd :_ :bd :_)
+  (seq :_ :sd :_ :sd)
+  (seq :hh :hh :hh :hh))
+
+;; :_ is a rest — silence for that step.
+;; Try adding a fourth layer!
+;; Next: (tutorial 3)"
+
+   ;; Chapter 3: Speed
+   ";; === Tutorial 3/8 — Speed: fast & slow ===
+;;
+;; `fast` speeds up a pattern by a factor.
+;; `slow` does the opposite.
+
+(stack
+  (seq :bd :_ :bd :_)
+  (fast 2 (seq :hh :oh))
+  (slow 2 (seq :sd :_ :_ :_)))
+
+;; (fast 2 pat) plays pat twice per cycle.
+;; (slow 2 pat) stretches pat over two cycles.
+;; Try (fast 4 (seq :hh :oh)) for rapid hi-hats.
+;; Next: (tutorial 4)"
+
+   ;; Chapter 4: Evolution
+   ";; === Tutorial 4/8 — Evolution: every ===
+;;
+;; `every` applies a transformation only on certain cycles.
+;; (every N transform pattern) — transform every Nth cycle.
+
+(stack
+  (every 4 (fast 2) (seq :bd :_ :bd :_))
+  (seq :_ :sd :_ :sd)
+  (every 3 rev (seq :hh :oh :hh :_)))
+
+;; The kick doubles speed every 4th cycle.
+;; The hats reverse every 3rd cycle.
+;; This is how patterns stay alive without manual changes.
+;; Next: (tutorial 5)"
+
+   ;; Chapter 5: Naming
+   ";; === Tutorial 5/8 — Naming: def ===
+;;
+;; `def` binds a name to a value. Use it to build
+;; a vocabulary of reusable parts.
+
+(def kick  (seq :bd :_ :bd :_))
+(def snare (seq :_ :sd :_ :sd))
+(def hat   (fast 2 (seq :hh :oh)))
+
+(stack kick snare hat)
+
+;; Now you can refer to `kick`, `snare`, `hat` by name.
+;; Try: (def kick (seq :bd :bd :_ :bd)) and re-evaluate.
+;; Next: (tutorial 6)"
+
+   ;; Chapter 6: Multi-track
+   ";; === Tutorial 6/8 — Multi-Track: play ===
+;;
+;; `play` starts a named track.  Each track runs
+;; independently — you can update one without stopping others.
+
+(play :kick
+  (seq :bd :_ :bd :bd))
+
+(play :snare
+  (seq :_ :sd :_ :sd))
+
+(play :hat
+  (fast 2 (seq :hh :oh)))
+
+;; In the command bar, try:
+;;   (mute! :hat)     — silence the hats
+;;   (unmute! :hat)   — bring them back
+;;   (solo! :kick)    — hear only the kick
+;;   (clear!)         — stop everything
+;; Next: (tutorial 7)"
+
+   ;; Chapter 7: Melody
+   ";; === Tutorial 7/8 — Melody: scale & chord ===
+;;
+;; Note keywords like :c4 play pitched tones.
+;; `scale` maps degree numbers (0, 1, 2, …) to a musical scale.
+;; `chord` stacks the tones of a chord.
+
+(play :bass
+  (scale :minor :c3 (seq 0 0 3 5)))
+
+(play :chords
+  (slow 2 (chord :minor :c4)))
+
+(play :melody
+  (scale :minor :c4 (seq 0 2 4 7 4 2)))
+
+(play :kick
+  (seq :bd :bd :bd :bd))
+
+;; Try changing :minor to :dorian or :blues.
+;; Try (transpose 5 ...) around the melody.
+;; Next: (tutorial 8)"
+
+   ;; Chapter 8: Expression
+   ";; === Tutorial 8/8 — Expression: amp, decay, ->> ===
+;;
+;; Per-event parameters make patterns expressive.
+;; `->>` threads a pattern through a chain of transformers.
+
+(play :kick
+  (->> (seq :bd :bd :bd :bd)
+       (amp (seq 0.9 0.5 0.7 0.5))))
+
+(play :lead
+  (->> (scale :minor :c4 (seq 0 2 4 7 4 2 0 :_))
+       (amp 0.6)
+       (attack 0.02)
+       (decay 0.5)))
+
+(play :pad
+  (->> (chord :minor7 :c3)
+       (amp 0.25)
+       (attack 0.3)
+       (decay 2.0)))
+
+;; (amp val) sets amplitude 0.0–1.0
+;; (attack secs) sets onset time
+;; (decay secs) sets fade time
+;; (pan pos) sets stereo position -1.0 to 1.0
+;;
+;; That's the basics! Try (demo :techno) or (demo :experimental)
+;; to hear full compositions, or start writing your own."
+])
+
 (defn make-stop-fn []
   (fn []
     (audio/stop!)
@@ -356,7 +687,45 @@
                              (doseq [[k v] (partition 2 rest-args)]
                                (fx/set-param! effect-name (cljs.core/name k) v))
                              (fx/set-param! effect-name "value" (first rest-args))))))
-                     nil)))
+                     nil)
+                   ;; --- Demo templates ---
+                   "demo"
+                   (fn [& args]
+                     (let [kw (when (seq args) (leval/unwrap (first args)))]
+                       (if (nil? kw)
+                         (str "available demos: "
+                              (cstr/join " " (map #(str ":" (name %))
+                                                  (sort (keys demo-templates)))))
+                         (if-let [{:keys [bpm code]} (get demo-templates kw)]
+                           (do
+                             (audio/set-bpm! bpm)
+                             (when-let [view @editor-view]
+                               (.dispatch view
+                                          #js {:changes #js {:from 0
+                                                             :to   (.. view -state -doc -length)
+                                                             :insert code}})
+                               (js/setTimeout #(evaluate! code) 50))
+                             (str "=> loaded demo :" (name kw)))
+                           (str "unknown demo :" (name kw)
+                                " — available: "
+                                (cstr/join " " (map #(str ":" (name %))
+                                                    (sort (keys demo-templates)))))))))
+                   ;; --- Interactive tutorial ---
+                   "tutorial"
+                   (fn [& args]
+                     (let [n   (if (seq args) (int (leval/unwrap (first args))) 1)
+                           idx (dec n)]
+                       (if (and (>= idx 0) (< idx (count tutorial-chapters)))
+                         (let [code (nth tutorial-chapters idx)]
+                           (when-let [view @editor-view]
+                             (.dispatch view
+                                        #js {:changes #js {:from 0
+                                                           :to   (.. view -state -doc -length)
+                                                           :insert code}}))
+                           (str "=> tutorial chapter " n "/" (count tutorial-chapters)
+                                " — press Alt+Enter to play"))
+                         (str "tutorial has chapters 1–" (count tutorial-chapters)
+                              " — try (tutorial 1)"))))))
     ;; Snapshot built-in names so render-context-panel! can filter them out
     (reset! builtin-names (set (keys @env-atom)))))
 
