@@ -408,6 +408,10 @@ No new language features; pure UX and documentation.
 
 See full spec: [PROMPTS/phase-j-onboarding.md](PROMPTS/phase-j-onboarding.md)
 
+**Backlog:**
+- [ ] Expand tutorials beyond the current 8 chapters to cover **all** built-in functions and effects — euclidean, cat, late/early, sometimes/often/rarely, degrade, choose/wchoose, jux/off, arrange/play-scenes, fx (reverb, delay, filter, compressor, chorus, phaser, tremolo, overdrive, bitcrusher, dattorro), samples!/bank/sound, and MIDI sync
+- [ ] Add more demo templates covering additional genres and showcasing uncovered features
+
 ---
 
 ## Phase K — Mini-Notation & Sharing 📋 *planned*
