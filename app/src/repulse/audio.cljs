@@ -77,7 +77,10 @@
 ;;; Synthesized voices (JS fallback when AudioWorklet is unavailable)
 
 (defn- output-node [ac]
-  (or @master-gain (.-destination ac)))
+  ;; OfflineAudioContext has no master-gain — route directly to its destination.
+  (if (instance? js/OfflineAudioContext ac)
+    (.-destination ac)
+    (or @master-gain (.-destination ac))))
 
 (defn- make-kick [ac t amp pan]
   (let [osc    (.createOscillator ac)
@@ -209,60 +212,76 @@
      (make-sine ac t 440 1.5 amp 0.001 pan))))
 
 (defn play-event [ac t value]
-  (cond
-    ;; Silence / rest
-    (= value :_) nil
+  ;; OfflineAudioContext has no worklet — skip to JS fallbacks for rendering.
+  (let [offline? (instance? js/OfflineAudioContext ac)]
+    (cond
+      ;; Silence / rest
+      (= value :_) nil
 
-    ;; Parameter map {:note … :amp … :attack … :decay … :pan …}
-    ;; from amp/attack/decay/release/pan transformers
-    (and (map? value) (:note value))
-    (let [note     (:note value)
-          amp-v    (float (:amp value 1.0))
-          attack-v (float (:attack value 0.001))
-          decay-v  (float (:decay value 1.5))
-          pan-v    (float (:pan value 0.0))]
-      (cond
-        (= note :_) nil
-        (keyword? note)
-        (if (theory/note-keyword? note)
-          (let [hz (theory/note->hz note)]
-            (or (worklet-trigger-v2! (str hz) t amp-v attack-v decay-v pan-v)
-                (make-sine ac t hz decay-v amp-v attack-v pan-v)))
-          (let [resolved (samples/resolve-keyword note)]
-            (cond
-              (samples/has-bank? resolved) (samples/play! ac t resolved 0 amp-v pan-v)
-              :else (or (worklet-trigger-v2! (name note) t amp-v attack-v decay-v pan-v)
-                        (js-synth ac t note amp-v pan-v)))))
-        (number? note)
-        (or (worklet-trigger-v2! (str note) t amp-v attack-v decay-v pan-v)
-            (make-sine ac t note decay-v amp-v attack-v pan-v))))
-
-    ;; Map {:bank :bd :n 2} from (sound :bd 2) — always use samples
-    (and (map? value) (:bank value))
-    (let [{:keys [bank n]} value]
-      (if (samples/has-bank? bank)
-        (samples/play! ac t bank n)
-        (or (worklet-trigger! (name bank) t)
-            (make-sine ac t 440))))
-
-    ;; Keyword — note name (c4, eb3, …) → Hz tone, or bank prefix → sample → synth fallback
-    (keyword? value)
-    (if (theory/note-keyword? value)
-      (let [hz (theory/note->hz value)]
-        (or (worklet-trigger! (str hz) t)
-            (make-sine ac t hz)))
-      (let [resolved (samples/resolve-keyword value)]
+      ;; Parameter map {:note … :amp … :attack … :decay … :pan …}
+      ;; from amp/attack/decay/release/pan transformers
+      (and (map? value) (:note value))
+      (let [note     (:note value)
+            amp-v    (float (:amp value 1.0))
+            attack-v (float (:attack value 0.001))
+            decay-v  (float (:decay value 1.5))
+            pan-v    (float (:pan value 0.0))]
         (cond
-          (samples/has-bank? resolved) (samples/play! ac t resolved 0)
-          :else (or (worklet-trigger! (name value) t)
-                    (js-synth ac t value)))))
+          (= note :_) nil
+          (keyword? note)
+          (if (theory/note-keyword? note)
+            (let [hz (theory/note->hz note)]
+              (if offline?
+                (make-sine ac t hz decay-v amp-v attack-v pan-v)
+                (or (worklet-trigger-v2! (str hz) t amp-v attack-v decay-v pan-v)
+                    (make-sine ac t hz decay-v amp-v attack-v pan-v))))
+            (let [resolved (samples/resolve-keyword note)]
+              (cond
+                (samples/has-bank? resolved) (samples/play! ac t resolved 0 amp-v pan-v)
+                :else (if offline?
+                        (js-synth ac t note amp-v pan-v)
+                        (or (worklet-trigger-v2! (name note) t amp-v attack-v decay-v pan-v)
+                            (js-synth ac t note amp-v pan-v))))))
+          (number? note)
+          (if offline?
+            (make-sine ac t note decay-v amp-v attack-v pan-v)
+            (or (worklet-trigger-v2! (str note) t amp-v attack-v decay-v pan-v)
+                (make-sine ac t note decay-v amp-v attack-v pan-v)))))
 
-    ;; Number — frequency in Hz
-    (number? value)
-    (or (worklet-trigger! (str value) t)
-        (make-sine ac t value))
+      ;; Map {:bank :bd :n 2} from (sound :bd 2) — always use samples
+      (and (map? value) (:bank value))
+      (let [{:keys [bank n]} value]
+        (if (samples/has-bank? bank)
+          (samples/play! ac t bank n)
+          (if offline?
+            (make-sine ac t 440)
+            (or (worklet-trigger! (name bank) t)
+                (make-sine ac t 440)))))
 
-    :else (make-sine ac t 440)))
+      ;; Keyword — note name (c4, eb3, …) → Hz tone, or bank prefix → sample → synth fallback
+      (keyword? value)
+      (if (theory/note-keyword? value)
+        (let [hz (theory/note->hz value)]
+          (if offline?
+            (make-sine ac t hz)
+            (or (worklet-trigger! (str hz) t)
+                (make-sine ac t hz))))
+        (let [resolved (samples/resolve-keyword value)]
+          (cond
+            (samples/has-bank? resolved) (samples/play! ac t resolved 0)
+            :else (if offline?
+                    (js-synth ac t value)
+                    (or (worklet-trigger! (name value) t)
+                        (js-synth ac t value))))))
+
+      ;; Number — frequency in Hz
+      (number? value)
+      (if offline?
+        (make-sine ac t value)
+        (or (worklet-trigger! (str value) t)
+            (make-sine ac t value)))
+
+      :else (make-sine ac t 440))))
 
 ;;; Scheduler state
 

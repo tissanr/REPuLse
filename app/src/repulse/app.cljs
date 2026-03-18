@@ -770,16 +770,24 @@
                    ;; --- WAV export ---
                    "export"
                    (fn [& args]
-                     (let [n-cycles  (or (when (seq args) (leval/unwrap (first args))) 4)
+                     (let [arg       (when (seq args) (leval/unwrap (first args)))
+                           n-cycles  (if (number? arg) (int arg) 4)
+                           track-kw  (when (keyword? arg) arg)
                            state     @audio/scheduler-state
-                           tracks    (:tracks state)
+                           all-tracks (:tracks state)
+                           tracks    (cond
+                                       (nil? track-kw) all-tracks
+                                       (contains? all-tracks track-kw) {track-kw (get all-tracks track-kw)}
+                                       :else {})
                            cycle-dur (:cycle-dur state)
                            duration  (* n-cycles cycle-dur)
                            sr        44100
                            n-frames  (int (* sr duration))
                            offline   (js/OfflineAudioContext. 2 n-frames sr)]
                        (if (empty? tracks)
-                         "Error: no active tracks to export"
+                         (if track-kw
+                           (str "Error: no track :" (name track-kw))
+                           "Error: no active tracks to export")
                          (do
                            ;; Schedule all events for N cycles into the offline context
                            (doseq [c (range n-cycles)]
@@ -837,12 +845,18 @@
                                                 url  (.createObjectURL js/URL blob)
                                                 a    (.createElement js/document "a")]
                                             (set! (.-href a) url)
-                                            (set! (.-download a) (str "repulse-" n-cycles "cycles.wav"))
+                                            (set! (.-download a) (str "repulse-"
+                                                                       (if track-kw (name track-kw) "all")
+                                                                       "-" n-cycles "cycles.wav"))
+                                            (.appendChild (.-body js/document) a)
                                             (.click a)
-                                            (.revokeObjectURL js/URL url)))))
+                                            (.removeChild (.-body js/document) a)
+                                            (js/setTimeout #(.revokeObjectURL js/URL url) 1000)))))
                                (.catch (fn [e]
                                          (js/console.error "[REPuLse] export failed:" e))))
-                           (str "exporting " n-cycles " cycles…")))))))
+                           (str "exporting "
+                                (if track-kw (str ":" (name track-kw)) "all tracks")
+                                " — " n-cycles " cycles…")))))))
     ;; Snapshot built-in names so render-context-panel! can filter them out
     (reset! builtin-names (set (keys @env-atom)))))
 

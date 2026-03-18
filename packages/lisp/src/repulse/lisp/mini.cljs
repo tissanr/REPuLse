@@ -21,7 +21,7 @@
 ;;   :question       ?
 ;;   :colon          :
 ;;   :at             @
-;;   :atom           (with :text field — the raw word)
+;;   :atom           (with :text, :str-from, :str-to — positions within the string)
 
 (defn- whitespace? [ch]
   (contains? #{\space \tab \newline \return} ch))
@@ -30,7 +30,8 @@
   (contains? #{\[ \] \< \> \* \? \: \@} ch))
 
 (defn- tokenise
-  "Scan a mini-notation string into a flat sequence of tokens."
+  "Scan a mini-notation string into a flat sequence of tokens.
+   :atom tokens carry :str-from/:str-to — character offsets within s."
   [s]
   (loop [i 0, tokens []]
     (if (>= i (count s))
@@ -58,7 +59,8 @@
                         j
                         (recur (inc j))))
                 word (subs s i end)]
-            (recur end (conj tokens {:type :atom :text word}))))))))
+            (recur end (conj tokens {:type :atom :text word
+                                     :str-from i :str-to end}))))))))
 
 ;;; ── Parser ─────────────────────────────────────────────────────────
 
@@ -104,13 +106,18 @@
 
 (defn- parse-atom
   "Parse a single atom token (not brackets/angles), then consume any suffixes.
-   Returns [ast-node next-pos]."
+   Returns [ast-node next-pos].
+   :str-from/:str-to on the node are the character offsets of the base atom within
+   the mini-notation string (used to compute per-token highlight ranges)."
   [tokens pos]
   (let [tok      (nth tokens pos)
         base-val (atom-value (:text tok))
+        str-from (:str-from tok)
+        str-to   (:str-to tok)
         pos      (inc pos)]
     ;; Consume suffixes: * ? : @
-    (loop [node {:type :atom :value base-val :weight 1}
+    (loop [node {:type :atom :value base-val :weight 1
+                 :str-from str-from :str-to str-to}
            p    pos]
       (let [tok (peek-token tokens p)]
         (cond
@@ -222,8 +229,12 @@
 ;; We cannot use core/seq* for sequences of patterns because core/seq*
 ;; stores its arguments as event *values*, not as child patterns to be
 ;; queried. We need seq-of-pats which sequences patterns in time slots.
-
-(declare compile-node)
+;;
+;; base-offset: absolute editor position of the first character inside the
+;; mini-notation string (position after the opening "). When non-nil, each
+;; :atom node computes its source range as {:from base-offset+str-from
+;;                                          :to   base-offset+str-to}
+;; so the exact token highlights during playback (not the whole string).
 
 (defn alt*
   "Alternation: on cycle N, play the (mod N count)-th pattern."
@@ -237,7 +248,7 @@
 
 (defn- scale-events
   "Query pat within [0,1) and scale/shift event times into [slot-sf, slot-ef).
-   Clips the :part span to [sp-sf, sp-ef)."
+   Clips the :part span to [sp-sf, sp-ef). Preserves :source on events."
   [pat slot-sf slot-ef sp-sf sp-ef]
   (let [raw-evs (core/query pat {:start [0 1] :end [1 1]})
         dur     (- slot-ef slot-sf)]
@@ -314,15 +325,21 @@
     (fn [sp]
       (filter (fn [_] (> (Math/random) 0.5)) (core/query pat sp)))))
 
-(defn- compile-node
-  "Compile an AST node to a Pattern."
-  [node]
+(defn- compile-ast
+  "Compile an AST node to a Pattern.
+   base-offset: absolute editor position after the opening quote of the
+   mini-notation string. When provided, :atom events carry per-token
+   :source ranges so individual tokens flash during playback."
+  [node base-offset]
   (case (:type node)
     :atom
-    (let [v (:value node)]
+    (let [v      (:value node)
+          source (when (and base-offset (:str-from node))
+                   {:from (+ base-offset (:str-from node))
+                    :to   (+ base-offset (:str-to node))})]
       (if (:sample-index node)
-        (core/pure {:bank v :n (:sample-index node)})
-        (core/pure v)))
+        (core/pure {:bank v :n (:sample-index node)} source)
+        (core/pure v source)))
 
     :rest
     (core/pure :_)
@@ -334,15 +351,15 @@
         (core/pattern (fn [_] []))
 
         (= 1 (count children))
-        (compile-node (first children))
+        (compile-ast (first children) base-offset)
 
         :else
         (let [total-weight (reduce + (map #(or (:weight %) 1) children))
               all-unit?    (every? #(= 1 (or (:weight %) 1)) children)]
           (if all-unit?
-            (seq-of-pats (mapv compile-node children))
+            (seq-of-pats (mapv #(compile-ast % base-offset) children))
             (let [pairs (mapv (fn [child]
-                                {:pat    (compile-node child)
+                                {:pat    (compile-ast child base-offset)
                                  :weight (or (:weight child) 1)})
                               children)]
               (weighted-seq* pairs total-weight))))))
@@ -350,16 +367,16 @@
     :alt
     (let [children (:children node)]
       (if (= 1 (count children))
-        (compile-node (first children))
-        (alt* (mapv compile-node children))))
+        (compile-ast (first children) base-offset)
+        (alt* (mapv #(compile-ast % base-offset) children))))
 
     :repeat
-    (let [child-pat (compile-node (:child node))
+    (let [child-pat (compile-ast (:child node) base-offset)
           times     (:times node)]
       (core/fast times child-pat))
 
     :degrade
-    (degrade (compile-node (:child node)))
+    (degrade (compile-ast (:child node) base-offset))
 
     ;; Fallback
     (core/pure :_)))
@@ -368,8 +385,14 @@
 
 (defn parse
   "Parse a mini-notation string and return a Pattern.
-   (parse \"bd sd [hh hh] bd\")  → pattern equivalent to (seq :bd :sd (seq :hh :hh) :bd)"
-  [s]
-  (let [tokens  (tokenise s)
-        [ast _] (parse-sequence tokens 0)]
-    (compile-node ast)))
+   (parse \"bd sd [hh hh] bd\")  → pattern equivalent to (seq :bd :sd (seq :hh :hh) :bd)
+
+   base-offset (optional): absolute editor position of the first character
+   inside the string (i.e. one past the opening quote). When provided,
+   each token in the pattern carries a :source range pointing to its exact
+   position in the editor so it highlights individually during playback."
+  ([s] (parse s nil))
+  ([s base-offset]
+   (let [tokens  (tokenise s)
+         [ast _] (parse-sequence tokens 0)]
+     (compile-ast ast base-offset))))

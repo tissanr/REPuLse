@@ -218,15 +218,9 @@
      "comp"    (fn [& fs] (apply comp fs))
      ;; Mini-notation
      "~"       (fn [s]
-                 (let [src (source-of s)
-                       pat (mini/parse (unwrap s))]
-                   (if src
-                     ;; Tag every event with the source position of the string
-                     ;; so the mini-notation string flashes during playback.
-                     (core/pattern (fn [sp]
-                                     (map #(assoc % :source src)
-                                          (core/query pat sp))))
-                     pat)))
+                 (let [src         (source-of s)
+                       base-offset (when src (inc (:from src)))]
+                   (mini/parse (unwrap s) base-offset)))
      "alt"     (fn [& pats] (mini/alt* (mapv unwrap pats)))
      ;; Sound helpers
      "sound"  (fn [bank n] {:bank (unwrap bank) :n (or (unwrap n) 0)})
