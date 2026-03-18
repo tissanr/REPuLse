@@ -204,7 +204,7 @@ To verify UI changes, describe what to check or ask the user to reload the brows
 | 4     | Named tracks, command bar, tap BPM, MIDI clock, session URLs   | ✓ delivered  |
 | I     | Pattern combinators — euclidean, cat, late, sometimes, jux, off | ✓ delivered  |
 | J     | Onboarding — demo templates, hover docs, interactive tutorial  | ✓ delivered  |
-| K     | Mini-notation & sharing — `(~ "bd sd")`, gist import, WAV export | planned    |
+| K     | Mini-notation & sharing — `(~ "bd sd")`, gist import, WAV export | ✓ delivered |
 | L     | Per-track audio — track FX chains, sample params, sidechain   | planned      |
 | M     | Lisp superpowers — defsynth, defmacro, loop/recur, rationals  | planned      |
 | N     | MIDI & I/O — controller input, note out, clock out, Freesound | planned      |

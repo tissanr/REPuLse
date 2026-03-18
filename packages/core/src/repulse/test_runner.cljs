@@ -3,8 +3,9 @@
             [repulse.core-test]
             [repulse.theory-test]
             [repulse.params-test]
-            [repulse.lisp.eval-test]))
+            [repulse.lisp.eval-test]
+            [repulse.lisp.mini-test]))
 
 (defn main []
   (test/run-tests 'repulse.core-test 'repulse.theory-test 'repulse.params-test
-                  'repulse.lisp.eval-test))
+                  'repulse.lisp.eval-test 'repulse.lisp.mini-test))

@@ -75,6 +75,10 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(release 0.5 pat)` | Envelope release time in seconds |
 | `(pan -0.5 pat)` | Stereo panning -1.0 (left) to 1.0 (right) |
 | `(comp f g …)` | Compose transformers right-to-left: `(def pluck (comp (amp 0.8) (decay 0.15)))` |
+| `(~ "bd sd [hh hh] bd")` | Mini-notation: compact string syntax for patterns (see below) |
+| `(alt p1 p2 p3)` | Alternation: cycle 0 plays p1, cycle 1 plays p2, etc. |
+| `(load-gist url)` | Load a GitHub Gist into the editor and auto-evaluate |
+| `(export 4)` | Render 4 cycles to a downloadable WAV file |
 | `(arrange [[p 4] [q 8]])` | Play sections in order for N cycles each, then loop |
 | `(play-scenes [p q r])` | Play each pattern for 1 cycle in sequence, then loop |
 | `(bpm 140)` | Set the tempo in BPM (default: 120) |
@@ -173,6 +177,30 @@ Tidal Drum Machines) are loaded at startup. Use `(sound :bd 2)` for indexed acce
 
 ; Arithmetic
 (fast (+ 1 1) (seq :bd :sd))
+```
+
+### Mini-notation
+
+`~` parses a compact string into a pattern, composing with all other functions:
+
+| Syntax | Example | Meaning |
+|---|---|---|
+| space-separated | `"bd sd hh"` | sequence of 3 equal slots |
+| `[…]` | `"bd [sd hh]"` | subdivision — contents share one parent slot |
+| `*N` | `"hh*4"` | repeat N times |
+| `<…>` | `"<bd sd cp>"` | alternation — cycle N picks element mod N |
+| `~` or `_` | `"bd ~ sd"` | rest / silence (`:_`) |
+| `?` | `"bd?"` | 50% probability of playing |
+| `:N` | `"bd:2"` | sample index (`{:bank :bd :n 2}`) |
+| `@N` | `"bd@3 sd"` | weight — bd takes 3 units, sd takes 1 |
+| bare number | `"440"` | numeric value |
+| note name | `"c4 eb3"` | keyword (`:c4`, `:eb3`) |
+
+```lisp
+(~ "bd [sd hh] bd sd")                        ; subdivision
+(->> (~ "c4 e4 g4") (amp 0.6) (attack 0.02))  ; with params
+(fast 2 (~ "bd sd"))                           ; with transformers
+(stack (~ "bd _ bd _") (~ "_ sd _ sd"))        ; stacked
 ```
 
 ---
