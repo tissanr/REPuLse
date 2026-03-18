@@ -193,6 +193,23 @@
           (is (= 1 (count evs)))
           (is (contains? #{:bd :sd :hh} (:value (first evs)))))))))
 
+(deftest choose-attaches-source
+  (testing "choose attaches :source from the sources vector to events"
+    (let [srcs [{:from 0 :to 3} {:from 4 :to 7} {:from 8 :to 11} {:from 12 :to 15}]
+          pat  (c/choose [:a :b :c :d] srcs)]
+      (doseq [cy (range 20)]
+        (let [ev  (first (c/query pat (c/cycle-span cy)))
+              idx (mod (c/cycle-hash cy) 4)]
+          (is (= (nth srcs idx) (:source ev))))))))
+
+(deftest wchoose-attaches-source
+  (testing "wchoose attaches :source from the sources vector to events"
+    (let [srcs [{:from 0 :to 3} {:from 4 :to 7} {:from 8 :to 11}]
+          pat  (c/wchoose [[0.5 :bd] [0.3 :sd] [0.2 :hh]] srcs)]
+      (doseq [cy (range 20)]
+        (let [ev (first (c/query pat (c/cycle-span cy)))]
+          (is (contains? (set srcs) (:source ev))))))))
+
 (deftest off-layers-original-and-shifted
   (testing "off produces events from both original and transformed copy"
     (let [pat (c/off 0.5 c/rev (c/seq* [:a :b]))

@@ -192,9 +192,14 @@
      "sometimes-by" (fn [prob f p]  (core/sometimes-by (unwrap prob) (unwrap f) (unwrap p)))
      "degrade"      (fn [p]         (core/degrade (unwrap p)))
      "degrade-by"   (fn [prob p]    (core/degrade-by (unwrap prob) (unwrap p)))
-     "choose"       (fn [xs]        (core/choose (mapv unwrap (unwrap xs))))
-     "wchoose"      (fn [pairs]     (core/wchoose (mapv (fn [[w v]] [(unwrap w) (unwrap v)])
-                                                        (unwrap pairs))))
+     "choose"       (fn [xs]
+                      (let [xs' (unwrap xs)]
+                        (core/choose (mapv unwrap xs') (mapv source-of xs'))))
+     "wchoose"      (fn [pairs]
+                      (let [pairs' (unwrap pairs)
+                            srcs   (mapv #(source-of (second %)) pairs')
+                            vecs   (mapv (fn [[w v]] [(unwrap w) (unwrap v)]) pairs')]
+                        (core/wchoose vecs srcs)))
      "jux"          (fn [f p]       (params/jux (unwrap f) (unwrap p)))
      "jux-by"       (fn [w f p]     (params/jux-by (unwrap w) (unwrap f) (unwrap p)))
      "off"          (fn [a f p]     (core/off (unwrap a) (unwrap f) (unwrap p)))

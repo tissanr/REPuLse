@@ -326,43 +326,51 @@
 (defn choose
   "Pick one value from xs per cycle (deterministic based on cycle number).
    Returns a pattern that produces one event per cycle.
-   (choose [:bd :sd :hh :oh])"
-  [xs]
-  (let [n (count xs)]
-    (pattern
-     (fn [{:keys [start end] :as sp}]
-       (let [start-c (int (Math/floor (rat->float start)))
-             end-c   (int (Math/ceil  (rat->float end)))]
-         (for [c (range start-c end-c)
-               :let [idx   (mod (cycle-hash c) n)
-                     whole (cycle-span c)
-                     part  (span-intersect whole (span start end))]
-               :when part]
-           (event (nth xs idx) whole part)))))))
+   (choose [:bd :sd :hh :oh])
+   Optional sources vector attaches :source to events for editor highlighting."
+  ([xs] (choose xs nil))
+  ([xs sources]
+   (let [n (count xs)]
+     (pattern
+      (fn [{:keys [start end] :as sp}]
+        (let [start-c (int (Math/floor (rat->float start)))
+              end-c   (int (Math/ceil  (rat->float end)))]
+          (for [c (range start-c end-c)
+                :let [idx   (mod (cycle-hash c) n)
+                      whole (cycle-span c)
+                      part  (span-intersect whole (span start end))]
+                :when part]
+            (let [base (event (nth xs idx) whole part)
+                  src  (when sources (nth sources idx nil))]
+              (if src (assoc base :source src) base)))))))))
 
 (defn wchoose
   "Weighted random choice per cycle. Takes a vector of [weight value] pairs.
    Weights are relative (don't need to sum to 1.0).
-   (wchoose [[0.5 :bd] [0.3 :sd] [0.2 :hh]])"
-  [pairs]
-  (let [total      (reduce + (map first pairs))
-        cumulative (reductions + (map #(* 100 (/ (first %) total)) pairs))
-        values     (mapv second pairs)]
-    (pattern
-     (fn [{:keys [start end] :as sp}]
-       (let [start-c (int (Math/floor (rat->float start)))
-             end-c   (int (Math/ceil  (rat->float end)))]
-         (for [c (range start-c end-c)
-               :let [h     (cycle-hash c)
-                     idx   (or (first (keep-indexed
-                                        (fn [i thresh]
-                                          (when (< h thresh) i))
-                                        cumulative))
-                               (dec (count values)))
-                     whole (cycle-span c)
-                     part  (span-intersect whole (span start end))]
-               :when part]
-           (event (nth values idx) whole part)))))))
+   (wchoose [[0.5 :bd] [0.3 :sd] [0.2 :hh]])
+   Optional sources vector attaches :source to events for editor highlighting."
+  ([pairs] (wchoose pairs nil))
+  ([pairs sources]
+   (let [total      (reduce + (map first pairs))
+         cumulative (reductions + (map #(* 100 (/ (first %) total)) pairs))
+         values     (mapv second pairs)]
+     (pattern
+      (fn [{:keys [start end] :as sp}]
+        (let [start-c (int (Math/floor (rat->float start)))
+              end-c   (int (Math/ceil  (rat->float end)))]
+          (for [c (range start-c end-c)
+                :let [h     (cycle-hash c)
+                      idx   (or (first (keep-indexed
+                                         (fn [i thresh]
+                                           (when (< h thresh) i))
+                                         cumulative))
+                                (dec (count values)))
+                      whole (cycle-span c)
+                      part  (span-intersect whole (span start end))]
+                :when part]
+            (let [base (event (nth values idx) whole part)
+                  src  (when sources (nth sources idx nil))]
+              (if src (assoc base :source src) base)))))))))
 
 (defn off
   "Layer the original pattern with a time-shifted, transformed copy.

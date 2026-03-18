@@ -62,3 +62,23 @@
       (is (= {:from 14 :to 17} (:source (first evs))))
       ;; :e4 starts at 18, ends at 21
       (is (= {:from 18 :to 21} (:source (second evs)))))))
+
+;;; ── choose / wchoose source propagation ─────────────────────────────
+
+(deftest lisp-choose-attaches-source
+  (testing "choose attaches :source of the chosen element to the event"
+    (let [code "(choose [:a :b :c :d])"
+          ;;    0         1         2
+          ;;    0123456789012345678901
+          ;;    (choose [:a :b :c :d])
+          ;;              ^9 ^12^15^18
+          env  (make-test-env)
+          pat  (:result (lisp/eval-string code env))
+          srcs #{;; :a at 9-11, :b at 12-14, :c at 15-17, :d at 18-20
+                 {:from 9 :to 11} {:from 12 :to 14}
+                 {:from 15 :to 17} {:from 18 :to 20}}]
+      (is (some? pat))
+      ;; Every chosen event must carry a :source pointing to one of the keywords
+      (doseq [cy (range 20)]
+        (let [ev (first (core/query pat (core/cycle-span cy)))]
+          (is (contains? srcs (:source ev))))))))
