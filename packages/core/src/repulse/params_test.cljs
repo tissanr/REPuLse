@@ -109,3 +109,10 @@
         evs   (core/query (pluck (core/pure :e4)) one-cycle)]
     (is (= {:note :e4 :amp 0.9 :attack 0.003 :decay 0.15}
            (:value (first evs))))))
+
+(deftest amp-preserves-source
+  ;; :source must survive amp/attack/decay chains — used for editor highlighting
+  (let [src   {:from 1 :to 3}
+        pat   (core/pure :c4 src)
+        evs   (core/query (params/amp 0.7 pat) one-cycle)]
+    (is (= src (:source (first evs))))))
