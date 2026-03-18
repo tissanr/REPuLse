@@ -2,7 +2,8 @@
   (:require [repulse.core :as core]
             [repulse.theory :as theory]
             [repulse.params :as params]
-            [repulse.lisp.reader :as reader]))
+            [repulse.lisp.reader :as reader]
+            [repulse.lisp.mini :as mini]))
 
 ;;; Source-tracking helpers
 
@@ -215,6 +216,9 @@
      "jux-by"       (fn [w f p]     (params/jux-by (unwrap w) (unwrap f) (unwrap p)))
      "off"          (fn [a f p]     (core/off (unwrap a) (unwrap f) (unwrap p)))
      "comp"    (fn [& fs] (apply comp fs))
+     ;; Mini-notation
+     "~"       (fn [s] (mini/parse (unwrap s)))
+     "alt"     (fn [& pats] (mini/alt* (mapv unwrap pats)))
      ;; Sound helpers
      "sound"  (fn [bank n] {:bank (unwrap bank) :n (or (unwrap n) 0)})
      "bpm"    (fn [b] (bpm-fn (unwrap b)) nil)

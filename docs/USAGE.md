@@ -1123,6 +1123,50 @@ name, a suggestion is shown.
 (stack kick snare hats fill)
 ```
 
+### Mini-notation
+
+```lisp
+;; Mini-notation is a compact string syntax for patterns
+(~ "bd sd hh")               ; ≡ (seq :bd :sd :hh)
+(~ "bd [sd hh]")             ; subdivision: sd and hh share one slot
+(~ "hh*4 sd")                ; repetition: four hats then a snare
+(~ "<bd sd cp>")             ; alternation: cycles through bd → sd → cp
+(~ "bd? sd")                 ; bd plays with ~50% probability
+(~ "bd:2 sd:0")              ; sample index: (sound :bd 2), (sound :sd 0)
+(~ "bd@3 sd")                ; elongation: bd takes ¾ of the cycle
+(~ "c4 e4 g4")               ; note names → keywords (:c4 :e4 :g4)
+(~ "440 330 220")            ; numbers pass through as Hz values
+
+;; Mini-notation composes with all Lisp functions:
+(fast 2 (~ "bd sd"))
+(stack (~ "bd _ bd _") (~ "_ sd _ sd"))
+(->> (~ "c4 e4 g4") (amp 0.6) (attack 0.02))
+(every 4 rev (~ "bd sd hh cp"))
+
+;; alt — cycle-based alternation at the Lisp level
+(alt (seq :bd :bd) (seq :sd :sd))   ; even cycles: bd bd, odd: sd sd
+```
+
+### Gist import
+
+```lisp
+;; Load a GitHub Gist into the editor and auto-evaluate it
+(load-gist "https://gist.github.com/user/abc123def")
+
+;; Raw Gist URL also works
+(load-gist "https://gist.githubusercontent.com/user/id/raw/file.clj")
+```
+
+### WAV export
+
+```lisp
+;; Render 4 cycles of the current tracks to a WAV file and download it
+(export 4)
+
+;; Render 1 cycle (useful for short loops)
+(export 1)
+```
+
 ### Stopping
 
 ```lisp

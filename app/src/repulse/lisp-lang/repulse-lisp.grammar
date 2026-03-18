@@ -31,13 +31,14 @@ Map    { "{" expr* "}" }
     "bpm" | "stop" | "fx" | "load-plugin" | "arrange" | "play-scenes" | "sound" |
     "get" | "assoc" | "merge" | "not" | "and" | "or" | "comp" |
     "play" | "mute!" | "unmute!" | "solo!" | "clear!" | "tracks" | "tap!" | "midi-sync!" |
-    "upd" | "demo" | "tutorial"
+    "upd" | "demo" | "tutorial" |
+    "~" | "alt" | "load-gist" | "export"
   }
 
   Symbol { identStart identChar* }
 
-  identStart { @asciiLetter | "-" | "_" | "!" | "?" | "+" | "*" | "/" | "=" | "<" | ">" | "." | "'" }
-  identChar  { @asciiLetter | @digit | "-" | "_" | "!" | "?" | "+" | "*" | "/" | "=" | "<" | ">" | "." | "'" }
+  identStart { @asciiLetter | "-" | "_" | "!" | "?" | "+" | "*" | "/" | "=" | "<" | ">" | "." | "'" | "~" }
+  identChar  { @asciiLetter | @digit | "-" | "_" | "!" | "?" | "+" | "*" | "/" | "=" | "<" | ">" | "." | "'" | "~" }
 
   @precedence { BuiltinName, Symbol }
 

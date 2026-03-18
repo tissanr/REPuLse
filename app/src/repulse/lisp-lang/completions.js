@@ -39,6 +39,12 @@ const BUILTINS = [
   { label: "jux-by",       type: "function", detail: "(jux-by width f pat) — like jux with adjustable stereo width 0.0–1.0" },
   { label: "off",          type: "function", detail: "(off amount f pat) — layer original with time-shifted transformed copy" },
   { label: "comp",         type: "function", detail: "(comp f g …) — compose transformers right-to-left, e.g. (def pluck (comp (amp 0.8) (decay 0.15)))" },
+  // --- Mini-notation ---
+  { label: "~",            type: "function", detail: "(~ \"bd sd [hh hh] bd\") — parse mini-notation string into pattern" },
+  { label: "alt",          type: "function", detail: "(alt pat-a pat-b …) — cycle-based alternation: play pat-a on cycle 0, pat-b on cycle 1, …" },
+  // --- Sharing ---
+  { label: "load-gist",    type: "function", detail: "(load-gist url) — fetch a Gist and load into editor" },
+  { label: "export",       type: "function", detail: "(export n) — render n cycles to downloadable WAV file" },
   // --- Sound ---
   { label: "sound",        type: "function", detail: "(sound bank n) — select sample n from bank" },
   { label: "bpm",          type: "function", detail: "(bpm n) — set tempo in beats per minute" },

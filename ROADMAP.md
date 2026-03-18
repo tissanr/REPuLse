@@ -414,7 +414,7 @@ See full spec: [PROMPTS/phase-j-onboarding.md](PROMPTS/phase-j-onboarding.md)
 
 ---
 
-## Phase K — Mini-Notation & Sharing 📋 *planned*
+## Phase K — Mini-Notation & Sharing ✅ *delivered*
 
 Tidal/Strudel-compatible mini-notation as opt-in Lisp sugar, plus Gist import and WAV export.
 
@@ -425,6 +425,17 @@ Tidal/Strudel-compatible mini-notation as opt-in Lisp sugar, plus Gist import an
 - `(load-gist url)` — fetch a GitHub Gist and load into the editor
 - `(export n)` — render n cycles of the current pattern to a downloadable WAV file via `OfflineAudioContext`
 - `mini.cljs` has no audio or DOM dependency — pure pattern algebra
+
+**Delivered:**
+- `packages/lisp/src/repulse/lisp/mini.cljs` — tokeniser → recursive-descent parser → compiler to patterns
+- `seq-of-pats` and `weighted-seq*` for pattern sequences (not `core/seq*` which treats args as plain values)
+- `alt*` for cycle-based alternation, `degrade` for 50% probability
+- `float->rat` helper (local, denominator 100000) since `core/float->rat` doesn't exist
+- `~` and `alt` registered in `eval.cljs` `make-env`
+- `load-gist` and `export` registered in `app.cljs` `ensure-env!`
+- Grammar: `~`, `alt`, `load-gist`, `export` added to `BuiltinName`; `~` added to `identStart`/`identChar`
+- 20 new mini-notation unit tests, all passing (96 total, 0 failures)
+- `packages/lisp/src/repulse/lisp/mini_test.cljs` co-located with source (matching project convention)
 
 See full spec: [PROMPTS/phase-k-mini-notation.md](PROMPTS/phase-k-mini-notation.md)
 
