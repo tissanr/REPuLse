@@ -10,20 +10,22 @@
 
 (defn note-keyword?
   "True if kw looks like a note name: a letter a–g, optional accidental (s=sharp, b=flat),
-   and an octave number. Examples: :c4, :eb3, :fs5, :bb4, :cs-1."
+   and an optional octave number (defaults to 4 if omitted).
+   Examples: :c4, :eb3, :fs5, :bb4, :cs-1, :a, :g, :bb."
   [kw]
-  (boolean (re-matches #"[a-g][sb]?-?\d+" (name kw))))
+  (boolean (re-matches #"[a-g][sb]?(-?\d+)?" (name kw))))
 
 (defn note->midi
   "Convert a note keyword to a MIDI note number.
    Convention: C4 = 60, A4 = 69.
    Accidentals: s = sharp (+1), b = flat (−1).
-   Examples: :c4 → 60, :a4 → 69, :eb3 → 51, :fs5 → 78, :bb4 → 70."
+   Octave defaults to 4 if omitted.
+   Examples: :c4 → 60, :a4 → 69, :a → 69, :eb3 → 51, :fs5 → 78, :bb4 → 70."
   [kw]
-  (let [[_ letter acc oct-str] (re-matches #"([a-g])([sb])?(-?\d+)" (name kw))
+  (let [[_ letter acc oct-str] (re-matches #"([a-g])([sb])?(-?\d+)?" (name kw))
         semitone   (get note-semitones letter 0)
         accidental (case acc "s" 1 "b" -1 0)
-        octave     (js/parseInt oct-str 10)]
+        octave     (if oct-str (js/parseInt oct-str 10) 4)]
     (+ semitone accidental (* (+ octave 1) 12))))
 
 (defn midi->hz
