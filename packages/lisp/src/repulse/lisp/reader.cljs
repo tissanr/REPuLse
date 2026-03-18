@@ -12,7 +12,7 @@
   (boolean (re-matches #"[0-9]" (str ch))))
 
 (defn sym-char? [ch]
-  (boolean (re-matches #"[a-zA-Z0-9\-_+*/=<>!?.]" (str ch))))
+  (boolean (re-matches #"[a-zA-Z0-9\-_+*/=<>!?.~]" (str ch))))
 
 (declare read-form)
 
