@@ -278,6 +278,8 @@ npx shadow-cljs compile test && node out/test.js
 | Key | Action |
 |---|---|
 | Ctrl+Enter / Cmd+Enter | Evaluate buffer |
+| Escape | Focus command bar |
+| Ctrl+A / Cmd+A | Select all code (works even when editor is not focused) |
 | Ctrl+Z / Cmd+Z | Undo |
 | Ctrl+Shift+Z / Cmd+Shift+Z | Redo |
 
@@ -290,7 +292,7 @@ commands that shouldn't live in the buffer — `mute!`, `unmute!`, `solo!`, `cle
 | Key | Action |
 |---|---|
 | Enter | Evaluate and clear |
-| Escape | Clear without evaluating |
+| Escape | Clear and return focus to editor |
 
 The command bar has full syntax highlighting and autocompletion (same as the main editor),
 but its content is not saved to `localStorage`.

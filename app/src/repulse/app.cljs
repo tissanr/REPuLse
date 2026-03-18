@@ -65,6 +65,7 @@
 (defonce active-ranges (atom []))
 
 (defonce editor-view (atom nil))
+(defonce cmd-view    (atom nil))
 
 (defn- rebuild-decorations! [view]
   (let [ranges  (sort-by :from @active-ranges)
@@ -497,11 +498,15 @@
                           (evaluate! code)
                           (clear-view! view)))
                       true)
+        clear+return! (fn [view]
+                        (clear-view! view)
+                        (when-let [ev @editor-view] (.focus ev))
+                        true)
         extensions  #js [oneDark
                          lispLanguage
                          (.of keymap #js [#js {:key "Mod-a"  :run selectAll}
                                           #js {:key "Enter"  :run eval-cmd}
-                                          #js {:key "Escape" :run clear-view!}])]
+                                          #js {:key "Escape" :run clear+return!}])]
         state (.. EditorState (create #js {:doc "" :extensions extensions}))
         view  (EditorView. #js {:state state :parent container})]
     view))
@@ -510,7 +515,11 @@
   (let [eval-cmd (fn [view]
                    (on-eval (.. view -state -doc (toString)))
                    true)
-        eval-binding #js {:key "Mod-Enter" :run eval-cmd}
+        eval-binding    #js {:key "Mod-Enter" :run eval-cmd}
+        escape-binding  #js {:key "Escape"
+                             :run (fn [_]
+                                    (when-let [cv @cmd-view] (.focus cv))
+                                    true)}
         extensions #js [(history)
                         (lineNumbers)
                         oneDark
@@ -520,6 +529,7 @@
                         save-listener
                         (.-lineWrapping EditorView)
                         (.of keymap (.concat
+                                     #js [escape-binding]
                                      (clj->js defaultKeymap)
                                      (clj->js historyKeymap)
                                      #js [eval-binding]))]
@@ -602,7 +612,7 @@
               (audio/unmute-track! kw)
               (audio/mute-track! kw)))))
 
-  (make-cmd-editor (el "cmd-container"))
+  (reset! cmd-view (make-cmd-editor (el "cmd-container")))
 
   (let [container (el "editor-container")
         view (make-editor container "(seq :bd :sd :bd :sd)" evaluate!)]
