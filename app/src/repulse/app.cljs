@@ -609,6 +609,22 @@
     (reset! editor-view view)
     (.focus view))
 
+  ;; Global Cmd/Ctrl+A — focus main editor and select all when pressed
+  ;; outside both the main editor and the command bar.
+  (.addEventListener js/document "keydown"
+    (fn [e]
+      (when (and (or (.-metaKey e) (.-ctrlKey e))
+                 (= "a" (.-key e)))
+        (when-let [view @editor-view]
+          (let [target     (.-target e)
+                editor-dom (.-dom view)
+                cmd-dom    (el "cmd-container")]
+            (when-not (or (.contains editor-dom target)
+                          (and cmd-dom (.contains cmd-dom target)))
+              (.preventDefault e)
+              (.focus view)
+              (selectAll view)))))))
+
   ;; Auto-load built-in visual plugins
   (-> (js* "import('/plugins/oscilloscope.js')")
       (.then (fn [m]
