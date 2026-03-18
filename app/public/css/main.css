@@ -358,3 +358,33 @@ footer {
 
 .tap-btn:hover   { border-color: var(--accent); color: var(--accent); }
 .share-btn:hover { border-color: #56b6c2; color: #56b6c2; }
+
+/* --- Hover documentation tooltip --- */
+.repulse-hover-doc {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 13px;
+  max-width: 480px;
+  padding: 8px 12px;
+  background: #21252b;
+  border: 1px solid #3a3f4b;
+  border-radius: 4px;
+  color: #abb2bf;
+  line-height: 1.5;
+}
+
+.repulse-hover-sig {
+  color: #c678dd;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.repulse-hover-desc {
+  margin-bottom: 4px;
+}
+
+.repulse-hover-example {
+  color: #98c379;
+  font-style: italic;
+  padding-top: 4px;
+  border-top: 1px solid #3a3f4b;
+}

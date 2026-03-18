@@ -394,7 +394,7 @@ See full spec: [PROMPTS/phase-i-pattern-combinators.md](PROMPTS/phase-i-pattern-
 
 ---
 
-## Phase J — Onboarding & Discoverability 📋 *planned*
+## Phase J — Onboarding & Discoverability ✅ *delivered*
 
 Lower the activation energy for new users — the "first 60 seconds" experience.
 No new language features; pure UX and documentation.

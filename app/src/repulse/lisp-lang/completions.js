@@ -59,6 +59,9 @@ const BUILTINS = [
   { label: "upd",         type: "function", detail: "(upd) — hot-swap: re-evaluate editor buffer and update running tracks without stopping" },
   { label: "tap!",        type: "function", detail: "(tap!) — register a BPM tap; 4 taps sets tempo (or click tap button)" },
   { label: "midi-sync!",  type: "function", detail: "(midi-sync! true/false) — enable/disable MIDI clock sync" },
+  // --- Onboarding ---
+  { label: "demo",        type: "function", detail: "(demo :name) — load a starter template and play it; (demo) lists available demos" },
+  { label: "tutorial",    type: "function", detail: "(tutorial n) — load tutorial chapter n into the editor (1–8); (tutorial) loads chapter 1" },
   // --- Arrangement ---
   { label: "arrange",      type: "function", detail: "(arrange [[pat cycles] …]) — sequence patterns by duration" },
   { label: "play-scenes",  type: "function", detail: "(play-scenes [pat …]) — play patterns as 1-cycle scenes" },

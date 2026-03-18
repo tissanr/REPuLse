@@ -1,0 +1,389 @@
+// hover.js — Hover documentation tooltips for REPuLse-Lisp built-ins
+import { hoverTooltip } from "@codemirror/view";
+import { syntaxTree } from "@codemirror/language";
+
+/**
+ * Documentation map: name → { signature, description, example }.
+ * A superset of completions.js — same labels but richer content.
+ */
+const DOCS = {
+  // --- Pattern constructors ---
+  "seq": {
+    signature: "(seq val ...)",
+    description: "Create a sequence of values, each occupying one equal step per cycle.",
+    example: "(seq :bd :sd :bd :sd)",
+  },
+  "stack": {
+    signature: "(stack pat ...)",
+    description: "Play multiple patterns simultaneously in parallel.",
+    example: "(stack (seq :bd :_ :bd :_) (seq :_ :sd :_ :sd))",
+  },
+  "pure": {
+    signature: "(pure val)",
+    description: "A constant pattern that plays a single value for the entire cycle.",
+    example: "(pure :bd)",
+  },
+
+  // --- Transformations ---
+  "fast": {
+    signature: "(fast factor pat)",
+    description: "Speed up a pattern by the given factor. 2 = twice as fast.",
+    example: "(fast 2 (seq :bd :sd))",
+  },
+  "slow": {
+    signature: "(slow factor pat)",
+    description: "Slow down a pattern by the given factor. 2 = half speed.",
+    example: "(slow 2 (seq :bd :sd :hh :oh))",
+  },
+  "rev": {
+    signature: "(rev pat)",
+    description: "Reverse the order of events within each cycle.",
+    example: "(rev (seq :bd :sd :hh :oh))",
+  },
+  "every": {
+    signature: "(every n transform pat)",
+    description: "Apply a transformation every nth cycle. Other cycles play unmodified.",
+    example: "(every 4 (fast 2) (seq :bd :sd))",
+  },
+  "fmap": {
+    signature: "(fmap f pat)",
+    description: "Map a function over every value in the pattern.",
+    example: "(fmap (fn [x] (* x 2)) (seq 1 2 3))",
+  },
+
+  // --- Pattern combinators ---
+  "euclidean": {
+    signature: "(euclidean k n val) or (euclidean k n val rot)",
+    description: "Distribute k onsets evenly across n steps using the Björklund algorithm. Optional rot rotates the pattern.",
+    example: "(euclidean 5 8 :bd)",
+  },
+  "cat": {
+    signature: "(cat pat ...)",
+    description: "Concatenate patterns: each plays for one full cycle in sequence, then loops.",
+    example: "(cat (seq :bd :sd) (seq :hh :oh))",
+  },
+  "late": {
+    signature: "(late amount pat)",
+    description: "Shift events forward in time by a fraction of a cycle.",
+    example: "(late 0.25 (seq :hh :hh :hh :hh))",
+  },
+  "early": {
+    signature: "(early amount pat)",
+    description: "Shift events backward in time by a fraction of a cycle.",
+    example: "(early 0.125 (seq :sd :_ :sd :_))",
+  },
+  "sometimes": {
+    signature: "(sometimes f pat)",
+    description: "Apply transform f on approximately 50% of cycles (deterministic per cycle).",
+    example: "(sometimes (fast 2) (seq :bd :sd))",
+  },
+  "often": {
+    signature: "(often f pat)",
+    description: "Apply transform f on approximately 75% of cycles.",
+    example: "(often rev (seq :bd :sd :hh :oh))",
+  },
+  "rarely": {
+    signature: "(rarely f pat)",
+    description: "Apply transform f on approximately 25% of cycles.",
+    example: "(rarely (fast 2) (seq :bd :sd))",
+  },
+  "sometimes-by": {
+    signature: "(sometimes-by prob f pat)",
+    description: "Apply transform f with probability prob (0.0–1.0) per cycle.",
+    example: "(sometimes-by 0.3 rev (seq :bd :sd :hh :oh))",
+  },
+  "degrade": {
+    signature: "(degrade pat)",
+    description: "Randomly drop approximately 50% of events per cycle.",
+    example: "(degrade (seq :hh :hh :hh :hh))",
+  },
+  "degrade-by": {
+    signature: "(degrade-by prob pat)",
+    description: "Drop events with the given probability (0.0 = keep all, 1.0 = drop all).",
+    example: "(degrade-by 0.3 (seq :hh :hh :hh :hh))",
+  },
+  "choose": {
+    signature: "(choose [val ...])",
+    description: "Pick one value from the vector per cycle. Deterministic: same cycle always picks the same value.",
+    example: "(choose [:bd :sd :hh :oh])",
+  },
+  "wchoose": {
+    signature: "(wchoose [[val weight] ...])",
+    description: "Weighted random choice: pick one value per cycle, biased by weights.",
+    example: "(wchoose [[:bd 3] [:sd 1] [:hh 2]])",
+  },
+  "jux": {
+    signature: "(jux f pat)",
+    description: "Juxtapose: play pat panned left, and (f pat) panned right, simultaneously.",
+    example: "(jux (fast 2) (seq :bd :sd :hh :oh))",
+  },
+  "jux-by": {
+    signature: "(jux-by width f pat)",
+    description: "Like jux with adjustable stereo width (0.0 = mono, 1.0 = hard pan).",
+    example: "(jux-by 0.5 rev (seq :bd :sd))",
+  },
+  "off": {
+    signature: "(off amount f pat)",
+    description: "Layer the original with a time-shifted transformed copy: (stack pat (late amount (f pat))).",
+    example: "(off 0.25 (fast 2) (seq :bd :sd))",
+  },
+
+  // --- Music theory ---
+  "scale": {
+    signature: "(scale scale-kw root pat)",
+    description: "Map degree integers (0, 1, 2, ...) to Hz frequencies using a named scale. Degrees outside the scale wrap into higher/lower octaves.",
+    example: "(scale :minor :c4 (seq 0 2 4 7))",
+  },
+  "chord": {
+    signature: "(chord chord-kw root)",
+    description: "Stack the tones of a chord as simultaneous Hz values.",
+    example: "(chord :minor7 :a3)",
+  },
+  "transpose": {
+    signature: "(transpose semitones pat)",
+    description: "Shift all Hz values in a pattern up or down by n semitones. Note keywords pass through. Non-note keywords (drums, rests) are unchanged.",
+    example: "(transpose 7 (scale :major :c4 (seq 0 1 2 3)))",
+  },
+
+  // --- Per-event parameters ---
+  "->>": {
+    signature: "(->> pat (f args) ...)",
+    description: "Thread-last: pass the pattern as the last argument of each successive form. The natural way to chain parameter transforms.",
+    example: "(->> (seq :c4 :e4) (amp 0.7) (decay 0.5))",
+  },
+  "amp": {
+    signature: "(amp val pat) or (amp val)",
+    description: "Set event amplitude (0.0 = silent, 1.0 = full). One-arg form returns a transformer for use with ->> or comp.",
+    example: "(amp 0.8 (seq :c4 :e4 :g4))",
+  },
+  "attack": {
+    signature: "(attack secs pat) or (attack secs)",
+    description: "Set envelope attack time in seconds. 0.001 = percussive, 0.3 = slow swell.",
+    example: "(attack 0.1 (pure :c4))",
+  },
+  "decay": {
+    signature: "(decay secs pat) or (decay secs)",
+    description: "Set envelope decay time in seconds. 0.08 = short stab, 2.0 = long tone.",
+    example: "(decay 0.5 (seq :c4 :e4))",
+  },
+  "release": {
+    signature: "(release secs pat) or (release secs)",
+    description: "Set envelope release time in seconds. Defaults to decay value when omitted.",
+    example: "(release 0.3 (seq :c4 :e4))",
+  },
+  "pan": {
+    signature: "(pan pos pat) or (pan pos)",
+    description: "Set stereo panning. -1.0 = hard left, 0.0 = centre, 1.0 = hard right.",
+    example: "(pan -0.5 (seq :c4 :e4))",
+  },
+  "comp": {
+    signature: "(comp f g ...)",
+    description: "Compose transformers right-to-left. Useful for building named presets.",
+    example: "(def pluck (comp (amp 0.8) (attack 0.003) (decay 0.15)))",
+  },
+
+  // --- Sound & playback ---
+  "bpm": {
+    signature: "(bpm n)",
+    description: "Set the tempo in beats per minute.",
+    example: "(bpm 130)",
+  },
+  "stop": {
+    signature: "(stop)",
+    description: "Stop all playback immediately.",
+    example: "(stop)",
+  },
+  "play": {
+    signature: "(play :name pattern)",
+    description: "Start or replace a named track. Each track runs independently.",
+    example: "(play :kick (seq :bd :_ :bd :_))",
+  },
+  "mute!": {
+    signature: "(mute! :name)",
+    description: "Silence a track without removing it. Use in the command bar.",
+    example: "(mute! :kick)",
+  },
+  "unmute!": {
+    signature: "(unmute! :name)",
+    description: "Re-enable a muted track.",
+    example: "(unmute! :kick)",
+  },
+  "solo!": {
+    signature: "(solo! :name)",
+    description: "Play only this track, muting all others.",
+    example: "(solo! :bass)",
+  },
+  "clear!": {
+    signature: "(clear! :name) or (clear!)",
+    description: "Remove a track by name, or remove all tracks.",
+    example: "(clear! :kick)",
+  },
+  "tracks": {
+    signature: "(tracks)",
+    description: "List all currently active track names.",
+    example: "(tracks)",
+  },
+  "upd": {
+    signature: "(upd)",
+    description: "Hot-swap: re-evaluate the editor buffer and update running tracks without stopping playback.",
+    example: "(upd)",
+  },
+  "tap!": {
+    signature: "(tap!)",
+    description: "Register a BPM tap. Four consecutive taps set the tempo.",
+    example: "(tap!)",
+  },
+  "midi-sync!": {
+    signature: "(midi-sync! true/false)",
+    description: "Enable or disable MIDI clock synchronisation.",
+    example: "(midi-sync! true)",
+  },
+
+  // --- Samples ---
+  "samples!": {
+    signature: '(samples! "github:owner/repo")',
+    description: "Load an external sample bank from a GitHub repository.",
+    example: '(samples! "github:tidalcycles/Dirt-Samples")',
+  },
+  "sample-banks": {
+    signature: "(sample-banks)",
+    description: "List all registered sample bank names.",
+    example: "(sample-banks)",
+  },
+  "bank": {
+    signature: "(bank :prefix)",
+    description: "Set a default bank prefix for all subsequent keyword lookups.",
+    example: "(bank :AkaiLinn)",
+  },
+  "sound": {
+    signature: "(sound bank n)",
+    description: "Select sample number n from the named bank.",
+    example: "(sound :808 0)",
+  },
+
+  // --- Effects ---
+  "fx": {
+    signature: "(fx :name :param val ...) or (fx :off/:on :name)",
+    description: "Set effect parameters. Use (fx :off :name) to bypass, (fx :on :name) to re-enable.",
+    example: "(fx :reverb :wet 0.4)",
+  },
+  "load-plugin": {
+    signature: '(load-plugin "url")',
+    description: "Load a REPuLse plugin from a URL (visual or effect).",
+    example: '(load-plugin "/plugins/reverb.js")',
+  },
+
+  // --- Arrangement ---
+  "arrange": {
+    signature: "(arrange [[pat cycles] ...])",
+    description: "Sequence patterns by duration. Each [pattern cycles] pair plays for the given number of cycles.",
+    example: "(arrange [[(seq :bd :sd) 4] [(seq :hh :oh) 2]])",
+  },
+  "play-scenes": {
+    signature: "(play-scenes [pat ...])",
+    description: "Play patterns as sequential 1-cycle scenes.",
+    example: "(play-scenes [(seq :bd :sd) (seq :hh :oh)])",
+  },
+
+  // --- Special forms ---
+  "def": {
+    signature: "(def name value)",
+    description: "Bind a name in the global environment. The name persists across evaluations.",
+    example: "(def kick (seq :bd :_ :bd :_))",
+  },
+  "let": {
+    signature: "(let [name val ...] body)",
+    description: "Create local bindings. Names are only visible inside the let body.",
+    example: "(let [x (seq :bd :sd)] (fast 2 x))",
+  },
+  "fn": {
+    signature: "(fn [params ...] body)",
+    description: "Create an anonymous function.",
+    example: "(fn [p] (fast 2 p))",
+  },
+  "lambda": {
+    signature: "(lambda [params ...] body)",
+    description: "Create an anonymous function (alias for fn).",
+    example: "(lambda [p] (fast 2 p))",
+  },
+  "if": {
+    signature: "(if condition then else)",
+    description: "Conditional expression. Evaluates then if condition is truthy, else otherwise.",
+    example: "(if (> x 0) :bd :sd)",
+  },
+  "do": {
+    signature: "(do expr ...)",
+    description: "Evaluate expressions in sequence, return the value of the last one.",
+    example: "(do (def x 1) (+ x 2))",
+  },
+
+  // --- Demo & Tutorial ---
+  "demo": {
+    signature: "(demo :name) or (demo)",
+    description: "Load a starter template into the editor and play it. With no arguments, lists available demos.",
+    example: "(demo :techno)",
+  },
+  "tutorial": {
+    signature: "(tutorial) or (tutorial n)",
+    description: "Load tutorial chapter n into the editor without auto-playing. Defaults to chapter 1. Press Alt+Enter to hear it.",
+    example: "(tutorial 3)",
+  },
+};
+
+/**
+ * Find a BuiltinName or Symbol node at the given position.
+ * Returns { from, to, word } or null.
+ */
+function wordAt(state, pos) {
+  const tree = syntaxTree(state);
+  let node = tree.resolveInner(pos, 0);
+  while (node) {
+    if (node.name === "BuiltinName" || node.name === "Symbol") {
+      const word = state.sliceDoc(node.from, node.to);
+      return { from: node.from, to: node.to, word };
+    }
+    if (node.name === "List" || node.name === "Vector" || node.name === "Program") break;
+    node = node.parent;
+  }
+  return null;
+}
+
+/**
+ * CM6 hoverTooltip provider for REPuLse-Lisp built-ins.
+ */
+export const lispHoverTooltip = hoverTooltip((view, pos) => {
+  const hit = wordAt(view.state, pos);
+  if (!hit) return null;
+
+  const doc = DOCS[hit.word];
+  if (!doc) return null;
+
+  return {
+    pos: hit.from,
+    end: hit.to,
+    above: true,
+    create() {
+      const container = document.createElement("div");
+      container.className = "repulse-hover-doc";
+
+      const sig = document.createElement("div");
+      sig.className = "repulse-hover-sig";
+      sig.textContent = doc.signature;
+      container.appendChild(sig);
+
+      const desc = document.createElement("div");
+      desc.className = "repulse-hover-desc";
+      desc.textContent = doc.description;
+      container.appendChild(desc);
+
+      if (doc.example) {
+        const ex = document.createElement("div");
+        ex.className = "repulse-hover-example";
+        ex.textContent = doc.example;
+        container.appendChild(ex);
+      }
+
+      return { dom: container };
+    },
+  };
+});

@@ -53,9 +53,58 @@ npx shadow-cljs watch app
 > synthesis engine automatically. You'll see `audio backend: clojurescript synthesis`
 > in the browser console instead of `audio backend: audioworklet+wasm`.
 
-Type an expression in the editor and press **Ctrl+Enter** (macOS: **Cmd+Enter**) or click **▶ play**.
+Type an expression in the editor and press **Alt+Enter** (macOS: **Option+Enter**) or click **▶ play**.
 
 To stop: type `(stop)` and evaluate it, or click **■ stop**.
+
+---
+
+## Demos and tutorials
+
+### Starter templates
+
+Type in the command bar (the `>` input at the bottom):
+
+    (demo :techno)
+
+This loads a full multi-track techno pattern into the editor and starts playing it immediately.
+Available demos:
+
+| Demo | BPM | Description |
+|---|---|---|
+| `:techno` | 130 | Four-on-the-floor kick, offbeat hats, acid bassline |
+| `:ambient` | 72 | Slow pad chords, gentle melodic line |
+| `:dnb` | 174 | Breakbeat, sub bass, amen-style rhythm |
+| `:minimal` | 120 | Sparse kick, subtle hats, one-note bass |
+| `:house` | 124 | Classic four-on-the-floor, organ stabs |
+| `:dub` | 140 | Heavy bass, delay-heavy snare |
+| `:experimental` | 110 | Algorithmic patterns: every, rev, fmap |
+
+Type `(demo)` with no arguments to list all available demos.
+
+### Interactive tutorial
+
+    (tutorial)       ;; loads chapter 1
+    (tutorial 3)     ;; loads chapter 3
+
+Eight chapters that teach REPuLse from first principles. Each chapter is a playable
+program — press **Alt+Enter** to hear it, read the comments, experiment, then move on.
+
+| Chapter | Topic | Key concept |
+|---|---|---|
+| 1 | First sound | `seq` |
+| 2 | Layering | `stack` |
+| 3 | Speed | `fast`, `slow` |
+| 4 | Evolution | `every` |
+| 5 | Naming | `def` |
+| 6 | Multi-track | `play` |
+| 7 | Melody | `scale`, `chord` |
+| 8 | Expression | `amp`, `decay`, `->>` |
+
+### Hover documentation
+
+Hover the mouse over any built-in name in the editor to see its signature, a
+description, and an example in a tooltip.
 
 ---
 
