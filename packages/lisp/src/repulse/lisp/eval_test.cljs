@@ -82,3 +82,26 @@
       (doseq [cy (range 20)]
         (let [ev (first (core/query pat (core/cycle-span cy)))]
           (is (contains? srcs (:source ev))))))))
+
+;;; ── partial application of combinators ───────────────────────────────
+
+(deftest fast-partial-returns-transform-fn
+  (testing "(fast n) returns a function, not a pattern"
+    (let [env (make-test-env)
+          ;; (fast 2) should return a fn, not crash
+          f   (:result (lisp/eval-string "(fast 2)" env))]
+      (is (fn? f)))))
+
+(deftest jux-fast-partial
+  (testing "(jux (fast 2) pat) does not crash and produces events"
+    (let [env  (make-test-env)
+          pat  (:result (lisp/eval-string "(jux (fast 2) (seq :c4 :e4))" env))
+          evs  (core/query pat (core/cycle-span 0))]
+      (is (some? pat))
+      (is (pos? (count evs))))))
+
+(deftest transpose-partial-returns-transform-fn
+  (testing "(transpose n) returns a function"
+    (let [env (make-test-env)
+          f   (:result (lisp/eval-string "(transpose 12)" env))]
+      (is (fn? f)))))
