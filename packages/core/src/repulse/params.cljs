@@ -64,3 +64,17 @@
    (pan -0.5)                 — return transformer"
   ([p]     (fn [pat] (pan p pat)))
   ([p pat] (apply-param :pan p pat)))
+
+(defn jux
+  "Stack the original pattern panned left with (f pat) panned right.
+   Creates stereo width by splitting original and transformed copies.
+   (jux rev (seq :c4 :e4 :g4))  — original left, reversed right"
+  [f pat]
+  (core/stack* [(pan -1 pat) (pan 1 (f pat))]))
+
+(defn jux-by
+  "Like jux but with adjustable stereo width.
+   width 0.0 = both copies centre (mono), 1.0 = full left/right.
+   (jux-by 0.5 rev pat) — half stereo width"
+  [width f pat]
+  (core/stack* [(pan (- width) pat) (pan width (f pat))]))

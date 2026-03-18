@@ -67,3 +67,151 @@
       (is (= [:a] (map :value (c/query arr (c/cycle-span 4)))))
       ;; Cycle 6: loops back to b
       (is (= [:b] (map :value (c/query arr (c/cycle-span 6))))))))
+
+;;; ── Phase I: Pattern Combinators ───────────────────────────────────
+
+(deftest euclidean-5-8
+  (testing "euclidean 5 8 distributes 5 onsets across 8 steps"
+    (let [evs  (c/query (c/euclidean 5 8 :bd) (c/cycle-span 0))
+          vals (mapv :value evs)]
+      (is (= 8 (count vals)))
+      (is (= 5 (count (filter #(= :bd %) vals))))
+      (is (= 3 (count (filter #(= :_ %) vals)))))))
+
+(deftest euclidean-3-8-rotation
+  (testing "euclidean with rotation shifts the pattern"
+    (let [evs-no-rot (mapv :value (c/query (c/euclidean 3 8 :x) (c/cycle-span 0)))
+          evs-rot    (mapv :value (c/query (c/euclidean 3 8 :x 2) (c/cycle-span 0)))]
+      (is (= 3 (count (filter #(= :x %) evs-rot))))
+      (is (= 5 (count (filter #(= :_ %) evs-rot))))
+      (is (not= evs-no-rot evs-rot)))))
+
+(deftest euclidean-4-4
+  (testing "euclidean k=n produces all onsets"
+    (let [vals (mapv :value (c/query (c/euclidean 4 4 :bd) (c/cycle-span 0)))]
+      (is (= [:bd :bd :bd :bd] vals)))))
+
+(deftest cat-basic
+  (testing "cat* plays each pattern for one cycle in sequence"
+    (let [a   (c/pure :a)
+          b   (c/pure :b)
+          c-p (c/pure :c)
+          pat (c/cat* [a b c-p])]
+      (is (= [:a] (mapv :value (c/query pat (c/cycle-span 0)))))
+      (is (= [:b] (mapv :value (c/query pat (c/cycle-span 1)))))
+      (is (= [:c] (mapv :value (c/query pat (c/cycle-span 2)))))
+      ;; Loops back
+      (is (= [:a] (mapv :value (c/query pat (c/cycle-span 3))))))))
+
+(deftest cat-with-seq
+  (testing "cat* with seq patterns preserves internal structure"
+    (let [pat (c/cat* [(c/seq* [:bd :sd]) (c/pure :hh)])]
+      (is (= [:bd :sd] (mapv :value (c/query pat (c/cycle-span 0)))))
+      (is (= [:hh]     (mapv :value (c/query pat (c/cycle-span 1))))))))
+
+(deftest late-shifts-forward
+  (testing "late shifts events forward in time"
+    (let [pat    (c/late 0.5 (c/pure :bd))
+          evs    (c/query pat (c/span [0 1] [2 1]))
+          starts (set (map #(:start (:whole %)) evs))]
+      (is (pos? (count evs)))
+      ;; cycle-0 event shifted from [0,1] to [1/2]=[1,2]; [0,1] should not appear
+      (is (contains? starts [1 2]))
+      (is (not (contains? starts [0 1]))))))
+
+(deftest early-shifts-backward
+  (testing "early is the inverse of late"
+    (let [pat    (c/early 0.25 (c/pure :bd))
+          evs    (c/query pat (c/span [0 1] [2 1]))
+          starts (set (map #(:start (:whole %)) evs))]
+      (is (pos? (count evs)))
+      ;; cycle-0 event shifted from [0,1] to [-1/4]=[-1,4]; [0,1] should not appear
+      (is (contains? starts [-1 4]))
+      (is (not (contains? starts [0 1]))))))
+
+(deftest sometimes-deterministic
+  (testing "sometimes produces consistent results for the same cycle"
+    (let [pat  (c/sometimes c/rev (c/pure :bd))
+          evs1 (c/query pat (c/cycle-span 5))
+          evs2 (c/query pat (c/cycle-span 5))]
+      (is (= (mapv :value evs1) (mapv :value evs2))))))
+
+(deftest sometimes-by-zero-never-applies
+  (testing "sometimes-by 0.0 never applies the transform"
+    (let [pat (c/sometimes-by 0.0 (fn [p] (c/fmap (constantly :WRONG) p))
+                              (c/pure :bd))]
+      (doseq [cy (range 20)]
+        (is (= [:bd] (mapv :value (c/query pat (c/cycle-span cy)))))))))
+
+(deftest sometimes-by-one-always-applies
+  (testing "sometimes-by 1.0 always applies the transform"
+    (let [pat (c/sometimes-by 1.0 (fn [p] (c/fmap (constantly :YES) p))
+                              (c/pure :bd))]
+      (doseq [cy (range 20)]
+        (is (= [:YES] (mapv :value (c/query pat (c/cycle-span cy)))))))))
+
+(deftest degrade-drops-some-events
+  (testing "degrade drops approximately half the events"
+    (let [pat (c/degrade (c/seq* [:a :b :c :d :e :f :g :h]))
+          evs (c/query pat (c/cycle-span 0))]
+      (is (< (count evs) 8))
+      (is (pos? (count evs))))))
+
+(deftest degrade-by-zero-keeps-all
+  (testing "degrade-by 0.0 keeps all events"
+    (let [pat (c/degrade-by 0.0 (c/seq* [:a :b :c :d]))
+          evs (c/query pat (c/cycle-span 0))]
+      (is (= 4 (count evs))))))
+
+(deftest degrade-deterministic
+  (testing "degrade produces same results for same query"
+    (let [pat  (c/degrade (c/seq* [:a :b :c :d :e :f :g :h]))
+          evs1 (c/query pat (c/cycle-span 0))
+          evs2 (c/query pat (c/cycle-span 0))]
+      (is (= (mapv :value evs1) (mapv :value evs2))))))
+
+(deftest choose-picks-one-per-cycle
+  (testing "choose returns exactly one event per cycle"
+    (let [pat (c/choose [:a :b :c :d])]
+      (doseq [cy (range 10)]
+        (let [evs (c/query pat (c/cycle-span cy))]
+          (is (= 1 (count evs)))
+          (is (contains? #{:a :b :c :d} (:value (first evs)))))))))
+
+(deftest choose-deterministic
+  (testing "choose is deterministic for the same cycle"
+    (let [pat (c/choose [:a :b :c :d])]
+      (doseq [cy (range 10)]
+        (is (= (mapv :value (c/query pat (c/cycle-span cy)))
+               (mapv :value (c/query pat (c/cycle-span cy)))))))))
+
+(deftest wchoose-picks-one-per-cycle
+  (testing "wchoose returns exactly one event per cycle"
+    (let [pat (c/wchoose [[0.5 :bd] [0.3 :sd] [0.2 :hh]])]
+      (doseq [cy (range 10)]
+        (let [evs (c/query pat (c/cycle-span cy))]
+          (is (= 1 (count evs)))
+          (is (contains? #{:bd :sd :hh} (:value (first evs)))))))))
+
+(deftest choose-attaches-source
+  (testing "choose attaches :source from the sources vector to events"
+    (let [srcs [{:from 0 :to 3} {:from 4 :to 7} {:from 8 :to 11} {:from 12 :to 15}]
+          pat  (c/choose [:a :b :c :d] srcs)]
+      (doseq [cy (range 20)]
+        (let [ev  (first (c/query pat (c/cycle-span cy)))
+              idx (mod (c/cycle-hash cy) 4)]
+          (is (= (nth srcs idx) (:source ev))))))))
+
+(deftest wchoose-attaches-source
+  (testing "wchoose attaches :source from the sources vector to events"
+    (let [srcs [{:from 0 :to 3} {:from 4 :to 7} {:from 8 :to 11}]
+          pat  (c/wchoose [[0.5 :bd] [0.3 :sd] [0.2 :hh]] srcs)]
+      (doseq [cy (range 20)]
+        (let [ev (first (c/query pat (c/cycle-span cy)))]
+          (is (contains? (set srcs) (:source ev))))))))
+
+(deftest off-layers-original-and-shifted
+  (testing "off produces events from both original and transformed copy"
+    (let [pat (c/off 0.5 c/rev (c/seq* [:a :b]))
+          evs (c/query pat (c/span [0 1] [2 1]))]
+      (is (> (count evs) 2)))))

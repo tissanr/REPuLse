@@ -65,6 +65,7 @@
 (defonce active-ranges (atom []))
 
 (defonce editor-view (atom nil))
+(defonce cmd-view    (atom nil))
 
 (defn- rebuild-decorations! [view]
   (let [ranges  (sort-by :from @active-ranges)
@@ -379,7 +380,7 @@
             (clear-highlights!)
             (audio/start! val on-beat highlight-range!)
             (set-playing! true)
-            (set-output! "playing pattern — Ctrl+Enter to re-evaluate, (stop) to stop" :success))
+            (set-output! "playing pattern — Alt+Enter to re-evaluate, (stop) to stop" :success))
 
           ;; stop fn was called directly — handled inside stop fn
           (nil? val)
@@ -482,8 +483,9 @@
                           (.. update -state -doc (toString)))
                 (catch :default _))))))
 
-(defn make-cmd-editor [container]
+(defn make-cmd-editor 
   "Single-line CodeMirror editor for the command bar. Enter evaluates + clears."
+  [container]
   (let [clear-view! (fn [view]
                       (.dispatch view
                                  #js {:changes #js {:from 0
@@ -491,16 +493,21 @@
                                                     :insert ""}})
                       true)
         eval-cmd    (fn [view]
-                      (let [code (.. view -state -doc (toString))]
-                        (when (seq (cstr/trim code))
-                          (evaluate! code)
-                          (clear-view! view)))
+                      (let [raw (cstr/trim (.. view -state -doc (toString)))]
+                        (when (seq raw)
+                          (let [code (if (cstr/starts-with? raw "(") raw (str "(" raw ")"))]
+                            (evaluate! code)
+                            (clear-view! view))))
                       true)
+        clear+return! (fn [view]
+                        (clear-view! view)
+                        (when-let [ev @editor-view] (.focus ev))
+                        true)
         extensions  #js [oneDark
                          lispLanguage
                          (.of keymap #js [#js {:key "Mod-a"  :run selectAll}
                                           #js {:key "Enter"  :run eval-cmd}
-                                          #js {:key "Escape" :run clear-view!}])]
+                                          #js {:key "Escape" :run clear+return!}])]
         state (.. EditorState (create #js {:doc "" :extensions extensions}))
         view  (EditorView. #js {:state state :parent container})]
     view))
@@ -509,7 +516,14 @@
   (let [eval-cmd (fn [view]
                    (on-eval (.. view -state -doc (toString)))
                    true)
-        eval-binding #js {:key "Mod-Enter" :run eval-cmd}
+        eval-binding    #js {:key "Alt-Enter" :run eval-cmd}
+        upd-fn          (fn [_] (evaluate! "(upd)") true)
+        upd-binding     #js {:key "Ctrl-." :run upd-fn}
+        upd-f9-binding  #js {:key "F9"     :run upd-fn}
+        escape-binding  #js {:key "Escape"
+                             :run (fn [_]
+                                    (when-let [cv @cmd-view] (.focus cv))
+                                    true)}
         extensions #js [(history)
                         (lineNumbers)
                         oneDark
@@ -519,9 +533,9 @@
                         save-listener
                         (.-lineWrapping EditorView)
                         (.of keymap (.concat
+                                     #js [escape-binding eval-binding upd-binding upd-f9-binding]
                                      (clj->js defaultKeymap)
-                                     (clj->js historyKeymap)
-                                     #js [eval-binding]))]
+                                     (clj->js historyKeymap)))]
         state (.. EditorState
                   (create #js {:doc (load-editor-content initial-value)
                                :extensions extensions}))
@@ -568,8 +582,8 @@
                "<div id=\"track-panel\" class=\"track-panel\"></div>"
                "<div id=\"plugin-panel\" class=\"plugin-panel hidden\"></div>"
                "<footer>"
-               "  <span id=\"output\" class=\"output\">ready &mdash; Ctrl+Enter or click play</span>"
-               "  <span class=\"hint\">Ctrl+Enter to eval</span>"
+               "  <span id=\"output\" class=\"output\">ready &mdash; Alt+Enter or click play</span>"
+               "  <span class=\"hint\">Alt+Enter to eval</span>"
                "</footer>")))
   (.addEventListener (el "play-btn")  "click" on-play-btn-click)
   (.addEventListener (el "tap-btn")   "click" (fn [] (evaluate! "(tap!)")))
@@ -601,12 +615,44 @@
               (audio/unmute-track! kw)
               (audio/mute-track! kw)))))
 
-  (make-cmd-editor (el "cmd-container"))
+  (reset! cmd-view (make-cmd-editor (el "cmd-container")))
 
   (let [container (el "editor-container")
         view (make-editor container "(seq :bd :sd :bd :sd)" evaluate!)]
     (reset! editor-view view)
     (.focus view))
+
+  ;; Global keyboard shortcuts — capture phase so we fire before any child handler
+  ;; (including CodeMirror) can stop propagation.
+  (.addEventListener js/document "keydown"
+    (fn [e]
+      (when-let [view @editor-view]
+        (let [target     (.-target e)
+              editor-dom (.-dom view)
+              cmd-dom    (el "cmd-container")
+              in-editor? (.contains editor-dom target)
+              in-cmd?    (and cmd-dom (.contains cmd-dom target))]
+          (cond
+            ;; Alt/Option+Enter — evaluate main buffer from anywhere.
+            (and (.-altKey e) (= "Enter" (.-key e)))
+            (do (.preventDefault e)
+                (evaluate! (.. view -state -doc (toString))))
+
+            ;; Ctrl+. or F9 — run (upd) from anywhere
+            (or (and (.-ctrlKey e) (= "." (.-key e)))
+                (= "F9" (.-key e)))
+            (do (.preventDefault e)
+                (evaluate! "(upd)"))
+
+            ;; Ctrl/Cmd+A — focus editor + select all when outside both editors
+            (and (or (.-metaKey e) (.-ctrlKey e))
+                 (= "a" (.-key e))
+                 (not in-editor?)
+                 (not in-cmd?))
+            (do (.preventDefault e)
+                (.focus view)
+                (selectAll view))))))
+    true) ;; true = capture phase
 
   ;; Auto-load built-in visual plugins
   (-> (js* "import('/plugins/oscilloscope.js')")

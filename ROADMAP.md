@@ -373,6 +373,126 @@ See full spec: [PROMPTS/phase-4-live-features.md](PROMPTS/phase-4-live-features.
 
 ---
 
+## Phase I — Pattern Combinators 📋 *planned*
+
+Eight new pure pattern functions that complete REPuLse's expressive vocabulary.
+Highest-value additions: cheap to implement (pure CLJS, no DOM/audio), immediate
+impact on what you can write in one line.
+
+**Key additions:**
+- `(euclidean k n pat)` — Björklund algorithm; `(euclidean 5 8 :bd)` distributes 5 hits across 8 steps
+- `(cat pat-a pat-b ...)` — multi-pattern concatenation; each plays for one full cycle in sequence
+- `(late n pat)` / `(early n pat)` — rational-arithmetic time shift within a cycle
+- `(sometimes f pat)` / `(often f pat)` / `(rarely f pat)` — cycle-hashed stochastic transforms; deterministic per cycle
+- `(degrade pat)` / `(degrade-by p pat)` — per-event stochastic dropout
+- `(choose [v1 v2 ...])` / `(wchoose [[v1 w1] ...])` — cycle-deterministic random selection
+- `(jux f pat)` — juxtapose: apply `f` to the right channel while left plays unchanged; needs `pan`
+- `(off n f pat)` — offset copy: `(stack pat (late n (f pat)))`
+- All functions in `packages/core/src/repulse/core.cljs`; `jux` in `params.cljs`
+
+See full spec: [PROMPTS/phase-i-pattern-combinators.md](PROMPTS/phase-i-pattern-combinators.md)
+
+---
+
+## Phase J — Onboarding & Discoverability 📋 *planned*
+
+Lower the activation energy for new users — the "first 60 seconds" experience.
+No new language features; pure UX and documentation.
+
+**Key additions:**
+- **Demo patterns** — curated starter examples selectable from a dropdown or `(demo :name)` Lisp call
+- **Hover docs** — CodeMirror hover extension shows docstring + example for any built-in under the cursor
+- **Signature hints** — parameter hints appear as you type after an opening paren
+- **Error messages** — contextual hints in the output footer for the 10 most common mistakes
+- **Interactive tutorial** — `(tutorial)` loads a step-by-step guided session into the editor
+
+See full spec: [PROMPTS/phase-j-onboarding.md](PROMPTS/phase-j-onboarding.md)
+
+---
+
+## Phase K — Mini-Notation & Sharing 📋 *planned*
+
+Tidal/Strudel-compatible mini-notation as opt-in Lisp sugar, plus Gist import and WAV export.
+
+**Key additions:**
+- `(~ "bd sd [hh hh] bd")` — mini-notation parser in `packages/lisp/src/repulse/lisp/mini.cljs`
+- Supported syntax: sequences `bd sd`, sub-groups `[bd sd]`, alternation `<bd sd>`, repetition `hh*4`, rest `~`/`_`, sample index `bd:2`, weight/elongation `bd@3`, probability `bd?`
+- `(alt pat-a pat-b ...)` — cycle-based alternation as a first-class Lisp function
+- `(load-gist url)` — fetch a GitHub Gist and load into the editor
+- `(export n)` — render n cycles of the current pattern to a downloadable WAV file via `OfflineAudioContext`
+- `mini.cljs` has no audio or DOM dependency — pure pattern algebra
+
+See full spec: [PROMPTS/phase-k-mini-notation.md](PROMPTS/phase-k-mini-notation.md)
+
+---
+
+## Phase L — Per-Track Audio Routing & Sample Control 📋 *planned*
+
+Independent effect chains per track, per-event sample playback parameters, pattern-aware
+sidechain, and four new synth voices.
+
+**Key additions:**
+- Per-track `GainNode` routing: each `(play :name pat)` gets its own node before `masterGain`
+- `(track-fx :name :effect param ...)` — apply/remove/adjust effects on a single track
+- New param functions: `(rate 1.5 pat)`, `(begin 0.2 pat)`, `(end 0.8 pat)`, `(loop-sample true pat)`
+- **Pattern-aware sidechain** (`sidechain.js` plugin) — ducks master bus on `:bd` events via pre-scheduled gain automation
+- Four new WASM voice types: `saw`, `square`, `noise`, `fm` (index + ratio)
+- Dependency architecture: `fx.cljs` owns `notify-fx-event!`; scheduler calls it via an `:on-fx-event` callback — keeps `audio ↛ fx` acyclic
+
+See full spec: [PROMPTS/phase-l-per-track-audio.md](PROMPTS/phase-l-per-track-audio.md)
+
+---
+
+## Phase M — Lisp Superpowers 📋 *planned*
+
+Four language-level additions that make REPuLse-Lisp a genuine instrument, not just a
+shell around pattern combinators.
+
+**Key additions:**
+- `(defsynth name [params] body)` — user-defined instruments from Web Audio node graphs; UGen vocabulary: `sin`, `saw`, `square`, `tri`, `noise`, `lpf`, `hpf`, `bpf`, `mix`, `env-perc`, `env-asr`
+- `(synth :name pat)` — apply a user-defined synth to any pattern
+- `(defmacro name [params] body)` — compile-time macro expansion with backtick/unquote/splice-unquote
+- `(loop [bindings] body)` / `(recur ...)` — trampoline-style tail-call optimised iteration
+- `(defn name [params] body)` — named function sugar (`def` + `fn`)
+- Rational number literals: `1/4` → `[1 4]`; `120bpm` → `(bpm 120)`
+- Collection helpers: `conj`, `count`, `nth`, `first`, `rest`, `concat`, `map`, `range`, `apply`
+
+See full spec: [PROMPTS/phase-m-lisp-superpowers.md](PROMPTS/phase-m-lisp-superpowers.md)
+
+---
+
+## Phase N — MIDI & External I/O 📋 *planned*
+
+Connect REPuLse to the outside world: hardware controllers, DAWs, sample libraries.
+
+**Key additions:**
+- `(midi-map :cc N :target)` — map MIDI CC messages from any controller to `:filter`, `:amp`, or `:bpm`
+- `(midi-out ch pat)` — route pattern events as MIDI Note On/Off on a channel (1–16)
+- `(midi-clock-out! true/false)` — broadcast 24ppqn MIDI clock + Start/Stop at current BPM
+- `(midi-export :track N)` — export N cycles as a `.mid` file (pure binary, no external library)
+- `(freesound-key! "key")` + `(freesound! "query")` — search freesound.org and load samples directly
+- Chrome/Edge only (Web MIDI API); other browsers return a clear error
+- Extends `app/src/repulse/midi.cljs` (new namespace)
+
+See full spec: [PROMPTS/phase-n-midi-io.md](PROMPTS/phase-n-midi-io.md)
+
+---
+
+## Phase O — Platform & Deployment 📋 *planned*
+
+Expand where REPuLse runs and who can use it.
+
+**Key additions:**
+- **PWA / offline** — service worker (cache-first), web app manifest, install prompt; `(download-bank! :Name)` caches samples for offline use
+- **Embeddable component** — `<repulse-editor code='...' autoplay>` custom element via Shadow DOM; separate `repulse-embed.js` bundle
+- **Collaborative sessions** — `(collab-start!)` / `(collab-join! "code")` via Yjs + WebRTC; peer-to-peer, no server required; synced code = synced audio
+- **Mobile layout** — CSS media queries for ≤768px; ≥44px touch targets; command bar font-size prevents iOS auto-zoom
+- New dependencies: `yjs`, `y-webrtc`, `y-codemirror.next` (collab only)
+
+See full spec: [PROMPTS/phase-o-platform.md](PROMPTS/phase-o-platform.md)
+
+---
+
 ## Phase B — Richer Visuals 📋 *planned*
 
 Two new visual plugin types: a high-quality spectrum analyser (audiomotion-analyzer)
@@ -387,23 +507,7 @@ See full spec: [PROMPTS/phase-b-richer-visuals.md](PROMPTS/phase-b-richer-visual
 
 ---
 
-## Phase 7 — Advanced Plugins 📋 *planned*
-
-Per-pattern effect routing, MIDI output, and audio recording.
-
-**Key additions:**
-- Named pattern slots with independent gain nodes (`slots.cljs`)
-- `(with-fx :slot-name ...)` — per-slot effects chain before the master bus
-- **MIDI output plugin** — route pattern events to hardware via Web MIDI API
-- **Recorder plugin** — ⏺ record button captures master output to a downloadable file
-- `(record)` / `(record-stop)` Lisp built-ins
-
-See full spec: [PROMPTS/phase-7-plugins-advanced.md](PROMPTS/phase-7-plugins-advanced.md)
-
----
-
 ## Future ideas (unscheduled)
 
-See [docs/FUTURE-FEATURES.md](docs/FUTURE-FEATURES.md) for the full list, including
-additional visual plugins, effect ideas, MIDI/OSC/CV integration, export options,
-language features, and collaboration tools.
+See [docs/FUTURE-FEATURES.md](docs/FUTURE-FEATURES.md) for the full prioritised feature
+backlog — tiered by impact and implementation cost.

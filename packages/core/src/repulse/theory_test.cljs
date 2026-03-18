@@ -14,6 +14,11 @@
   (is (theory/note-keyword? :fs5))
   (is (theory/note-keyword? :bb4))
   (is (theory/note-keyword? :cs-1))
+  ;; bare note names (no octave) — default to octave 4
+  (is (theory/note-keyword? :a))
+  (is (theory/note-keyword? :c))
+  (is (theory/note-keyword? :g))
+  (is (theory/note-keyword? :bb))
   (is (not (theory/note-keyword? :bd)))
   (is (not (theory/note-keyword? :sd)))
   (is (not (theory/note-keyword? :_)))
@@ -26,6 +31,15 @@
   (is (= 69 (theory/note->midi :a4)))   ; concert A
   (is (= 48 (theory/note->midi :c3)))
   (is (= 72 (theory/note->midi :c5))))
+
+(deftest note->midi-bare-letter
+  ;; bare note names default to octave 4
+  (is (= 69 (theory/note->midi :a)))    ; :a = :a4 = 69
+  (is (= 60 (theory/note->midi :c)))    ; :c = :c4 = 60
+  (is (= 62 (theory/note->midi :d)))    ; :d = :d4 = 62
+  (is (= 70 (theory/note->midi :bb)))   ; :bb = :bb4 = 70
+  ;; bare :a and :a4 are identical
+  (is (= (theory/note->midi :a) (theory/note->midi :a4))))
 
 (deftest note->midi-accidentals
   (is (= 61 (theory/note->midi :cs4)))  ; C-sharp 4

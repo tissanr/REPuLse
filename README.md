@@ -31,7 +31,7 @@ npx shadow-cljs watch app
 
 Open [http://localhost:3000](http://localhost:3000).
 
-You should see a dark editor. Type this and press **Ctrl+Enter** (or **Cmd+Enter** on macOS):
+You should see a dark editor. Type this and press **Alt+Enter** (or **Option+Enter** on macOS):
 
 ```lisp
 (seq :bd :sd :bd :sd)
@@ -267,7 +267,7 @@ npx shadow-cljs compile test && node out/test.js
    See [docs/PLUGINS.md](docs/PLUGINS.md) for the full plugin development guide.
 
 7. **`app/app.cljs`** — mounts a CodeMirror 6 main editor and a single-line command bar
-   editor; wires **Ctrl+Enter** to `eval-string` and routes Pattern results to the audio
+   editor; wires **Alt+Enter** to `eval-string` and routes Pattern results to the audio
    scheduler vs. plain values to the output line. A live context panel shows BPM, user `def`
    bindings, and the active effect chain; a track timeline panel below the editor shows all
    active tracks with SVG event bars and a `requestAnimationFrame` playhead sweep. All panels
@@ -277,7 +277,10 @@ npx shadow-cljs compile test && node out/test.js
 
 | Key | Action |
 |---|---|
-| Ctrl+Enter / Cmd+Enter | Evaluate buffer |
+| Alt+Enter / Option+Enter | Evaluate buffer (global — works even when editor is not focused) |
+| Ctrl+. or F9 | Run `(upd)` — apply BPM/param changes without restarting patterns (global) |
+| Escape | Focus command bar |
+| Ctrl+A / Cmd+A | Select all code (global — works even when editor is not focused) |
 | Ctrl+Z / Cmd+Z | Undo |
 | Ctrl+Shift+Z / Cmd+Shift+Z | Redo |
 
@@ -290,7 +293,7 @@ commands that shouldn't live in the buffer — `mute!`, `unmute!`, `solo!`, `cle
 | Key | Action |
 |---|---|
 | Enter | Evaluate and clear |
-| Escape | Clear without evaluating |
+| Escape | Clear and return focus to editor |
 
 The command bar has full syntax highlighting and autocompletion (same as the main editor),
 but its content is not saved to `localStorage`.

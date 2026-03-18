@@ -152,8 +152,12 @@
                   (core/seq* vals srcs)))
      "stack"  (fn [& ps] (core/stack* (mapv unwrap ps)))
      "pure"   (fn [v] (core/pure (unwrap v) (source-of v)))
-     "fast"   (fn [f p] (core/fast (unwrap f) (unwrap p)))
-     "slow"   (fn [f p] (core/slow (unwrap f) (unwrap p)))
+     "fast"   (fn
+                ([f]   (fn [p] (core/fast (unwrap f) (unwrap p))))
+                ([f p] (core/fast (unwrap f) (unwrap p))))
+     "slow"   (fn
+                ([f]   (fn [p] (core/slow (unwrap f) (unwrap p))))
+                ([f p] (core/slow (unwrap f) (unwrap p))))
      "rev"    (fn [p] (core/rev (unwrap p)))
      "every"  (fn [n t p] (core/every (unwrap n) t (unwrap p)))
      "fmap"      (fn [f p] (core/fmap (fn [v] (unwrap (f v))) (unwrap p)))
@@ -161,8 +165,9 @@
                    (theory/scale (unwrap kw) (unwrap root) (unwrap pat)))
      "chord"     (fn [kw root]
                    (theory/chord (unwrap kw) (unwrap root)))
-     "transpose" (fn [n pat]
-                   (theory/transpose (unwrap n) (unwrap pat)))
+     "transpose" (fn
+                   ([n]     (fn [p] (theory/transpose (unwrap n) (unwrap p))))
+                   ([n pat] (theory/transpose (unwrap n) (unwrap pat))))
      ;; Per-event parameters — curried: one arg returns a (pat → pat) transformer
      "amp"     (fn
                  ([v]   (params/amp (unwrap v)))
@@ -179,6 +184,36 @@
      "pan"     (fn
                  ([v]   (params/pan (unwrap v)))
                  ([v p] (params/pan (unwrap v) (unwrap p))))
+     ;; Pattern combinators — Phase I
+     "euclidean"    (fn
+                      ([k n v]   (core/euclidean (unwrap k) (unwrap n) (unwrap v)))
+                      ([k n v r] (core/euclidean (unwrap k) (unwrap n) (unwrap v) (unwrap r))))
+     "cat"          (fn [& ps]      (core/cat* (mapv unwrap ps)))
+     "late"         (fn
+                      ([a]   (fn [p] (core/late  (unwrap a) (unwrap p))))
+                      ([a p] (core/late  (unwrap a) (unwrap p))))
+     "early"        (fn
+                      ([a]   (fn [p] (core/early (unwrap a) (unwrap p))))
+                      ([a p] (core/early (unwrap a) (unwrap p))))
+     "sometimes"    (fn [f p]       (core/sometimes (unwrap f) (unwrap p)))
+     "often"        (fn [f p]       (core/often (unwrap f) (unwrap p)))
+     "rarely"       (fn [f p]       (core/rarely (unwrap f) (unwrap p)))
+     "sometimes-by" (fn [prob f p]  (core/sometimes-by (unwrap prob) (unwrap f) (unwrap p)))
+     "degrade"      (fn [p]         (core/degrade (unwrap p)))
+     "degrade-by"   (fn
+                      ([prob]   (fn [p] (core/degrade-by (unwrap prob) (unwrap p))))
+                      ([prob p] (core/degrade-by (unwrap prob) (unwrap p))))
+     "choose"       (fn [xs]
+                      (let [xs' (unwrap xs)]
+                        (core/choose (mapv unwrap xs') (mapv source-of xs'))))
+     "wchoose"      (fn [pairs]
+                      (let [pairs' (unwrap pairs)
+                            srcs   (mapv #(source-of (second %)) pairs')
+                            vecs   (mapv (fn [[w v]] [(unwrap w) (unwrap v)]) pairs')]
+                        (core/wchoose vecs srcs)))
+     "jux"          (fn [f p]       (params/jux (unwrap f) (unwrap p)))
+     "jux-by"       (fn [w f p]     (params/jux-by (unwrap w) (unwrap f) (unwrap p)))
+     "off"          (fn [a f p]     (core/off (unwrap a) (unwrap f) (unwrap p)))
      "comp"    (fn [& fs] (apply comp fs))
      ;; Sound helpers
      "sound"  (fn [bank n] {:bank (unwrap bank) :n (or (unwrap n) 0)})
