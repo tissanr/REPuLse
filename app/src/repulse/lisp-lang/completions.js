@@ -45,8 +45,6 @@ const BUILTINS = [
   // --- Sharing ---
   { label: "load-gist",    type: "function", detail: "(load-gist url) — fetch a Gist and load into editor" },
   { label: "export",       type: "function", detail: "(export) — render all tracks to WAV; (export n) — n cycles; (export :track) — single track" },
-  // --- Per-track effects ---
-  { label: "track-fx",    type: "function", detail: "(track-fx :track :effect param …) — add/set effect on a specific track" },
   // --- Sample playback control ---
   { label: "rate",        type: "function", detail: "(rate n pat) — playback rate: 1.0 = normal, 2.0 = octave up; (rate n) returns transformer" },
   { label: "begin",       type: "function", detail: "(begin frac pat) — sample start offset 0.0–1.0; (begin frac) returns transformer" },
@@ -65,7 +63,7 @@ const BUILTINS = [
   { label: "samples!",     type: "function", detail: "(samples! url) — load external sample bank" },
   { label: "sample-banks", type: "function", detail: "(sample-banks) — list all registered bank names" },
   // --- Effects ---
-  { label: "fx",           type: "function", detail: "(fx :name param val …) — set effect parameters" },
+  { label: "fx",          type: "function", detail: "(fx :name param) — global effect; inside ->>: (fx :name param pat) — per-track effect on this track only" },
   { label: "load-plugin",  type: "function", detail: "(load-plugin url) — load a REPuLse plugin from URL" },
   // --- Tracks (multi-pattern) ---
   { label: "play",        type: "function", detail: "(play :name pattern) — start or replace a named track (use in editor buffer)" },

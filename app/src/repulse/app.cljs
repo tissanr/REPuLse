@@ -572,8 +572,14 @@
                        (if (and (map? pat') (fn? (:query pat')))
                          (do
                            (audio/play-track! name' pat' on-beat highlight-range!)
+                           ;; Apply per-track FX from pattern metadata (clear old chain first)
+                           (fx/clear-track-effects! name')
+                           (doseq [{:keys [name params]} (:track-fx pat')]
+                             (fx/add-track-effect! name' name)
+                             (doseq [[k v] params]
+                               (fx/set-track-param! name' name k v)))
                            (set-playing! true)
-                           (str "=> track :" (name name') " playing"))
+                           (str "=> track :" (cljs.core/name name') " playing"))
                          "Error: second argument to play must be a pattern")))
                    "mute!"
                    (fn [track-name]
@@ -669,56 +675,48 @@
                    (fn [prefix]
                      (samples/set-bank-prefix! (leval/unwrap prefix))
                      (str "bank: " (if prefix (name (leval/unwrap prefix)) "cleared")))
+                   ;; fx: context-aware — per-track transformer when called from ->>, global otherwise
                    "fx"
-                   (fn [& args]
-                     (let [args'     (mapv leval/unwrap args)
-                           first-arg (first args')]
-                       (cond
-                         (= first-arg :off)
-                         (fx/bypass! (cljs.core/name (second args')) true)
+                   (fn [& raw-args]
+                     (let [args'    (mapv leval/unwrap raw-args)
+                           last-arg (last args')
+                           ;; When ->> passes the pattern as last arg, route per-track
+                           per-track? (and (> (count args') 1)
+                                           (map? last-arg)
+                                           (fn? (:query last-arg)))]
+                       (if per-track?
+                         ;; ── Per-track mode: annotate pattern with FX metadata ──────────
+                         (let [fx-args     (butlast args')
+                               pat         last-arg
+                               effect-name (cljs.core/name (first fx-args))
+                               rest-fx     (rest fx-args)
+                               params      (if (keyword? (first rest-fx))
+                                             (into {} (map (fn [[k v]] [(cljs.core/name k) v])
+                                                           (partition 2 rest-fx)))
+                                             (when (seq rest-fx)
+                                               {"value" (first rest-fx)}))]
+                           (update pat :track-fx (fnil conj []) {:name effect-name :params (or params {})}))
+                         ;; ── Global chain mode: apply to master chain ─────────────────
+                         (do
+                           (let [first-arg (first args')]
+                             (cond
+                               (= first-arg :off)
+                               (fx/bypass! (cljs.core/name (second args')) true)
 
-                         (= first-arg :on)
-                         (fx/bypass! (cljs.core/name (second args')) false)
+                               (= first-arg :on)
+                               (fx/bypass! (cljs.core/name (second args')) false)
 
-                         (= first-arg :remove)
-                         (fx/remove-effect! (cljs.core/name (second args')))
+                               (= first-arg :remove)
+                               (fx/remove-effect! (cljs.core/name (second args')))
 
-                         :else
-                         (let [effect-name (cljs.core/name first-arg)
-                               rest-args   (rest args')]
-                           (if (keyword? (first rest-args))
-                             (doseq [[k v] (partition 2 rest-args)]
-                               (fx/set-param! effect-name (cljs.core/name k) v))
-                             (fx/set-param! effect-name "value" (first rest-args))))))
-                     nil)
-                   ;; --- Per-track FX --- Phase L
-                   "track-fx"
-                   (fn [& args]
-                     (let [args'      (mapv leval/unwrap args)
-                           track-name (first args')
-                           rest-args  (vec (rest args'))]
-                       (cond
-                         ;; (track-fx :bass :off) — clear all effects from track
-                         (and (= (first rest-args) :off) (= 1 (count rest-args)))
-                         (fx/clear-track-effects! track-name)
-
-                         ;; (track-fx :bass :off :reverb) — remove specific effect
-                         (= (first rest-args) :off)
-                         (fx/remove-track-effect! track-name (cljs.core/name (second rest-args)))
-
-                         ;; (track-fx :bass :reverb 0.4) — add/set effect
-                         :else
-                         (let [effect-name (cljs.core/name (first rest-args))
-                               params      (rest rest-args)]
-                           (when-not (some #(= effect-name (:name %))
-                                           (:fx-chain (get @audio/track-nodes track-name)))
-                             (fx/add-track-effect! track-name effect-name))
-                           (if (keyword? (first params))
-                             (doseq [[k v] (partition 2 params)]
-                               (fx/set-track-param! track-name effect-name (cljs.core/name k) v))
-                             (when (seq params)
-                               (fx/set-track-param! track-name effect-name "value" (first params))))))
-                       nil))
+                               :else
+                               (let [effect-name (cljs.core/name first-arg)
+                                     rest-args   (rest args')]
+                                 (if (keyword? (first rest-args))
+                                   (doseq [[k v] (partition 2 rest-args)]
+                                     (fx/set-param! effect-name (cljs.core/name k) v))
+                                   (fx/set-param! effect-name "value" (first rest-args))))))
+                           nil))))
                    ;; --- Demo templates ---
                    "demo"
                    (fn [& args]

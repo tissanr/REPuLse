@@ -129,7 +129,8 @@
   [value]
   (cond
     (keyword? value) (name value)
-    (and (map? value) (:note value)) (name (:note value))
+    (and (map? value) (:note value)) (let [n (:note value)]
+                                       (when (keyword? n) (name n)))
     (and (map? value) (:synth value)) (cljs.core/name (:synth value))
     :else nil))
 

@@ -762,6 +762,36 @@ Control them with the `fx` built-in.
 (fx :remove :delay)
 ```
 
+### Per-track effects
+
+Route a track through its own private effect chain by placing `fx` inside the `->>` pipeline:
+
+```lisp
+(play :kick
+  (->> (seq :bd :_ :bd :_)
+       (fx :filter 1000)))              ; kick only goes through lowpass
+
+(play :lead
+  (->> (scale :minor :c3 (seq 0 2 4 7))
+       (decay 1.0)
+       (fx :reverb 0.4)))              ; lead gets its own reverb
+
+;; Multiple effects on one track
+(play :bass
+  (->> (seq :c2 :_ :eb2 :_)
+       (fx :filter 600)
+       (fx :overdrive 0.6)))
+
+;; Named params work the same as global fx
+(play :snare
+  (->> (seq :_ :sd :_ :sd)
+       (fx :delay :wet 0.3 :time 0.25 :feedback 0.4)))
+```
+
+To remove a per-track effect, re-evaluate the `play` form without the `(fx ...)` line.
+
+> **Note:** `fx` must come **after** all pattern transformations (`amp`, `decay`, `pan`, etc.) in the `->>` chain — it annotates the final pattern for audio routing.
+
 ### Built-in effects
 
 #### `reverb` — convolution reverb
@@ -1165,6 +1195,28 @@ name, a suggestion is shown.
 
 ;; Render 1 cycle (useful for short loops)
 (export 1)
+```
+
+### Per-track effects
+
+```lisp
+(bpm 128)
+
+;; Kick: tight lowpass, no reverb
+(play :kick
+  (->> (seq :bd :_ :bd :_)
+       (fx :filter 800)))
+
+;; Lead: its own reverb + delay, independent of the kick
+(play :lead
+  (->> (scale :minor :c3 (seq 0 2 4 7))
+       (amp 0.6)
+       (decay 0.8)
+       (fx :reverb 0.5)
+       (fx :delay :wet 0.3 :time 0.25)))
+
+;; Global master bus compressor still applies to the whole mix
+(fx :compressor 0.8)
 ```
 
 ### Stopping

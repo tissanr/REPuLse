@@ -96,7 +96,7 @@
     (if-let [tn (get @track-nodes track-name)]
       (if-let [first-fx (first (:fx-chain tn))]
         (:input first-fx)
-        (:gain-node tn))
+        @master-gain)
       ;; track-name given but no node yet — fallback
       (or @master-gain (.-destination ac)))
     ;; no track-name or offline render
@@ -273,17 +273,19 @@
 ;;; Synthesis dispatch
 
 (defn- worklet-trigger!
-  "Send a trigger message to the AudioWorklet. Returns true if worklet is ready."
-  [value t]
-  (when (and @worklet-ready? @worklet-node)
+  "Send a trigger message to the AudioWorklet. Returns true if worklet is ready.
+   dest must be master-gain — worklet always outputs there and cannot be redirected."
+  [value t dest]
+  (when (and @worklet-ready? @worklet-node (= dest @master-gain))
     (.. @worklet-node -port
         (postMessage #js {:type "trigger" :value value :time t}))
     true))
 
 (defn- worklet-trigger-v2!
-  "Send a trigger_v2 message with explicit synthesis parameters. Returns true if ready."
-  [value t amp attack decay pan]
-  (when (and @worklet-ready? @worklet-node)
+  "Send a trigger_v2 message with explicit synthesis parameters. Returns true if ready.
+   dest must be master-gain — worklet always outputs there and cannot be redirected."
+  [value t amp attack decay pan dest]
+  (when (and @worklet-ready? @worklet-node (= dest @master-gain))
     (.. @worklet-node -port
         (postMessage #js {:type "trigger_v2" :value value :time t
                           :amp amp :attack attack :decay decay :pan pan}))
@@ -326,14 +328,14 @@
            (= synth :saw)
            (let [hz (if (theory/note-keyword? note) (theory/note->hz note) (double note))]
              (or (when-not offline?
-                   (worklet-trigger-v2! (str "saw:" hz) t amp-v attack-v decay-v pan-v))
+                   (worklet-trigger-v2! (str "saw:" hz) t amp-v attack-v decay-v pan-v dest))
                  (make-saw ac t hz decay-v amp-v attack-v pan-v dest)))
 
            (= synth :square)
            (let [hz (if (theory/note-keyword? note) (theory/note->hz note) (double note))]
              (or (when-not offline?
                    (worklet-trigger-v2! (str "square:" hz ":" (or (:pw value) 0.5))
-                                        t amp-v attack-v decay-v pan-v))
+                                        t amp-v attack-v decay-v pan-v dest))
                  (make-square ac t hz decay-v amp-v attack-v pan-v dest)))
 
            (= synth :fm)
@@ -342,7 +344,7 @@
                  ratio (or (:ratio value) 2.0)]
              (or (when-not offline?
                    (worklet-trigger-v2! (str "fm:" hz ":" index ":" ratio)
-                                        t amp-v attack-v decay-v pan-v))
+                                        t amp-v attack-v decay-v pan-v dest))
                  ;; JS fallback: sine (FM needs two connected oscillators — WASM only)
                  (make-sine ac t hz decay-v amp-v attack-v pan-v dest)))
 
@@ -352,7 +354,7 @@
              (let [hz (theory/note->hz note)]
                (if offline?
                  (make-sine ac t hz decay-v amp-v attack-v pan-v dest)
-                 (or (worklet-trigger-v2! (str hz) t amp-v attack-v decay-v pan-v)
+                 (or (worklet-trigger-v2! (str hz) t amp-v attack-v decay-v pan-v dest)
                      (make-sine ac t hz decay-v amp-v attack-v pan-v dest))))
              (let [resolved (samples/resolve-keyword note)
                    extra    {:rate  (:rate value)
@@ -365,13 +367,13 @@
                  :else
                  (if offline?
                    (js-synth ac t note amp-v pan-v dest)
-                   (or (worklet-trigger-v2! (name note) t amp-v attack-v decay-v pan-v)
+                   (or (worklet-trigger-v2! (name note) t amp-v attack-v decay-v pan-v dest)
                        (js-synth ac t note amp-v pan-v dest))))))
 
            (number? note)
            (if offline?
              (make-sine ac t note decay-v amp-v attack-v pan-v dest)
-             (or (worklet-trigger-v2! (str note) t amp-v attack-v decay-v pan-v)
+             (or (worklet-trigger-v2! (str note) t amp-v attack-v decay-v pan-v dest)
                  (make-sine ac t note decay-v amp-v attack-v pan-v dest)))))
 
        ;; Map {:bank :bd :n 2} from (sound :bd 2) — always use samples
@@ -383,7 +385,7 @@
            (samples/play! ac t bank n 1.0 0.0 extra dest)
            (if offline?
              (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)
-             (or (worklet-trigger! (name bank) t)
+             (or (worklet-trigger! (name bank) t dest)
                  (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)))))
 
        ;; Keyword — note name → Hz tone, or sample bank
@@ -392,14 +394,14 @@
          (let [hz (theory/note->hz value)]
            (if offline?
              (make-sine ac t hz 1.5 1.0 0.001 0.0 dest)
-             (or (worklet-trigger! (str hz) t)
+             (or (worklet-trigger! (str hz) t dest)
                  (make-sine ac t hz 1.5 1.0 0.001 0.0 dest))))
          (let [resolved (samples/resolve-keyword value)]
            (cond
              (samples/has-bank? resolved) (samples/play! ac t resolved 0 1.0 0.0 {} dest)
              :else (if offline?
                      (js-synth ac t value dest)
-                     (or (worklet-trigger! (name value) t)
+                     (or (worklet-trigger! (name value) t dest)
                          (js-synth ac t value dest))))))
 
        ;; Map with :synth :noise — no :note key
@@ -408,14 +410,14 @@
              decay-v (float (:decay value 0.3))
              pan-v  (float (:pan value 0.0))]
          (or (when-not offline?
-               (worklet-trigger-v2! "noise" t amp-v 0.001 decay-v pan-v))
+               (worklet-trigger-v2! "noise" t amp-v 0.001 decay-v pan-v dest))
              (make-noise ac t decay-v amp-v pan-v dest)))
 
        ;; Number — frequency in Hz
        (number? value)
        (if offline?
          (make-sine ac t value 1.5 1.0 0.001 0.0 dest)
-         (or (worklet-trigger! (str value) t)
+         (or (worklet-trigger! (str value) t dest)
              (make-sine ac t value 1.5 1.0 0.001 0.0 dest)))
 
        :else (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)))))

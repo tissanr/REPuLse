@@ -12,13 +12,15 @@ dynamics, and more synth voices.
 (play :lead (scale :minor :c4 (seq 0 2 4 7)))
 (fx :reverb 0.4)    ; washes over everything
 
-;; After — per-track effect chains:
-(play :kick (seq :bd :_ :bd :_))
-(play :lead (scale :minor :c4 (seq 0 2 4 7)))
-(track-fx :lead :reverb 0.4)          ; reverb on lead only
-(track-fx :lead :delay :wet 0.3 :time 0.25)
-(track-fx :kick :filter 800)          ; lowpass on kick only
-(track-fx :kick :off :filter)         ; remove filter from kick
+;; After — per-track effect chains (inline ->> syntax):
+(play :lead (->> (scale :minor :c4 (seq 0 2 4 7))
+                 (fx :reverb 0.4)))           ; reverb on lead only
+(play :lead (->> (scale :minor :c4 (seq 0 2 4 7))
+                 (fx :reverb 0.4)
+                 (fx :delay :wet 0.3 :time 0.25)))
+(play :kick (->> (seq :bd :_ :bd :_)
+                 (fx :filter 800)))           ; lowpass on kick only
+(play :kick (seq :bd :_ :bd :_))              ; re-evaluate without fx to remove
 
 ;; After — sample playback control:
 (->> (sound :tabla 0) (rate 1.5))          ; 50% higher pitch
@@ -112,18 +114,21 @@ sources ──────┘     │                                  │
 `play-event` gains a fourth argument: the track name. It routes the output of each
 sound source to the track's GainNode rather than `masterGain` directly.
 
-### 2. `track-fx` reuses the plugin infrastructure
+### 2. Per-track effects reuse the plugin infrastructure
 
 Per-track effects use the exact same plugin interface as global effects (`createNodes`,
 `setParam`, `bypass`, `destroy`). The only difference is where the chain is stored and
 what nodes the chain connects between.
 
-`track-fx` in `fx.cljs` mirrors the global `fx` API but scoped to a track:
+Per-track effects are applied inline via `->>` in the `play` call. The `fx` function
+detects when a pattern is passed as its last argument and annotates it with `:track-fx`
+metadata instead of applying global chain changes. When `play` evaluates, it reads the
+metadata and wires up the track's effect chain automatically:
 
 ```lisp
-(track-fx :name :effect-name param ...)   ; apply effect to track
-(track-fx :name :off :effect-name)        ; bypass effect on track
-(track-fx :name :off)                     ; clear all track effects
+(play :bass (->> (seq :c2 :_ :eb2 :_)
+                 (fx :filter 600)
+                 (fx :overdrive 0.6)))
 ```
 
 ### 3. Sample params as event map keys
@@ -965,41 +970,11 @@ Add to `make-env`:
                 ([v p] (params/loop-sample (unwrap v) (unwrap p))))
 ```
 
-Add `track-fx` to `app.cljs` `ensure-env!` (not in `make-env`, since it needs
-`fx` and `audio` namespaces):
-
-```clojure
-"track-fx"
-(fn [& args]
-  (let [args'      (mapv leval/unwrap args)
-        track-name (first args')
-        rest-args  (rest args')]
-    (cond
-      ;; (track-fx :bass :off)            — clear all track effects
-      (and (= (first rest-args) :off) (= 1 (count rest-args)))
-      (fx/clear-track-effects! track-name)
-
-      ;; (track-fx :bass :off :reverb)    — bypass/remove specific effect
-      (= (first rest-args) :off)
-      (fx/remove-track-effect! track-name (cljs.core/name (second rest-args)))
-
-      ;; (track-fx :bass :reverb 0.4)     — set effect with positional param
-      ;; (track-fx :bass :delay :wet 0.3 :time 0.25) — set effect with named params
-      :else
-      (let [effect-name (cljs.core/name (first rest-args))
-            params      (rest rest-args)]
-        ;; Ensure effect exists on track
-        (when-not (some #(= effect-name (:name %))
-                        (:fx-chain (get @audio/track-nodes track-name)))
-          (fx/add-track-effect! track-name effect-name))
-        ;; Set params
-        (if (keyword? (first params))
-          (doseq [[k v] (partition 2 params)]
-            (fx/set-track-param! track-name effect-name (cljs.core/name k) v))
-          (when (first params)
-            (fx/set-track-param! track-name effect-name "value" (first params)))))))
-  nil)
-```
+Update `"fx"` in `app.cljs` `ensure-env!` to be context-aware — it detects whether a
+pattern is the last argument (per-track mode via `->>`), and if so annotates the pattern
+with `:track-fx` metadata instead of mutating the global chain. The `"play"` binding reads
+`:track-fx` metadata and wires the chain via `fx/clear-track-effects!` + `fx/add-track-effect!`
++ `fx/set-track-param!`.
 
 Add new synth voice constructors — `saw`, `square`, `noise`, `fm` — to `make-env`
 in `eval.cljs`:
@@ -1072,7 +1047,7 @@ In `play-event`, add handling for the `:synth` key in map values. Extend the
 Add to the BuiltinName token list:
 
 ```
-"track-fx" | "rate" | "begin" | "end" | "loop-sample" |
+"rate" | "begin" | "end" | "loop-sample" |
 "saw" | "square" | "noise" | "fm" |
 ```
 
@@ -1083,8 +1058,6 @@ After editing, run `npm run gen:grammar`.
 ### 12. `app/src/repulse/lisp-lang/completions.js` — add entries
 
 ```javascript
-// --- Per-track effects ---
-{ label: "track-fx",    type: "function", detail: "(track-fx :track :effect param …) — per-track effect chain" },
 // --- Sample playback control ---
 { label: "rate",        type: "function", detail: "(rate n pat) — playback rate (1.0 = normal, 2.0 = octave up); (rate n) returns transformer" },
 { label: "begin",       type: "function", detail: "(begin frac pat) — sample start position 0.0–1.0; (begin frac) returns transformer" },
@@ -1105,7 +1078,7 @@ After editing, run `npm run gen:grammar`.
 |---|---|
 | `app/src/repulse/audio.cljs` | Per-track GainNode routing; `play-event` gains track-name param + dest routing; `ensure-track-node!`; new JS fallback synths (`make-saw`, `make-square`, `make-noise`); `:on-fx-event` callback slot in scheduler-state; track cleanup in `stop!`/`clear-track!` |
 | `app/src/repulse/fx.cljs` | `rewire-track!`, `add-track-effect!`, `remove-track-effect!`, `clear-track-effects!`, `set-track-param!`, `bypass-track-effect!`, `notify-fx-event!` (event notification for sidechain) |
-| `app/src/repulse/app.cljs` | Wire `fx/notify-fx-event!` into scheduler via `:on-fx-event` callback; `track-fx` binding in `ensure-env!`; auto-load sidechain plugin; `saw`/`square`/`noise`/`fm` bindings |
+| `app/src/repulse/app.cljs` | Wire `fx/notify-fx-event!` into scheduler via `:on-fx-event` callback; context-aware `fx` binding (per-track via `->>` or global); updated `play` binding reads `:track-fx` metadata; auto-load sidechain plugin; `saw`/`square`/`noise`/`fm` bindings |
 | `app/src/repulse/samples.cljs` | `play!` gains `:rate`, `:begin`, `:end`, `:loop` support + destination node param |
 | `packages/core/src/repulse/params.cljs` | `rate`, `begin`, `end*`, `loop-sample` |
 | `packages/core/test/repulse/params_test.cljs` | Tests for new param functions |
@@ -1124,11 +1097,10 @@ After editing, run `npm run gen:grammar`.
 ### Per-track routing
 
 - [ ] `(play :kick (seq :bd :_ :bd :_))` creates a per-track GainNode for `:kick`
-- [ ] `(track-fx :kick :reverb 0.4)` adds reverb only to the kick track
-- [ ] `(track-fx :lead :delay :wet 0.3 :time 0.25)` adds delay only to the lead track
+- [ ] `(play :kick (->> (seq :bd :_ :bd :_) (fx :reverb 0.4)))` adds reverb only to the kick track
+- [ ] `(play :lead (->> (scale :minor :c4 (seq 0 2 4 7)) (fx :delay :wet 0.3 :time 0.25)))` adds delay only to the lead track
 - [ ] Kick and lead have independent, non-interfering effect chains
-- [ ] `(track-fx :kick :off :reverb)` removes reverb from kick without affecting lead
-- [ ] `(track-fx :kick :off)` clears all effects from kick
+- [ ] Re-evaluating `(play :kick (seq :bd :_ :bd :_))` without `(fx ...)` removes the effect chain
 - [ ] Global `(fx :reverb 0.4)` still works and affects the master bus
 - [ ] `(stop)` cleans up all per-track nodes without console errors
 - [ ] `(clear! :kick)` disconnects the kick track's GainNode and effects
@@ -1166,11 +1138,11 @@ After editing, run `npm run gen:grammar`.
 ### Composition
 
 - [ ] Per-track effects + sample control + sidechain work together in a full arrangement
-- [ ] `(stack (play :drums ...) (play :bass ...))` with independent track-fx on each
+- [ ] `(play :drums ...)` and `(play :bass ...)` with independent per-track effects via `->>`
 - [ ] All existing core tests still pass (`npm run test:core`)
 
 ### UI
 
-- [ ] `track-fx`, `rate`, `begin`, `end`, `loop-sample`, `saw`, `square`, `noise`, `fm` appear in autocomplete
-- [ ] All nine tokens receive syntax highlighting as built-in names
+- [ ] `rate`, `begin`, `end`, `loop-sample`, `saw`, `square`, `noise`, `fm` appear in autocomplete
+- [ ] All eight tokens receive syntax highlighting as built-in names
 - [ ] Context panel shows per-track effects when active

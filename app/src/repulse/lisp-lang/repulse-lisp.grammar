@@ -33,7 +33,7 @@ Map    { "{" expr* "}" }
     "play" | "mute!" | "unmute!" | "solo!" | "clear!" | "tracks" | "tap!" | "midi-sync!" |
     "upd" | "demo" | "tutorial" |
     "~" | "alt" | "load-gist" | "export" |
-    "track-fx" | "rate" | "begin" | "end" | "loop-sample" |
+    "rate" | "begin" | "end" | "loop-sample" |
     "saw" | "square" | "noise" | "fm"
   }
 

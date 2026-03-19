@@ -263,9 +263,9 @@ const DOCS = {
 
   // --- Effects ---
   "fx": {
-    signature: "(fx :name :param val ...) or (fx :off/:on :name)",
-    description: "Set effect parameters. Use (fx :off :name) to bypass, (fx :on :name) to re-enable.",
-    example: "(fx :reverb :wet 0.4)",
+    signature: "(fx :name param) or (->> pat (fx :name param))",
+    description: "Global: sets a master-chain effect parameter. Per-track: use inside ->> to route a track through its own effect chain — re-evaluating play without (fx ...) removes the effect automatically. Use (fx :off :name) / (fx :on :name) to bypass/restore global effects.",
+    example: "(->> (seq :bd :_ :bd :_) (fx :filter 1000))",
   },
   "load-plugin": {
     signature: '(load-plugin "url")',
