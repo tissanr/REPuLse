@@ -97,10 +97,46 @@ enum Voice {
     Tone {
         phase: f64,
         freq: f64,
-        amp: f32,       // peak amplitude
-        gain: f32,      // current envelope value
+        amp: f32,
+        gain: f32,
         gain_decay: f32,
-        attack_inc: f32, // per-sample gain increment during attack (0 = instant)
+        attack_inc: f32,
+        in_attack: bool,
+    },
+    Saw {
+        phase: f64,
+        freq: f64,
+        amp: f32,
+        gain: f32,
+        gain_decay: f32,
+        attack_inc: f32,
+        in_attack: bool,
+    },
+    Square {
+        phase: f64,
+        freq: f64,
+        amp: f32,
+        gain: f32,
+        gain_decay: f32,
+        attack_inc: f32,
+        in_attack: bool,
+        pulse_width: f32,  // 0.0–1.0, default 0.5
+    },
+    Noise {
+        state: u32,
+        gain: f32,
+        gain_decay: f32,
+    },
+    FM {
+        carrier_phase: f64,
+        mod_phase: f64,
+        carrier_freq: f64,
+        mod_freq: f64,
+        index: f32,
+        amp: f32,
+        gain: f32,
+        gain_decay: f32,
+        attack_inc: f32,
         in_attack: bool,
     },
 }
@@ -131,7 +167,6 @@ impl Voice {
                 out
             }
             Voice::Tone { phase, freq, amp, gain, gain_decay, attack_inc, in_attack } => {
-                // Envelope: ramp up during attack, then exponential decay
                 if *in_attack {
                     *gain += *attack_inc;
                     if *gain >= *amp { *gain = *amp; *in_attack = false; }
@@ -142,14 +177,61 @@ impl Voice {
                 *phase += *freq / sr as f64;
                 s * *gain
             }
+            Voice::Saw { phase, freq, amp, gain, gain_decay, attack_inc, in_attack } => {
+                if *in_attack {
+                    *gain += *attack_inc;
+                    if *gain >= *amp { *gain = *amp; *in_attack = false; }
+                } else {
+                    *gain *= *gain_decay;
+                }
+                // Sawtooth: ramp from -1 to +1 over one period
+                let s = (2.0 * (*phase % 1.0) - 1.0) as f32;
+                *phase += *freq / sr as f64;
+                s * *gain
+            }
+            Voice::Square { phase, freq, amp, gain, gain_decay, attack_inc, in_attack, pulse_width } => {
+                if *in_attack {
+                    *gain += *attack_inc;
+                    if *gain >= *amp { *gain = *amp; *in_attack = false; }
+                } else {
+                    *gain *= *gain_decay;
+                }
+                let p = *phase % 1.0;
+                let s: f32 = if p < *pulse_width as f64 { 1.0 } else { -1.0 };
+                *phase += *freq / sr as f64;
+                s * *gain
+            }
+            Voice::Noise { state, gain, gain_decay } => {
+                let s = lcg_next(state);
+                let out = s * *gain;
+                *gain *= *gain_decay;
+                out
+            }
+            Voice::FM { carrier_phase, mod_phase, carrier_freq, mod_freq, index,
+                        amp, gain, gain_decay, attack_inc, in_attack } => {
+                if *in_attack {
+                    *gain += *attack_inc;
+                    if *gain >= *amp { *gain = *amp; *in_attack = false; }
+                } else {
+                    *gain *= *gain_decay;
+                }
+                let mod_sig = (*mod_phase * TAU).sin() as f32;
+                let carrier_sig = (*carrier_phase * TAU + (*index * mod_sig) as f64).sin() as f32;
+                *carrier_phase += *carrier_freq / sr as f64;
+                *mod_phase     += *mod_freq     / sr as f64;
+                carrier_sig * *gain
+            }
         }
     }
 
     fn is_silent(&self) -> bool {
         match self {
-            Voice::Tone { gain, in_attack, .. } => !*in_attack && *gain < 1e-5,
-            Voice::Kick { gain, .. } | Voice::Snare { gain, .. }
-            | Voice::Hihat { gain, .. } => *gain < 1e-5,
+            Voice::Tone     { gain, in_attack, .. }
+            | Voice::Saw    { gain, in_attack, .. }
+            | Voice::Square { gain, in_attack, .. }
+            | Voice::FM     { gain, in_attack, .. } => !*in_attack && *gain < 1e-5,
+            Voice::Kick  { gain, .. } | Voice::Snare { gain, .. }
+            | Voice::Hihat { gain, .. } | Voice::Noise { gain, .. } => *gain < 1e-5,
         }
     }
 }
@@ -263,41 +345,82 @@ impl AudioEngine {
         let sr = self.sample_rate;
         let seed = self.next_seed();
         let amp = p.amp.clamp(0.0, 1.0);
-        let voice = match p.value.trim_start_matches(':') {
-            "bd" => {
-                let sweep_samples = 0.06 * sr as f64;
-                Voice::Kick {
-                    phase: 0.0, freq: 150.0, freq_floor: 40.0,
-                    freq_decay: (40.0_f64 / 150.0).powf(1.0 / sweep_samples),
-                    gain: amp, gain_decay: decay_rate(0.4, sr),
-                }
+        let value = p.value.trim_start_matches(':');
+
+        let voice = if value.starts_with("saw:") {
+            let freq = value[4..].parse::<f64>().unwrap_or(440.0);
+            let peak = amp * 0.5;
+            let attack_samples = (p.attack * sr).max(1.0);
+            Voice::Saw {
+                phase: 0.0, freq, amp: peak, gain: 0.0,
+                gain_decay: decay_rate(p.decay, sr),
+                attack_inc: peak / attack_samples, in_attack: true,
             }
-            "sd" => Voice::Snare {
-                noise_state: seed, bpf: Biquad::bandpass(200.0, 0.7, sr),
-                gain: 0.9 * amp, gain_decay: decay_rate(0.2, sr),
-                phase: 0.0, tone_gain: amp, tone_gain_decay: decay_rate(0.1, sr),
-            },
-            "hh" => Voice::Hihat {
-                noise_state: seed, hpf: Biquad::highpass(8000.0, 0.7, sr),
-                gain: 0.5 * amp, gain_decay: decay_rate(0.045, sr),
-            },
-            "oh" => Voice::Hihat {
-                noise_state: seed, hpf: Biquad::highpass(8000.0, 0.7, sr),
-                gain: 0.4 * amp, gain_decay: decay_rate(1.0, sr),
-            },
-            other => {
-                let freq = other.parse::<f64>().unwrap_or(440.0);
-                // amp is the peak gain (0.0–1.0). Scale by 0.5 to leave headroom
-                // for polyphony — identical to make-sine JS fallback.
-                let peak = amp * 0.5;
-                let attack_samples = (p.attack * sr).max(1.0);
-                Voice::Tone {
-                    phase: 0.0, freq,
-                    amp: peak,
-                    gain: 0.0,
-                    gain_decay: decay_rate(p.decay, sr),
-                    attack_inc: peak / attack_samples,
-                    in_attack: true,
+        } else if value.starts_with("square:") {
+            let parts: Vec<&str> = value[7..].splitn(2, ':').collect();
+            let freq = parts[0].parse::<f64>().unwrap_or(440.0);
+            let pw = if parts.len() > 1 { parts[1].parse::<f32>().unwrap_or(0.5) } else { 0.5 };
+            let peak = amp * 0.5;
+            let attack_samples = (p.attack * sr).max(1.0);
+            Voice::Square {
+                phase: 0.0, freq, amp: peak, gain: 0.0,
+                gain_decay: decay_rate(p.decay, sr),
+                attack_inc: peak / attack_samples, in_attack: true,
+                pulse_width: pw.clamp(0.01, 0.99),
+            }
+        } else if value == "noise" {
+            Voice::Noise {
+                state: seed,
+                gain: amp * 0.3,
+                gain_decay: decay_rate(p.decay, sr),
+            }
+        } else if value.starts_with("fm:") {
+            // Format: "fm:<carrier_hz>:<index>:<ratio>"
+            let parts: Vec<&str> = value[3..].splitn(3, ':').collect();
+            let carrier_freq = parts[0].parse::<f64>().unwrap_or(440.0);
+            let index = if parts.len() > 1 { parts[1].parse::<f32>().unwrap_or(1.0) } else { 1.0 };
+            let ratio = if parts.len() > 2 { parts[2].parse::<f64>().unwrap_or(2.0) } else { 2.0 };
+            let peak = amp * 0.5;
+            let attack_samples = (p.attack * sr).max(1.0);
+            Voice::FM {
+                carrier_phase: 0.0, mod_phase: 0.0,
+                carrier_freq, mod_freq: carrier_freq * ratio,
+                index, amp: peak, gain: 0.0,
+                gain_decay: decay_rate(p.decay, sr),
+                attack_inc: peak / attack_samples, in_attack: true,
+            }
+        } else {
+            match value {
+                "bd" => {
+                    let sweep_samples = 0.06 * sr as f64;
+                    Voice::Kick {
+                        phase: 0.0, freq: 150.0, freq_floor: 40.0,
+                        freq_decay: (40.0_f64 / 150.0).powf(1.0 / sweep_samples),
+                        gain: amp, gain_decay: decay_rate(0.4, sr),
+                    }
+                }
+                "sd" => Voice::Snare {
+                    noise_state: seed, bpf: Biquad::bandpass(200.0, 0.7, sr),
+                    gain: 0.9 * amp, gain_decay: decay_rate(0.2, sr),
+                    phase: 0.0, tone_gain: amp, tone_gain_decay: decay_rate(0.1, sr),
+                },
+                "hh" => Voice::Hihat {
+                    noise_state: seed, hpf: Biquad::highpass(8000.0, 0.7, sr),
+                    gain: 0.5 * amp, gain_decay: decay_rate(0.045, sr),
+                },
+                "oh" => Voice::Hihat {
+                    noise_state: seed, hpf: Biquad::highpass(8000.0, 0.7, sr),
+                    gain: 0.4 * amp, gain_decay: decay_rate(1.0, sr),
+                },
+                other => {
+                    let freq = other.parse::<f64>().unwrap_or(440.0);
+                    let peak = amp * 0.5;
+                    let attack_samples = (p.attack * sr).max(1.0);
+                    Voice::Tone {
+                        phase: 0.0, freq, amp: peak, gain: 0.0,
+                        gain_decay: decay_rate(p.decay, sr),
+                        attack_inc: peak / attack_samples, in_attack: true,
+                    }
                 }
             }
         };

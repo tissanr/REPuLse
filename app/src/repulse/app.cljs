@@ -569,11 +569,17 @@
                    (fn [track-name pat]
                      (let [name' (leval/unwrap track-name)
                            pat'  (leval/unwrap pat)]
-                       (if (and (map? pat') (fn? (:query pat')))
+                       (if (core/pattern? pat')
                          (do
                            (audio/play-track! name' pat' on-beat highlight-range!)
+                           ;; Apply per-track FX from pattern metadata (clear old chain first)
+                           (fx/clear-track-effects! name')
+                           (doseq [{:keys [name params]} (:track-fx pat')]
+                             (fx/add-track-effect! name' name)
+                             (doseq [[k v] params]
+                               (fx/set-track-param! name' name k v)))
                            (set-playing! true)
-                           (str "=> track :" (name name') " playing"))
+                           (str "=> track :" (cljs.core/name name') " playing"))
                          "Error: second argument to play must be a pattern")))
                    "mute!"
                    (fn [track-name]
@@ -621,13 +627,15 @@
                                (set-output! (str "Error: " err) :error))
                            (let [val (:result result)]
                              (cond
-                               (and (map? val) (fn? (:query val)))
+                               (core/pattern? val)
                                (do (audio/play-track! :_ val on-beat highlight-range!)
                                    (set-playing! true)
                                    (set-output! "updated" :success))
                                (nil? val) nil
                                (string? val) (set-output! val :success)
-                               :else (set-output! (str "=> " (pr-str val)) :success)))))))
+                               :else (set-output! (str "=> " (pr-str val)) :success)))))
+                     ;; Always return nil so evaluate! does not re-process upd's output
+                     nil))
                    ;; --- Tap tempo ---
                    "tap!"
                    (fn []
@@ -669,28 +677,47 @@
                    (fn [prefix]
                      (samples/set-bank-prefix! (leval/unwrap prefix))
                      (str "bank: " (if prefix (name (leval/unwrap prefix)) "cleared")))
+                   ;; fx: context-aware — per-track transformer when called from ->>, global otherwise
                    "fx"
-                   (fn [& args]
-                     (let [args'     (mapv leval/unwrap args)
-                           first-arg (first args')]
-                       (cond
-                         (= first-arg :off)
-                         (fx/bypass! (cljs.core/name (second args')) true)
+                   (fn [& raw-args]
+                     (let [args'    (mapv leval/unwrap raw-args)
+                           last-arg (last args')
+                           ;; When ->> passes the pattern as last arg, route per-track
+                           per-track? (and (> (count args') 1)
+                                           (core/pattern? last-arg))]
+                       (if per-track?
+                         ;; ── Per-track mode: annotate pattern with FX metadata ──────────
+                         (let [fx-args     (butlast args')
+                               pat         last-arg
+                               effect-name (cljs.core/name (first fx-args))
+                               rest-fx     (rest fx-args)
+                               params      (if (keyword? (first rest-fx))
+                                             (into {} (map (fn [[k v]] [(cljs.core/name k) v])
+                                                           (partition 2 rest-fx)))
+                                             (when (seq rest-fx)
+                                               {"value" (first rest-fx)}))]
+                           (update pat :track-fx (fnil conj []) {:name effect-name :params (or params {})}))
+                         ;; ── Global chain mode: apply to master chain ─────────────────
+                         (do
+                           (let [first-arg (first args')]
+                             (cond
+                               (= first-arg :off)
+                               (fx/bypass! (cljs.core/name (second args')) true)
 
-                         (= first-arg :on)
-                         (fx/bypass! (cljs.core/name (second args')) false)
+                               (= first-arg :on)
+                               (fx/bypass! (cljs.core/name (second args')) false)
 
-                         (= first-arg :remove)
-                         (fx/remove-effect! (cljs.core/name (second args')))
+                               (= first-arg :remove)
+                               (fx/remove-effect! (cljs.core/name (second args')))
 
-                         :else
-                         (let [effect-name (cljs.core/name first-arg)
-                               rest-args   (rest args')]
-                           (if (keyword? (first rest-args))
-                             (doseq [[k v] (partition 2 rest-args)]
-                               (fx/set-param! effect-name (cljs.core/name k) v))
-                             (fx/set-param! effect-name "value" (first rest-args))))))
-                     nil)
+                               :else
+                               (let [effect-name (cljs.core/name first-arg)
+                                     rest-args   (rest args')]
+                                 (if (keyword? (first rest-args))
+                                   (doseq [[k v] (partition 2 rest-args)]
+                                     (fx/set-param! effect-name (cljs.core/name k) v))
+                                   (fx/set-param! effect-name "value" (first rest-args))))))
+                           nil))))
                    ;; --- Demo templates ---
                    "demo"
                    (fn [& args]
@@ -857,6 +884,8 @@
                            (str "exporting "
                                 (if track-kw (str ":" (name track-kw)) "all tracks")
                                 " — " n-cycles " cycles…")))))))
+    ;; Wire the FX event notification callback (used by sidechain plugin)
+    (swap! audio/scheduler-state assoc :on-fx-event fx/notify-fx-event!)
     ;; Snapshot built-in names so render-context-panel! can filter them out
     (reset! builtin-names (set (keys @env-atom)))))
 
@@ -874,13 +903,23 @@
       (let [val (:result result)]
         (cond
           ;; Pattern — start playing (legacy single-pattern mode)
-          (and (map? val) (fn? (:query val)))
+          (core/pattern? val)
           (do
             (audio/stop!)
             (clear-highlights!)
             (audio/start! val on-beat highlight-range!)
             (set-playing! true)
             (set-output! "playing pattern — Alt+Enter to re-evaluate, (stop) to stop" :success))
+
+          ;; Plain event-value map: (saw :c4), (sound :tabla 0), (noise), etc.
+          ;; Auto-wrap in pure so users don't need to write (pure (saw :c4)).
+          (and (map? val) (or (:note val) (:bank val) (:synth val)))
+          (do
+            (audio/stop!)
+            (clear-highlights!)
+            (audio/start! (core/pure val) on-beat highlight-range!)
+            (set-playing! true)
+            (set-output! "playing — Alt+Enter to re-evaluate, (stop) to stop" :success))
 
           ;; stop fn was called directly — handled inside stop fn
           (nil? val)
@@ -897,7 +936,7 @@
 
 (defn- infer-type [v]
   (cond
-    (and (map? v) (fn? (:query v))) "pattern"
+    (core/pattern? v) "pattern"
     (fn? v)                          "fn"
     (number? v)                      "number"
     (string? v)                      "string"
@@ -1174,7 +1213,8 @@
                "/plugins/phaser.js"
                "/plugins/tremolo.js"
                "/plugins/overdrive.js"
-               "/plugins/bitcrusher.js"]]
+               "/plugins/bitcrusher.js"
+               "/plugins/sidechain.js"]]
     (-> (js* "import(~{})" url)
         (.then (fn [m]
                  (let [plug (.-default m)]
@@ -1200,5 +1240,6 @@
   (start-playhead-raf!))
 
 (defn reload []
-  ;; Hot-reload hook: re-attach evaluate! without rebuilding the DOM
-  )
+  ;; Hot-reload hook: reset env so new/changed built-in bindings take effect
+  ;; without a full page reload.  User defs are lost but that is expected.
+  (reset! env-atom nil))

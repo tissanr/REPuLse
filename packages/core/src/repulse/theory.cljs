@@ -13,7 +13,8 @@
    and an optional octave number (defaults to 4 if omitted).
    Examples: :c4, :eb3, :fs5, :bb4, :cs-1, :a, :g, :bb."
   [kw]
-  (boolean (re-matches #"[a-g][sb]?(-?\d+)?" (name kw))))
+  (and (keyword? kw)
+       (boolean (re-matches #"[a-g][sb]?(-?\d+)?" (name kw)))))
 
 (defn note->midi
   "Convert a note keyword to a MIDI note number.

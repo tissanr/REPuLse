@@ -137,6 +137,34 @@
     (is (= src-a (:source (first evs))))
     (is (= src-b (:source (second evs))))))
 
+;;; ── rate / begin / end* / loop-sample ───────────────────────────────
+
+(deftest rate-scalar
+  (let [evs (core/query (params/rate 1.5 (core/pure :bd)) one-cycle)]
+    (is (= {:note :bd :rate 1.5} (:value (first evs))))))
+
+(deftest rate-one-arg
+  (let [speed-up (params/rate 2.0)
+        evs      (core/query (speed-up (core/pure :bd)) one-cycle)]
+    (is (= {:note :bd :rate 2.0} (:value (first evs))))))
+
+(deftest begin-end-chain
+  (let [evs (core/query
+              (params/end* 0.8 (params/begin 0.2 (core/pure :tabla)))
+              one-cycle)]
+    (is (= {:note :tabla :begin 0.2 :end 0.8} (:value (first evs))))))
+
+(deftest loop-sample-test
+  (let [evs (core/query (params/loop-sample true (core/pure :bd)) one-cycle)]
+    (is (= {:note :bd :loop true} (:value (first evs))))))
+
+(deftest rate-chains-with-amp
+  (let [evs (core/query (->> (core/pure :tabla)
+                              (params/rate 1.5)
+                              (params/amp 0.7))
+                        one-cycle)]
+    (is (= {:note :tabla :rate 1.5 :amp 0.7} (:value (first evs))))))
+
 ;;; ── jux ─────────────────────────────────────────────────────────────
 
 (deftest jux-stacks-panned

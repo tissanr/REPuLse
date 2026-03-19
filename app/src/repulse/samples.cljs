@@ -21,10 +21,16 @@
   (reset! active-bank-prefix (when prefix (name prefix)))
   (js/console.log (str "[REPuLse] bank prefix: " (or @active-bank-prefix "none"))))
 
-;; Default sample manifests (hosted on dough-samples, Strudel's canonical source)
+;; Default sample manifests.
+;; - dough-samples: small curated set (casio, crow, jazz, metal, etc.)
+;; - tidal-drum-machines: drum machine banks (AkaiLinn, TR-808, TR-909, …)
+;; - tidalcycles/Dirt-Samples: full SuperDirt library (tabla, bd, sd, cp, …)
+;;   strudel.json format: {"_base": "https://…/", "bank": ["path/file.wav", …]}
+;;   Lazy loading — audio files are only fetched when a sample actually plays.
 (def DEFAULT-MANIFESTS
   ["https://raw.githubusercontent.com/felixroos/dough-samples/main/Dirt-Samples.json"
-   "https://raw.githubusercontent.com/felixroos/dough-samples/main/tidal-drum-machines.json"])
+   "https://raw.githubusercontent.com/felixroos/dough-samples/main/tidal-drum-machines.json"
+   "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/strudel.json"])
 
 (defn- parse-manifest
   "Parse a manifest JS object into {bank-name -> [full-url ...]}."
@@ -102,25 +108,48 @@
 
 (defn play!
   "Schedule playback of the nth sample from bank at audio time t.
-   amp (0.0–1.0, default 1.0) scales the playback gain.
-   pan (-1.0–1.0, default 0.0) sets stereo position."
-  ([ac t bank n] (play! ac t bank n 1.0 0.0))
-  ([ac t bank n amp] (play! ac t bank n amp 0.0))
-  ([ac t bank n amp pan]
+   amp        — 0.0–1.0 gain (default 1.0)
+   pan        — -1.0–1.0 stereo position (default 0.0)
+   extra      — map with optional keys:
+                  :rate  — playback rate multiplier (default 1.0)
+                  :begin — start offset as fraction 0.0–1.0 (default 0.0)
+                  :end   — end offset as fraction 0.0–1.0 (default 1.0)
+                  :loop  — boolean, loop the sample (default false)
+   dest       — AudioNode to connect to (default: ac.destination)"
+  ([ac t bank n] (play! ac t bank n 1.0 0.0 {} nil))
+  ([ac t bank n amp] (play! ac t bank n amp 0.0 {} nil))
+  ([ac t bank n amp pan] (play! ac t bank n amp pan {} nil))
+  ([ac t bank n amp pan extra] (play! ac t bank n amp pan extra nil))
+  ([ac t bank n amp pan extra dest]
    (when-let [url (get-url bank n)]
      (-> (get-buffer! url ac)
          (.then (fn [buf]
-                  (let [src    (.createBufferSource ac)
-                        gain   (.createGain ac)
-                        panner (.createStereoPanner ac)
-                        t'     (max t (.-currentTime ac))]
+                  (let [src     (.createBufferSource ac)
+                        gain    (.createGain ac)
+                        panner  (.createStereoPanner ac)
+                        t'      (max t (.-currentTime ac))
+                        rate-v  (or (:rate extra) 1.0)
+                        begin-v (or (:begin extra) 0.0)
+                        end-v   (or (:end extra) 1.0)
+                        loop?   (boolean (:loop extra))
+                        buf-dur (.-duration buf)
+                        offset  (* begin-v buf-dur)
+                        dur     (* (- end-v begin-v) buf-dur)
+                        out     (or dest (.-destination ac))]
                     (set! (.-buffer src) buf)
+                    (set! (.. src -playbackRate -value) (float rate-v))
+                    (when loop?
+                      (set! (.-loop src) true)
+                      (set! (.-loopStart src) offset)
+                      (set! (.-loopEnd src) (* end-v buf-dur)))
                     (.setValueAtTime (.-gain gain) (float amp) t')
                     (.setValueAtTime (.-pan panner) (float pan) t')
                     (.connect src gain)
                     (.connect gain panner)
-                    (.connect panner (.-destination ac))
-                    (.start src t'))))
+                    (.connect panner out)
+                    (if loop?
+                      (.start src t' offset)
+                      (.start src t' offset dur)))))
          (.catch (fn [e]
                    (js/console.debug "[REPuLse] sample play failed:" (name bank) e)))))))
 

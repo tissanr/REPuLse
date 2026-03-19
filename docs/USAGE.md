@@ -112,7 +112,7 @@ description, and an example in a tooltip.
 
 | Key | Action |
 |---|---|
-| **Ctrl+Enter** / **Cmd+Enter** | Evaluate the entire buffer and start playback |
+| **Alt+Enter** / **Option+Enter** | Evaluate the entire buffer and start playback |
 | **Ctrl+Z** / **Cmd+Z** | Undo |
 | **Ctrl+Shift+Z** / **Cmd+Shift+Z** | Redo |
 
@@ -401,8 +401,9 @@ Write pitches directly as keywords. The format is **note letter** (`a`–`g`) + 
 (seq :fs4 :gs4 :bb4 :cs5)       ; chromatic run
 ```
 
-Note keywords play as sine tones via the WASM synth. Middle C is `:c4`, concert A is `:a4`
-(440 Hz). Drum keywords like `:bd` and `:sd` are unaffected.
+Note keywords play as sine tones by default. Use `synth` (see [Per-event parameters](#per-event-parameters))
+to apply a different voice — sawtooth, square, FM, or noise — to the whole pattern. Middle C is `:c4`,
+concert A is `:a4` (440 Hz). Drum keywords like `:bd` and `:sd` are unaffected.
 
 ### `scale` — melodic patterns from scale degrees
 
@@ -528,6 +529,46 @@ putting the pattern last:
 (pan -0.5 melody)                      ; slightly left
 (pan (seq -0.8 0.8) (fast 2 hihat))    ; ping-pong hi-hat
 ```
+
+### `synth` — apply a synthesis voice to a note pattern
+
+Write note sequences as plain keywords, then attach a voice with `synth`. This separates
+pitch from timbre — the same note pattern can be tried with different voices by changing
+one word:
+
+```lisp
+(->> (seq :c4 :eb4 :g4)
+     (synth :saw)
+     (amp 0.6) (attack 0.02) (decay 0.5))
+
+(->> (seq :c3 :eb3 :g3)
+     (synth :square :pw 0.25)    ; 25% duty cycle — brighter, thinner
+     (amp 0.4) (decay 0.3))
+
+(->> (seq :c4 :eb4 :g4)
+     (synth :fm :index 4 :ratio 2)
+     (amp 0.5) (attack 0.05) (decay 1.2))
+
+(->> (seq :_ :_ :_ :_)           ; timing/rest pattern drives noise hits
+     (synth :noise)
+     (amp 0.5) (decay 0.08))
+```
+
+Available voices:
+
+| Voice        | Keyword   | Options                                                      |
+|--------------|-----------|--------------------------------------------------------------|
+| Sawtooth     | `:saw`    | —                                                            |
+| Pulse/square | `:square` | `:pw` 0.0–1.0 — duty cycle (default `0.5` = square wave)   |
+| FM synthesis | `:fm`     | `:index` modulation depth (default `1.0`), `:ratio` mod/carrier ratio (default `2.0`) |
+| White noise  | `:noise`  | —                                                            |
+
+`synth` works on any note-producing pattern: plain keywords, Hz values from `scale`, or
+already-transformed maps. All `amp`/`attack`/`decay`/`pan` parameters compose normally
+on top of it.
+
+The per-note forms `(saw :c4)`, `(square :c3 :pw 0.25)`, `(fm :c4 :index 4)` remain
+available when you need different voices on individual steps within the same `seq`.
 
 ### Named voice presets
 
@@ -739,7 +780,7 @@ Shorthand where every section plays for exactly 1 cycle. Useful for short, bar-l
 ## Effect plugins
 
 REPuLse has a built-in effect chain between the synthesis engine and the audio output.
-Five effects are loaded automatically at startup, all silent by default (wet = 0).
+Eleven effects are loaded automatically at startup, all silent/inactive by default.
 Control them with the `fx` built-in.
 
 ### `fx` — effect control
@@ -761,6 +802,36 @@ Control them with the `fx` built-in.
 ; Remove an effect from the chain
 (fx :remove :delay)
 ```
+
+### Per-track effects
+
+Route a track through its own private effect chain by placing `fx` inside the `->>` pipeline:
+
+```lisp
+(play :kick
+  (->> (seq :bd :_ :bd :_)
+       (fx :filter 1000)))              ; kick only goes through lowpass
+
+(play :lead
+  (->> (scale :minor :c3 (seq 0 2 4 7))
+       (decay 1.0)
+       (fx :reverb 0.4)))              ; lead gets its own reverb
+
+;; Multiple effects on one track
+(play :bass
+  (->> (seq :c2 :_ :eb2 :_)
+       (fx :filter 600)
+       (fx :overdrive 0.6)))
+
+;; Named params work the same as global fx
+(play :snare
+  (->> (seq :_ :sd :_ :sd)
+       (fx :delay :wet 0.3 :time 0.25 :feedback 0.4)))
+```
+
+To remove a per-track effect, re-evaluate the `play` form without the `(fx ...)` line.
+
+> **Note:** `fx` must come **after** all pattern transformations (`amp`, `decay`, `pan`, etc.) in the `->>` chain — it annotates the final pattern for audio routing.
 
 ### Built-in effects
 
@@ -927,13 +998,49 @@ Reduces bit depth and sample rate for crunchy, glitchy textures. Uses an AudioWo
 (fx :bitcrusher :bits 4 :rate 0.25)
 ```
 
+#### `sidechain` — pattern-aware gain ducking
+
+Ducks the master volume every time a chosen event fires. Unlike a compressor, this uses
+the scheduler's pre-known event schedule to drive Web Audio gain automation directly —
+so the duck is perfectly in time regardless of BPM, with zero look-ahead latency.
+
+| Parameter | Key | Default | Description |
+|-----------|-----|---------|-------------|
+| Trigger   | `trigger` | `"bd"` | Event name that causes ducking (e.g. `"bd"`, `"sd"`) |
+| Amount    | `amount` / positional | `0.8` | Duck depth — 0.0 = no duck, 1.0 = full silence |
+| Release   | `release` | `0.1` s | Seconds to ramp back to unity after each duck |
+
+```lisp
+;; Duck the master bus on every kick hit
+(play :kick (seq :bd :_ :bd :_))
+(play :pad  (slow 2 (seq :c3 :eb3 :g3)))
+(fx :sidechain :trigger :bd :amount 0.8 :release 0.15)
+
+;; Positional shorthand — sets amount
+(fx :sidechain 0.6)
+
+;; Sidechain on snare instead
+(fx :sidechain :trigger :sd :amount 0.5 :release 0.2)
+
+;; Bypass / remove
+(fx :off :sidechain)
+(fx :remove :sidechain)
+```
+
+> **How it works:** On each scheduled event whose name matches `trigger`, the plugin
+> instantly drops the master gain to `1 - amount` and ramps it linearly back to `1.0`
+> over `release` seconds. The automation is written directly onto the Web Audio gain
+> parameter, so it is sample-accurate.
+
 ### Effect chain order
 
-The fixed signal chain is:
+The default signal chain is:
 ```
 synthesis → reverb → delay → filter → compressor → dattorro-reverb
-         → chorus → phaser → tremolo → overdrive → bitcrusher → output
+         → chorus → phaser → tremolo → overdrive → bitcrusher → sidechain → output
 ```
+
+`sidechain` sits at the end of the chain so it ducks the fully-processed signal.
 
 Use `(fx :remove :name)` to take an effect out of the chain entirely.
 Use `(fx :off :name)` / `(fx :on :name)` for transparent bypass without removing.
@@ -1165,6 +1272,28 @@ name, a suggestion is shown.
 
 ;; Render 1 cycle (useful for short loops)
 (export 1)
+```
+
+### Per-track effects
+
+```lisp
+(bpm 128)
+
+;; Kick: tight lowpass, no reverb
+(play :kick
+  (->> (seq :bd :_ :bd :_)
+       (fx :filter 800)))
+
+;; Lead: its own reverb + delay, independent of the kick
+(play :lead
+  (->> (scale :minor :c3 (seq 0 2 4 7))
+       (amp 0.6)
+       (decay 0.8)
+       (fx :reverb 0.5)
+       (fx :delay :wet 0.3 :time 0.25)))
+
+;; Global master bus compressor still applies to the whole mix
+(fx :compressor 0.8)
 ```
 
 ### Stopping

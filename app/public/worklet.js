@@ -3,15 +3,22 @@
 // The process() callback generates raw PCM samples — no Web Audio API node creation
 // (OscillatorNode etc. are only available on the main thread).
 //
-// Dynamic import() is banned in AudioWorkletGlobalScope; only static imports work.
-// The main thread compiles the WebAssembly.Module and sends it here via postMessage
-// (WebAssembly.Module is serialisable via structured clone).
+// WASM loading strategy: the main thread fetches the raw WASM bytes and transfers
+// them here as an ArrayBuffer via postMessage.  The worklet then uses initSync()
+// which calls new WebAssembly.Module(bytes) + new WebAssembly.Instance(module) —
+// both synchronous, both allowed in workers/worklets on all browsers.
+//
+// Why not the alternatives:
+//   • WebAssembly.Module postMessage  → silently dropped on Chrome
+//   • fetch() in worklet              → not available in Safari AudioWorklet
+//   • new URL() in worklet            → not available in Firefox AudioWorklet
+//   • async WebAssembly.instantiate() → Promise hangs silently on Chrome
 //
 // worklet-polyfills.js MUST be imported first — ES module evaluation is depth-first
 // in source order, so the polyfills run before repulse_audio.js top-level code
 // (which calls `new TextDecoder()` / `new TextEncoder()` unconditionally).
 import '/worklet-polyfills.js';
-import init, { AudioEngine } from '/repulse_audio.js';
+import { initSync, AudioEngine } from '/repulse_audio.js';
 
 class RepulseProcessor extends AudioWorkletProcessor {
   constructor() {
@@ -20,12 +27,14 @@ class RepulseProcessor extends AudioWorkletProcessor {
     this.port.onmessage = (e) => this._onMessage(e.data);
   }
 
-  async _onMessage(msg) {
+  _onMessage(msg) {
     if (msg.type === 'init') {
       try {
-        // Passing a WebAssembly.Module to init() bypasses the fetch/import.meta.url
-        // path in the wasm-pack glue — safe to call on the audio thread.
-        await init(msg.wasmModule);
+        // initSync({ module: ArrayBuffer }) does:
+        //   1. new WebAssembly.Module(bytes)    — synchronous compile from bytes
+        //   2. new WebAssembly.Instance(module) — synchronous instantiate
+        // Both are allowed in workers/worklets regardless of module size.
+        initSync({ module: msg.wasmBytes });
         this.engine = new AudioEngine(sampleRate);
         this.port.postMessage({ type: 'ready' });
       } catch (err) {
