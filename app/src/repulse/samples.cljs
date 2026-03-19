@@ -21,10 +21,16 @@
   (reset! active-bank-prefix (when prefix (name prefix)))
   (js/console.log (str "[REPuLse] bank prefix: " (or @active-bank-prefix "none"))))
 
-;; Default sample manifests (hosted on dough-samples, Strudel's canonical source)
+;; Default sample manifests.
+;; - dough-samples: small curated set (casio, crow, jazz, metal, etc.)
+;; - tidal-drum-machines: drum machine banks (AkaiLinn, TR-808, TR-909, …)
+;; - tidalcycles/Dirt-Samples: full SuperDirt library (tabla, bd, sd, cp, …)
+;;   strudel.json format: {"_base": "https://…/", "bank": ["path/file.wav", …]}
+;;   Lazy loading — audio files are only fetched when a sample actually plays.
 (def DEFAULT-MANIFESTS
   ["https://raw.githubusercontent.com/felixroos/dough-samples/main/Dirt-Samples.json"
-   "https://raw.githubusercontent.com/felixroos/dough-samples/main/tidal-drum-machines.json"])
+   "https://raw.githubusercontent.com/felixroos/dough-samples/main/tidal-drum-machines.json"
+   "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/strudel.json"])
 
 (defn- parse-manifest
   "Parse a manifest JS object into {bank-name -> [full-url ...]}."

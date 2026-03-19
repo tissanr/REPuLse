@@ -244,6 +244,27 @@
                       idx   (get opts' :index 1.0)
                       ratio (get opts' :ratio 2.0)]
                   {:note n :synth :fm :index idx :ratio ratio}))
+     ;; synth transformer — apply a voice to an entire note pattern
+     ;; (synth :saw pat)                   — sawtooth on whole pattern
+     ;; (synth :fm :index 4 :ratio 2 pat)  — FM with opts on whole pattern
+     ;; (synth :square :pw 0.25)           — returns transformer for ->>
+     "synth"  (fn [voice-arg & rest-args]
+                (let [voice    (unwrap voice-arg)
+                      args'    (mapv unwrap rest-args)
+                      last-a   (last args')
+                      has-pat? (and (seq args')
+                                    (map? last-a)
+                                    (fn? (:query last-a)))
+                      opts-map (apply hash-map (if has-pat? (butlast args') args'))
+                      apply-xf (fn [pat]
+                                  (core/fmap
+                                   (fn [v]
+                                     (let [base (if (map? v) v {:note v})]
+                                       (merge base {:synth voice} opts-map)))
+                                   pat))]
+                  (if has-pat?
+                    (apply-xf last-a)
+                    apply-xf)))
      ;; Mini-notation
      "~"       (fn [s]
                  (let [src         (source-of s)

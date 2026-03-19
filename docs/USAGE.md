@@ -401,8 +401,9 @@ Write pitches directly as keywords. The format is **note letter** (`a`–`g`) + 
 (seq :fs4 :gs4 :bb4 :cs5)       ; chromatic run
 ```
 
-Note keywords play as sine tones via the WASM synth. Middle C is `:c4`, concert A is `:a4`
-(440 Hz). Drum keywords like `:bd` and `:sd` are unaffected.
+Note keywords play as sine tones by default. Use `synth` (see [Per-event parameters](#per-event-parameters))
+to apply a different voice — sawtooth, square, FM, or noise — to the whole pattern. Middle C is `:c4`,
+concert A is `:a4` (440 Hz). Drum keywords like `:bd` and `:sd` are unaffected.
 
 ### `scale` — melodic patterns from scale degrees
 
@@ -528,6 +529,46 @@ putting the pattern last:
 (pan -0.5 melody)                      ; slightly left
 (pan (seq -0.8 0.8) (fast 2 hihat))    ; ping-pong hi-hat
 ```
+
+### `synth` — apply a synthesis voice to a note pattern
+
+Write note sequences as plain keywords, then attach a voice with `synth`. This separates
+pitch from timbre — the same note pattern can be tried with different voices by changing
+one word:
+
+```lisp
+(->> (seq :c4 :eb4 :g4)
+     (synth :saw)
+     (amp 0.6) (attack 0.02) (decay 0.5))
+
+(->> (seq :c3 :eb3 :g3)
+     (synth :square :pw 0.25)    ; 25% duty cycle — brighter, thinner
+     (amp 0.4) (decay 0.3))
+
+(->> (seq :c4 :eb4 :g4)
+     (synth :fm :index 4 :ratio 2)
+     (amp 0.5) (attack 0.05) (decay 1.2))
+
+(->> (seq :_ :_ :_ :_)           ; timing/rest pattern drives noise hits
+     (synth :noise)
+     (amp 0.5) (decay 0.08))
+```
+
+Available voices:
+
+| Voice        | Keyword   | Options                                                      |
+|--------------|-----------|--------------------------------------------------------------|
+| Sawtooth     | `:saw`    | —                                                            |
+| Pulse/square | `:square` | `:pw` 0.0–1.0 — duty cycle (default `0.5` = square wave)   |
+| FM synthesis | `:fm`     | `:index` modulation depth (default `1.0`), `:ratio` mod/carrier ratio (default `2.0`) |
+| White noise  | `:noise`  | —                                                            |
+
+`synth` works on any note-producing pattern: plain keywords, Hz values from `scale`, or
+already-transformed maps. All `amp`/`attack`/`decay`/`pan` parameters compose normally
+on top of it.
+
+The per-note forms `(saw :c4)`, `(square :c3 :pw 0.25)`, `(fm :c4 :index 4)` remain
+available when you need different voices on individual steps within the same `seq`.
 
 ### Named voice presets
 

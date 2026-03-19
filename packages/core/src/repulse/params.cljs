@@ -9,20 +9,27 @@
   (if (map? v) v {:note v}))
 
 (defn- pat?
-  "True if x is a REPuLse pattern (a map with a :query function)."
+  "True if x is a REPuLse pattern (was created via core/pattern).
+   Uses the explicit ::core/pat tag so plain event-value maps
+   (which are also Clojure maps) are never misidentified."
   [x]
-  (and (map? x) (fn? (:query x))))
+  (core/pattern? x))
 
 (defn- apply-param
   "Merge parameter kw into each event of note-pat, sourcing values from
-   param-val-or-pat. Scalar values are wrapped in (pure …) first."
+   param-val-or-pat. Scalar values are wrapped in (pure …) first.
+   note-pat may also be a raw value (e.g. the map returned by (sound …));
+   it is coerced to (pure v) so that (rate 2.0 (sound :tabla 0)) works."
   [kw param-val-or-pat note-pat]
   (let [param-pat (if (pat? param-val-or-pat)
                     param-val-or-pat
-                    (core/pure param-val-or-pat))]
+                    (core/pure param-val-or-pat))
+        note-pat' (if (pat? note-pat)
+                    note-pat
+                    (core/pure note-pat))]
     (core/combine (fn [pv nv] (assoc (to-map nv) kw pv))
                   param-pat
-                  note-pat)))
+                  note-pat')))
 
 ;;; ── Parameter transformers ───────────────────────────────────────────
 

@@ -30,11 +30,16 @@ dynamics, and more synth voices.
 ;; After — pattern-aware sidechain:
 (fx :sidechain :trigger :bd :amount 0.8 :release 0.1)
 
-;; After — new synth voices:
+;; After — new synth voices (per-note form):
 (saw :c4)                   ; sawtooth oscillator
-(square :c4)                ; square wave
+(square :c4 :pw 0.25)       ; pulse wave, 25% duty cycle
 (noise)                     ; white noise burst
 (fm :c4 :index 3 :ratio 2) ; FM synthesis pair
+
+;; After — synth transformer (apply voice to whole note pattern):
+(->> (seq :c4 :eb4 :g4) (synth :saw) (amp 0.6) (decay 0.5))
+(->> (seq :c3 :eb3 :g3) (synth :square :pw 0.25) (amp 0.4))
+(->> (seq :c4 :eb4 :g4) (synth :fm :index 4 :ratio 2) (decay 1.2))
 ```
 
 ---
@@ -901,17 +906,31 @@ Add three new JS fallback functions:
     (.start osc t)
     (.stop osc stop-t)))
 
-(defn- make-square [ac t freq dur amp attack pan pw dest]
-  ;; Web Audio OscillatorNode doesn't support pulse width natively;
-  ;; use "square" type (50% duty cycle). Pulse width variation would
-  ;; require a custom PeriodicWave — omit for now, just use square.
+(defn- make-pulse-wave
+  "Build a PeriodicWave for a pulse wave with duty cycle pw (0.0–1.0).
+   Fourier coefficients: real[n] = 2·sin(2πnD)/(πn), imag[n] = 2·(1−cos(2πnD))/(πn).
+   For pw=0.5 the caller uses the native 'square' OscillatorNode type instead."
+  [ac pw]
+  (let [n 64 real (js/Float32Array. n) imag (js/Float32Array. n) d (double pw)]
+    (aset real 0 0.0) (aset imag 0 0.0)
+    (dotimes [i (dec n)]
+      (let [k (inc i) pk (* js/Math.PI k)]
+        (aset real k (/ (* 2.0 (js/Math.sin (* 2.0 js/Math.PI k d))) pk))
+        (aset imag k (/ (* 2.0 (- 1.0 (js/Math.cos (* 2.0 js/Math.PI k d)))) pk))))
+    (.createPeriodicWave ac real imag #js {:disableNormalization false})))
+
+(defn- make-square [ac t freq dur amp attack pan dest pw]
+  ;; pw=0.5 → native "square" type; any other duty cycle → PeriodicWave (Fourier).
+  ;; This makes :pw work in the JS fallback (Safari/Chrome WASM fallback).
   (let [osc    (.createOscillator ac)
         gain   (.createGain ac)
         panner (.createStereoPanner ac)
         peak   (* 0.5 (float amp))
         atk    (max 0.001 (float attack))
         stop-t (+ t atk (float dur))]
-    (set! (.-type osc) "square")
+    (if (== (double pw) 0.5)
+      (set! (.-type osc) "square")
+      (.setPeriodicWave osc (make-pulse-wave ac pw)))
     (.setValueAtTime (.-frequency osc) freq t)
     (.setValueAtTime (.-gain gain) 0.0001 t)
     (.linearRampToValueAtTime (.-gain gain) peak (+ t atk))
@@ -1064,6 +1083,7 @@ After editing, run `npm run gen:grammar`.
 { label: "end",         type: "function", detail: "(end frac pat) — sample end position 0.0–1.0; (end frac) returns transformer" },
 { label: "loop-sample", type: "function", detail: "(loop-sample true pat) — loop sample playback; (loop-sample bool) returns transformer" },
 // --- Synth voices ---
+{ label: "synth",       type: "function", detail: "(->> (seq :c4 :eb4) (synth :saw)) — apply voice to note pattern; opts: :pw :index :ratio" },
 { label: "saw",         type: "function", detail: "(saw :c4) — sawtooth oscillator" },
 { label: "square",      type: "function", detail: "(square :c4) — square wave; (square :c4 :pw 0.25) — pulse width" },
 { label: "noise",       type: "function", detail: "(noise) — white noise burst" },
@@ -1082,7 +1102,7 @@ After editing, run `npm run gen:grammar`.
 | `app/src/repulse/samples.cljs` | `play!` gains `:rate`, `:begin`, `:end`, `:loop` support + destination node param |
 | `packages/core/src/repulse/params.cljs` | `rate`, `begin`, `end*`, `loop-sample` |
 | `packages/core/test/repulse/params_test.cljs` | Tests for new param functions |
-| `packages/lisp/src/repulse/lisp/eval.cljs` | `rate`, `begin`, `end`, `loop-sample`, `saw`, `square`, `noise`, `fm` bindings in `make-env` |
+| `packages/lisp/src/repulse/lisp/eval.cljs` | `rate`, `begin`, `end`, `loop-sample`, `saw`, `square`, `noise`, `fm`, `synth` bindings in `make-env` |
 | `packages/audio/src/lib.rs` | `Voice::Saw`, `Voice::Square`, `Voice::Noise`, `Voice::FM` variants; `tick`/`is_silent` match arms; `activate` dispatch |
 | `app/public/plugins/sidechain.js` | **New** — pattern-aware sidechain duck plugin |
 | `app/src/repulse/lisp-lang/repulse-lisp.grammar` | Add 9 tokens to BuiltinName |
@@ -1128,11 +1148,14 @@ After editing, run `npm run gen:grammar`.
 
 - [ ] `(saw :c4)` produces a sawtooth tone at middle C
 - [ ] `(square :c4)` produces a square wave at middle C
-- [ ] `(square :c4 :pw 0.25)` produces a pulse wave with 25% duty cycle (WASM only)
+- [ ] `(square :c4 :pw 0.25)` produces a pulse wave with 25% duty cycle (WASM + JS fallback via PeriodicWave)
 - [ ] `(noise)` produces a burst of white noise
 - [ ] `(fm :c4 :index 3 :ratio 2)` produces an FM tone
 - [ ] All new voices work with `amp`, `attack`, `decay`, `pan`: `(->> (saw :c4) (amp 0.6) (decay 0.3))`
 - [ ] All new voices work in both WASM and JS fallback (except FM in JS falls back to sine)
+- [ ] `synth` transformer: `(->> (seq :c4 :eb4 :g4) (synth :saw))` applies sawtooth to a note sequence
+- [ ] `synth` with opts: `(->> (seq :c3 :eb3) (synth :square :pw 0.25))` works
+- [ ] `synth` composes with all param transformers: `(amp ...)`, `(decay ...)`, `(pan ...)`
 - [ ] Raw `(seq :bd :sd)` without new features still works unchanged
 
 ### Composition

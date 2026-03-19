@@ -51,6 +51,7 @@ const BUILTINS = [
   { label: "end",         type: "function", detail: "(end frac pat) — sample end offset 0.0–1.0; (end frac) returns transformer" },
   { label: "loop-sample", type: "function", detail: "(loop-sample true pat) — loop sample playback; (loop-sample bool) returns transformer" },
   // --- Synth voices ---
+  { label: "synth",       type: "function", detail: "(->> (seq :c4 :eb4) (synth :saw)) — apply voice to note pattern; opts: :pw :index :ratio" },
   { label: "saw",         type: "function", detail: "(saw :c4) — sawtooth oscillator; works with amp/attack/decay/pan" },
   { label: "square",      type: "function", detail: "(square :c4) — square wave; (square :c4 :pw 0.25) — pulse width" },
   { label: "noise",       type: "function", detail: "(noise) — white noise burst; works with amp/decay/pan" },

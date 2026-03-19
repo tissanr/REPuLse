@@ -569,7 +569,7 @@
                    (fn [track-name pat]
                      (let [name' (leval/unwrap track-name)
                            pat'  (leval/unwrap pat)]
-                       (if (and (map? pat') (fn? (:query pat')))
+                       (if (core/pattern? pat')
                          (do
                            (audio/play-track! name' pat' on-beat highlight-range!)
                            ;; Apply per-track FX from pattern metadata (clear old chain first)
@@ -627,13 +627,15 @@
                                (set-output! (str "Error: " err) :error))
                            (let [val (:result result)]
                              (cond
-                               (and (map? val) (fn? (:query val)))
+                               (core/pattern? val)
                                (do (audio/play-track! :_ val on-beat highlight-range!)
                                    (set-playing! true)
                                    (set-output! "updated" :success))
                                (nil? val) nil
                                (string? val) (set-output! val :success)
-                               :else (set-output! (str "=> " (pr-str val)) :success)))))))
+                               :else (set-output! (str "=> " (pr-str val)) :success)))))
+                     ;; Always return nil so evaluate! does not re-process upd's output
+                     nil))
                    ;; --- Tap tempo ---
                    "tap!"
                    (fn []
@@ -682,8 +684,7 @@
                            last-arg (last args')
                            ;; When ->> passes the pattern as last arg, route per-track
                            per-track? (and (> (count args') 1)
-                                           (map? last-arg)
-                                           (fn? (:query last-arg)))]
+                                           (core/pattern? last-arg))]
                        (if per-track?
                          ;; ── Per-track mode: annotate pattern with FX metadata ──────────
                          (let [fx-args     (butlast args')
@@ -902,13 +903,23 @@
       (let [val (:result result)]
         (cond
           ;; Pattern — start playing (legacy single-pattern mode)
-          (and (map? val) (fn? (:query val)))
+          (core/pattern? val)
           (do
             (audio/stop!)
             (clear-highlights!)
             (audio/start! val on-beat highlight-range!)
             (set-playing! true)
             (set-output! "playing pattern — Alt+Enter to re-evaluate, (stop) to stop" :success))
+
+          ;; Plain event-value map: (saw :c4), (sound :tabla 0), (noise), etc.
+          ;; Auto-wrap in pure so users don't need to write (pure (saw :c4)).
+          (and (map? val) (or (:note val) (:bank val) (:synth val)))
+          (do
+            (audio/stop!)
+            (clear-highlights!)
+            (audio/start! (core/pure val) on-beat highlight-range!)
+            (set-playing! true)
+            (set-output! "playing — Alt+Enter to re-evaluate, (stop) to stop" :success))
 
           ;; stop fn was called directly — handled inside stop fn
           (nil? val)
@@ -925,7 +936,7 @@
 
 (defn- infer-type [v]
   (cond
-    (and (map? v) (fn? (:query v))) "pattern"
+    (core/pattern? v) "pattern"
     (fn? v)                          "fn"
     (number? v)                      "number"
     (string? v)                      "string"
@@ -1202,7 +1213,8 @@
                "/plugins/phaser.js"
                "/plugins/tremolo.js"
                "/plugins/overdrive.js"
-               "/plugins/bitcrusher.js"]]
+               "/plugins/bitcrusher.js"
+               "/plugins/sidechain.js"]]
     (-> (js* "import(~{})" url)
         (.then (fn [m]
                  (let [plug (.-default m)]
@@ -1228,5 +1240,6 @@
   (start-playhead-raf!))
 
 (defn reload []
-  ;; Hot-reload hook: re-attach evaluate! without rebuilding the DOM
-  )
+  ;; Hot-reload hook: reset env so new/changed built-in bindings take effect
+  ;; without a full page reload.  User defs are lost but that is expected.
+  (reset! env-atom nil))

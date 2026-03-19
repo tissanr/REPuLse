@@ -31,7 +31,9 @@
     (reset! analyser-node anl)))
 
 (defn- init-worklet!
-  "Register the AudioWorkletProcessor and load WASM inside it.
+  "Register the AudioWorkletProcessor. The main thread fetches the WASM bytes
+   and transfers them as an ArrayBuffer; the worklet uses initSync to compile
+   and instantiate synchronously — works on Chrome, Firefox, and Safari.
    Falls back to JS synthesis if AudioWorklet is unavailable."
   [ac]
   (if-let [worklet (.-audioWorklet ac)]
@@ -49,16 +51,24 @@
                                            (js/console.log "[REPuLse] audio backend: audioworklet+wasm"))
                                "error" (js/console.warn "[REPuLse] Worklet WASM error:" (.-message d))
                                nil))))
-                   ;; Compile WASM on the main thread — dynamic import() is banned in
-                   ;; AudioWorkletGlobalScope. Send the compiled WebAssembly.Module
-                   ;; (serialisable via structured clone) to the worklet instead.
-                   (-> (.compileStreaming js/WebAssembly (js/fetch "/repulse_audio_bg.wasm"))
-                       (.then (fn [wasm-module]
+                   ;; Fetch raw WASM bytes on the main thread and transfer the
+                   ;; ArrayBuffer to the worklet.  The worklet uses initSync()
+                   ;; (new WebAssembly.Module + new WebAssembly.Instance) which
+                   ;; avoids every browser-specific limitation we hit before.
+                   (-> (js/fetch "/repulse_audio_bg.wasm")
+                       (.then (fn [resp] (.arrayBuffer resp)))
+                       (.then (fn [buf]
                                 (.. node -port
-                                    (postMessage #js {:type       "init"
-                                                      :wasmModule wasm-module}))))
+                                    (postMessage #js {:type "init" :wasmBytes buf}
+                                                 #js [buf]))
+                                (js/setTimeout
+                                 (fn []
+                                   (when-not @worklet-ready?
+                                     (js/console.warn
+                                      "[REPuLse] audio backend: clojurescript synthesis (WASM init timed out — worklet did not send 'ready' after 5 s)")))
+                                 5000)))
                        (.catch (fn [e]
-                                 (js/console.warn "[REPuLse] WASM compile failed:" e)))))))
+                                 (js/console.warn "[REPuLse] WASM fetch failed:" e)))))))
         (.catch (fn [e]
                   (js/console.warn "[REPuLse] audio backend: clojurescript synthesis (Worklet load failed)" e))))
     (js/console.warn "[REPuLse] audio backend: clojurescript synthesis (AudioWorklet not supported)")))
@@ -231,14 +241,37 @@
     (.start osc t)
     (.stop osc stop-t)))
 
-(defn- make-square [ac t freq dur amp attack pan dest]
+(defn- make-pulse-wave
+  "Build a PeriodicWave for a pulse wave with duty cycle pw (0.0–1.0).
+   Uses Fourier synthesis so any pulse width is supported — unlike the native
+   OscillatorNode 'square' type which is always 50%.
+   Coefficients: real[n] = 2·sin(2πnD)/(πn), imag[n] = 2·(1−cos(2πnD))/(πn)."
+  [ac pw]
+  (let [n    64
+        real (js/Float32Array. n)
+        imag (js/Float32Array. n)
+        d    (double pw)]
+    (aset real 0 0.0)   ; zero DC offset
+    (aset imag 0 0.0)
+    (dotimes [i (dec n)]
+      (let [k  (inc i)
+            pk (* js/Math.PI k)]
+        (aset real k (/ (* 2.0 (js/Math.sin (* 2.0 js/Math.PI k d))) pk))
+        (aset imag k (/ (* 2.0 (- 1.0 (js/Math.cos (* 2.0 js/Math.PI k d)))) pk))))
+    (.createPeriodicWave ac real imag #js {:disableNormalization false})))
+
+(defn- make-square [ac t freq dur amp attack pan dest pw]
   (let [osc    (.createOscillator ac)
         gain   (.createGain ac)
         panner (.createStereoPanner ac)
         peak   (* 0.5 (float amp))
         atk    (max 0.001 (float attack))
         stop-t (+ t atk (float dur))]
-    (set! (.-type osc) "square")
+    ;; Use native "square" only for the 50% default — any other pw needs
+    ;; PeriodicWave because OscillatorNode has no pulse-width parameter.
+    (if (== (double pw) 0.5)
+      (set! (.-type osc) "square")
+      (.setPeriodicWave osc (make-pulse-wave ac pw)))
     (.setValueAtTime (.-frequency osc) freq t)
     (.setValueAtTime (.-gain gain) 0.0001 t)
     (.linearRampToValueAtTime (.-gain gain) peak (+ t atk))
@@ -332,11 +365,12 @@
                  (make-saw ac t hz decay-v amp-v attack-v pan-v dest)))
 
            (= synth :square)
-           (let [hz (if (theory/note-keyword? note) (theory/note->hz note) (double note))]
+           (let [hz  (if (theory/note-keyword? note) (theory/note->hz note) (double note))
+                 pw' (double (or (:pw value) 0.5))]
              (or (when-not offline?
-                   (worklet-trigger-v2! (str "square:" hz ":" (or (:pw value) 0.5))
+                   (worklet-trigger-v2! (str "square:" hz ":" pw')
                                         t amp-v attack-v decay-v pan-v dest))
-                 (make-square ac t hz decay-v amp-v attack-v pan-v dest)))
+                 (make-square ac t hz decay-v amp-v attack-v pan-v dest pw')))
 
            (= synth :fm)
            (let [hz    (if (theory/note-keyword? note) (theory/note->hz note) (double note))
@@ -379,14 +413,16 @@
        ;; Map {:bank :bd :n 2} from (sound :bd 2) — always use samples
        (and (map? value) (:bank value))
        (let [{:keys [bank n]} value
+             amp-v  (float (:amp  value 1.0))
+             pan-v  (float (:pan  value 0.0))
              extra {:rate  (:rate value) :begin (:begin value)
                     :end   (:end value)  :loop  (:loop value)}]
          (if (samples/has-bank? bank)
-           (samples/play! ac t bank n 1.0 0.0 extra dest)
+           (samples/play! ac t bank n amp-v pan-v extra dest)
            (if offline?
              (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)
-             (or (worklet-trigger! (name bank) t dest)
-                 (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)))))
+             (or (worklet-trigger-v2! (name bank) t amp-v 0.001 1.5 pan-v dest)
+                 (make-sine ac t 440 1.5 amp-v 0.001 pan-v dest)))))
 
        ;; Keyword — note name → Hz tone, or sample bank
        (keyword? value)

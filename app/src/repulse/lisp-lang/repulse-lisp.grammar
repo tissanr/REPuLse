@@ -34,7 +34,7 @@ Map    { "{" expr* "}" }
     "upd" | "demo" | "tutorial" |
     "~" | "alt" | "load-gist" | "export" |
     "rate" | "begin" | "end" | "loop-sample" |
-    "saw" | "square" | "noise" | "fm"
+    "saw" | "square" | "noise" | "fm" | "synth"
   }
 
   Symbol { identStart identChar* }

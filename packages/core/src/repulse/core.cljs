@@ -47,7 +47,13 @@
 ;;; Pattern — a map wrapping a query function
 
 (defn pattern [query-fn]
-  {:query query-fn})
+  ;; ::pat true is a reliable type tag so plain event-value maps (which also
+  ;; happen to be Clojure maps) are never mistaken for patterns.
+  {:query query-fn, ::pat true})
+
+(defn pattern? [x]
+  "True if x is a REPuLse pattern created via (pattern ...)."
+  (true? (::pat x)))
 
 (defn query [pat sp]
   ((:query pat) sp))
