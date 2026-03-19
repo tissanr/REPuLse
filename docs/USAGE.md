@@ -112,7 +112,7 @@ description, and an example in a tooltip.
 
 | Key | Action |
 |---|---|
-| **Ctrl+Enter** / **Cmd+Enter** | Evaluate the entire buffer and start playback |
+| **Alt+Enter** / **Option+Enter** | Evaluate the entire buffer and start playback |
 | **Ctrl+Z** / **Cmd+Z** | Undo |
 | **Ctrl+Shift+Z** / **Cmd+Shift+Z** | Redo |
 
@@ -780,7 +780,7 @@ Shorthand where every section plays for exactly 1 cycle. Useful for short, bar-l
 ## Effect plugins
 
 REPuLse has a built-in effect chain between the synthesis engine and the audio output.
-Five effects are loaded automatically at startup, all silent by default (wet = 0).
+Eleven effects are loaded automatically at startup, all silent/inactive by default.
 Control them with the `fx` built-in.
 
 ### `fx` — effect control
@@ -998,13 +998,49 @@ Reduces bit depth and sample rate for crunchy, glitchy textures. Uses an AudioWo
 (fx :bitcrusher :bits 4 :rate 0.25)
 ```
 
+#### `sidechain` — pattern-aware gain ducking
+
+Ducks the master volume every time a chosen event fires. Unlike a compressor, this uses
+the scheduler's pre-known event schedule to drive Web Audio gain automation directly —
+so the duck is perfectly in time regardless of BPM, with zero look-ahead latency.
+
+| Parameter | Key | Default | Description |
+|-----------|-----|---------|-------------|
+| Trigger   | `trigger` | `"bd"` | Event name that causes ducking (e.g. `"bd"`, `"sd"`) |
+| Amount    | `amount` / positional | `0.8` | Duck depth — 0.0 = no duck, 1.0 = full silence |
+| Release   | `release` | `0.1` s | Seconds to ramp back to unity after each duck |
+
+```lisp
+;; Duck the master bus on every kick hit
+(play :kick (seq :bd :_ :bd :_))
+(play :pad  (slow 2 (seq :c3 :eb3 :g3)))
+(fx :sidechain :trigger :bd :amount 0.8 :release 0.15)
+
+;; Positional shorthand — sets amount
+(fx :sidechain 0.6)
+
+;; Sidechain on snare instead
+(fx :sidechain :trigger :sd :amount 0.5 :release 0.2)
+
+;; Bypass / remove
+(fx :off :sidechain)
+(fx :remove :sidechain)
+```
+
+> **How it works:** On each scheduled event whose name matches `trigger`, the plugin
+> instantly drops the master gain to `1 - amount` and ramps it linearly back to `1.0`
+> over `release` seconds. The automation is written directly onto the Web Audio gain
+> parameter, so it is sample-accurate.
+
 ### Effect chain order
 
-The fixed signal chain is:
+The default signal chain is:
 ```
 synthesis → reverb → delay → filter → compressor → dattorro-reverb
-         → chorus → phaser → tremolo → overdrive → bitcrusher → output
+         → chorus → phaser → tremolo → overdrive → bitcrusher → sidechain → output
 ```
+
+`sidechain` sits at the end of the chain so it ducks the fully-processed signal.
 
 Use `(fx :remove :name)` to take an effect out of the chain entirely.
 Use `(fx :off :name)` / `(fx :on :name)` for transparent bypass without removing.
