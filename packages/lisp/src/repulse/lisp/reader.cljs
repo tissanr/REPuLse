@@ -52,13 +52,44 @@
                          (recur (conj acc (case e \n \newline \t \tab \\ \\ \" \" e)))))
         :else      (recur (conj acc (advance r)))))))
 
-(defn read-number [r]
+(defn read-number
+  "Read a numeric literal. Returns:
+   - integer or float for plain numbers
+   - [numerator denominator] for N/D rational literals (e.g. 1/4)
+   - (list (symbol \"bpm\") n) for NNNbpm suffix literals (e.g. 120bpm)"
+  [r]
   (loop [acc []]
     (let [ch (peek-char r)]
       (if (and ch (or (digit? ch) (= \. ch)))
         (recur (conj acc (advance r)))
-        (let [s (apply str acc)]
-          (if (re-find #"\." s) (js/parseFloat s) (js/parseInt s 10)))))))
+        (let [s (apply str acc)
+              n (if (re-find #"\." s) (js/parseFloat s) (js/parseInt s 10))]
+          (let [next-ch (peek-char r)]
+            (cond
+              ;; Rational literal: 1/4, 3/8, etc.
+              (= \/ next-ch)
+              (do
+                (advance r) ; consume /
+                (let [denom-acc (loop [dacc []]
+                                  (let [c (peek-char r)]
+                                    (if (and c (digit? c))
+                                      (recur (conj dacc (advance r)))
+                                      dacc)))]
+                  (if (empty? denom-acc)
+                    ;; no digits after / — the / was the division operator, back off
+                    ;; (shouldn't happen in practice since we peek before consuming)
+                    n
+                    [n (js/parseInt (apply str denom-acc) 10)])))
+
+              ;; BPM suffix: 120bpm → (bpm 120)
+              (and next-ch
+                   (let [remaining (subs (:src r) @(:pos r))]
+                     (.startsWith remaining "bpm")))
+              (do
+                (dotimes [_ 3] (advance r)) ; consume "bpm"
+                (list (symbol "bpm") n))
+
+              :else n)))))))
 
 (defn read-keyword [r]
   (advance r) ; consume :
@@ -126,11 +157,42 @@
       (= \[ ch)      (read-vector r)
       (= \{ ch)      (read-map r)
       (digit? ch)    (read-number r)
+
+      ;; Backtick — quasiquote reader macro
+      (= \` ch)
+      (do (advance r)
+          (let [inner (read-form r)]
+            (list (symbol "quasiquote") inner)))
+
+      ;; Tilde — unquote or splice-unquote, with backward-compat for mini-notation (~ "...")
+      (= \~ ch)
+      (do (advance r)
+          (let [next-ch (peek-char r)]
+            (cond
+              ;; ~@ → splice-unquote
+              (= \@ next-ch)
+              (do (advance r)
+                  (let [inner (read-form r)]
+                    (list (symbol "splice-unquote") inner)))
+
+              ;; ~ followed by whitespace, ", ), ] — treat as symbol (mini-notation: (~ "bd sd"))
+              (or (nil? next-ch) (whitespace? next-ch)
+                  (= \" next-ch) (= \) next-ch) (= \] next-ch))
+              (symbol "~")
+
+              ;; ~ followed by anything else → unquote
+              :else
+              (let [inner (read-form r)]
+                (list (symbol "unquote") inner)))))
+
       (= \- ch)      (do
                        (advance r)
                        (if (digit? (peek-char r))
                          (let [n (read-number r)]
-                           (- n))
+                           (cond
+                             (vector? n) [(- (first n)) (second n)]
+                             (seq? n)    n   ; -120bpm → treat as positive (unusual)
+                             :else       (- n)))
                          (do
                            (swap! (:pos r) dec)
                            (read-symbol r))))

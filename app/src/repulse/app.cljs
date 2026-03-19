@@ -3,6 +3,7 @@
             [repulse.lisp.eval :as leval]
             [repulse.core :as core]
             [repulse.audio :as audio]
+            [repulse.synth :as synth]
             [repulse.samples :as samples]
             [repulse.plugins :as plugins]
             [repulse.fx :as fx]
@@ -564,6 +565,7 @@
     (samples/init!)
     (reset! env-atom
             (assoc (leval/make-env (make-stop-fn) audio/set-bpm!)
+                   :*register-synth-fn* synth/register-synth!
                    ;; --- Multi-track ---
                    "play"
                    (fn [track-name pat]
