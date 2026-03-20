@@ -2,7 +2,8 @@
   (:require [cljs.test :refer-macros [deftest is testing]]
             [repulse.core :as core]
             [repulse.lisp.core :as lisp]
-            [repulse.lisp.eval :as leval]))
+            [repulse.lisp.eval :as leval]
+            [repulse.lisp.reader :as reader]))
 
 ;;; Helpers
 
@@ -105,3 +106,143 @@
     (let [env (make-test-env)
           f   (:result (lisp/eval-string "(transpose 12)" env))]
       (is (fn? f)))))
+
+;;; ── Phase M: loop/recur ─────────────────────────────────────────────
+
+(deftest loop-basic
+  (testing "(loop [i 0] ...) counts to 10"
+    (let [env (make-test-env)
+          r   (:result (lisp/eval-string "(loop [i 0] (if (>= i 10) i (recur (+ i 1))))" env))]
+      (is (= 10 r)))))
+
+(deftest loop-multiple-bindings
+  (testing "loop with two bindings sums 0..10"
+    (let [env (make-test-env)
+          r   (:result (lisp/eval-string "(loop [i 0 s 0] (if (> i 10) s (recur (+ i 1) (+ s i))))" env))]
+      (is (= 55 r)))))
+
+(deftest loop-returns-body-value
+  (testing "loop returns the last expression in body when no recur"
+    (let [env (make-test-env)
+          r   (:result (lisp/eval-string "(loop [x 42] x)" env))]
+      (is (= 42 (leval/unwrap r))))))
+
+(deftest loop-large-count-no-overflow
+  (testing "loop handles 10000 iterations without stack overflow"
+    (let [env (make-test-env)
+          r   (:result (lisp/eval-string "(loop [i 0] (if (>= i 10000) i (recur (+ i 1))))" env))]
+      (is (= 10000 r)))))
+
+;;; ── Phase M: defn ────────────────────────────────────────────────────
+
+(defn- eval-seq [src]
+  "Evaluate multiple forms sharing one env. Returns result of last form."
+  (let [env (make-test-env)
+        forms (reader/read-all src)]
+    (last (map #(leval/eval-form % env) forms))))
+
+(deftest defn-basic
+  (testing "(defn double [x] (* x 2)) works"
+    (is (= 6 (eval-seq "(defn double [x] (* x 2)) (double 3)")))))
+
+(deftest defn-recursive
+  (testing "(defn fact [n] ...) computes factorial"
+    (is (= 120 (eval-seq "(defn fact [n] (if (<= n 1) 1 (* n (fact (- n 1))))) (fact 5)")))))
+
+;;; ── Phase M: defmacro + quasiquote ──────────────────────────────────
+
+(deftest defmacro-simple-wrap
+  (testing "macro that doubles a value by expanding to (+ x x)"
+    ;; The macro receives the unevaluated argument form (a number literal 5)
+    ;; and expands to a list that is then evaluated: (+ 5 5) → 10
+    (is (= 10 (eval-seq "(defmacro add-self [x] (list (symbol \"+\") x x)) (add-self 5)")))))
+
+(deftest defmacro-quasiquote-pattern
+  (testing "macro using backtick/unquote expanding to a pattern combinator"
+    (let [env (make-test-env)
+          ;; (swing 0.04 pat) expands to (off 0.04 identity pat)
+          code "(defmacro swing [amount pat] `(off ~amount identity ~pat)) (swing 0.04 (seq :bd :sd))"
+          r    (:result (lisp/eval-string code env))]
+      (is (some? r))
+      (is (fn? (:query r))))))
+
+(deftest quasiquote-basic
+  (testing "quasiquote with unquote inserts the evaluated value"
+    (let [env (make-test-env)
+          r   (:result (lisp/eval-string "(let [x 42] (quasiquote (unquote x)))" env))]
+      (is (= 42 (leval/unwrap r))))))
+
+(deftest quasiquote-splice
+  (testing "quasiquote with splice-unquote splices a list into the template"
+    (let [env (make-test-env)
+          r   (:result (lisp/eval-string
+                         "(let [xs (list 2 3 4)] (quasiquote (1 (splice-unquote xs) 5)))"
+                         env))]
+      ;; result is a list; elements may be SourcedVals from the template positions
+      (is (= '(1 2 3 4 5) (map leval/unwrap r))))))
+
+;;; ── Phase M: rational literals ───────────────────────────────────────
+
+(deftest rational-literal-reads
+  (testing "1/4 parses as a two-element vector [1 4]"
+    (let [forms (reader/read-all "1/4")
+          v     (leval/unwrap (first forms))]
+      (is (= [1 4] v)))))
+
+(deftest rational-used-in-arithmetic
+  (testing "rational pair coerces to float in arithmetic"
+    (let [env (make-test-env)
+          r   (:result (lisp/eval-string "(* 1/4 4)" env))]
+      (is (= 1.0 r)))))
+
+(deftest rational-in-slow
+  (testing "(slow 1/4 (seq :bd :sd)) does not crash"
+    (let [env (make-test-env)
+          r   (:result (lisp/eval-string "(slow 1/4 (seq :bd :sd))" env))]
+      (is (some? r))
+      (is (fn? (:query r))))))
+
+;;; ── Phase M: collection helpers ──────────────────────────────────────
+
+(deftest conj-test
+  (testing "(conj [1 2] 3) → [1 2 3]"
+    (let [env (make-test-env)
+          r   (:result (lisp/eval-string "(conj [1 2] 3)" env))]
+      (is (= [1 2 3] (mapv leval/unwrap r))))))
+
+(deftest apply-test
+  (testing "(apply + (list 1 2 3)) → 6"
+    (let [env (make-test-env)
+          r   (:result (lisp/eval-string "(apply + (list 1 2 3))" env))]
+      (is (= 6 r)))))
+
+(deftest range-test
+  (testing "(range 5) → (0 1 2 3 4)"
+    (let [env (make-test-env)
+          r   (:result (lisp/eval-string "(vec (range 5))" env))]
+      (is (= [0 1 2 3 4] r)))))
+
+(deftest apply-seq-from-list
+  (testing "(apply seq (list :bd :sd :hh)) creates a pattern"
+    (let [env (make-test-env)
+          r   (:result (lisp/eval-string "(apply seq (list :bd :sd :hh))" env))]
+      (is (some? r))
+      (is (fn? (:query r))))))
+
+;;; ── Phase M: defn + loop integration ────────────────────────────────
+
+(deftest defn-with-loop
+  (testing "defn using loop to build a note list"
+    (let [env  (make-test-env)
+          code "(defn gen [n]
+                  (loop [notes [] i 0]
+                    (if (>= i n)
+                      (apply seq notes)
+                      (recur (conj notes (+ 200 (* i 30))) (+ i 1)))))
+                (gen 4)"
+          r    (:result (lisp/eval-string code env))]
+      (is (some? r))
+      (is (fn? (:query r)))
+      ;; pattern should have 4 events per cycle
+      (let [evs (core/query r one-cycle)]
+        (is (= 4 (count evs)))))))

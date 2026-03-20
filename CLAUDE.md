@@ -206,7 +206,7 @@ To verify UI changes, describe what to check or ask the user to reload the brows
 | J     | Onboarding — demo templates, hover docs, interactive tutorial  | ✓ delivered  |
 | K     | Mini-notation & sharing — `(~ "bd sd")`, gist import, WAV export | ✓ delivered |
 | L     | Per-track audio — track FX chains, sample params, sidechain   | ✓ delivered  |
-| M     | Lisp superpowers — defsynth, defmacro, loop/recur, rationals  | planned      |
+| M     | Lisp superpowers — defsynth, defmacro, loop/recur, rationals  | ✓ delivered  |
 | N     | MIDI & I/O — controller input, note out, clock out, Freesound | planned      |
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
 | B     | Richer visuals — audiomotion-analyzer spectrum, p5.js support  | not started  |

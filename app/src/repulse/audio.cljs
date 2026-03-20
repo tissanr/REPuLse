@@ -1,7 +1,8 @@
 (ns repulse.audio
   (:require [repulse.core :as core]
             [repulse.theory :as theory]
-            [repulse.samples :as samples]))
+            [repulse.samples :as samples]
+            [repulse.synth :as synth]))
 
 ;; Web Audio API scheduler
 ;; Based on Chris Wilson's "A Tale of Two Clocks"
@@ -344,6 +345,12 @@
      (cond
        ;; Silence / rest
        (= value :_) nil
+
+       ;; User-defined synth — check BEFORE built-in dispatch.
+       ;; Produced by (synth :my-synth pat) when :my-synth is registered via defsynth.
+       (and (map? value) (:synth value) (synth/lookup-synth (:synth value)))
+       (let [synth-def (synth/lookup-synth (:synth value))]
+         (synth/play-synth! ac t synth-def value dest))
 
        ;; Parameter map {:note … :amp … :attack … :decay … :pan … :synth …}
        ;; from amp/attack/decay/release/pan/saw/square/noise/fm transformers
