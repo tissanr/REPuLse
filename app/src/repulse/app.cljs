@@ -891,7 +891,7 @@
                                          (js/console.error "[REPuLse] export failed:" e))))
                            (str "exporting "
                                 (if track-kw (str ":" (name track-kw)) "all tracks")
-                                " — " n-cycles " cycles…")))))))
+                                " — " n-cycles " cycles…")))))
                    ;; --- MIDI controller input ---
                    "midi-map"
                    (fn [& args]
@@ -1004,6 +1004,7 @@
                                          (set-output! (str "Freesound error: " e) :error))))
                            "searching freesound…"))))
     ;; Wire the FX event notification callback (used by sidechain plugin)
+    ))
     (swap! audio/scheduler-state assoc :on-fx-event fx/notify-fx-event!)
     ;; Snapshot built-in names so render-context-panel! can filter them out
     (reset! builtin-names (set (keys @env-atom)))))
