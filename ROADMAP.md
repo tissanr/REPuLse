@@ -522,6 +522,25 @@ See full spec: [PROMPTS/phase-b-richer-visuals.md](PROMPTS/phase-b-richer-visual
 
 ---
 
+## Phase P — Modular Routing: Busses & Control Rate 📋 *planned*
+
+Named audio and control-rate busses for inter-synth modulation — patch an LFO
+into a filter cutoff, sidechain one synth from another, build modular-style rigs.
+
+**Key additions:**
+- `(bus :name)` / `(bus :name :control)` — create named audio or control-rate busses in `app/src/repulse/bus.cljs`
+- `(out :bus-name signal)` — write a synth's output to a named bus (inside `defsynth`)
+- `(in :bus-name)` — read from a bus as a UGen source (inside `defsynth`)
+- `(kr freq signal)` — control-rate wrapper; downsamples to per-block updates instead of per-sample
+- `(env [levels] [times] [curves])` — general envelope constructor with per-segment curve types (`:lin`, `:exp`, `:sin`, `:welch`, `:step`, or a numeric curvature)
+- `(env-gen envelope gate)` — apply any envelope to a signal, with gate-based sustain/release
+- Bus inspector in the context panel — shows active busses and their current values
+- Unit tests for envelope math in `packages/core/test/repulse/envelope_test.cljs`
+
+See full spec: [PROMPTS/phase-p-modular-routing.md](PROMPTS/phase-p-modular-routing.md)
+
+---
+
 ## Future ideas (unscheduled)
 
 See [docs/FUTURE-FEATURES.md](docs/FUTURE-FEATURES.md) for the full prioritised feature

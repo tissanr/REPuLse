@@ -145,6 +145,7 @@ there's energy for side quests.
 ### Synthesis
 | Feature | Description |
 |---|---|
+| SC-style UGen aliases | Alias existing UGen names to SuperCollider conventions: `sin` → `sin-osc`, `saw` → `saw-osc`, `square` → `pulse`, `tri` → `tri-osc`, `lpf` → `lpf`, `hpf` → `hpf`, `bpf` → `bpf`, `env-perc` → `env-perc`, `env-asr` → `env-asr`, `env-gen` → `env-gen`. Both names coexist — no breaking changes. Trivial: one `assoc` per alias in `make-build-fn`. Valuable for users coming from SC/Overtone who expect the longer names. |
 | Granular synthesis | AudioWorklet-based grain engine: pitch, density, spread, position |
 | Multi-buffer editor | Multiple named code buffers per track |
 
