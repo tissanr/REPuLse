@@ -441,7 +441,7 @@ See full spec: [PROMPTS/phase-k-mini-notation.md](PROMPTS/phase-k-mini-notation.
 
 ---
 
-## Phase L — Per-Track Audio Routing & Sample Control 📋 *planned*
+## Phase L — Per-Track Audio Routing & Sample Control ✅ *delivered*
 
 Independent effect chains per track, per-event sample playback parameters, pattern-aware
 sidechain, and four new synth voices.
@@ -458,7 +458,7 @@ See full spec: [PROMPTS/phase-l-per-track-audio.md](PROMPTS/phase-l-per-track-au
 
 ---
 
-## Phase M — Lisp Superpowers 📋 *planned*
+## Phase M — Lisp Superpowers ✅ *delivered*
 
 Four language-level additions that make REPuLse-Lisp a genuine instrument, not just a
 shell around pattern combinators.
