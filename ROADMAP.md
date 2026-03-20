@@ -476,7 +476,7 @@ See full spec: [PROMPTS/phase-m-lisp-superpowers.md](PROMPTS/phase-m-lisp-superp
 
 ---
 
-## Phase N — MIDI & External I/O 📋 *planned*
+## Phase N — MIDI & External I/O ✅ *delivered*
 
 Connect REPuLse to the outside world: hardware controllers, DAWs, sample libraries.
 
