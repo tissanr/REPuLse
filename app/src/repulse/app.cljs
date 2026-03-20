@@ -993,7 +993,7 @@
                                (.then (fn [data]
                                         (let [results (js->clj (.-results data) :keywordize-keys true)]
                                           (doseq [{:keys [id previews]} results]
-                                            (when-let [url (get previews "preview-hq-mp3")]
+                                            (when-let [url (get previews :preview-hq-mp3)]
                                               (samples/register-url! (str "freesound-" id) url)))
                                           (set-output!
                                             (str "loaded " (count results) " sounds: "
