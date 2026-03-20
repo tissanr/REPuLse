@@ -157,6 +157,15 @@
     ;; and expands to a list that is then evaluated: (+ 5 5) → 10
     (is (= 10 (eval-seq "(defmacro add-self [x] (list (symbol \"+\") x x)) (add-self 5)")))))
 
+(deftest defmacro-quasiquote-pattern
+  (testing "macro using backtick/unquote expanding to a pattern combinator"
+    (let [env (make-test-env)
+          ;; (swing 0.04 pat) expands to (off 0.04 identity pat)
+          code "(defmacro swing [amount pat] `(off ~amount identity ~pat)) (swing 0.04 (seq :bd :sd))"
+          r    (:result (lisp/eval-string code env))]
+      (is (some? r))
+      (is (fn? (:query r))))))
+
 (deftest quasiquote-basic
   (testing "quasiquote with unquote inserts the evaluated value"
     (let [env (make-test-env)
