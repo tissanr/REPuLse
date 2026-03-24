@@ -239,6 +239,40 @@ const DOCS = {
     example: "(midi-sync! true)",
   },
 
+  // --- MIDI output ---
+  "midi-map": {
+    signature: "(midi-map :cc N :target)",
+    description: "Map MIDI CC number N from any connected controller to a named parameter. Supported targets: :filter (master lowpass cutoff), :amp (master gain), :bpm (tempo 60–240). Requires Chrome or Edge.",
+    example: "(midi-map :cc 1 :filter)",
+  },
+  "midi-out": {
+    signature: "(midi-out ch pat) or (midi-out ch)",
+    description: "Route pattern events as MIDI Note On/Off messages on the given channel (1–16). Notes are derived from Hz values; amp maps to MIDI velocity. Combine with scale, chord, transpose. Requires Chrome or Edge.",
+    example: "(->> (scale :minor :c4 (seq 0 2 4 7)) (midi-out 1))",
+  },
+  "midi-clock-out!": {
+    signature: "(midi-clock-out! true/false)",
+    description: "Start or stop broadcasting a 24ppqn MIDI clock at the current BPM. Sends MIDI Start (0xFA) when enabled, MIDI Stop (0xFC) when disabled. Locks external DAWs and hardware to REPuLse's tempo. Requires Chrome or Edge.",
+    example: "(midi-clock-out! true)",
+  },
+  "midi-export": {
+    signature: "(midi-export :track n)",
+    description: "Export n cycles of the named track as a Standard MIDI File (.mid) and trigger a browser download. The file contains correct pitch, timing, duration, and tempo. Works in all browsers — no MIDI hardware required.",
+    example: "(midi-export :bass 4)",
+  },
+
+  // --- Freesound ---
+  "freesound-key!": {
+    signature: '(freesound-key! "api-key")',
+    description: "Set your Freesound API key. Required before using freesound!. Get a free key at freesound.org.",
+    example: '(freesound-key! "abc123xyz")',
+  },
+  "freesound!": {
+    signature: '(freesound! "query")',
+    description: "Search Freesound.org and load up to 5 results as sample banks named :freesound-ID. Use them in patterns like any other keyword.",
+    example: '(do (freesound! "kick 808") (seq :freesound-12345))',
+  },
+
   // --- Samples ---
   "samples!": {
     signature: '(samples! "github:owner/repo")',

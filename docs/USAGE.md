@@ -31,8 +31,9 @@ evaluate them with **Ctrl+Enter** (or the **▶ play** button), and hear them lo
 12. [Effect plugins](#effect-plugins)
 13. [Visual plugins](#visual-plugins)
 14. [Available sample banks](#available-sample-banks)
-15. [Error messages](#error-messages)
-16. [Examples](#examples)
+15. [MIDI & External I/O](#midi--external-io)
+16. [Error messages](#error-messages)
+17. [Examples](#examples)
 
 ---
 
@@ -1136,6 +1137,93 @@ Common drum machines in the library include: `RolandTR808`, `RolandTR909`, `Rola
 `RolandTR707`, `LinnDrum`, `AkaiMPC60`, `EmuDrumulator`, `KorgKR55`, `YamahaRX5`, and many more.
 
 Use `(sound :RolandTR808_bd 2)` to pick from multiple kit variations.
+
+---
+
+## MIDI & External I/O
+
+MIDI features require **Chrome or Edge** (Web MIDI API). Other browsers return a clear
+error message. Connect MIDI devices via USB — the browser sees them through the OS MIDI
+subsystem automatically.
+
+### MIDI controller input
+
+Map incoming CC messages from any MIDI controller to live parameters:
+
+```lisp
+(midi-map :cc 1 :filter)    ; CC #1 → master lowpass filter cutoff
+(midi-map :cc 7 :amp)       ; CC #7 → master gain
+(midi-map :cc 10 :bpm)      ; CC #10 → tempo (range 60–240)
+```
+
+Multiple mappings work simultaneously. Turning a mapped knob changes the parameter in
+real time while patterns play.
+
+### MIDI note output
+
+Route pattern events as MIDI Note On/Off to external synths or DAWs:
+
+```lisp
+(play :bass (midi-out 1 (seq :c4 :e4 :g4)))         ; channel 1
+(->> (scale :minor :c3 (seq 0 2 4 7)) (midi-out 2))  ; channel 2
+
+; Chains with other params — amp maps to MIDI velocity
+(->> (seq :c4 :e4 :g4) (midi-out 1) (amp 0.7))
+```
+
+Note timing aligns with audio playback. Note Off is sent at event end.
+
+### MIDI clock output
+
+Broadcast 24ppqn MIDI clock so external hardware/DAWs lock to REPuLse tempo:
+
+```lisp
+(midi-clock-out! true)   ; sends Start (0xFA) + 24ppqn clock pulses
+(bpm 140)                ; clock rate updates automatically
+(midi-clock-out! false)  ; sends Stop (0xFC) and halts clock
+```
+
+### MIDI file export
+
+Export a track as a standard MIDI file (Type 0, 480 ticks/quarter note):
+
+```lisp
+(play :lead (seq :c4 :e4 :g4 :b4))
+(midi-export :lead 4)    ; downloads repulse-lead.mid (4 cycles)
+(midi-export :lead 8)    ; 8 cycles
+```
+
+The `.mid` file opens in any DAW (Logic, Ableton, Reaper). Tempo is embedded in the file.
+
+### MIDI sync input
+
+Lock REPuLse tempo to an external MIDI clock source:
+
+```lisp
+(midi-sync! true)    ; listen for 24ppqn clock from external device
+(midi-sync! false)   ; stop syncing, return to manual BPM
+```
+
+### Freesound
+
+Search and load samples from [freesound.org](https://freesound.org). Requires a free
+API key (get one at https://freesound.org/apiv2/apply).
+
+```lisp
+; Step 1 — set your API key (once per session)
+(freesound-key! "your-api-key")
+
+; Step 2 — search (loads up to 5 results)
+(freesound! "kick 808")
+; Output panel shows: "loaded 5 sounds: :freesound-521234, :freesound-789012, ..."
+
+; Step 3 — use the actual IDs from the output
+(pure :freesound-521234)
+(seq :freesound-521234 :freesound-789012)
+```
+
+The keywords are based on Freesound's database IDs (not the search terms). Check the
+output panel after `freesound!` completes to see which keywords were registered.
 
 ---
 

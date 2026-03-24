@@ -74,8 +74,16 @@ const BUILTINS = [
   { label: "clear!",      type: "function", detail: "(clear! :name) — remove a track; (clear!) removes all tracks (use in command bar)" },
   { label: "tracks",      type: "function", detail: "(tracks) — list active track names" },
   { label: "upd",         type: "function", detail: "(upd) — hot-swap: re-evaluate editor buffer and update running tracks without stopping" },
-  { label: "tap!",        type: "function", detail: "(tap!) — register a BPM tap; 4 taps sets tempo (or click tap button)" },
-  { label: "midi-sync!",  type: "function", detail: "(midi-sync! true/false) — enable/disable MIDI clock sync" },
+  { label: "tap!",           type: "function", detail: "(tap!) — register a BPM tap; 4 taps sets tempo (or click tap button)" },
+  { label: "midi-sync!",     type: "function", detail: "(midi-sync! true/false) — enable/disable MIDI clock sync" },
+  // --- MIDI output ---
+  { label: "midi-map",       type: "function", detail: "(midi-map :cc N :target) — map MIDI CC number N to :filter, :amp, or :bpm" },
+  { label: "midi-out",       type: "function", detail: "(midi-out ch pat) — route pattern events as MIDI notes on channel 1–16; (midi-out ch) returns transformer" },
+  { label: "midi-clock-out!", type: "function", detail: "(midi-clock-out! true/false) — broadcast 24ppqn MIDI clock at current BPM" },
+  { label: "midi-export",    type: "function", detail: "(midi-export :track n) — export n cycles of :track as a downloadable .mid file" },
+  // --- Freesound ---
+  { label: "freesound-key!", type: "function", detail: "(freesound-key! \"key\") — set your Freesound API key (one-time setup)" },
+  { label: "freesound!",     type: "function", detail: "(freesound! \"query\") — search Freesound and load up to 5 results as :freesound-N" },
   // --- Onboarding ---
   { label: "demo",        type: "function", detail: "(demo :name) — load a starter template and play it; (demo) lists available demos" },
   { label: "tutorial",    type: "function", detail: "(tutorial n) — load tutorial chapter n into the editor (1–8); (tutorial) loads chapter 1" },
