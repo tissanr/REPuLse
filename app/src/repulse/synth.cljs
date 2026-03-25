@@ -1,6 +1,8 @@
 (ns repulse.synth
   (:require [repulse.lisp.eval :as leval]))
 
+(declare make-build-fn)
+
 ;;; ── Synth definition registry ───────────────────────────────────────
 
 ;; Stores registered synth definitions:

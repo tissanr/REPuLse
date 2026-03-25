@@ -210,7 +210,7 @@ To verify UI changes, describe what to check or ask the user to reload the brows
 | E2    | Live session dashboard — per-track params, conditional FX, sources | planned  |
 | E2b   | Parameter sliders — dashboard sliders that update code live    | planned      |
 | N1    | MIDI CC mapping — bind controller knobs to any parameter      | planned      |
-| N     | MIDI & I/O — note out, clock out, MIDI export, Freesound      | planned      |
+| N     | MIDI & I/O — controller input, note out, clock out, Freesound | ✓ delivered  |
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
 | B     | Richer visuals — audiomotion-analyzer spectrum, p5.js support  | not started  |
 | P     | Modular routing — busses, control rate, general envelopes      | planned      |

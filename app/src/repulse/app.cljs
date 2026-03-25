@@ -3,6 +3,9 @@
             [repulse.lisp.eval :as leval]
             [repulse.core :as core]
             [repulse.audio :as audio]
+            [repulse.midi :as midi]
+            [repulse.theory :as theory]
+            [repulse.params :as params]
             [repulse.synth :as synth]
             [repulse.samples :as samples]
             [repulse.plugins :as plugins]
@@ -205,6 +208,9 @@
 
 ;; Keys present in the initial env — used to filter built-ins from user defs
 (defonce ^:private builtin-names (atom #{}))
+
+;; Freesound API key — set via (freesound-key! "...")
+(defonce ^:private freesound-api-key (atom nil))
 
 ;;; Plugin support
 
@@ -885,8 +891,120 @@
                                          (js/console.error "[REPuLse] export failed:" e))))
                            (str "exporting "
                                 (if track-kw (str ":" (name track-kw)) "all tracks")
-                                " — " n-cycles " cycles…")))))))
+                                " — " n-cycles " cycles…")))))
+                   ;; --- MIDI controller input ---
+                   "midi-map"
+                   (fn [& args]
+                     (let [args' (mapv leval/unwrap args)
+                           cc-num (int (nth args' 1))
+                           target (nth args' 2)]
+                       (-> (midi/ensure-access!)
+                           (.then (fn [_]
+                                    (midi/map-cc! cc-num target
+                                      (fn [tgt val]
+                                        (case tgt
+                                          :filter (fx/set-param! "filter" "value" val)
+                                          :amp    (.setValueAtTime (.-gain @audio/master-gain)
+                                                                   (float val)
+                                                                   (.-currentTime (audio/get-ctx)))
+                                          :bpm    (audio/set-bpm! (+ 60 (* val 180)))
+                                          nil)))))
+                           (.catch (fn [e]
+                                     (set-output! (str "MIDI error: " e) :error))))
+                       "mapping MIDI CC…"))
+                   ;; --- MIDI note output ---
+                   "midi-out"
+                   (fn
+                     ([ch]   (params/midi-out (leval/unwrap ch)))
+                     ([ch p] (params/midi-out (leval/unwrap ch) (leval/unwrap p))))
+                   ;; --- MIDI clock output ---
+                   "midi-clock-out!"
+                   (fn [on?]
+                     (let [on (leval/unwrap on?)]
+                       (if on
+                         (-> (midi/ensure-access!)
+                             (.then (fn [_]
+                                      (midi/start-clock! (audio/get-bpm))))
+                             (.catch (fn [e]
+                                       (set-output! (str "MIDI error: " e) :error))))
+                         (midi/stop-clock!))
+                       nil))
+                   ;; --- MIDI file export ---
+                   "midi-export"
+                   (fn [& args]
+                     (let [args'      (mapv leval/unwrap args)
+                           track-name (first args')
+                           n-cycles   (or (second args') 4)
+                           state      @audio/scheduler-state
+                           pattern    (get-in state [:tracks track-name])
+                           bpm        (audio/get-bpm)
+                           cycle-dur  (:cycle-dur state)]
+                       (if-not pattern
+                         (str "Error: no track :" (when track-name (name track-name)))
+                         (let [events
+                               (for [c    (range n-cycles)
+                                     :let [sp {:start [c 1] :end [(inc c) 1]}]
+                                     ev   (core/query pattern sp)
+                                     :let [v  (:value ev)
+                                           hz (cond
+                                                (number? v) v
+                                                (and (map? v) (number? (:note v))) (:note v)
+                                                (and (map? v) (keyword? (:note v))
+                                                     (theory/note-keyword? (:note v)))
+                                                (theory/note->hz (:note v))
+                                                (theory/note-keyword? v) (theory/note->hz v)
+                                                :else nil)]
+                                     :when hz
+                                     :let [ps (core/rat->float (:start (:part ev)))
+                                           pe (core/rat->float (:end   (:part ev)))]]
+                                 {:time-sec     (* (- ps c) cycle-dur)
+                                  :duration-sec (* (- pe ps) cycle-dur)
+                                  :midi-note    (midi/hz->midi (double hz))
+                                  :channel      1})
+                               midi-data (midi/export-midi (vec events) bpm)
+                               blob      (js/Blob. #js [midi-data] #js {:type "audio/midi"})
+                               url       (.createObjectURL js/URL blob)
+                               a         (.createElement js/document "a")]
+                           (set! (.-href a) url)
+                           (set! (.-download a) (str "repulse-" (name track-name) ".mid"))
+                           (.appendChild (.-body js/document) a)
+                           (.click a)
+                           (.removeChild (.-body js/document) a)
+                           (js/setTimeout #(.revokeObjectURL js/URL url) 1000)
+                           (str "exported " n-cycles " cycles of :" (name track-name) " as MIDI")))))
+                   ;; --- Freesound ---
+                   "freesound-key!"
+                   (fn [key]
+                     (reset! freesound-api-key (leval/unwrap key))
+                     "Freesound API key set")
+                   "freesound!"
+                   (fn [query]
+                     (let [q   (leval/unwrap query)
+                           key @freesound-api-key]
+                       (if-not key
+                         "Error: set API key first with (freesound-key! \"your-key\")"
+                         (do
+                           (-> (js/fetch (str "https://freesound.org/apiv2/search/text/"
+                                              "?query=" (js/encodeURIComponent q)
+                                              "&token=" key
+                                              "&fields=id,name,previews"
+                                              "&page_size=5"))
+                               (.then #(.json %))
+                               (.then (fn [data]
+                                        (let [results (js->clj (.-results data) :keywordize-keys true)]
+                                          (doseq [{:keys [id previews]} results]
+                                            (when-let [url (get previews :preview-hq-mp3)]
+                                              (samples/register-url! (str "freesound-" id) url)))
+                                          (set-output!
+                                            (str "loaded " (count results) " sounds: "
+                                                 (clojure.string/join ", "
+                                                   (map #(str ":freesound-" (:id %)) results)))
+                                            :success))))
+                               (.catch (fn [e]
+                                         (set-output! (str "Freesound error: " e) :error))))
+                           "searching freesound…"))))
     ;; Wire the FX event notification callback (used by sidechain plugin)
+    ))
     (swap! audio/scheduler-state assoc :on-fx-event fx/notify-fx-event!)
     ;; Snapshot built-in names so render-context-panel! can filter them out
     (reset! builtin-names (set (keys @env-atom)))))

@@ -115,3 +115,10 @@
    (jux-by 0.5 rev pat) — half stereo width"
   [width f pat]
   (core/stack* [(pan (- width) pat) (pan width (f pat))]))
+
+(defn midi-out
+  "Tag events for MIDI note output on the given channel (1–16).
+   (midi-out 1 pat)  — send events as MIDI notes on channel 1
+   (midi-out 1)      — return (pat → pat) transformer"
+  ([ch]     (fn [pat] (midi-out ch pat)))
+  ([ch pat] (apply-param :midi-ch ch pat)))

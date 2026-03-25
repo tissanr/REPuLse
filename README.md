@@ -99,6 +99,12 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(upd)` | Hot-swap: re-evaluate the editor buffer and update running tracks without stopping — use in the command bar |
 | `(tap!)` | Register a BPM tap; 4 taps sets tempo (or click the tap button) |
 | `(midi-sync! true)` | Enable MIDI clock sync from external hardware |
+| `(midi-map :cc 1 :filter)` | Map MIDI CC #1 to master filter cutoff (also `:amp`, `:bpm`) |
+| `(midi-out 1 pat)` | Route pattern events as MIDI Note On/Off on channel 1–16 |
+| `(midi-clock-out! true)` | Broadcast 24ppqn MIDI clock at current BPM |
+| `(midi-export :track 4)` | Export 4 cycles of a track as a `.mid` file |
+| `(freesound-key! "key")` | Set your Freesound API key (get one at freesound.org) |
+| `(freesound! "kick 808")` | Search Freesound and load samples as `:freesound-<id>` |
 | `(samples! "github:owner/repo")` | Load sample banks from a public GitHub repo (auto-discovers audio files) |
 | `(samples! "https://…/samples.edn")` | Load banks from a REPuLse Lisp manifest |
 | `(samples! "https://…/samples.json")` | Load banks from a Strudel-compatible JSON manifest |

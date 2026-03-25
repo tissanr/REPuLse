@@ -255,6 +255,11 @@
     :else
     (load-manifest! url)))
 
+(defn register-url!
+  "Register a single audio URL as a one-sample bank under bank-name (string or keyword)."
+  [bank-name url]
+  (swap! registry assoc (name bank-name) [url]))
+
 (defn bank-names
   "Returns a sorted list of all registered bank names."
   []
