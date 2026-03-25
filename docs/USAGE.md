@@ -513,19 +513,19 @@ concert A is `:a4` (440 Hz). Drum keywords like `:bd` and `:sd` are unaffected.
 
 ### `scale` — melodic patterns from scale degrees
 
-Map zero-indexed degree integers to frequencies in a named scale:
+Map one-indexed degree integers to frequencies in a named scale:
 
 ```lisp
-(scale :major :c4 (seq 0 1 2 3 4 5 6))   ; C major scale
-(scale :minor :a3 (seq 0 2 4))            ; A minor triad
-(scale :pentatonic :g3 (fast 2 (seq 0 1 2 3 4)))
+(scale :major :c4 (seq 1 2 3 4 5 6 7))   ; C major scale
+(scale :minor :a3 (seq 1 3 5))            ; A minor triad
+(scale :pentatonic :g3 (fast 2 (seq 1 2 3 4 5)))
 
 ;; Degrees wrap into higher octaves
-(scale :major :c4 (seq 0 7 14))           ; C4, C5, C6
+(scale :major :c4 (seq 1 8 15))           ; C4, C5, C6
 ```
 
-Degree 0 = root, degree 1 = second scale tone, etc. Values beyond the scale length wrap
-into higher octaves; negative values wrap into lower octaves.
+Degree 1 = root, degree 2 = second scale tone, etc. Values beyond the scale length wrap
+into higher octaves; values below 1 wrap into lower octaves.
 
 Available scales: `:major` (`:ionian`), `:minor` (`:aeolian`), `:dorian`, `:phrygian`,
 `:lydian`, `:mixolydian`, `:locrian`, `:pentatonic`, `:minor-pentatonic`, `:blues`.
@@ -543,7 +543,7 @@ one full cycle:
 ;; Layer a chord under a melody
 (stack
   (slow 4 (chord :minor :a3))
-  (scale :minor :a3 (fast 2 (seq 0 2 4 5 4 2))))
+  (scale :minor :a3 (fast 2 (seq 1 3 5 6 5 3))))
 ```
 
 Available chords: `:major`, `:minor`, `:major7`, `:minor7`, `:dom7`, `:m7b5`
@@ -556,7 +556,7 @@ Shifts all numeric (Hz) values in a pattern up or down by `n` semitones. Keyword
 
 ```lisp
 (transpose 12 (seq :c4 :e4 :g4))          ; up one octave → C5 E5 G5
-(transpose -7 (scale :major :c5 (seq 0 1 2 3)))
+(transpose -7 (scale :major :c5 (seq 1 2 3 4)))
 (transpose 5 (chord :major :c4))           ; same voicing, up a fourth
 
 ;; drum keywords are untouched
@@ -574,7 +574,7 @@ Shifts all numeric (Hz) values in a pattern up or down by `n` semitones. Keyword
                     [(chord :major :c4) 4]
                     [(chord :major :g3) 4]]))
   ;; melody over the top
-  (scale :minor :a3 (seq 0 2 4 5 4 2 0 2))
+  (scale :minor :a3 (seq 1 3 5 6 5 3 1 3))
   ;; drums
   (seq :bd :_ :bd :_)
   (seq :_ :sd :_ :sd))
@@ -687,7 +687,7 @@ and `comp`:
 (def punchy (comp (amp 1.0) (attack 0.001) (decay 0.08)))
 
 (stack
-  (pluck (scale :minor :a3 (seq 0 2 4 7)))
+  (pluck (scale :minor :a3 (seq 1 3 5 8)))
   (pad   (chord :minor :a3))
   (punchy (seq :bd :_ :bd :_)))
 ```
@@ -728,7 +728,7 @@ cycle-aligned, so different densities create polyrhythmic parameter changes:
 (amp (seq 0.9 0.4) (seq :c4 :e4 :g4))
 
 ; independent amp and attack patterns stacked with melody
-(->> (scale :dorian :d3 (fast 3 (seq 0 2 4 5 6)))
+(->> (scale :dorian :d3 (fast 3 (seq 1 3 5 6 7)))
      (amp (slow 2 (seq 0.8 0.5 1.0 0.3)))
      (attack 0.01))
 ```
@@ -1014,7 +1014,7 @@ Evaluating a new `play` for the same name replaces the pattern without stopping 
 (play :kick  (seq :bd :_ :bd :_))
 (play :snare (seq :_ :sd :_ :sd))
 (play :hats  (fast 2 (seq :hh :_)))
-(play :bass  (scale :minor :c2 (seq 0 :_ 7 :_ 0 :_ 5 :_)))
+(play :bass  (scale :minor :c2 (seq 1 :_ 8 :_ 1 :_ 6 :_)))
 ```
 
 ---
@@ -1134,7 +1134,7 @@ Define custom instruments from Web Audio node graphs. UGen functions build the g
       (lpf 2000)
       (env-asr 0.3 0.8 1.0)))
 
-(->> (scale :minor :c4 (seq 0 2 4 7))
+(->> (scale :minor :c4 (seq 1 3 5 8))
      (synth :pluck)
      (amp 0.7))
 ```
@@ -1248,7 +1248,7 @@ Route a track through its own private effect chain by placing `fx` inside the `-
        (fx :filter 1000)))              ; kick only goes through lowpass
 
 (play :lead
-  (->> (scale :minor :c3 (seq 0 2 4 7))
+  (->> (scale :minor :c3 (seq 1 3 5 8))
        (decay 1.0)
        (fx :reverb 0.4)))              ; lead gets its own reverb
 
@@ -1599,7 +1599,7 @@ Route pattern events as MIDI Note On/Off to external synths or DAWs:
 
 ```lisp
 (play :bass (midi-out 1 (seq :c4 :e4 :g4)))         ; channel 1
-(->> (scale :minor :c3 (seq 0 2 4 7)) (midi-out 2))  ; channel 2
+(->> (scale :minor :c3 (seq 1 3 5 8)) (midi-out 2))  ; channel 2
 
 ; Chains with other params — amp maps to MIDI velocity
 (->> (seq :c4 :e4 :g4) (midi-out 1) (amp 0.7))
@@ -1808,7 +1808,7 @@ name, a suggestion is shown.
 
 ;; Lead: its own reverb + delay, independent of the kick
 (play :lead
-  (->> (scale :minor :c3 (seq 0 2 4 7))
+  (->> (scale :minor :c3 (seq 1 3 5 8))
        (amp 0.6)
        (decay 0.8)
        (fx :reverb 0.5)

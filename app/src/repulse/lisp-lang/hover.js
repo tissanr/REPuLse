@@ -131,8 +131,8 @@ const DOCS = {
   // --- Music theory ---
   "scale": {
     signature: "(scale scale-kw root pat)",
-    description: "Map degree integers (0, 1, 2, ...) to Hz frequencies using a named scale. Degrees outside the scale wrap into higher/lower octaves.",
-    example: "(scale :minor :c4 (seq 0 2 4 7))",
+    description: "Map degree integers (1, 2, 3, ...) to Hz frequencies using a named scale. 1 = root, 2 = second tone, etc. Degrees outside the scale wrap into higher/lower octaves.",
+    example: "(scale :minor :c4 (seq 1 3 5 8))",
   },
   "chord": {
     signature: "(chord chord-kw root)",
