@@ -234,6 +234,48 @@ footer {
 .ctx-bypass { color: #e06c75; flex-shrink: 0; font-size: 10px; }
 .ctx-empty { padding: 2px 10px; color: var(--dim); }
 
+/* Audio backend tag */
+.ctx-backend { color: #5c6370; font-size: 10px; flex-shrink: 0; }
+
+/* Track rows */
+.ctx-track {
+  display: flex;
+  align-items: baseline;
+  padding: 2px 6px 2px 10px;
+  gap: 4px;
+  overflow: hidden;
+  font-size: 11px;
+}
+.ctx-track-icon  { flex-shrink: 0; color: #98c379; font-size: 9px; }
+.ctx-track-name  { color: #56b6c2; font-weight: bold; flex-shrink: 0; }
+.ctx-track-params {
+  color: #abb2bf;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.ctx-track-status { color: var(--dim); font-size: 10px; font-style: italic; flex-shrink: 0; }
+.ctx-track-solo   { color: #e5c07b; }
+.ctx-track-muted  .ctx-track-icon { color: var(--dim); }
+.ctx-track-muted  .ctx-track-name { color: #5c6370; }
+
+/* Track param key/value */
+.ctx-param-key { color: #5c6370; }
+.ctx-param-val { color: #d19a66; }
+
+/* Source lines */
+.ctx-source {
+  padding: 2px 10px;
+  color: #98c379;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── Command bar ── */
 .cmd-bar {
   display: flex;

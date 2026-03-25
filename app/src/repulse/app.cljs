@@ -995,6 +995,8 @@
                                           (doseq [{:keys [id previews]} results]
                                             (when-let [url (get previews :preview-hq-mp3)]
                                               (samples/register-url! (str "freesound-" id) url)))
+                                          (swap! samples/loaded-sources conj
+                                                 {:type :freesound :query q :count (count results)})
                                           (set-output!
                                             (str "loaded " (count results) " sounds: "
                                                  (clojure.string/join ", "
@@ -1057,66 +1059,180 @@
 (defn- infer-type [v]
   (cond
     (core/pattern? v) "pattern"
-    (fn? v)                          "fn"
-    (number? v)                      "number"
-    (string? v)                      "string"
-    (keyword? v)                     "keyword"
-    :else                            "value"))
+    (fn? v)          "fn"
+    (number? v)      "number"
+    (string? v)      "string"
+    (keyword? v)     "keyword"
+    :else            "value"))
 
 (defn- fmt-pv [v]
   (if (number? v)
     (if (== v (Math/round v)) (str (int v)) (.toFixed v 2))
     (str v)))
 
+(def ^:private TRACK-PARAM-KEYS
+  [:amp :pan :decay :attack :release :synth :bank :rate :begin :end])
+
+(defn- extract-track-params
+  "Query cycle 0 of a pattern and collect the first value for each known param key."
+  [pattern]
+  (try
+    (let [events (core/query pattern {:start [0 1] :end [1 1]})
+          maps   (filter map? (map :value events))]
+      (reduce (fn [acc m]
+                (reduce (fn [a k]
+                          (if (and (contains? m k) (not (contains? a k)))
+                            (assoc a k (get m k))
+                            a))
+                        acc TRACK-PARAM-KEYS))
+              {} maps))
+    (catch :default _ {})))
+
+(defn- render-status-section []
+  (let [bpm      (Math/round (/ 240.0 (:cycle-dur @audio/scheduler-state)))
+        playing? (audio/playing?)
+        backend  (if @audio/worklet-ready? "[wasm]" "[js]")
+        pfx      @samples/active-bank-prefix]
+    (str "<div class=\"ctx-status\">"
+         "<span class=\"ctx-bpm\">" bpm " BPM</span>"
+         "<span class=\"ctx-backend\">" backend "</span>"
+         (when pfx (str "<span class=\"ctx-bank\">" pfx "</span>"))
+         "<span class=\"" (if playing? "ctx-playing" "ctx-stopped") "\">"
+         (if playing? "&#9679; playing" "&#9675; stopped")
+         "</span>"
+         "</div>")))
+
+(defn- render-tracks-section []
+  (let [state  @audio/scheduler-state
+        tracks (:tracks state)
+        muted  (:muted state)]
+    (when (seq tracks)
+      (let [n-active   (- (count tracks) (count muted))
+            solo-track (when (and (> (count tracks) 1) (= n-active 1))
+                         (first (remove #(contains? muted %) (keys tracks))))]
+        (str "<div class=\"ctx-section\">"
+             "<div class=\"ctx-section-title\">Tracks</div>"
+             (apply str
+               (map (fn [[track-name pattern]]
+                      (let [muted?  (contains? muted track-name)
+                            solo?   (= track-name solo-track)
+                            icon    (cond muted? "&#9632;" solo? "&#9733;" :else "&#9654;")
+                            params  (when-not muted? (extract-track-params pattern))
+                            pkeys   (filter #(contains? params %) TRACK-PARAM-KEYS)]
+                        (str "<div class=\"ctx-track" (when muted? " ctx-track-muted") "\">"
+                             "<span class=\"ctx-track-icon\">" icon "</span>"
+                             "<span class=\"ctx-track-name\">:" (name track-name) "</span>"
+                             (cond
+                               muted? "<span class=\"ctx-track-status\">(muted)</span>"
+                               solo?  "<span class=\"ctx-track-status ctx-track-solo\">(solo)</span>"
+                               (seq pkeys)
+                               (str "<span class=\"ctx-track-params\">"
+                                    (apply str
+                                      (map (fn [k]
+                                             (str "<span class=\"ctx-param-key\">" (name k) " </span>"
+                                                  "<span class=\"ctx-param-val\">" (fmt-pv (get params k)) "</span>"
+                                                  " "))
+                                           pkeys))
+                                    "</span>")
+                               :else "")
+                             "</div>")))
+                    (sort-by (comp name first) tracks)))
+             "</div>")))))
+
+(defn- render-fx-section []
+  (let [chain @fx/chain]
+    (when (and (seq chain) (some (complement :bypassed?) chain))
+      (str "<div class=\"ctx-section\">"
+           "<div class=\"ctx-section-title\">FX</div>"
+           (apply str
+             (map (fn [{:keys [name plugin bypassed?]}]
+                    (let [params   (when (and plugin (not bypassed?))
+                                     (try (js->clj (.getParams ^js plugin))
+                                          (catch :default _ {})))
+                          first-kv (first (seq params))
+                          pstr     (when first-kv
+                                     (str (first first-kv) " "
+                                          (fmt-pv (second first-kv))))]
+                      (str "<div class=\"ctx-row\">"
+                           "<span class=\"ctx-name\">" name "</span>"
+                           (cond
+                             bypassed? "<span class=\"ctx-bypass\">off</span>"
+                             pstr      (str "<span class=\"ctx-param\">" pstr "</span>")
+                             :else     "")
+                           "</div>")))
+                  chain))
+           "</div>"))))
+
+(defn- render-midi-section []
+  (let [mappings @midi/cc-mappings]
+    (when (seq mappings)
+      (str "<div class=\"ctx-section\">"
+           "<div class=\"ctx-section-title\">MIDI</div>"
+           (apply str
+             (map (fn [[cc-num {:keys [target]}]]
+                    (str "<div class=\"ctx-row\">"
+                         "<span class=\"ctx-name\">CC #" cc-num "</span>"
+                         "<span class=\"ctx-type\">"
+                         (when target (str "&#8594; " (name target)))
+                         "</span>"
+                         "</div>"))
+                  (sort-by key mappings)))
+           "</div>"))))
+
+(defn- render-sources-section []
+  (let [sources @samples/loaded-sources]
+    (when (seq sources)
+      (str "<div class=\"ctx-section\">"
+           "<div class=\"ctx-section-title\">Sources</div>"
+           (apply str
+             (map (fn [{:keys [type id banks query count]}]
+                    (str "<div class=\"ctx-source\">&#9835; "
+                         (case type
+                           :github    (str "github:" id
+                                          (when (pos? (or banks 0))
+                                            (str " (" banks " banks)")))
+                           :freesound (str "freesound: " query
+                                          (when count (str " (" count ")")))
+                           (str id))
+                         "</div>"))
+                  sources))
+           "</div>"))))
+
+(defn- render-bindings-section []
+  (let [env      (or @env-atom {})
+        builtins @builtin-names
+        user-defs (sort (remove builtins (keys env)))]
+    (when (seq user-defs)
+      (str "<div class=\"ctx-section\">"
+           "<div class=\"ctx-section-title\">Bindings</div>"
+           (apply str
+             (map (fn [k]
+                    (str "<div class=\"ctx-row\">"
+                         "<span class=\"ctx-name\">" k "</span>"
+                         "<span class=\"ctx-type\">" (infer-type (get env k)) "</span>"
+                         "</div>"))
+                  user-defs))
+           "</div>"))))
+
+(defonce ^:private render-scheduled? (atom false))
+
 (defn- render-context-panel! []
-  (when-let [status-el (el "ctx-status")]
-    (let [bpm     (Math/round (/ 240.0 (:cycle-dur @audio/scheduler-state)))
-          playing? (audio/playing?)]
-      (set! (.-innerHTML status-el)
-            (str "<span class=\"ctx-bpm\">" bpm " BPM</span>"
-                 (when-let [pfx @samples/active-bank-prefix]
-                   (str "<span class=\"ctx-bank\">" pfx "</span>"))
-                 "<span class=\"" (if playing? "ctx-playing" "ctx-stopped") "\">"
-                 (if playing? "&#9679; playing" "&#9675; stopped")
-                 "</span>"))))
-  (when-let [bindings-el (el "ctx-bindings")]
-    (let [env       (or @env-atom {})
-          builtins  @builtin-names
-          user-defs (sort (remove builtins (keys env)))]
-      (set! (.-innerHTML bindings-el)
-            (str "<div class=\"ctx-section-title\">Bindings</div>"
-                 (if (empty? user-defs)
-                   "<div class=\"ctx-empty\">—</div>"
-                   (apply str
-                          (map (fn [k]
-                                 (str "<div class=\"ctx-row\">"
-                                      "<span class=\"ctx-name\">" k "</span>"
-                                      "<span class=\"ctx-type\">" (infer-type (get env k)) "</span>"
-                                      "</div>"))
-                               user-defs)))))))
-  (when-let [effects-el (el "ctx-effects")]
-    (let [chain @fx/chain]
-      (set! (.-innerHTML effects-el)
-            (str "<div class=\"ctx-section-title\">Effects</div>"
-                 (if (empty? chain)
-                   "<div class=\"ctx-empty\">—</div>"
-                   (apply str
-                          (map (fn [{:keys [name plugin bypassed?]}]
-                                 (let [params    (when plugin
-                                                   (try (js->clj (.getParams ^js plugin))
-                                                        (catch :default _ {})))
-                                       first-kv  (first (seq params))
-                                       param-str (when first-kv
-                                                   (str (first first-kv) ": "
-                                                        (fmt-pv (second first-kv))))]
-                                   (str "<div class=\"ctx-row\">"
-                                        "<span class=\"ctx-name\">" name "</span>"
-                                        (cond
-                                          bypassed?  "<span class=\"ctx-bypass\">off</span>"
-                                          param-str  (str "<span class=\"ctx-param\">" param-str "</span>")
-                                          :else      "")
-                                        "</div>")))
-                               chain))))))))
+  (when-let [panel-el (el "context-panel")]
+    (set! (.-innerHTML panel-el)
+          (str (render-status-section)
+               (render-tracks-section)
+               (render-fx-section)
+               (render-midi-section)
+               (render-sources-section)
+               (render-bindings-section)))))
+
+(defn- schedule-render! []
+  (when-not @render-scheduled?
+    (reset! render-scheduled? true)
+    (js/requestAnimationFrame
+      (fn []
+        (reset! render-scheduled? false)
+        (render-context-panel!)))))
 
 ;;; CodeMirror editor
 
@@ -1228,11 +1344,7 @@
                "</header>"
                "<div class=\"main-area\">"
                "  <div id=\"editor-container\" class=\"editor-container\"></div>"
-               "  <div id=\"context-panel\" class=\"context-panel\">"
-               "    <div id=\"ctx-status\" class=\"ctx-status\"></div>"
-               "    <div id=\"ctx-bindings\" class=\"ctx-section\"></div>"
-               "    <div id=\"ctx-effects\" class=\"ctx-section\"></div>"
-               "  </div>"
+               "  <div id=\"context-panel\" class=\"context-panel\"></div>"
                "</div>"
                "<div id=\"cmd-bar\" class=\"cmd-bar\">"
                "  <span class=\"cmd-prompt\">&gt;</span>"
@@ -1344,17 +1456,19 @@
                   (js/console.warn "[REPuLse] Effect load failed:" url e)))))
 
   ;; Reactive context panel + track panel
-  (add-watch env-atom               ::ctx (fn [_ _ _ _] (render-context-panel!)))
-  (add-watch fx/chain               ::ctx (fn [_ _ _ _] (render-context-panel!)))
-  (add-watch audio/scheduler-state  ::ctx (fn [_ _ _ _]
-                                            (render-context-panel!)
-                                            (render-track-panel!)
-                                            ;; Persist BPM
-                                            (try
-                                              (.setItem js/localStorage bpm-storage-key
-                                                        (str (audio/get-bpm)))
-                                              (catch :default _))))
-  (add-watch samples/active-bank-prefix ::ctx (fn [_ _ _ _] (render-context-panel!)))
+  (add-watch env-atom                   ::ctx (fn [_ _ _ _] (schedule-render!)))
+  (add-watch fx/chain                   ::ctx (fn [_ _ _ _] (schedule-render!)))
+  (add-watch audio/scheduler-state      ::ctx (fn [_ _ _ _]
+                                                (schedule-render!)
+                                                (render-track-panel!)
+                                                ;; Persist BPM
+                                                (try
+                                                  (.setItem js/localStorage bpm-storage-key
+                                                            (str (audio/get-bpm)))
+                                                  (catch :default _))))
+  (add-watch samples/active-bank-prefix ::ctx (fn [_ _ _ _] (schedule-render!)))
+  (add-watch samples/loaded-sources     ::ctx (fn [_ _ _ _] (schedule-render!)))
+  (add-watch midi/cc-mappings           ::ctx (fn [_ _ _ _] (schedule-render!)))
 
   (render-context-panel!)
   (start-playhead-raf!))
