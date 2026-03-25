@@ -208,6 +208,7 @@ To verify UI changes, describe what to check or ask the user to reload the brows
 | L     | Per-track audio — track FX chains, sample params, sidechain   | ✓ delivered  |
 | M     | Lisp superpowers — defsynth, defmacro, loop/recur, rationals  | ✓ delivered  |
 | E2    | Live session dashboard — per-track params, conditional FX, sources | planned  |
+| E2b   | Parameter sliders — dashboard sliders that update code live    | planned      |
 | N1    | MIDI CC mapping — bind controller knobs to any parameter      | planned      |
 | N     | MIDI & I/O — note out, clock out, MIDI export, Freesound      | planned      |
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
