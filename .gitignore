@@ -21,5 +21,6 @@ app/public/repulse_audio.js
 # macOS
 .DS_Store
 
-# Claude Code session data
-.claude/
+# Claude Code — track commands, ignore local settings and worktrees
+.claude/settings.local.json
+.claude/worktrees/
