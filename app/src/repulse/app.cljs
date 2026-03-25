@@ -1140,8 +1140,8 @@
              "</div>")))))
 
 (defn- render-fx-section []
-  (let [chain @fx/chain]
-    (when (and (seq chain) (some (complement :bypassed?) chain))
+  (let [active (filter :active? @fx/chain)]
+    (when (seq active)
       (str "<div class=\"ctx-section\">"
            "<div class=\"ctx-section-title\">FX</div>"
            (apply str
@@ -1160,7 +1160,7 @@
                              pstr      (str "<span class=\"ctx-param\">" pstr "</span>")
                              :else     "")
                            "</div>")))
-                  chain))
+                  active))
            "</div>"))))
 
 (defn- render-midi-section []

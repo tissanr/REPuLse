@@ -29,7 +29,8 @@
                        :plugin    plugin
                        :input     (.-inputNode nodes)
                        :output    (.-outputNode nodes)
-                       :bypassed? false})
+                       :bypassed? false
+                       :active?   false})
     (rewire!)))
 
 (defn remove-effect! [effect-name]
@@ -39,8 +40,10 @@
     (rewire!)))
 
 (defn set-param! [effect-name param-name value]
-  (when-let [entry (some #(when (= effect-name (:name %)) %) @chain)]
-    (.setParam ^js (:plugin entry) param-name value)))
+  (when (some #(= effect-name (:name %)) @chain)
+    (swap! chain (fn [c] (mapv #(if (= effect-name (:name %)) (assoc % :active? true) %) c)))
+    (when-let [entry (some #(when (= effect-name (:name %)) %) @chain)]
+      (.setParam ^js (:plugin entry) param-name value))))
 
 (defn bypass! [effect-name enabled]
   (when-let [entry (some #(when (= effect-name (:name %)) %) @chain)]
