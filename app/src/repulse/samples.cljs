@@ -15,6 +15,11 @@
 ;; When set, keyword :kw is looked up as "<prefix>_<kw>" first.
 (defonce active-bank-prefix (atom nil))
 
+;; External sources loaded via (samples! ...) — tracked for the context panel.
+;; [{:type :github :id "owner/repo" :banks N}
+;;  {:type :freesound :query "kick 808" :count N}]
+(defonce loaded-sources (atom []))
+
 (defn set-bank-prefix!
   "Set the global drum machine prefix. Pass nil to clear."
   [prefix]
@@ -224,6 +229,8 @@
                                  {}
                                  grouped)]
                    (swap! registry merge banks)
+                   (swap! loaded-sources conj
+                          {:type :github :id (str owner "/" repo) :banks (count banks)})
                    (js/console.log (str "[REPuLse] loaded " (count banks)
                                         " banks from github:" owner "/" repo)))))
         (.catch (fn [e]
@@ -254,6 +261,11 @@
 
     :else
     (load-manifest! url)))
+
+(defn register-url!
+  "Register a single audio URL as a one-sample bank under bank-name (string or keyword)."
+  [bank-name url]
+  (swap! registry assoc (name bank-name) [url]))
 
 (defn bank-names
   "Returns a sorted list of all registered bank names."

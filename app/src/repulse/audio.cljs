@@ -2,7 +2,8 @@
   (:require [repulse.core :as core]
             [repulse.theory :as theory]
             [repulse.samples :as samples]
-            [repulse.synth :as synth]))
+            [repulse.synth :as synth]
+            [repulse.midi :as midi]))
 
 ;; Web Audio API scheduler
 ;; Based on Chris Wilson's "A Tale of Two Clocks"
@@ -495,11 +496,34 @@
         (let [evs (core/query pattern sp)]
           (doseq [ev evs]
             (let [part-start        (core/rat->float (:start (:part ev)))
+                  part-end          (core/rat->float (:end   (:part ev)))
                   cycle-audio-start (* cycle cycle-dur)
                   event-offset      (* (- part-start cycle) cycle-dur)
-                  t                 (+ cycle-audio-start event-offset)]
+                  t                 (+ cycle-audio-start event-offset)
+                  dur               (* (- part-end part-start) cycle-dur)]
               (when (> t (.-currentTime ac))
                 (play-event ac t (:value ev) track-name)
+                ;; MIDI note output — triggered by :midi-ch key added via (midi-out ch pat)
+                (when-let [midi-ch (:midi-ch (:value ev))]
+                  (let [value    (:value ev)
+                        hz       (cond
+                                   (:freq value) (:freq value)
+                                   (and (:note value) (theory/note-keyword? (:note value)))
+                                   (theory/note->hz (:note value))
+                                   (number? (:note value)) (:note value)
+                                   (theory/note-keyword? value) (theory/note->hz value)
+                                   (number? value) value
+                                   :else nil)
+                        note-num (when hz (midi/hz->midi (double hz)))
+                        amp-v    (float (:amp value 1.0))
+                        velocity (min 127 (max 0 (Math/round (* amp-v 127))))
+                        ac-now   (.-currentTime ac)
+                        perf-now (.now js/performance)
+                        ts-on    (+ perf-now (* (- t ac-now) 1000))
+                        ts-off   (+ ts-on (* dur 1000))]
+                    (when note-num
+                      (midi/send-note-on!  midi-ch note-num velocity ts-on)
+                      (midi/send-note-off! midi-ch note-num ts-off))))
                 (when on-fx-event
                   (on-fx-event (:value ev) t))
                 (when (and on-event (:source ev))

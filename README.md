@@ -99,6 +99,12 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(upd)` | Hot-swap: re-evaluate the editor buffer and update running tracks without stopping — use in the command bar |
 | `(tap!)` | Register a BPM tap; 4 taps sets tempo (or click the tap button) |
 | `(midi-sync! true)` | Enable MIDI clock sync from external hardware |
+| `(midi-map :cc 1 :filter)` | Map MIDI CC #1 to master filter cutoff (also `:amp`, `:bpm`) |
+| `(midi-out 1 pat)` | Route pattern events as MIDI Note On/Off on channel 1–16 |
+| `(midi-clock-out! true)` | Broadcast 24ppqn MIDI clock at current BPM |
+| `(midi-export :track 4)` | Export 4 cycles of a track as a `.mid` file |
+| `(freesound-key! "key")` | Set your Freesound API key (get one at freesound.org) |
+| `(freesound! "kick 808")` | Search Freesound and load samples as `:freesound-<id>` |
 | `(samples! "github:owner/repo")` | Load sample banks from a public GitHub repo (auto-discovers audio files) |
 | `(samples! "https://…/samples.edn")` | Load banks from a REPuLse Lisp manifest |
 | `(samples! "https://…/samples.json")` | Load banks from a Strudel-compatible JSON manifest |
@@ -357,6 +363,35 @@ The generated `parser.js` must be committed alongside the grammar source.
 
 Open [packages/audio/src/lib.rs](packages/audio/src/lib.rs) and add a match arm to `trigger()`,
 then implement a `play_*` method on `AudioEngine`. Run `npm run build:wasm` to rebuild.
+
+---
+
+## Contributing
+
+REPuLse is open to contributions! Here's how you can help:
+
+### Suggest a feature
+
+Open a [GitHub issue](../../issues) describing a function, pattern combinator, or capability
+you'd like to see. Browse the [ROADMAP.md](ROADMAP.md) for planned phases and existing ideas.
+
+### Implement a planned phase
+
+The [PROMPTS/](PROMPTS/) folder contains detailed specs for upcoming features. Pick one that
+interests you:
+
+1. Open an issue (or comment on an existing one) to claim the work
+2. Fork the repo and create a branch off `main`
+3. Implement the feature following the coding conventions in [CLAUDE.md](CLAUDE.md)
+4. Include tests for any new `core` functions (see `packages/core/src/repulse/core_test.cljs`)
+5. Open a PR against `main`
+
+See the [Development setup](#development-setup) section above to get your local environment running.
+
+### Report a bug
+
+Found something broken? Open an issue with steps to reproduce — include the code you typed
+in the editor and what you expected to hear.
 
 ---
 
