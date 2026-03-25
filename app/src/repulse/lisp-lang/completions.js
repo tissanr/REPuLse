@@ -12,7 +12,7 @@ const BUILTINS = [
   { label: "every",        type: "function", detail: "(every n f pat) — apply f every n cycles" },
   { label: "fmap",         type: "function", detail: "(fmap f pat) — map a function over pattern values" },
   // --- Music theory ---
-  { label: "scale",        type: "function", detail: "(scale kw root pat) — map degree integers to Hz (e.g. (scale :minor :c4 (seq 0 2 4)))" },
+  { label: "scale",        type: "function", detail: "(scale kw root pat) — map degree integers to Hz (e.g. (scale :minor :c4 (seq 1 3 5)))" },
   { label: "chord",        type: "function", detail: "(chord kw root) — stack chord tones as Hz (e.g. (chord :major7 :c4))" },
   { label: "transpose",    type: "function", detail: "(transpose n pat) — shift Hz values by n semitones" },
   // --- Per-event parameters ---

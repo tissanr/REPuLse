@@ -112,17 +112,18 @@
 
 (defn scale
   "Map scale degree integers in pat to Hz frequencies.
-   Degrees are zero-indexed from the root; values outside [0, n) wrap
-   into higher/lower octaves (e.g. degree 7 in a 7-note scale = root + 1 octave).
+   Degrees are one-indexed from the root (1 = root, 2 = second, …); values
+   outside [1, n] wrap into higher/lower octaves
+   (e.g. degree 8 in a 7-note scale = root + 1 octave).
 
-   (scale :minor :c4 (seq 0 2 4 7))
-   (scale :pentatonic :g3 (fast 2 (seq 0 1 2 3 4)))"
+   (scale :minor :c4 (seq 1 3 5 8))
+   (scale :pentatonic :g3 (fast 2 (seq 1 2 3 4 5)))"
   [scale-kw root pat]
   (let [root-midi  (note->midi root)
         semitones  (resolve-intervals (get scale-intervals scale-kw [1 2 3 4 5 6 7]))
         n          (count semitones)
         degree->hz (fn [degree]
-                     (let [degree (int degree)
+                     (let [degree (dec (int degree))   ; 1-indexed → 0-indexed internally
                            oct    (int (js/Math.floor (/ degree n)))
                            idx    (- degree (* oct n))]
                        (midi->hz (+ root-midi (* oct 12) (nth semitones idx)))))]
