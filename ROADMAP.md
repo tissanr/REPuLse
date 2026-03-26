@@ -272,6 +272,22 @@ See full spec: [PROMPTS/phase-d-editor-persistence.md](PROMPTS/phase-d-editor-pe
 
 ---
 
+## Phase D2 — Full Session Persistence 📋 *planned*
+
+Persist **all session state** to localStorage so a page reload restores exactly what
+the user had — effects, bank prefix, sample sources, mute/solo state, MIDI mappings,
+and BPM. Adds `(reset!)` to wipe everything back to defaults.
+
+**Key additions:**
+- Persist FX chain (names, params, bypass state), bank prefix, mute/solo sets, BPM
+- Persist loaded external sample sources (`samples!` calls)
+- `(reset!)` — stops playback, clears all localStorage, reloads default demo
+- New localStorage keys with versioned schema; forward-compat handling for unknown keys
+
+See full spec: [PROMPTS/phase-d2-session-persistence.md](PROMPTS/phase-d2-session-persistence.md)
+
+---
+
 ## Phase E — Session Context Panel ✅ *delivered*
 
 A live sidebar to the right of the editor showing the current session state at a glance.
@@ -284,6 +300,45 @@ A live sidebar to the right of the editor showing the current session state at a
 - `:bypassed?` field added to `fx/chain` entries so bypass state is observable
 
 See full spec: [PROMPTS/phase-e-context-panel.md](PROMPTS/phase-e-context-panel.md)
+
+---
+
+## Phase E2 — Live Session Dashboard 📋 *planned*
+
+Upgrade the session context panel from a basic status display into a **full live
+mirror of the session** — per-track params, arrangement state, MIDI mappings, loaded
+sources, conditional FX display.
+
+**Key additions:**
+- **Tracks section** — each active track with inline params (`amp`, `pan`, `decay`, …),
+  mute/solo state icons (`▶ ■ ★`), synth type, sample bank; params extracted by querying
+  one pattern cycle
+- **Arrangement section** — current scene name, cycle progress; hidden when no arrangement
+- **FX section** — only shown when at least one non-bypassed effect is active
+- **MIDI section** — UI slot for CC mappings (populated by Phase N1); hidden when empty
+- **Sources section** — loaded GitHub repos and Freesound queries; hidden when none
+- Rendering throttled via `requestAnimationFrame`; section-based HTML approach
+- `samples/loaded-sources` atom tracks external sources for display
+
+See full spec: [PROMPTS/phase-e2-live-session-dashboard.md](PROMPTS/phase-e2-live-session-dashboard.md)
+
+---
+
+## Phase E2b — Parameter Sliders 📋 *planned*
+
+Make numeric params in the session dashboard **interactive sliders** that update
+the editor code live and change the audio immediately, without re-evaluation.
+
+**Key additions:**
+- Per-param `<input type="range">` sliders with param-appropriate min/max/step
+- Exponential scaling for time params (attack, decay, release)
+- Slider drag → writes to `param-overrides` atom (instant audio) + rewrites number
+  literal in editor via Lezer parse tree traversal
+- Undo-friendly: micro-movements not in undo history; final value on release is
+- Alt+Enter clears overrides — code is now source of truth
+- Depends on Phase E2 (per-track param display) and Phase N1 (`param-overrides` atom)
+
+See full spec: [PROMPTS/phase-e2b-param-sliders.md](PROMPTS/phase-e2b-param-sliders.md)
 
 ---
 
@@ -490,6 +545,25 @@ Connect REPuLse to the outside world: hardware controllers, DAWs, sample librari
 - Extends `app/src/repulse/midi.cljs` (new namespace)
 
 See full spec: [PROMPTS/phase-n-midi-io.md](PROMPTS/phase-n-midi-io.md)
+
+---
+
+## Phase N1 — MIDI CC → Parameter Mapping 📋 *planned*
+
+Bind any MIDI controller knob or fader to any numeric parameter in REPuLse for
+hands-on live performance control.
+
+**Key additions:**
+- `(midi-map cc target)` — bind CC number to `:filter`, `:amp`, `:bpm`, `:reverb`, or
+  any per-event param (optionally scoped to a track with `:track :name`)
+- `(midi-unmap cc)` / `(midi-maps)` — remove or inspect mappings
+- `(midi-learn target)` — learn mode: move a knob, it maps to the target automatically
+- `param-overrides` atom applies CC values at event dispatch without re-evaluation
+- Mappings persisted in localStorage (via Phase D2); shown in E2 dashboard MIDI section
+- Global targets: `:bpm` (scaled 60–240), `:amp`, FX param names
+- Track-scoped targets: any per-event param on a named track
+
+See full spec: [PROMPTS/phase-n1-midi-cc-mapping.md](PROMPTS/phase-n1-midi-cc-mapping.md)
 
 ---
 
