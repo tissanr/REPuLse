@@ -135,24 +135,30 @@ footer {
 /* Plugin panel — shown below the editor when visual plugins are active */
 .plugin-panel {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 4px;
   background: #0a0a0a;
   border-top: 1px solid #222;
   padding: 4px;
-  min-height: 88px;
+  max-height: 40vh;
+  overflow: hidden;
 }
 
 .plugin-panel.hidden {
   display: none;
 }
 
+/* Each plugin appends its own element (canvas or div); give them full width */
+.plugin-panel > * {
+  width: 100%;
+  flex-shrink: 0;
+}
+
 .plugin-panel canvas {
-  flex: 1;
-  min-width: 200px;
   height: 80px;
   background: #111;
   border-radius: 3px;
+  display: block;
 }
 
 /* Rainbow delimiters — 6 depth levels, cycling through the oneDark palette */

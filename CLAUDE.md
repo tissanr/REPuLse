@@ -213,7 +213,7 @@ To verify UI changes, describe what to check or ask the user to reload the brows
 | D2    | Full session persistence — all state in localStorage + reset!  | planned      |
 | N1    | MIDI CC mapping — bind controller knobs to any parameter      | planned      |
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
-| B     | Richer visuals — audiomotion-analyzer spectrum, p5.js support  | not started  |
+| B     | Richer visuals — audiomotion-analyzer spectrum, p5.js support  | ✓ delivered  |
 | P     | Modular routing — busses, control rate, general envelopes      | planned      |
 
 See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full delivery notes.

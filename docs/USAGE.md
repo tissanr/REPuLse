@@ -1496,16 +1496,74 @@ See [docs/PLUGINS.md](PLUGINS.md) for the full effect plugin protocol, base clas
 ## Visual plugins
 
 A permanent `AnalyserNode` sits on the master audio bus. Visual plugins read from it and
-draw to a canvas in the **plugin panel** that appears below the editor.
+draw to a canvas in the **plugin panel** that appears below the editor. Multiple visual
+plugins stack vertically (up to 40vh total height).
 
-The oscilloscope is loaded automatically at startup. You can reload it or load other plugins:
+### Built-in visual plugins
+
+Three plugins load automatically at startup:
+
+| Plugin | Description |
+|--------|-------------|
+| `oscilloscope` | Time-domain waveform — classic cyan line |
+| `spectrum` | Frequency spectrum via [audiomotion-analyzer](https://audiomotion.dev) — GPU-accelerated octave-band display with peak indicators |
+
+Reload or replace a plugin at any time:
 
 ```lisp
 (load-plugin "/plugins/oscilloscope.js")
-(load-plugin "https://example.com/my-spectrum.js")
+(load-plugin "/plugins/spectrum.js")
 ```
 
-Loading a plugin with the same name replaces the existing registration.
+### p5.js sketch plugins
+
+The `p5-base.js` module provides a `makeP5Plugin` factory that wraps any
+[p5.js](https://p5js.org) sketch as a REPuLse visual plugin. p5 is loaded
+once from CDN and shared across all p5 sketch plugins.
+
+Load the built-in p5 waveform example:
+
+```lisp
+(load-plugin "/plugins/p5-waveform.js")
+```
+
+Write your own sketch plugin (save as a `.js` file and load via URL):
+
+```javascript
+import { makeP5Plugin } from "/plugins/p5-base.js";
+
+export default makeP5Plugin("my-sketch", "1.0.0", (p, analyser, audioCtx) => {
+  const buf = new Uint8Array(1024);
+
+  p.setup = () => {
+    p.createCanvas(p.windowWidth, 120);
+    p.colorMode(p.HSB, 360, 100, 100, 100);
+  };
+
+  p.draw = () => {
+    analyser.getByteFrequencyData(buf);
+    // ... draw using p5 API ...
+  };
+});
+```
+
+`sketchFn` receives:
+- `p` — the p5 instance (instance mode, full p5 API)
+- `analyser` — the master `AnalyserNode` (use `getByteTimeDomainData` or `getByteFrequencyData`)
+- `audioCtx` — the `AudioContext`
+
+Loading a plugin with the same name replaces the existing registration (old visual
+removed, new one mounted in its place).
+
+To remove a plugin and its visual entirely:
+
+```lisp
+(unload-plugin "oscilloscope")   ; removes its canvas; hides the panel if nothing is left
+(unload-plugin "spectrum")
+(unload-plugin "p5-waveform")
+```
+
+`(unload-plugin "unknown-name")` returns `{:error "no plugin named \"...\""}`.
 
 For the full visual plugin protocol, the `VisualPlugin` base class, and worked examples,
 see [docs/PLUGINS.md](PLUGINS.md).
