@@ -29,7 +29,7 @@ Map    { "{" expr* "}" }
     "jux" | "jux-by" | "off" |
     "def" | "defn" | "let" | "fn" | "lambda" | "if" | "do" |
     "defmacro" | "defsynth" | "loop" | "recur" | "quasiquote" |
-    "bpm" | "stop" | "fx" | "load-plugin" | "arrange" | "play-scenes" | "sound" |
+    "bpm" | "stop" | "fx" | "load-plugin" | "unload-plugin" | "arrange" | "play-scenes" | "sound" |
     "get" | "assoc" | "merge" | "not" | "and" | "or" | "comp" |
     "play" | "mute!" | "unmute!" | "solo!" | "clear!" | "tracks" | "tap!" | "midi-sync!" |
     "midi-map" | "midi-out" | "midi-clock-out!" | "midi-export" |

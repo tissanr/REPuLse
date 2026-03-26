@@ -272,6 +272,22 @@ See full spec: [PROMPTS/phase-d-editor-persistence.md](PROMPTS/phase-d-editor-pe
 
 ---
 
+## Phase D2 — Full Session Persistence 📋 *planned*
+
+Persist **all session state** to localStorage so a page reload restores exactly what
+the user had — effects, bank prefix, sample sources, mute/solo state, MIDI mappings,
+and BPM. Adds `(reset!)` to wipe everything back to defaults.
+
+**Key additions:**
+- Persist FX chain (names, params, bypass state), bank prefix, mute/solo sets, BPM
+- Persist loaded external sample sources (`samples!` calls)
+- `(reset!)` — stops playback, clears all localStorage, reloads default demo
+- New localStorage keys with versioned schema; forward-compat handling for unknown keys
+
+See full spec: [PROMPTS/phase-d2-session-persistence.md](PROMPTS/phase-d2-session-persistence.md)
+
+---
+
 ## Phase E — Session Context Panel ✅ *delivered*
 
 A live sidebar to the right of the editor showing the current session state at a glance.
@@ -304,6 +320,25 @@ Upgraded the context panel from a basic status display into a full live mirror o
 See full spec: [PROMPTS/phase-e2-live-session-dashboard.md](PROMPTS/phase-e2-live-session-dashboard.md)
 
 ---
+
+## Phase E2b — Parameter Sliders 📋 *planned*
+
+Make numeric params in the session dashboard **interactive sliders** that update
+the editor code live and change the audio immediately, without re-evaluation.
+
+**Key additions:**
+- Per-param `<input type="range">` sliders with param-appropriate min/max/step
+- Exponential scaling for time params (attack, decay, release)
+- Slider drag → writes to `param-overrides` atom (instant audio) + rewrites number
+  literal in editor via Lezer parse tree traversal
+- Undo-friendly: micro-movements not in undo history; final value on release is
+- Alt+Enter clears overrides — code is now source of truth
+- Depends on Phase E2 (per-track param display) and Phase N1 (`param-overrides` atom)
+
+See full spec: [PROMPTS/phase-e2b-param-sliders.md](PROMPTS/phase-e2b-param-sliders.md)
+
+---
+
 
 ## Phase F — Drum Machine Bank Prefix ✅ *delivered*
 
@@ -511,6 +546,25 @@ See full spec: [PROMPTS/phase-n-midi-io.md](PROMPTS/phase-n-midi-io.md)
 
 ---
 
+## Phase N1 — MIDI CC → Parameter Mapping 📋 *planned*
+
+Bind any MIDI controller knob or fader to any numeric parameter in REPuLse for
+hands-on live performance control.
+
+**Key additions:**
+- `(midi-map cc target)` — bind CC number to `:filter`, `:amp`, `:bpm`, `:reverb`, or
+  any per-event param (optionally scoped to a track with `:track :name`)
+- `(midi-unmap cc)` / `(midi-maps)` — remove or inspect mappings
+- `(midi-learn target)` — learn mode: move a knob, it maps to the target automatically
+- `param-overrides` atom applies CC values at event dispatch without re-evaluation
+- Mappings persisted in localStorage (via Phase D2); shown in E2 dashboard MIDI section
+- Global targets: `:bpm` (scaled 60–240), `:amp`, FX param names
+- Track-scoped targets: any per-event param on a named track
+
+See full spec: [PROMPTS/phase-n1-midi-cc-mapping.md](PROMPTS/phase-n1-midi-cc-mapping.md)
+
+---
+
 ## Phase O — Platform & Deployment 📋 *planned*
 
 Expand where REPuLse runs and who can use it.
@@ -526,15 +580,28 @@ See full spec: [PROMPTS/phase-o-platform.md](PROMPTS/phase-o-platform.md)
 
 ---
 
-## Phase B — Richer Visuals 📋 *planned*
+## Phase B — Richer Visuals ✅ *delivered*
 
-Two new visual plugin types: a high-quality spectrum analyser (audiomotion-analyzer)
-and a p5.js canvas plugin adapter for generative graphics driven by audio data.
+Two new visual plugin types: a high-quality spectrum analyser and a p5.js canvas
+plugin adapter for generative graphics driven by audio data.
 
-**Key additions:**
-- **Spectrum plugin** — audiomotion-analyzer frequency display with gradient colouring
-- **p5.js adapter** — `makeP5Plugin(sketchFn)` helper; sketch receives `{ analyser, p }` each frame
-- Both plugins loadable via `(load-plugin url)`
+**Delivered:**
+- **`spectrum.js`** — GPU-accelerated frequency spectrum via audiomotion-analyzer@4.5.4;
+  auto-loads at startup; 1/12-octave band display with prism gradient and peak indicators
+- **`p5-base.js`** — shared p5.js loader (esm.sh, pinned to v1.11.11) and `makeP5Plugin(name, version, sketchFn)`
+  factory; sketch receives `(p, analyser, audioCtx)` and sets up `p.setup` / `p.draw`
+- **`p5-waveform.js`** — built-in example p5 sketch (time-domain waveform, HSB colours)
+- **`(unload-plugin "name")`** — removes a plugin and its DOM element; hides the panel
+  when no visual plugins remain; returns `{:error …}` for unknown names
+- Plugin panel layout updated to `flex-direction: column`, `max-height: 40vh`
+- Grammar and completions updated with `unload-plugin`
+
+**Usage:**
+```lisp
+(load-plugin "/plugins/oscilloscope.js")  ; add oscilloscope alongside spectrum
+(load-plugin "/plugins/p5-waveform.js")   ; add p5 waveform sketch
+(unload-plugin "spectrum")                ; remove spectrum and its canvas
+```
 
 See full spec: [PROMPTS/phase-b-richer-visuals.md](PROMPTS/phase-b-richer-visuals.md)
 

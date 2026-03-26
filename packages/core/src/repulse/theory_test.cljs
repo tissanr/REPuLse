@@ -74,9 +74,9 @@
 ;;; ── scale ────────────────────────────────────────────────────────────
 
 (deftest scale-major-degrees
-  ;; C major: C4=60 E4=64 G4=67
+  ;; C major: C4=60 E4=64 G4=67 (degrees 1 3 5)
   (let [events (core/query
-                 (theory/scale :major :c4 (core/seq* [0 2 4]))
+                 (theory/scale :major :c4 (core/seq* [1 3 5]))
                  one-cycle)
         freqs  (mapv :value events)]
     (is (= 3 (count freqs)))
@@ -85,9 +85,9 @@
     (is (< (js/Math.abs (- (theory/midi->hz 67) (nth freqs 2))) 0.01))))
 
 (deftest scale-minor-degrees
-  ;; A minor: A3=57 C4=60 E4=64
+  ;; A minor: A3=57 C4=60 E4=64 (degrees 1 3 5)
   (let [events (core/query
-                 (theory/scale :minor :a3 (core/seq* [0 2 4]))
+                 (theory/scale :minor :a3 (core/seq* [1 3 5]))
                  one-cycle)
         freqs  (mapv :value events)]
     (is (= 3 (count freqs)))
@@ -96,9 +96,9 @@
     (is (< (js/Math.abs (- (theory/midi->hz 64) (nth freqs 2))) 0.01))))
 
 (deftest scale-degree-octave-wrapping
-  ;; Degree 7 in a 7-note scale = root one octave up
+  ;; Degree 8 in a 7-note scale = root one octave up
   (let [events (core/query
-                 (theory/scale :major :c4 (core/seq* [0 7]))
+                 (theory/scale :major :c4 (core/seq* [1 8]))
                  one-cycle)
         freqs  (mapv :value events)]
     (is (< (js/Math.abs (- (* 2.0 (theory/midi->hz 60)) (nth freqs 1))) 0.01))))

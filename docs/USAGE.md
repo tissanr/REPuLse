@@ -21,19 +21,23 @@ evaluate them with **Ctrl+Enter** (or the **▶ play** button), and hear them lo
    - [Sequential evaluation — `do`](#sequential-evaluation--do)
    - [Top-level definitions — `def`](#top-level-definitions--def)
 4. [Pattern functions](#pattern-functions)
-5. [Music theory](#music-theory)
-6. [Per-event parameters](#per-event-parameters)
-7. [Sound and samples](#sound-and-samples)
-8. [Tempo control](#tempo-control)
-9. [Combining patterns](#combining-patterns)
-10. [Defining names](#defining-names)
-11. [Song arrangement](#song-arrangement)
-12. [Effect plugins](#effect-plugins)
-13. [Visual plugins](#visual-plugins)
-14. [Available sample banks](#available-sample-banks)
-15. [MIDI & External I/O](#midi--external-io)
-16. [Error messages](#error-messages)
-17. [Examples](#examples)
+5. [Pattern combinators](#pattern-combinators)
+6. [Music theory](#music-theory)
+7. [Per-event parameters](#per-event-parameters)
+8. [Sound and samples](#sound-and-samples)
+9. [Mini-notation](#mini-notation)
+10. [Tempo control](#tempo-control)
+11. [Named tracks](#named-tracks)
+12. [Combining patterns](#combining-patterns)
+13. [Defining names](#defining-names)
+14. [Song arrangement](#song-arrangement)
+15. [Lisp language features](#lisp-language-features)
+16. [Effect plugins](#effect-plugins)
+17. [Visual plugins](#visual-plugins)
+18. [Available sample banks](#available-sample-banks)
+19. [MIDI & External I/O](#midi--external-io)
+20. [Error messages](#error-messages)
+21. [Examples](#examples)
 
 ---
 
@@ -384,6 +388,107 @@ Apply a function to every event value:
 
 ---
 
+## Pattern combinators
+
+These functions extend the pattern algebra with rhythmic algorithms, time-shifting,
+stochastic variation, and spatial layering.
+
+### `euclidean` — Euclidean rhythms
+
+Distribute `k` onsets across `n` steps as evenly as possible (Björklund algorithm):
+
+```lisp
+(euclidean 5 8 :bd)      ; 5 onsets in 8 steps — Afro-Cuban clave feel
+(euclidean 3 8 :sd)      ; tresillo
+(euclidean 7 16 :hh)     ; complex subdivision
+
+; Optional rotation — shift the pattern left by r steps:
+(euclidean 5 8 :bd 2)    ; same rhythm, rotated 2 steps
+```
+
+### `cat` — sequential concatenation
+
+Play patterns in sequence, one per cycle, then loop:
+
+```lisp
+(cat (seq :bd :sd) (seq :hh :oh :hh :oh))   ; 2-cycle loop
+(cat kick fill fill fill)                     ; 1 fill per 4 cycles
+```
+
+### `late` / `early` — time shifting
+
+Shift all events forward (`late`) or backward (`early`) within the cycle:
+
+```lisp
+(late  0.25  (seq :bd :sd :bd :sd))   ; delay by ¼ cycle
+(early 0.125 hihat)                    ; advance by ⅛ cycle
+```
+
+### `sometimes` / `often` / `rarely` — probabilistic transforms
+
+Apply a transformation with a given probability. The result is deterministic — the same
+cycle always gets the same decision:
+
+```lisp
+(sometimes rev (seq :c4 :e4 :g4 :c5))   ; reverse ~50% of cycles
+(often (fast 2) (seq :hh :oh))           ; speed up ~75% of cycles
+(rarely rev melody)                       ; reverse ~25% of cycles
+```
+
+Use `sometimes-by` for custom probability:
+
+```lisp
+(sometimes-by 0.2 (fast 4) fill)   ; double-time 20% of cycles
+```
+
+### `degrade` / `degrade-by` — probabilistic event removal
+
+Randomly drop events from a pattern each cycle:
+
+```lisp
+(degrade (seq :hh :hh :hh :hh))           ; drop ~50% of hi-hats
+(degrade-by 0.3 (fast 4 (seq :hh :oh)))   ; drop 30% of events
+```
+
+### `choose` / `wchoose` — random selection per cycle
+
+Pick one value from a list each cycle (deterministic per cycle):
+
+```lisp
+(choose [:bd :sd :hh :oh])                    ; uniform probability
+(wchoose [[0.5 :bd] [0.3 :sd] [0.2 :hh]])    ; weighted — bd most likely
+```
+
+### `jux` / `jux-by` — stereo spatial layering
+
+Stack the original pattern (panned left) with a transformed copy (panned right):
+
+```lisp
+(jux rev (seq :c4 :e4 :g4))    ; original left, reversed right
+(jux (fast 2) (seq :hh :oh))   ; normal left, double-speed right
+(jux-by 0.5 rev melody)        ; half stereo width
+```
+
+### `off` — time-offset layering
+
+Layer the original with a time-shifted, transformed copy:
+
+```lisp
+(off 0.125 (fast 2) (seq :c4 :e4 :g4))   ; original + shifted double-speed copy
+(off 0.25  rev      (seq :bd :sd :hh))    ; original + ¼-cycle offset reversed copy
+```
+
+Combines freely with all other combinators:
+
+```lisp
+(->> (euclidean 5 8 :bd)
+     (sometimes rev)
+     (jux (fast 2))
+     (amp 0.8))
+```
+
+---
+
 ## Music theory
 
 REPuLse has a built-in music theory layer that lets you write melodies, scales, and chords
@@ -408,19 +513,19 @@ concert A is `:a4` (440 Hz). Drum keywords like `:bd` and `:sd` are unaffected.
 
 ### `scale` — melodic patterns from scale degrees
 
-Map zero-indexed degree integers to frequencies in a named scale:
+Map one-indexed degree integers to frequencies in a named scale:
 
 ```lisp
-(scale :major :c4 (seq 0 1 2 3 4 5 6))   ; C major scale
-(scale :minor :a3 (seq 0 2 4))            ; A minor triad
-(scale :pentatonic :g3 (fast 2 (seq 0 1 2 3 4)))
+(scale :major :c4 (seq 1 2 3 4 5 6 7))   ; C major scale
+(scale :minor :a3 (seq 1 3 5))            ; A minor triad
+(scale :pentatonic :g3 (fast 2 (seq 1 2 3 4 5)))
 
 ;; Degrees wrap into higher octaves
-(scale :major :c4 (seq 0 7 14))           ; C4, C5, C6
+(scale :major :c4 (seq 1 8 15))           ; C4, C5, C6
 ```
 
-Degree 0 = root, degree 1 = second scale tone, etc. Values beyond the scale length wrap
-into higher octaves; negative values wrap into lower octaves.
+Degree 1 = root, degree 2 = second scale tone, etc. Values beyond the scale length wrap
+into higher octaves; values below 1 wrap into lower octaves.
 
 Available scales: `:major` (`:ionian`), `:minor` (`:aeolian`), `:dorian`, `:phrygian`,
 `:lydian`, `:mixolydian`, `:locrian`, `:pentatonic`, `:minor-pentatonic`, `:blues`.
@@ -438,7 +543,7 @@ one full cycle:
 ;; Layer a chord under a melody
 (stack
   (slow 4 (chord :minor :a3))
-  (scale :minor :a3 (fast 2 (seq 0 2 4 5 4 2))))
+  (scale :minor :a3 (fast 2 (seq 1 3 5 6 5 3))))
 ```
 
 Available chords: `:major`, `:minor`, `:major7`, `:minor7`, `:dom7`, `:m7b5`
@@ -451,7 +556,7 @@ Shifts all numeric (Hz) values in a pattern up or down by `n` semitones. Keyword
 
 ```lisp
 (transpose 12 (seq :c4 :e4 :g4))          ; up one octave → C5 E5 G5
-(transpose -7 (scale :major :c5 (seq 0 1 2 3)))
+(transpose -7 (scale :major :c5 (seq 1 2 3 4)))
 (transpose 5 (chord :major :c4))           ; same voicing, up a fourth
 
 ;; drum keywords are untouched
@@ -469,7 +574,7 @@ Shifts all numeric (Hz) values in a pattern up or down by `n` semitones. Keyword
                     [(chord :major :c4) 4]
                     [(chord :major :g3) 4]]))
   ;; melody over the top
-  (scale :minor :a3 (seq 0 2 4 5 4 2 0 2))
+  (scale :minor :a3 (seq 1 3 5 6 5 3 1 3))
   ;; drums
   (seq :bd :_ :bd :_)
   (seq :_ :sd :_ :sd))
@@ -582,9 +687,35 @@ and `comp`:
 (def punchy (comp (amp 1.0) (attack 0.001) (decay 0.08)))
 
 (stack
-  (pluck (scale :minor :a3 (seq 0 2 4 7)))
+  (pluck (scale :minor :a3 (seq 1 3 5 8)))
   (pad   (chord :minor :a3))
   (punchy (seq :bd :_ :bd :_)))
+```
+
+### `rate` — sample playback rate
+
+Scale the playback speed of a sample. `1.0` = normal, `2.0` = double speed (one octave up):
+
+```lisp
+(->> (sound :tabla 0) (rate 1.5))    ; 50% faster (higher pitch)
+(->> (seq :hh :oh)    (rate 0.5))    ; half speed
+```
+
+### `begin` / `end` — sample slice
+
+Play only a portion of the sample buffer. Values are fractions of buffer duration (0.0–1.0):
+
+```lisp
+(->> (sound :tabla 0) (begin 0.2) (end 0.8))   ; middle 60%
+(->> (sound :rave  0) (begin 0.5))              ; second half
+```
+
+### `loop-sample` — loop sample
+
+Loop the sample buffer continuously:
+
+```lisp
+(->> (sound :pad 0) (loop-sample true) (decay 4.0))
 ```
 
 ### Patterned parameters
@@ -597,7 +728,7 @@ cycle-aligned, so different densities create polyrhythmic parameter changes:
 (amp (seq 0.9 0.4) (seq :c4 :e4 :g4))
 
 ; independent amp and attack patterns stacked with melody
-(->> (scale :dorian :d3 (fast 3 (seq 0 2 4 5 6)))
+(->> (scale :dorian :d3 (fast 3 (seq 1 3 5 6 7)))
      (amp (slow 2 (seq 0.8 0.5 1.0 0.3)))
      (attack 0.01))
 ```
@@ -651,6 +782,25 @@ Most sample banks contain multiple variations (different kit sounds). Use `sound
 (seq (sound :bd 0) (sound :bd 2) (sound :sd 1) :hh)
 ```
 
+### `bank` — drum machine prefix
+
+Set a global prefix so bare keywords resolve to a named drum machine bank:
+
+```lisp
+(bank :AkaiLinn)
+(seq :bd :sd :hh :sd)    ; plays AkaiLinn_bd, AkaiLinn_sd, AkaiLinn_hh, AkaiLinn_sd
+
+; Switch machines:
+(bank :RolandTR808)
+(seq :bd :sd :cp)
+
+; Clear — bare keywords use the default lookup:
+(bank nil)
+```
+
+If the prefixed bank doesn't exist (e.g. a machine has no hi-hat), the keyword resolves
+via the standard fallback with no error. The active bank is shown in the context panel.
+
 ### Built-in synthesis fallback
 
 These keywords always work even if samples haven't loaded yet — they are synthesized
@@ -662,6 +812,116 @@ by the Rust/WASM engine (or the JS fallback if WASM is unavailable):
 | `:sd` | Bandpass-filtered noise + sine crack |
 | `:hh` | Highpass-filtered noise, 45 ms (closed) |
 | `:oh` | Highpass-filtered noise, 350 ms (open) |
+
+### Loading external samples
+
+`samples!` loads additional sample banks at runtime from a public GitHub repository,
+a REPuLse Lisp manifest (`.edn`), or a Strudel-compatible JSON manifest (`.json`).
+The load is asynchronous — the built-in returns immediately and samples become
+available as soon as the first audio buffer finishes fetching.
+
+**GitHub shorthand** — discovers all audio files in a public repo and groups them
+by folder name. Each folder becomes one bank:
+
+```lisp
+; Load from the default branch (tries "main", falls back to "master")
+(samples! "github:algorave-dave/samples")
+
+; Then inspect what was registered:
+(sample-banks)   ; => ("breaks" "drums" "pads" ...)
+
+; Use the loaded banks just like any built-in:
+(stack
+  (seq :drums :_ :drums :_)
+  (seq :_ :breaks :_ :breaks)
+  (fast 2 (seq :pads :_)))
+```
+
+**Specific branch:**
+
+```lisp
+(samples! "github:algorave-dave/samples/main")
+```
+
+**REPuLse Lisp manifest** (`.edn`) — a map of bank names to lists of file paths:
+
+```lisp
+(samples! "https://raw.githubusercontent.com/algorave-dave/samples/main/samples.edn")
+```
+
+**Strudel-compatible JSON manifest** (`.json`):
+
+```lisp
+(samples! "https://raw.githubusercontent.com/algorave-dave/samples/main/samples.json")
+```
+
+**`sample-banks`** — returns a sorted list of every registered bank name (built-ins
+plus anything loaded via `samples!`):
+
+```lisp
+(sample-banks)   ; => ("arpy" "bass" "bd" "breaks" "drums" "hh" ...)
+```
+
+> **Note:** the unauthenticated GitHub API allows 60 requests/hour per IP.
+> One `(samples! "github:…")` call uses exactly one API request.
+
+---
+
+## Mini-notation
+
+`~` parses a compact Tidal/Strudel-style string into a Pattern. It is opt-in sugar — the
+Lisp is the host language and `~` is just another function returning a Pattern.
+
+```lisp
+(~ "bd sd hh")       ; ≡ (seq :bd :sd :hh)
+(~ "bd [sd hh]")     ; subdivision — sd and hh share one step
+(~ "hh*4 sd")        ; repetition — four hats then a snare
+(~ "<bd sd cp>")     ; alternation — cycles through bd → sd → cp
+(~ "bd? sd")         ; 50% probability — bd plays on ~half of cycles
+(~ "bd:2 sd:0")      ; sample index — ≡ (sound :bd 2), (sound :sd 0)
+(~ "bd@3 sd")        ; elongation — bd takes ¾ of the cycle
+(~ "c4 e4 g4")       ; note names → keywords (:c4 :e4 :g4)
+(~ "440 330 220")    ; numbers pass through as Hz values
+```
+
+### Mini-notation inside Lisp
+
+Mini-notation composes freely with all Lisp combinators:
+
+```lisp
+(fast 2 (~ "bd sd"))
+(stack (~ "bd _ bd _") (~ "_ sd _ sd"))
+(->> (~ "c4 e4 g4") (amp 0.6) (attack 0.02))
+(every 4 rev (~ "bd sd hh cp"))
+```
+
+### `alt` — cycle-based alternation
+
+`alt` is the Lisp-level equivalent of `<...>` in mini-notation. On each cycle it picks
+the next pattern from the list:
+
+```lisp
+(alt (seq :bd :bd) (seq :sd :sd))   ; even cycles: bd bd, odd cycles: sd sd
+(alt kick fill fill fill)            ; kick on cycle 0, fill on 1–3, loop
+```
+
+### `load-gist` — import a GitHub Gist
+
+Fetch a GitHub Gist into the editor and evaluate it:
+
+```lisp
+(load-gist "https://gist.github.com/user/abc123def")
+(load-gist "https://gist.githubusercontent.com/user/id/raw/file.clj")
+```
+
+### `export` — render to WAV
+
+Render `n` cycles of the current tracks to a downloadable WAV file via `OfflineAudioContext`:
+
+```lisp
+(export 4)   ; 4 cycles → WAV download
+(export 1)   ; 1 cycle loop
+```
 
 ---
 
@@ -678,6 +938,84 @@ Default tempo is **120 BPM** (one cycle = one bar = 4 beats = 2 seconds).
 ```
 
 `bpm` takes effect immediately, even mid-playback. One cycle = one bar regardless of BPM.
+
+### `tap` — tap tempo
+
+Call `(tap)` repeatedly on the beat to derive BPM from the average tap interval.
+The **tap** button in the header UI does the same thing with a mouse click:
+
+```lisp
+(tap)   ; call this expression several times in time with the beat
+```
+
+### `midi-sync` — MIDI clock input
+
+Synchronise playback to an incoming MIDI clock signal (24 ppqn):
+
+```lisp
+(midi-sync true)    ; lock to MIDI clock from connected device
+(midi-sync false)   ; return to internal BPM
+```
+
+MIDI sync overrides `(bpm ...)` while active. REPuLse listens on all available MIDI inputs.
+
+---
+
+## Named tracks
+
+REPuLse supports multiple simultaneous patterns running on independent **tracks**.
+Each track has a keyword name and loops independently.
+
+> **Strudel / TidalCycles users:** a REPuLse track is the same concept as an **orbit** in
+> Strudel or a `d1`/`d2` connection in TidalCycles — an independent output stream that
+> loops its own pattern on every cycle. In REPuLse you give tracks meaningful keyword names
+> (`:kick`, `:bass`, `:lead`) rather than numbers.
+
+### `play` — start or replace a named track
+
+```lisp
+(play :kick  (seq :bd :_ :bd :_))
+(play :snare (seq :_ :sd :_ :sd))
+(play :hats  (fast 2 (seq :hh :_)))
+```
+
+Evaluating a new `play` for the same name replaces the pattern without stopping others.
+
+### `mute` / `unmute` — silence a track
+
+```lisp
+(mute :kick)      ; kick stops at the next cycle boundary
+(unmute :kick)    ; kick resumes
+```
+
+### `solo` — isolate one track
+
+```lisp
+(solo :lead)   ; all other tracks are muted; re-evaluate another track to un-solo
+```
+
+### `clear` — remove a track
+
+```lisp
+(clear :kick)   ; remove the kick track
+(clear)         ; stop everything and remove all tracks
+```
+
+### `tracks` — list active tracks
+
+```lisp
+(tracks)   ; => (:kick :snare :hats)
+```
+
+### Multi-track example
+
+```lisp
+(bpm 130)
+(play :kick  (seq :bd :_ :bd :_))
+(play :snare (seq :_ :sd :_ :sd))
+(play :hats  (fast 2 (seq :hh :_)))
+(play :bass  (scale :minor :c2 (seq 1 :_ 8 :_ 1 :_ 6 :_)))
+```
 
 ---
 
@@ -778,6 +1116,102 @@ Shorthand where every section plays for exactly 1 cycle. Useful for short, bar-l
 
 ---
 
+## Lisp language features
+
+### `defsynth` — user-defined synthesis instruments
+
+Define custom instruments from Web Audio node graphs. UGen functions build the graph;
+`defsynth` registers it under a name usable with `synth`:
+
+```lisp
+(defsynth pluck [freq]
+  (-> (saw freq)
+      (lpf (* freq 2))
+      (env-perc 0.01 0.3)))
+
+(defsynth pad [freq]
+  (-> (mix (sin freq) (sin (* freq 1.002)))
+      (lpf 2000)
+      (env-asr 0.3 0.8 1.0)))
+
+(->> (scale :minor :c4 (seq 1 3 5 8))
+     (synth :pluck)
+     (amp 0.7))
+```
+
+Available UGens:
+
+| UGen | Description |
+|---|---|
+| `(sin freq)` | Sine oscillator |
+| `(saw freq)` | Sawtooth oscillator |
+| `(square freq)` | Square wave |
+| `(tri freq)` | Triangle wave |
+| `(noise)` | White noise |
+| `(lpf cutoff src)` | Lowpass filter |
+| `(hpf cutoff src)` | Highpass filter |
+| `(bpf freq src)` | Bandpass filter |
+| `(gain level src)` | Static gain |
+| `(delay-node time src)` | Delay line |
+| `(mix a b)` | Mix two signals |
+| `(env-perc attack decay src)` | Percussive envelope |
+| `(env-asr attack sustain release src)` | Sustain + release envelope |
+
+Synths are ephemeral — nodes are created at event time and disconnected after the envelope.
+
+### `defmacro` — compile-time transforms
+
+Define macros that expand at evaluate-time before execution:
+
+```lisp
+(defmacro swing [amount pat]
+  `(off ~amount identity ~pat))
+
+(swing 0.1 (seq :bd :sd))
+; expands to: (off 0.1 identity (seq :bd :sd))
+
+(defmacro build-seq [& vals]
+  `(seq ~@vals))
+```
+
+Quasiquote (`` ` ``), unquote (`~`), and splice-unquote (`~@`) work as in Clojure.
+
+### `loop` / `recur` — tail-recursive iteration
+
+Iterate without stack overflow using `loop` and `recur`:
+
+```lisp
+(loop [notes [] i 0]
+  (if (>= i 8)
+    (apply seq notes)
+    (recur (conj notes (+ 200 (* i 30))) (+ i 1))))
+; => (seq 200 230 260 290 320 350 380 410)
+```
+
+`recur` must be in tail position inside `loop`. Bindings are re-bound with the new values
+on each iteration.
+
+### Rational number literals
+
+Write time ratios as fractions directly in the source — cleaner than floats:
+
+```lisp
+(slow 1/4 (seq :bd :sd))    ; ≡ (slow 0.25 ...)
+(fast 3/2 melody)            ; ≡ (fast 1.5 ...)
+(late 1/8 (seq :hh :oh))    ; ≡ (late 0.125 ...)
+```
+
+### BPM notation
+
+Write BPM inline with a `bpm` suffix — the reader evaluates it as `(bpm N)`:
+
+```lisp
+120bpm    ; ≡ (bpm 120)
+140bpm    ; set tempo to 140 BPM inline in an expression
+```
+
+---
+
 ## Effect plugins
 
 REPuLse has a built-in effect chain between the synthesis engine and the audio output.
@@ -814,7 +1248,7 @@ Route a track through its own private effect chain by placing `fx` inside the `-
        (fx :filter 1000)))              ; kick only goes through lowpass
 
 (play :lead
-  (->> (scale :minor :c3 (seq 0 2 4 7))
+  (->> (scale :minor :c3 (seq 1 3 5 8))
        (decay 1.0)
        (fx :reverb 0.4)))              ; lead gets its own reverb
 
@@ -1062,16 +1496,76 @@ See [docs/PLUGINS.md](PLUGINS.md) for the full effect plugin protocol, base clas
 ## Visual plugins
 
 A permanent `AnalyserNode` sits on the master audio bus. Visual plugins read from it and
-draw to a canvas in the **plugin panel** that appears below the editor.
+draw to a canvas in the **plugin panel** that appears below the editor. Multiple visual
+plugins stack vertically (up to 40vh total height).
 
-The oscilloscope is loaded automatically at startup. You can reload it or load other plugins:
+### Built-in visual plugins
+
+The **spectrum** analyser loads automatically at startup.
+
+| Plugin | File | Auto-loaded | Description |
+|--------|------|-------------|-------------|
+| `spectrum` | `/plugins/spectrum.js` | ✓ | Frequency spectrum via [audiomotion-analyzer](https://audiomotion.dev) — GPU-accelerated octave-band display with peak indicators |
+| `oscilloscope` | `/plugins/oscilloscope.js` | — | Time-domain waveform — classic cyan line |
+| `p5-waveform` | `/plugins/p5-waveform.js` | — | p5.js waveform sketch example |
+
+Load or reload any plugin at any time:
 
 ```lisp
-(load-plugin "/plugins/oscilloscope.js")
-(load-plugin "https://example.com/my-spectrum.js")
+(load-plugin "/plugins/spectrum.js")      ; reload spectrum
+(load-plugin "/plugins/oscilloscope.js")  ; add oscilloscope
+(load-plugin "/plugins/p5-waveform.js")   ; add p5 waveform sketch
 ```
 
-Loading a plugin with the same name replaces the existing registration.
+Loading a plugin with the same name as an already-mounted one replaces it (old visual
+removed, new one mounted in its place).
+
+### p5.js sketch plugins
+
+The `p5-base.js` module provides a `makeP5Plugin` factory that wraps any
+[p5.js](https://p5js.org) sketch as a REPuLse visual plugin. p5 is loaded
+once from CDN and shared across all p5 sketch plugins.
+
+Load the built-in p5 waveform example:
+
+```lisp
+(load-plugin "/plugins/p5-waveform.js")
+```
+
+Write your own sketch plugin (save as a `.js` file and load via URL):
+
+```javascript
+import { makeP5Plugin } from "/plugins/p5-base.js";
+
+export default makeP5Plugin("my-sketch", "1.0.0", (p, analyser, audioCtx) => {
+  const buf = new Uint8Array(1024);
+
+  p.setup = () => {
+    p.createCanvas(p.windowWidth, 120);
+    p.colorMode(p.HSB, 360, 100, 100, 100);
+  };
+
+  p.draw = () => {
+    analyser.getByteFrequencyData(buf);
+    // ... draw using p5 API ...
+  };
+});
+```
+
+`sketchFn` receives:
+- `p` — the p5 instance (instance mode, full p5 API)
+- `analyser` — the master `AnalyserNode` (use `getByteTimeDomainData` or `getByteFrequencyData`)
+- `audioCtx` — the `AudioContext`
+
+To remove a plugin and its visual entirely:
+
+```lisp
+(unload-plugin "oscilloscope")   ; removes its canvas; hides the panel if nothing is left
+(unload-plugin "spectrum")
+(unload-plugin "p5-waveform")
+```
+
+`(unload-plugin "unknown-name")` returns `{:error "no plugin named \"...\""}`.
 
 For the full visual plugin protocol, the `VisualPlugin` base class, and worked examples,
 see [docs/PLUGINS.md](PLUGINS.md).
@@ -1165,7 +1659,7 @@ Route pattern events as MIDI Note On/Off to external synths or DAWs:
 
 ```lisp
 (play :bass (midi-out 1 (seq :c4 :e4 :g4)))         ; channel 1
-(->> (scale :minor :c3 (seq 0 2 4 7)) (midi-out 2))  ; channel 2
+(->> (scale :minor :c3 (seq 1 3 5 8)) (midi-out 2))  ; channel 2
 
 ; Chains with other params — amp maps to MIDI velocity
 (->> (seq :c4 :e4 :g4) (midi-out 1) (amp 0.7))
@@ -1374,7 +1868,7 @@ name, a suggestion is shown.
 
 ;; Lead: its own reverb + delay, independent of the kick
 (play :lead
-  (->> (scale :minor :c3 (seq 0 2 4 7))
+  (->> (scale :minor :c3 (seq 1 3 5 8))
        (amp 0.6)
        (decay 0.8)
        (fx :reverb 0.5)

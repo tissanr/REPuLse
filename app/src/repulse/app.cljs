@@ -228,6 +228,11 @@
     (.mount plugin panel)
     (.remove (.-classList panel) "hidden")))
 
+(defn maybe-hide-visual-panel! []
+  ;; Hide the panel when no visual plugins remain in the registry
+  (when (empty? (plugins/visual-plugins))
+    (.add (.-classList (el "plugin-panel")) "hidden")))
+
 ;;; ── Demo templates ────────────────────────────────────────────────────
 
 (def demo-templates
@@ -509,17 +514,17 @@
    ";; === Tutorial 7/8 — Melody: scale & chord ===
 ;;
 ;; Note keywords like :c4 play pitched tones.
-;; `scale` maps degree numbers (0, 1, 2, …) to a musical scale.
+;; `scale` maps degree numbers (1, 2, 3, …) to a musical scale.
 ;; `chord` stacks the tones of a chord.
 
 (play :bass
-  (scale :minor :c3 (seq 0 0 3 5)))
+  (scale :minor :c3 (seq 1 1 4 6)))
 
 (play :chords
   (slow 2 (chord :minor :c4)))
 
 (play :melody
-  (scale :minor :c4 (seq 0 2 4 7 4 2)))
+  (scale :minor :c4 (seq 1 3 5 8 5 3)))
 
 (play :kick
   (seq :bd :bd :bd :bd))
@@ -681,6 +686,14 @@
                            (.catch (fn [e]
                                      (js/console.warn "[REPuLse] Plugin load failed:" e))))
                        nil))
+                   "unload-plugin"
+                   (fn [name]
+                     (let [name' (leval/unwrap name)]
+                       (if (get @plugins/registry name')
+                         (do (plugins/unregister! name')
+                             (maybe-hide-visual-panel!)
+                             (str "unloaded: " name'))
+                         {:error (str "no plugin named \"" name' "\"")})))
                    "bank"
                    (fn [prefix]
                      (samples/set-bank-prefix! (leval/unwrap prefix))
@@ -1426,13 +1439,13 @@
     true) ;; true = capture phase
 
   ;; Auto-load built-in visual plugins
-  (-> (js* "import('/plugins/oscilloscope.js')")
+  (-> (js* "import('/plugins/spectrum.js')")
       (.then (fn [m]
                (let [plug (.-default m)]
                  (plugins/register! plug (make-host))
                  (mount-visual! plug))))
       (.catch (fn [e]
-                (js/console.warn "[REPuLse] oscilloscope load failed:" e))))
+                (js/console.warn "[REPuLse] spectrum load failed:" e))))
 
   ;; Auto-load built-in effect plugins
   (plugins/register! compressor-plugin/plugin (make-host))
