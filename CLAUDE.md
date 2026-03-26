@@ -208,12 +208,12 @@ To verify UI changes, describe what to check or ask the user to reload the brows
 | L     | Per-track audio — track FX chains, sample params, sidechain   | ✓ delivered  |
 | M     | Lisp superpowers — defsynth, defmacro, loop/recur, rationals  | ✓ delivered  |
 | N     | MIDI & I/O — controller input, note out, clock out, Freesound | ✓ delivered  |
+| B     | Richer visuals — audiomotion-analyzer spectrum, p5.js support  | ✓ delivered  |
 | E2    | Live session dashboard — per-track params, conditional FX, sources | planned  |
 | E2b   | Parameter sliders — dashboard sliders that update code live    | planned      |
 | D2    | Full session persistence — all state in localStorage + reset!  | planned      |
 | N1    | MIDI CC mapping — bind controller knobs to any parameter      | planned      |
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
-| B     | Richer visuals — audiomotion-analyzer spectrum, p5.js support  | ✓ delivered  |
 | P     | Modular routing — busses, control rate, general envelopes      | planned      |
 
 See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full delivery notes.
