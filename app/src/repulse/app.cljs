@@ -228,6 +228,11 @@
     (.mount plugin panel)
     (.remove (.-classList panel) "hidden")))
 
+(defn maybe-hide-visual-panel! []
+  ;; Hide the panel when no visual plugins remain in the registry
+  (when (empty? (plugins/visual-plugins))
+    (.add (.-classList (el "plugin-panel")) "hidden")))
+
 ;;; ── Demo templates ────────────────────────────────────────────────────
 
 (def demo-templates
@@ -681,6 +686,14 @@
                            (.catch (fn [e]
                                      (js/console.warn "[REPuLse] Plugin load failed:" e))))
                        nil))
+                   "unload-plugin"
+                   (fn [name]
+                     (let [name' (leval/unwrap name)]
+                       (if (get @plugins/registry name')
+                         (do (plugins/unregister! name')
+                             (maybe-hide-visual-panel!)
+                             (str "unloaded: " name'))
+                         {:error (str "no plugin named \"" name' "\"")})))
                    "bank"
                    (fn [prefix]
                      (samples/set-bank-prefix! (leval/unwrap prefix))
@@ -1426,13 +1439,13 @@
     true) ;; true = capture phase
 
   ;; Auto-load built-in visual plugins
-  (-> (js* "import('/plugins/oscilloscope.js')")
+  (-> (js* "import('/plugins/spectrum.js')")
       (.then (fn [m]
                (let [plug (.-default m)]
                  (plugins/register! plug (make-host))
                  (mount-visual! plug))))
       (.catch (fn [e]
-                (js/console.warn "[REPuLse] oscilloscope load failed:" e))))
+                (js/console.warn "[REPuLse] spectrum load failed:" e))))
 
   ;; Auto-load built-in effect plugins
   (plugins/register! compressor-plugin/plugin (make-host))

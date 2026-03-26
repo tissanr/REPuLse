@@ -246,13 +246,31 @@ Plugins are ES module default exports. Two authoring styles are supported:
 See [`docs/PLUGINS.md`](PLUGINS.md) for the complete protocol, Host API, worked examples,
 and registration rules.
 
-The built-in oscilloscope lives at `app/public/plugins/oscilloscope.js` and is
-auto-loaded at startup. Third-party plugins can be loaded at runtime:
+The built-in visual plugins live under `app/public/plugins/` and are auto-loaded
+at startup:
+
+| Plugin | File | Library |
+|--------|------|---------|
+| oscilloscope | `oscilloscope.js` | hand-rolled canvas |
+| spectrum | `spectrum.js` | [audiomotion-analyzer](https://audiomotion.dev) (CDN, pinned) |
+
+Third-party plugins can be loaded at runtime, including p5.js sketch plugins:
 
 ```lisp
 (load-plugin "/plugins/oscilloscope.js")
-(load-plugin "https://example.com/my-spectrum.js")
+(load-plugin "/plugins/spectrum.js")
+(load-plugin "/plugins/p5-waveform.js")
+(load-plugin "https://example.com/my-plugin.js")
 ```
+
+#### p5-base shared loader pattern
+
+`app/public/plugins/p5-base.js` exports `makeP5Plugin(name, version, sketchFn)`.
+It loads p5.js from CDN once (shared across all p5 plugins via a module-level
+promise) and returns a `VisualPlugin` instance whose `mount`/`unmount` lifecycle
+wraps `new P5(sketchFn, container)` / `p5instance.remove()`. Sketch authors
+only need to implement `p.setup` and `p.draw`; the analyser and audioCtx are
+forwarded via closure.
 
 ### `fx.cljs` — Effect chain manager
 
@@ -285,7 +303,7 @@ All disconnections happen before reconnection to avoid duplicate signal paths.
 
 - Builds the DOM (header, CodeMirror editor, plugin panel, footer)
 - Creates the Lisp environment via `leval/make-env`; injects `samples!`, `sample-banks`, `load-plugin`, and `fx` built-ins
-- On startup, auto-loads the oscilloscope (visual) and five effect plugins via dynamic `import()`
+- On startup, auto-loads the spectrum (visual) plus effect plugins via dynamic `import()`
 - Effect plugins auto-loaded: `reverb`, `delay`, `filter`, `compressor`, `dattorro-reverb`
 - Routes evaluated results: Pattern → audio scheduler, other → output line
 - **▶ play / ■ stop** button evaluates the editor buffer or stops playback

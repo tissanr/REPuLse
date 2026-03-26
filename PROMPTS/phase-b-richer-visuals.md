@@ -225,6 +225,64 @@ In `app/src/repulse/app.cljs` `init`, the recommended startup visual load order:
 
 ---
 
+---
+
+## Part 4 — `unload-plugin`
+
+Users need a way to remove a visual (or effect) plugin they no longer want, without
+having to reload the page. Add `(unload-plugin name)` as a Lisp builtin.
+
+### Behaviour
+
+- `name` is a string matching the plugin's registered name (e.g. `"oscilloscope"`).
+- Calls `plugins/unregister!`, which calls `.destroy` → `.unmount` on the plugin instance.
+  The plugin's `unmount` implementation is responsible for removing its own DOM element.
+- After unregistering, if no visual plugins remain in the registry, the plugin panel is
+  hidden (adds back the `"hidden"` CSS class).
+- Returns `"unloaded: <name>"` on success, or `{:error "no plugin named \"...\""}` if the
+  name is unknown.
+
+### Implementation
+
+In `app/src/repulse/app.cljs`:
+
+```clojure
+;; Helper — hides panel once all visual plugins are gone
+(defn maybe-hide-visual-panel! []
+  (when (empty? (plugins/visual-plugins))
+    (.add (.-classList (el "plugin-panel")) "hidden")))
+
+;; Lisp builtin
+"unload-plugin"
+(fn [name]
+  (let [name' (leval/unwrap name)]
+    (if (get @plugins/registry name')
+      (do (plugins/unregister! name')
+          (maybe-hide-visual-panel!)
+          (str "unloaded: " name'))
+      {:error (str "no plugin named \"" name' "\"")})))
+```
+
+### Grammar + completions
+
+- Add `"unload-plugin"` to `BuiltinName` in `repulse-lisp.grammar` and run `npm run gen:grammar`.
+- Add `{ label: "unload-plugin", type: "function", detail: "..." }` to `completions.js`.
+
+### Lisp usage
+
+```lisp
+; Unload the oscilloscope — its canvas is removed from the panel immediately
+(unload-plugin "oscilloscope")
+
+; Unload the spectrum analyser
+(unload-plugin "spectrum")
+
+; Unload a p5 sketch
+(unload-plugin "p5-waveform")
+```
+
+---
+
 ## Acceptance criteria
 
 - [ ] Spectrum analyser auto-loads and displays a real-time frequency plot
@@ -233,5 +291,8 @@ In `app/src/repulse/app.cljs` `init`, the recommended startup visual load order:
 - [ ] Multiple visual plugins can be mounted simultaneously without interfering
 - [ ] The plugin panel grows to accommodate new visuals and doesn't overflow
 - [ ] Removing and reloading a plugin (`(load-plugin ...)` again) works correctly
+- [ ] `(unload-plugin "name")` removes the plugin's visual from the panel immediately
+- [ ] Plugin panel hides itself when all visual plugins are unloaded
+- [ ] `(unload-plugin "unknown")` returns a helpful error map
 - [ ] No console errors from p5 or audiomotion in a clean Chrome/Firefox/Safari run
 - [ ] CDN imports are pinned to specific semver versions (no floating `@latest`)
