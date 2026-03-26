@@ -1501,19 +1501,24 @@ plugins stack vertically (up to 40vh total height).
 
 ### Built-in visual plugins
 
-Three plugins load automatically at startup:
+The **spectrum** analyser loads automatically at startup.
 
-| Plugin | Description |
-|--------|-------------|
-| `oscilloscope` | Time-domain waveform — classic cyan line |
-| `spectrum` | Frequency spectrum via [audiomotion-analyzer](https://audiomotion.dev) — GPU-accelerated octave-band display with peak indicators |
+| Plugin | File | Auto-loaded | Description |
+|--------|------|-------------|-------------|
+| `spectrum` | `/plugins/spectrum.js` | ✓ | Frequency spectrum via [audiomotion-analyzer](https://audiomotion.dev) — GPU-accelerated octave-band display with peak indicators |
+| `oscilloscope` | `/plugins/oscilloscope.js` | — | Time-domain waveform — classic cyan line |
+| `p5-waveform` | `/plugins/p5-waveform.js` | — | p5.js waveform sketch example |
 
-Reload or replace a plugin at any time:
+Load or reload any plugin at any time:
 
 ```lisp
-(load-plugin "/plugins/oscilloscope.js")
-(load-plugin "/plugins/spectrum.js")
+(load-plugin "/plugins/spectrum.js")      ; reload spectrum
+(load-plugin "/plugins/oscilloscope.js")  ; add oscilloscope
+(load-plugin "/plugins/p5-waveform.js")   ; add p5 waveform sketch
 ```
+
+Loading a plugin with the same name as an already-mounted one replaces it (old visual
+removed, new one mounted in its place).
 
 ### p5.js sketch plugins
 
@@ -1551,9 +1556,6 @@ export default makeP5Plugin("my-sketch", "1.0.0", (p, analyser, audioCtx) => {
 - `p` — the p5 instance (instance mode, full p5 API)
 - `analyser` — the master `AnalyserNode` (use `getByteTimeDomainData` or `getByteFrequencyData`)
 - `audioCtx` — the `AudioContext`
-
-Loading a plugin with the same name replaces the existing registration (old visual
-removed, new one mounted in its place).
 
 To remove a plugin and its visual entirely:
 

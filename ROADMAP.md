@@ -508,15 +508,28 @@ See full spec: [PROMPTS/phase-o-platform.md](PROMPTS/phase-o-platform.md)
 
 ---
 
-## Phase B — Richer Visuals 📋 *planned*
+## Phase B — Richer Visuals ✅ *delivered*
 
-Two new visual plugin types: a high-quality spectrum analyser (audiomotion-analyzer)
-and a p5.js canvas plugin adapter for generative graphics driven by audio data.
+Two new visual plugin types: a high-quality spectrum analyser and a p5.js canvas
+plugin adapter for generative graphics driven by audio data.
 
-**Key additions:**
-- **Spectrum plugin** — audiomotion-analyzer frequency display with gradient colouring
-- **p5.js adapter** — `makeP5Plugin(sketchFn)` helper; sketch receives `{ analyser, p }` each frame
-- Both plugins loadable via `(load-plugin url)`
+**Delivered:**
+- **`spectrum.js`** — GPU-accelerated frequency spectrum via audiomotion-analyzer@4.5.4;
+  auto-loads at startup; 1/12-octave band display with prism gradient and peak indicators
+- **`p5-base.js`** — shared p5.js loader (esm.sh, pinned to v1.11.11) and `makeP5Plugin(name, version, sketchFn)`
+  factory; sketch receives `(p, analyser, audioCtx)` and sets up `p.setup` / `p.draw`
+- **`p5-waveform.js`** — built-in example p5 sketch (time-domain waveform, HSB colours)
+- **`(unload-plugin "name")`** — removes a plugin and its DOM element; hides the panel
+  when no visual plugins remain; returns `{:error …}` for unknown names
+- Plugin panel layout updated to `flex-direction: column`, `max-height: 40vh`
+- Grammar and completions updated with `unload-plugin`
+
+**Usage:**
+```lisp
+(load-plugin "/plugins/oscilloscope.js")  ; add oscilloscope alongside spectrum
+(load-plugin "/plugins/p5-waveform.js")   ; add p5 waveform sketch
+(unload-plugin "spectrum")                ; remove spectrum and its canvas
+```
 
 See full spec: [PROMPTS/phase-b-richer-visuals.md](PROMPTS/phase-b-richer-visuals.md)
 
