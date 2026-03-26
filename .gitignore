@@ -21,6 +21,9 @@ app/public/repulse_audio.js
 # macOS
 .DS_Store
 
+# Calva (VS Code Clojure extension)
+.calva/
+
 # Claude Code — track commands, ignore local settings and worktrees
 .claude/settings.local.json
 .claude/worktrees/
