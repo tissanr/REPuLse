@@ -1086,6 +1086,17 @@
 (def ^:private TRACK-PARAM-KEYS
   [:amp :pan :decay :attack :release :synth :bank :rate :begin :end])
 
+;; Parameters that get interactive sliders, with their range config
+(def ^:private SLIDER-PARAMS
+  {:amp     {:min 0    :max 1   :step 0.01}
+   :pan     {:min -1   :max 1   :step 0.01}
+   :decay   {:min 0    :max 4   :step 0.01}
+   :attack  {:min 0    :max 2   :step 0.001}
+   :release {:min 0    :max 4   :step 0.01}
+   :rate    {:min 0.1  :max 4   :step 0.01}
+   :begin   {:min 0    :max 1   :step 0.01}
+   :end     {:min 0    :max 1   :step 0.01}})
+
 (defn- extract-track-params
   "Query cycle 0 of a pattern and collect the first value for each known param key."
   [pattern]
@@ -1100,6 +1111,56 @@
                         acc TRACK-PARAM-KEYS))
               {} maps))
     (catch :default _ {})))
+
+(defn- render-track-slider [track-name param-key value]
+  (when-let [{:keys [min max step]} (get SLIDER-PARAMS param-key)]
+    (let [tn  (name track-name)
+          pn  (name param-key)]
+      (str "<div class=\"ctx-slider-row\">"
+           "<label class=\"ctx-param-key\">" pn "</label>"
+           "<input type=\"range\" class=\"ctx-slider\""
+           " data-track=\"" tn "\""
+           " data-param=\"" pn "\""
+           " min=\"" min "\" max=\"" max "\" step=\"" step "\""
+           " value=\"" value "\">"
+           "<span class=\"ctx-param-val\">" (fmt-pv value) "</span>"
+           "</div>"))))
+
+;;; Code patching for live slider updates
+
+(defonce ^:private slider-timeout (atom nil))
+
+(defn- patch-param-in-editor!
+  "Find the first `(param-name NUMBER` in editor text, starting from the position
+   of `:track-name`, and replace the number with new-val."
+  [track-name param-name new-val]
+  (when-let [view @editor-view]
+    (let [doc        (.. view -state -doc (toString))
+          track-kw   (str ":" track-name)
+          track-pos  (let [p (.indexOf doc track-kw)] (if (>= p 0) p 0))
+          sub-doc    (.substring doc track-pos)
+          re         (js/RegExp. (str "\\(" param-name "\\s+(-?[0-9]*\\.?[0-9]+)"))
+          match      (.exec re sub-doc)]
+      (when match
+        (let [full  (aget match 0)
+              num   (aget match 1)
+              start (+ track-pos (.-index match) (- (.-length full) (.-length num)))
+              end   (+ start (.-length num))
+              fmtd  (if (== new-val (Math/round new-val))
+                      (str (int new-val))
+                      (.toFixed new-val 2))]
+          (.dispatch view #js {:changes #js {:from start :to end :insert fmtd}}))))))
+
+(defn- slider-patch-and-eval! [track-name param-name new-val]
+  (patch-param-in-editor! track-name param-name new-val)
+  (when @slider-timeout (js/clearTimeout @slider-timeout))
+  (reset! slider-timeout
+    (js/setTimeout
+      (fn []
+        (reset! slider-timeout nil)
+        (when-let [view @editor-view]
+          (evaluate! (.. view -state -doc (toString)))))
+      150)))
 
 (defn- render-status-section []
   (let [bpm      (Math/round (/ 240.0 (:cycle-dur @audio/scheduler-state)))
@@ -1127,28 +1188,42 @@
              "<div class=\"ctx-section-title\">Tracks</div>"
              (apply str
                (map (fn [[track-name pattern]]
-                      (let [muted?  (contains? muted track-name)
-                            solo?   (= track-name solo-track)
-                            icon    (cond muted? "&#9632;" solo? "&#9733;" :else "&#9654;")
-                            params  (when-not muted? (extract-track-params pattern))
-                            pkeys   (filter #(contains? params %) TRACK-PARAM-KEYS)]
+                      (let [muted?       (contains? muted track-name)
+                            solo?        (= track-name solo-track)
+                            icon         (cond muted? "&#9632;" solo? "&#9733;" :else "&#9654;")
+                            params       (when-not muted? (extract-track-params pattern))
+                            ;; Text params: non-numeric or not in SLIDER-PARAMS (synth, bank)
+                            text-pkeys   (filter #(and (contains? params %)
+                                                       (or (not (contains? SLIDER-PARAMS %))
+                                                           (not (number? (get params %)))))
+                                                 TRACK-PARAM-KEYS)
+                            ;; Slider params: numeric values with range config
+                            slider-pkeys (filter #(and (contains? params %)
+                                                       (contains? SLIDER-PARAMS %)
+                                                       (number? (get params %)))
+                                                 TRACK-PARAM-KEYS)]
                         (str "<div class=\"ctx-track" (when muted? " ctx-track-muted") "\">"
                              "<span class=\"ctx-track-icon\">" icon "</span>"
                              "<span class=\"ctx-track-name\">:" (name track-name) "</span>"
                              (cond
                                muted? "<span class=\"ctx-track-status\">(muted)</span>"
                                solo?  "<span class=\"ctx-track-status ctx-track-solo\">(solo)</span>"
-                               (seq pkeys)
+                               (seq text-pkeys)
                                (str "<span class=\"ctx-track-params\">"
                                     (apply str
                                       (map (fn [k]
                                              (str "<span class=\"ctx-param-key\">" (name k) " </span>"
                                                   "<span class=\"ctx-param-val\">" (fmt-pv (get params k)) "</span>"
                                                   " "))
-                                           pkeys))
+                                           text-pkeys))
                                     "</span>")
                                :else "")
-                             "</div>")))
+                             "</div>"
+                             ;; Slider rows below track header
+                             (when (and (not muted?) (seq slider-pkeys))
+                               (apply str
+                                 (map #(render-track-slider track-name % (get params %))
+                                      slider-pkeys))))))
                     (sort-by (comp name first) tracks)))
              "</div>")))))
 
@@ -1373,8 +1448,27 @@
   (.addEventListener (el "tap-btn")   "click" (fn [] (evaluate! "(tap!)")))
   (.addEventListener (el "share-btn") "click" share!))
 
+(defn- attach-slider-listener! []
+  (when-let [panel (el "context-panel")]
+    (.addEventListener panel "input"
+      (fn [^js e]
+        (let [target (.-target e)]
+          (when (and (= "range" (.-type target))
+                     (.contains (.-classList target) "ctx-slider"))
+            (let [track-name (.. target -dataset -track)
+                  param-name (.. target -dataset -param)
+                  new-val    (js/parseFloat (.-value target))
+                  row        (.-parentNode target)
+                  val-el     (when row (.querySelector row ".ctx-param-val"))
+                  fmtd       (if (== new-val (Math/round new-val))
+                               (str (int new-val))
+                               (.toFixed new-val 2))]
+              (when val-el (set! (.-textContent val-el) fmtd))
+              (slider-patch-and-eval! track-name param-name new-val))))))))
+
 (defn init []
   (build-dom!)
+  (attach-slider-listener!)
   (ensure-env!)
   (setBankNamesProvider (fn [] (clj->js (samples/bank-names))))
   (setFxNamesProvider   (fn [] (clj->js (mapv :name @fx/chain))))

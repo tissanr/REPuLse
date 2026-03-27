@@ -268,9 +268,73 @@ footer {
 .ctx-track-muted  .ctx-track-icon { color: var(--dim); }
 .ctx-track-muted  .ctx-track-name { color: #5c6370; }
 
-/* Track param key/value */
+/* Track param key/value (inline text display) */
 .ctx-param-key { color: #5c6370; }
 .ctx-param-val { color: #d19a66; }
+
+/* Parameter slider rows */
+.ctx-slider-row {
+  display: flex;
+  align-items: center;
+  padding: 1px 8px 1px 22px;
+  gap: 4px;
+}
+
+.ctx-slider-row .ctx-param-key {
+  flex-shrink: 0;
+  width: 32px;
+  font-size: 10px;
+  cursor: default;
+}
+
+.ctx-slider {
+  flex: 1;
+  min-width: 0;
+  height: 2px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #3e4451;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.ctx-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  background: #61afef;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.ctx-slider:hover::-webkit-slider-thumb {
+  background: #c678dd;
+}
+
+.ctx-slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  background: #61afef;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  transition: background 0.1s;
+}
+
+.ctx-slider:hover::-moz-range-thumb {
+  background: #c678dd;
+}
+
+.ctx-slider-row .ctx-param-val {
+  flex-shrink: 0;
+  width: 28px;
+  text-align: right;
+  font-size: 10px;
+  color: #d19a66;
+}
 
 /* Source lines */
 .ctx-source {
