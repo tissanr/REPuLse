@@ -83,6 +83,11 @@
            (when-let [{:keys [input out]} @state]
              (.disconnect input)
              (.disconnect out))
-           (reset! state nil))}))
+           (reset! state nil))
+
+         ;; Return a fresh instance with its own independent state atom.
+         ;; Object.create/assign copies method *references*, so all clones
+         ;; would share this closure's `state`.  clone() calls make() again.
+         :clone make}))
 
 (def plugin (make))
