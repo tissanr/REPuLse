@@ -89,7 +89,7 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(fx :compressor :threshold -18)` | Dynamics compressor |
 | `(fx :off :reverb)` | Bypass an effect (transparent) |
 | `(fx :on :reverb)` | Re-enable a bypassed effect |
-| `(play :name pattern)` | Start or replace a named track — use in the editor buffer |
+| `(track :name pattern)` | Define or replace a named track — use in the editor buffer |
 | `(mute! :name)` | Silence a track without removing it — use in the command bar |
 | `(unmute! :name)` | Re-enable a muted track — use in the command bar |
 | `(solo! :name)` | Play only this track, mute all others — use in the command bar |

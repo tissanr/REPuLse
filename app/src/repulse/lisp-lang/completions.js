@@ -68,7 +68,7 @@ const BUILTINS = [
   { label: "load-plugin",   type: "function", detail: "(load-plugin url) — load a REPuLse plugin from URL" },
   { label: "unload-plugin", type: "function", detail: "(unload-plugin name) — unload and remove a plugin by name" },
   // --- Tracks (multi-pattern) ---
-  { label: "play",        type: "function", detail: "(play :name pattern) — start or replace a named track (use in editor buffer)" },
+  { label: "track",       type: "function", detail: "(track :name pattern) — define or replace a named track" },
   { label: "mute!",       type: "function", detail: "(mute! :name) — silence a track without removing it (use in command bar)" },
   { label: "unmute!",     type: "function", detail: "(unmute! :name) — re-enable a muted track (use in command bar)" },
   { label: "solo!",       type: "function", detail: "(solo! :name) — play only this track, mute all others (use in command bar)" },

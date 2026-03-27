@@ -974,9 +974,9 @@ Each track has a keyword name and loops independently.
 ### `play` — start or replace a named track
 
 ```lisp
-(play :kick  (seq :bd :_ :bd :_))
-(play :snare (seq :_ :sd :_ :sd))
-(play :hats  (fast 2 (seq :hh :_)))
+(track :kick  (seq :bd :_ :bd :_))
+(track :snare (seq :_ :sd :_ :sd))
+(track :hats  (fast 2 (seq :hh :_)))
 ```
 
 Evaluating a new `play` for the same name replaces the pattern without stopping others.
@@ -1011,10 +1011,10 @@ Evaluating a new `play` for the same name replaces the pattern without stopping 
 
 ```lisp
 (bpm 130)
-(play :kick  (seq :bd :_ :bd :_))
-(play :snare (seq :_ :sd :_ :sd))
-(play :hats  (fast 2 (seq :hh :_)))
-(play :bass  (scale :minor :c2 (seq 1 :_ 8 :_ 1 :_ 6 :_)))
+(track :kick  (seq :bd :_ :bd :_))
+(track :snare (seq :_ :sd :_ :sd))
+(track :hats  (fast 2 (seq :hh :_)))
+(track :bass  (scale :minor :c2 (seq 1 :_ 8 :_ 1 :_ 6 :_)))
 ```
 
 ---
@@ -1243,23 +1243,23 @@ Control them with the `fx` built-in.
 Route a track through its own private effect chain by placing `fx` inside the `->>` pipeline:
 
 ```lisp
-(play :kick
+(track :kick
   (->> (seq :bd :_ :bd :_)
        (fx :filter 1000)))              ; kick only goes through lowpass
 
-(play :lead
+(track :lead
   (->> (scale :minor :c3 (seq 1 3 5 8))
        (decay 1.0)
        (fx :reverb 0.4)))              ; lead gets its own reverb
 
 ;; Multiple effects on one track
-(play :bass
+(track :bass
   (->> (seq :c2 :_ :eb2 :_)
        (fx :filter 600)
        (fx :overdrive 0.6)))
 
 ;; Named params work the same as global fx
-(play :snare
+(track :snare
   (->> (seq :_ :sd :_ :sd)
        (fx :delay :wet 0.3 :time 0.25 :feedback 0.4)))
 ```
@@ -1447,8 +1447,8 @@ so the duck is perfectly in time regardless of BPM, with zero look-ahead latency
 
 ```lisp
 ;; Duck the master bus on every kick hit
-(play :kick (seq :bd :_ :bd :_))
-(play :pad  (slow 2 (seq :c3 :eb3 :g3)))
+(track :kick (seq :bd :_ :bd :_))
+(track :pad  (slow 2 (seq :c3 :eb3 :g3)))
 (fx :sidechain :trigger :bd :amount 0.8 :release 0.15)
 
 ;; Positional shorthand — sets amount
@@ -1658,7 +1658,7 @@ real time while patterns play.
 Route pattern events as MIDI Note On/Off to external synths or DAWs:
 
 ```lisp
-(play :bass (midi-out 1 (seq :c4 :e4 :g4)))         ; channel 1
+(track :bass (midi-out 1 (seq :c4 :e4 :g4)))         ; channel 1
 (->> (scale :minor :c3 (seq 1 3 5 8)) (midi-out 2))  ; channel 2
 
 ; Chains with other params — amp maps to MIDI velocity
@@ -1682,7 +1682,7 @@ Broadcast 24ppqn MIDI clock so external hardware/DAWs lock to REPuLse tempo:
 Export a track as a standard MIDI file (Type 0, 480 ticks/quarter note):
 
 ```lisp
-(play :lead (seq :c4 :e4 :g4 :b4))
+(track :lead (seq :c4 :e4 :g4 :b4))
 (midi-export :lead 4)    ; downloads repulse-lead.mid (4 cycles)
 (midi-export :lead 8)    ; 8 cycles
 ```
@@ -1862,12 +1862,12 @@ name, a suggestion is shown.
 (bpm 128)
 
 ;; Kick: tight lowpass, no reverb
-(play :kick
+(track :kick
   (->> (seq :bd :_ :bd :_)
        (fx :filter 800)))
 
 ;; Lead: its own reverb + delay, independent of the kick
-(play :lead
+(track :lead
   (->> (scale :minor :c3 (seq 1 3 5 8))
        (amp 0.6)
        (decay 0.8)

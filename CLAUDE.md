@@ -173,11 +173,9 @@ Skipping step 2 means the grammar change has no effect at runtime.
 
 ## Dev server
 
-The user runs the dev server themselves (`npm run dev` or `npx shadow-cljs watch app`,
-always on port 3000). **Do not call `preview_start`** — it will fail with a port
-conflict since port 3000 is already held by the shadow-cljs Java process.
-
-To verify UI changes, describe what to check or ask the user to reload the browser.
+Use `preview_start` to start the dev server before verifying UI changes. The server
+runs on port 3000 via `npm run dev` (builds Rust/WASM then starts shadow-cljs watch).
+After code edits, follow the standard `<verification_workflow>` using the preview tools.
 
 ---
 
