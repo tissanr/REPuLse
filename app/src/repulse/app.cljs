@@ -1506,6 +1506,7 @@
            "</div>"))))
 
 (defonce ^:private render-scheduled? (atom false))
+(defonce ^:private slider-active? (atom false))   ; true while any ctx-slider is held
 
 (defn- render-context-panel! []
   (when-let [panel-el (el "context-panel")]
@@ -1518,7 +1519,9 @@
                (render-bindings-section)))))
 
 (defn- schedule-render! []
-  (when-not @render-scheduled?
+  ;; Skip tick-driven re-renders while the user is dragging a slider —
+  ;; replacing the DOM element mid-drag breaks the native range interaction.
+  (when (and (not @render-scheduled?) (not @slider-active?))
     (reset! render-scheduled? true)
     (js/requestAnimationFrame
       (fn []
@@ -1653,6 +1656,17 @@
 
 (defn- attach-slider-listener! []
   (when-let [panel (el "context-panel")]
+    ;; Pause context panel re-renders while a slider is held down
+    (.addEventListener panel "pointerdown"
+      (fn [^js e]
+        (when (.contains (.-classList (.-target e)) "ctx-slider")
+          (reset! slider-active? true))))
+    (.addEventListener js/document "pointerup"
+      (fn [_]
+        (when @slider-active?
+          (reset! slider-active? false)
+          ;; Trigger a deferred re-render once the drag is done
+          (js/requestAnimationFrame render-context-panel!))))
     (.addEventListener panel "input"
       (fn [^js e]
         (let [target (.-target e)]
