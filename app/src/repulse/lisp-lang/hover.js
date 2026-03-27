@@ -193,10 +193,15 @@ const DOCS = {
     description: "Stop all playback immediately.",
     example: "(stop)",
   },
+  "track": {
+    signature: "(track :name pattern)",
+    description: "Define or replace a named track. Each track runs independently.",
+    example: "(track :kick (seq :bd :_ :bd :_))",
+  },
   "play": {
     signature: "(play :name pattern)",
-    description: "Start or replace a named track. Each track runs independently.",
-    example: "(play :kick (seq :bd :_ :bd :_))",
+    description: "Renamed to track — use (track :name pattern) instead.",
+    example: "(track :kick (seq :bd :_ :bd :_))",
   },
   "mute!": {
     signature: "(mute! :name)",

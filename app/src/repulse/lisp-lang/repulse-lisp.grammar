@@ -31,7 +31,7 @@ Map    { "{" expr* "}" }
     "defmacro" | "defsynth" | "loop" | "recur" | "quasiquote" |
     "bpm" | "stop" | "fx" | "load-plugin" | "unload-plugin" | "arrange" | "play-scenes" | "sound" |
     "get" | "assoc" | "merge" | "not" | "and" | "or" | "comp" |
-    "play" | "mute!" | "unmute!" | "solo!" | "clear!" | "tracks" | "tap!" | "midi-sync!" |
+    "track" | "mute!" | "unmute!" | "solo!" | "clear!" | "tracks" | "tap!" | "midi-sync!" |
     "midi-map" | "midi-out" | "midi-clock-out!" | "midi-export" |
     "freesound!" | "freesound-key!" |
     "upd" | "demo" | "tutorial" |

@@ -242,17 +242,17 @@
 ";; TECHNO — four-on-the-floor kick, offbeat hats, snare on 2/4, acid bassline
 (bpm 130)
 
-(play :kick
+(track :kick
   (seq :bd :bd :bd :bd))
 
-(play :hat
+(track :hat
   (->> (fast 2 (seq :_ :oh :_ :oh))
        (amp (seq 0.5 0.7 0.5 0.9))))
 
-(play :snare
+(track :snare
   (seq :_ :sd :_ :sd))
 
-(play :bass
+(track :bass
   (->> (scale :minor :c2 (seq 0 0 3 5))
        (fast 2)
        (decay 0.15)
@@ -265,20 +265,20 @@
 ";; AMBIENT — slow pad chords with reverb, gentle melodic line
 (bpm 72)
 
-(play :pad
+(track :pad
   (->> (chord :minor7 :a3)
        (amp 0.3)
        (attack 0.4)
        (decay 3.0)))
 
-(play :melody
+(track :melody
   (->> (scale :minor :a4 (seq 0 2 4 7 4 2))
        (slow 2)
        (amp 0.4)
        (attack 0.1)
        (decay 1.5)))
 
-(play :pulse
+(track :pulse
   (->> (seq :c5 :_ :e5 :_)
        (slow 4)
        (amp 0.15)
@@ -291,15 +291,15 @@
 ";; DRUM & BASS — fast breakbeat, sub bass, amen-style rhythm
 (bpm 174)
 
-(play :break
+(track :break
   (seq :bd :_ :_ :bd :_ :_ :sd :_
        :bd :_ :bd :_ :_ :sd :_ :_))
 
-(play :hat
+(track :hat
   (->> (fast 2 (seq :hh :hh :oh :hh))
        (amp (seq 0.6 0.4 0.8 0.4))))
 
-(play :sub
+(track :sub
   (->> (scale :minor :e1 (seq 0 :_ 0 :_ 3 :_ 5 :_))
        (amp 0.9)
        (decay 0.2)))
@@ -311,14 +311,14 @@
 ";; MINIMAL — sparse kick, subtle hi-hats, one-note bass
 (bpm 120)
 
-(play :kick
+(track :kick
   (seq :bd :_ :_ :_ :bd :_ :_ :_))
 
-(play :hat
+(track :hat
   (->> (seq :_ :hh :_ :hh :_ :hh :_ :_)
        (amp 0.35)))
 
-(play :bass
+(track :bass
   (->> (pure :c2)
        (amp 0.6)
        (decay 0.12)))
@@ -330,23 +330,23 @@
 ";; HOUSE — classic four-on-the-floor, organ stab chords, open hat
 (bpm 124)
 
-(play :kick
+(track :kick
   (seq :bd :bd :bd :bd))
 
-(play :hat
+(track :hat
   (->> (seq :_ :oh :_ :oh)
        (amp 0.5)))
 
-(play :clap
+(track :clap
   (seq :_ :sd :_ :sd))
 
-(play :chord
+(track :chord
   (->> (every 4 (fast 2) (chord :dom7 :c4))
        (amp 0.4)
        (attack 0.02)
        (decay 0.25)))
 
-(play :bass
+(track :bass
   (->> (scale :minor :c2 (seq 0 0 3 0 5 0 3 0))
        (amp 0.7)
        (decay 0.1)))
@@ -358,19 +358,19 @@
 ";; DUB — heavy bass, delay-heavy snare, sparse hats
 (bpm 140)
 
-(play :kick
+(track :kick
   (seq :bd :_ :_ :_ :_ :_ :bd :_))
 
-(play :snare
+(track :snare
   (->> (seq :_ :_ :_ :sd :_ :_ :_ :_)
        (amp 0.8)
        (decay 0.3)))
 
-(play :hat
+(track :hat
   (->> (seq :_ :hh :_ :_ :_ :_ :hh :_)
        (amp 0.3)))
 
-(play :bass
+(track :bass
   (->> (scale :minor :g1 (seq 0 :_ :_ 0 :_ 3 :_ :_))
        (amp 0.9)
        (attack 0.01)
@@ -383,22 +383,22 @@
 ";; EXPERIMENTAL — algorithmic patterns using every, rev, fmap
 (bpm 110)
 
-(play :rhythm
+(track :rhythm
   (every 3 rev
     (seq :bd :_ :sd :_ :bd :bd :_ :sd)))
 
-(play :texture
+(track :texture
   (->> (every 2 (fast 2) (seq :hh :oh :hh :_))
        (amp (seq 0.3 0.6 0.4 0.8))))
 
-(play :melody
+(track :melody
   (->> (scale :dorian :d3 (seq 0 2 4 6 7 4 2 0))
        (every 4 rev)
        (every 3 (fast 2))
        (amp 0.5)
        (decay 0.6)))
 
-(play :drone
+(track :drone
   (->> (chord :sus4 :d2)
        (amp 0.2)
        (attack 0.5)
@@ -494,13 +494,13 @@
 ;; `play` starts a named track.  Each track runs
 ;; independently — you can update one without stopping others.
 
-(play :kick
+(track :kick
   (seq :bd :_ :bd :bd))
 
-(play :snare
+(track :snare
   (seq :_ :sd :_ :sd))
 
-(play :hat
+(track :hat
   (fast 2 (seq :hh :oh)))
 
 ;; In the command bar, try:
@@ -517,16 +517,16 @@
 ;; `scale` maps degree numbers (1, 2, 3, …) to a musical scale.
 ;; `chord` stacks the tones of a chord.
 
-(play :bass
+(track :bass
   (scale :minor :c3 (seq 1 1 4 6)))
 
-(play :chords
+(track :chords
   (slow 2 (chord :minor :c4)))
 
-(play :melody
+(track :melody
   (scale :minor :c4 (seq 1 3 5 8 5 3)))
 
-(play :kick
+(track :kick
   (seq :bd :bd :bd :bd))
 
 ;; Try changing :minor to :dorian or :blues.
@@ -539,17 +539,17 @@
 ;; Per-event parameters make patterns expressive.
 ;; `->>` threads a pattern through a chain of transformers.
 
-(play :kick
+(track :kick
   (->> (seq :bd :bd :bd :bd)
        (amp (seq 0.9 0.5 0.7 0.5))))
 
-(play :lead
+(track :lead
   (->> (scale :minor :c4 (seq 0 2 4 7 4 2 0 :_))
        (amp 0.6)
        (attack 0.02)
        (decay 0.5)))
 
-(play :pad
+(track :pad
   (->> (chord :minor7 :c3)
        (amp 0.25)
        (attack 0.3)
@@ -578,7 +578,7 @@
             (assoc (leval/make-env (make-stop-fn) audio/set-bpm!)
                    :*register-synth-fn* synth/register-synth!
                    ;; --- Multi-track ---
-                   "play"
+                   "track"
                    (fn [track-name pat]
                      (let [name' (leval/unwrap track-name)
                            pat'  (leval/unwrap pat)]
@@ -593,7 +593,8 @@
                                (fx/set-track-param! name' name k v)))
                            (set-playing! true)
                            (str "=> track :" (cljs.core/name name') " playing"))
-                         "Error: second argument to play must be a pattern")))
+                         "Error: second argument to track must be a pattern")))
+                   "play" (fn [& args] (throw (js/Error. "play is renamed to track — use (track :name pattern)")))
                    "mute!"
                    (fn [track-name]
                      (let [name' (leval/unwrap track-name)]
