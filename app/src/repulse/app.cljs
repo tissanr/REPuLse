@@ -714,10 +714,15 @@
                                effect-name (cljs.core/name (first fx-args))
                                rest-fx     (rest fx-args)
                                params      (if (keyword? (first rest-fx))
+                                             ;; All named: (fx :reverb :wet 0.3)
                                              (into {} (map (fn [[k v]] [(cljs.core/name k) v])
                                                            (partition 2 rest-fx)))
-                                             (when (seq rest-fx)
-                                               {"value" (first rest-fx)}))]
+                                             ;; Positional first, then optional named: (fx :delay 0.25 :feedback 0.4 :wet 0.5)
+                                             (let [named (rest rest-fx)]
+                                               (into (when (seq rest-fx) {"value" (first rest-fx)})
+                                                     (when (keyword? (first named))
+                                                       (map (fn [[k v]] [(cljs.core/name k) v])
+                                                            (partition 2 named))))))]
                            (update pat :track-fx (fnil conj []) {:name effect-name :params (or params {})}))
                          ;; ── Global chain mode: apply to master chain ─────────────────
                          (do
