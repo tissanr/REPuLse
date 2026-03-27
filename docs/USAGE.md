@@ -1270,9 +1270,11 @@ Route a track through its own private effect chain by placing `fx` inside the `-
        (fx :delay :wet 0.3 :time 0.25 :feedback 0.4)))
 ```
 
-To remove a per-track effect, re-evaluate the `play` form without the `(fx ...)` line.
+To remove a per-track effect, re-evaluate the `track` form without the `(fx ...)` line.
 
 > **Note:** `fx` must come **after** all pattern transformations (`amp`, `decay`, `pan`, etc.) in the `->>` chain — it annotates the final pattern for audio routing.
+
+> **Warning:** `fx` **must** be inside a `->>` pipeline to act as a per-track effect. Writing it as a bare argument — `(track :k (fx :reverb 0.3) (seq :bd :sd))` — will instead modify the **global** effect chain, not the track's private chain.
 
 ### Built-in effects
 
