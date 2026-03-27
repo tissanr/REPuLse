@@ -400,21 +400,25 @@
                       last-a   (last args')
                       has-pat? (and (seq args')
                                     (map? last-a)
-                                    (fn? (:query last-a)))
-                      opts-map (apply hash-map (if has-pat? (butlast args') args'))
-                      apply-xf (fn [pat]
-                                  (core/fmap
-                                   (fn [v]
-                                     (let [base (if (map? v) v {:note v})
-                                           freq (or (:freq base)
-                                                    (when (number? (:note base)) (:note base))
-                                                    (when (keyword? (:note base))
-                                                      (theory/note->hz (:note base))))]
-                                       (merge base {:synth voice :freq freq} opts-map)))
-                                   pat))]
-                  (if has-pat?
-                    (apply-xf last-a)
-                    apply-xf)))
+                                    (fn? (:query last-a)))]
+                  ;; Detect common mistake: transformer (amp, pan, …) passed directly
+                  ;; as a synth argument instead of chained via ->>.
+                  (when (and (seq args') (fn? last-a) (not has-pat?))
+                    (throw (js/Error. "amp, pan and other transformers must be chained with ->>, not passed as synth arguments.\nUse: (->> (synth :saw pattern) (amp 0.7))")))
+                  (let [opts-map (apply hash-map (if has-pat? (butlast args') args'))
+                        apply-xf (fn [pat]
+                                    (core/fmap
+                                     (fn [v]
+                                       (let [base (if (map? v) v {:note v})
+                                             freq (or (:freq base)
+                                                      (when (number? (:note base)) (:note base))
+                                                      (when (keyword? (:note base))
+                                                        (theory/note->hz (:note base))))]
+                                         (merge base {:synth voice :freq freq} opts-map)))
+                                     pat))]
+                    (if has-pat?
+                      (apply-xf last-a)
+                      apply-xf))))
      ;; Mini-notation
      "~"       (fn [s]
                  (let [src         (source-of s)
