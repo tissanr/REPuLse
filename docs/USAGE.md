@@ -102,7 +102,7 @@ program — press **Alt+Enter** to hear it, read the comments, experiment, then 
 | 3 | Speed | `fast`, `slow` |
 | 4 | Evolution | `every` |
 | 5 | Naming | `def` |
-| 6 | Multi-track | `play` |
+| 6 | Multi-track | `track` |
 | 7 | Melody | `scale`, `chord` |
 | 8 | Expression | `amp`, `decay`, `->>` |
 
@@ -622,6 +622,12 @@ putting the pattern last:
 (decay 0.08 (chord :major :c4))   ; short stab
 (decay 2.0 (pure :c3))            ; long bass tone
 ```
+
+> **Note:** `decay`, `attack`, and `release` only affect **synthesised** sounds (note
+> keywords like `:c4`, `saw`, `square`, `sine`, `noise`). They are silently ignored for
+> **sample-based** sounds (drum keywords like `:bd`, `:sd`, `:hh`, or any `(bank …)`
+> pattern). To shorten a sample, use the `:end` key via `(->> pat (params {:end 0.5}))`
+> instead.
 
 ### `release` — release time in seconds
 

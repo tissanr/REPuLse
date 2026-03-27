@@ -69,8 +69,9 @@
 
          :getParams
          (fn []
-           (if-let [{:keys [comp]} @state]
-             #js {:threshold (.. comp -threshold -value)
+           (if-let [{:keys [comp wet]} @state]
+             #js {:wet       (.. wet  -gain      -value)
+                  :threshold (.. comp -threshold -value)
                   :ratio     (.. comp -ratio     -value)
                   :attack    (.. comp -attack    -value)
                   :release   (.. comp -release   -value)

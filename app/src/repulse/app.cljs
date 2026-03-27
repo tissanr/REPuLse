@@ -489,9 +489,9 @@
 ;; Next: (tutorial 6)"
 
    ;; Chapter 6: Multi-track
-   ";; === Tutorial 6/8 — Multi-Track: play ===
+   ";; === Tutorial 6/8 — Multi-Track: track ===
 ;;
-;; `play` starts a named track.  Each track runs
+;; `track` defines a named track.  Each track runs
 ;; independently — you can update one without stopping others.
 
 (track :kick
@@ -1098,6 +1098,45 @@
    :begin   {:min 0    :max 1   :step 0.01}
    :end     {:min 0    :max 1   :step 0.01}})
 
+;; FX slider config: {effect-name {param-name {:min :max :step}}}
+(def ^:private FX-SLIDER-PARAMS
+  {"reverb"          {"wet"      {:min 0   :max 1    :step 0.01}}
+   "dattorro-reverb" {"wet"      {:min 0   :max 1    :step 0.01}}
+   "delay"           {"time"     {:min 0   :max 2    :step 0.01}
+                      "feedback" {:min 0   :max 0.95 :step 0.01}
+                      "wet"      {:min 0   :max 1    :step 0.01}}
+   "filter"          {"freq"     {:min 20  :max 8000 :step 1}
+                      "q"        {:min 0.1 :max 20   :step 0.1}}
+   "chorus"          {"wet"      {:min 0   :max 1    :step 0.01}
+                      "rate"     {:min 0.1 :max 10   :step 0.1}}
+   "phaser"          {"wet"      {:min 0   :max 1    :step 0.01}
+                      "rate"     {:min 0.1 :max 10   :step 0.1}}
+   "tremolo"         {"depth"    {:min 0   :max 1    :step 0.01}
+                      "rate"     {:min 0.1 :max 20   :step 0.1}}
+   "overdrive"       {"drive"    {:min 0   :max 1    :step 0.01}}
+   "bitcrusher"      {"wet"       {:min 0    :max 1   :step 0.01}}
+   "sidechain"       {"amount"    {:min 0    :max 1   :step 0.01}}
+   "compressor"      {"wet"       {:min 0    :max 1   :step 0.01}
+                      "threshold" {:min -60  :max 0   :step 0.5}
+                      "ratio"     {:min 1    :max 20  :step 0.5}
+                      "attack"    {:min 0    :max 1   :step 0.001}
+                      "release"   {:min 0    :max 1   :step 0.01}
+                      "knee"      {:min 0    :max 40  :step 0.5}}})
+
+;; Which getParams key corresponds to the positional (fx :name NUMBER) form
+(def ^:private FX-PRIMARY-PARAM
+  {"reverb"          "wet"
+   "dattorro-reverb" "wet"
+   "delay"           "time"
+   "filter"          "freq"
+   "chorus"          "wet"
+   "phaser"          "wet"
+   "tremolo"         "depth"
+   "overdrive"       "drive"
+   "bitcrusher"      "wet"
+   "sidechain"       "amount"
+   "compressor"      "wet"})
+
 (defn- extract-track-params
   "Query cycle 0 of a pattern and collect the first value for each known param key."
   [pattern]
@@ -1127,6 +1166,18 @@
            "<span class=\"ctx-param-val\">" (fmt-pv value) "</span>"
            "</div>"))))
 
+(defn- render-fx-slider [effect-name param-name value]
+  (when-let [{:keys [min max step]} (get-in FX-SLIDER-PARAMS [effect-name param-name])]
+    (str "<div class=\"ctx-slider-row\">"
+         "<label class=\"ctx-param-key\">" param-name "</label>"
+         "<input type=\"range\" class=\"ctx-slider\""
+         " data-fx=\"" effect-name "\""
+         " data-param=\"" param-name "\""
+         " min=\"" min "\" max=\"" max "\" step=\"" step "\""
+         " value=\"" value "\">"
+         "<span class=\"ctx-param-val\">" (fmt-pv value) "</span>"
+         "</div>")))
+
 ;;; Code patching for live slider updates
 
 (defonce ^:private slider-timeout (atom nil))
@@ -1154,6 +1205,52 @@
 
 (defn- slider-patch-and-eval! [track-name param-name new-val]
   (patch-param-in-editor! track-name param-name new-val)
+  (when @slider-timeout (js/clearTimeout @slider-timeout))
+  (reset! slider-timeout
+    (js/setTimeout
+      (fn []
+        (reset! slider-timeout nil)
+        (when-let [view @editor-view]
+          (evaluate! (.. view -state -doc (toString)))))
+      150)))
+
+(defn- patch-fx-param-in-editor!
+  "Update or insert a param in a (fx :effect-name ...) call.
+   Named :param-name NUMBER exists -> replace the number.
+   Positional (fx :effect-name NUMBER) for primary param -> replace.
+   Not found -> insert :param-name value before the closing )."
+  [effect-name param-name new-val]
+  (when-let [view @editor-view]
+    (let [doc      (.. view -state -doc (toString))
+          primary? (= param-name (get FX-PRIMARY-PARAM effect-name))
+          fmtd     (if (== new-val (Math/round new-val))
+                     (str (int new-val))
+                     (.toFixed new-val 2))
+          re-named (js/RegExp. (str "\\(fx\\s+:" effect-name "[^)]*:" param-name
+                                    "\\s+(-?[0-9]*\\.?[0-9]+)"))
+          match    (.exec re-named doc)
+          re-pos   (when (and (not match) primary?)
+                     (js/RegExp. (str "\\(fx\\s+:" effect-name "\\s+(-?[0-9]*\\.?[0-9]+)")))
+          match    (or match (when re-pos (.exec re-pos doc)))]
+      (if match
+        (let [full  (aget match 0)
+              num   (aget match 1)
+              start (+ (.-index match) (- (.-length full) (.-length num)))
+              end   (+ start (.-length num))]
+          (.dispatch view #js {:changes #js {:from start :to end :insert fmtd}}))
+        (let [re-fx    (js/RegExp. (str "\\(fx\\s+:" effect-name "[^)]*\\)"))
+              fx-match (.exec re-fx doc)]
+          (when fx-match
+            (let [close-pos (+ (.-index fx-match)
+                               (dec (.-length (aget fx-match 0))))]
+              (.dispatch view #js {:changes #js {:from close-pos
+                                                 :to   close-pos
+                                                 :insert (str " :" param-name " " fmtd)}}))))))))
+
+
+(defn- fx-slider-patch-and-eval! [effect-name param-name new-val]
+  (fx/set-param! effect-name param-name new-val)
+  (patch-fx-param-in-editor! effect-name param-name new-val)
   (when @slider-timeout (js/clearTimeout @slider-timeout))
   (reset! slider-timeout
     (js/setTimeout
@@ -1235,20 +1332,28 @@
            "<div class=\"ctx-section-title\">FX</div>"
            (apply str
              (map (fn [{:keys [name plugin bypassed?]}]
-                    (let [params   (when (and plugin (not bypassed?))
-                                     (try (js->clj (.getParams ^js plugin))
-                                          (catch :default _ {})))
-                          first-kv (first (seq params))
-                          pstr     (when first-kv
-                                     (str (first first-kv) " "
-                                          (fmt-pv (second first-kv))))]
+                    (let [params      (when (and plugin (not bypassed?))
+                                        (try (js->clj (.getParams ^js plugin))
+                                             (catch :default _ {})))
+                          fx-sliders  (get FX-SLIDER-PARAMS name)
+                          slider-html (when (and (not bypassed?) fx-sliders)
+                                        (apply str
+                                          (keep (fn [[pname _]]
+                                                  (when-let [v (get params pname)]
+                                                    (render-fx-slider name pname v)))
+                                                fx-sliders)))
+                          first-kv    (first (seq (apply dissoc params (keys fx-sliders))))
+                          pstr        (when (and first-kv (not (seq slider-html)))
+                                        (str (first first-kv) " "
+                                             (fmt-pv (second first-kv))))]
                       (str "<div class=\"ctx-row\">"
                            "<span class=\"ctx-name\">" name "</span>"
                            (cond
                              bypassed? "<span class=\"ctx-bypass\">off</span>"
                              pstr      (str "<span class=\"ctx-param\">" pstr "</span>")
                              :else     "")
-                           "</div>")))
+                           "</div>"
+                           (or slider-html ""))))
                   active))
            "</div>"))))
 
@@ -1456,7 +1561,8 @@
         (let [target (.-target e)]
           (when (and (= "range" (.-type target))
                      (.contains (.-classList target) "ctx-slider"))
-            (let [track-name (.. target -dataset -track)
+            (let [fx-name    (.. target -dataset -fx)
+                  track-name (.. target -dataset -track)
                   param-name (.. target -dataset -param)
                   new-val    (js/parseFloat (.-value target))
                   row        (.-parentNode target)
@@ -1465,7 +1571,9 @@
                                (str (int new-val))
                                (.toFixed new-val 2))]
               (when val-el (set! (.-textContent val-el) fmtd))
-              (slider-patch-and-eval! track-name param-name new-val))))))))
+              (if (seq fx-name)
+                (fx-slider-patch-and-eval! fx-name param-name new-val)
+                (slider-patch-and-eval! track-name param-name new-val)))))))))
 
 (defn init []
   (build-dom!)
