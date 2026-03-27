@@ -1029,6 +1029,8 @@
 
 (defn evaluate! [code]
   (ensure-env!)
+  ;; Reset active flags so removed (fx ...) calls disappear from the panel
+  (swap! fx/chain (fn [c] (mapv #(assoc % :active? false) c)))
   ;; Keep stop fn up to date (in case env was reset)
   (let [env (assoc @env-atom "stop" (make-stop-fn))
         result (lisp/eval-string code env)]
@@ -1177,6 +1179,44 @@
          " value=\"" value "\">"
          "<span class=\"ctx-param-val\">" (fmt-pv value) "</span>"
          "</div>")))
+(defn- render-track-fx-slider [track-name effect-name param-name value]
+  (when-let [{:keys [min max step]} (get-in FX-SLIDER-PARAMS [effect-name param-name])]
+    (str "<div class=\"ctx-slider-row\">"
+         "<label class=\"ctx-param-key\">" param-name "</label>"
+         "<input type=\"range\" class=\"ctx-slider\""
+         " data-track=\"" (cljs.core/name track-name) "\""
+         " data-fx=\"" effect-name "\""
+         " data-param=\"" param-name "\""
+         " min=\"" min "\" max=\"" max "\" step=\"" step "\""
+         " value=\"" value "\">"
+         "<span class=\"ctx-param-val\">" (fmt-pv value) "</span>"
+         "</div>")))
+
+(defn- render-track-fx-subsection [track-name]
+  (when-let [tn (get @audio/track-nodes track-name)]
+    (let [active-fx (filterv #(not (:bypassed? %)) (:fx-chain tn))]
+      (when (seq active-fx)
+        (str "<details open class=\"ctx-track-fx\">"
+             "<summary class=\"ctx-track-fx-title\">fx (" (count active-fx) ")</summary>"
+             (apply str
+               (map (fn [{:keys [name plugin]}]
+                      (let [params    (try (js->clj (.getParams ^js plugin))
+                                          (catch :default _ {}))
+                            fx-sliders (get FX-SLIDER-PARAMS name)
+                            sliders    (when fx-sliders
+                                         (apply str
+                                           (keep (fn [[pname _]]
+                                                   (when-let [v (get params pname)]
+                                                     (render-track-fx-slider track-name name pname v)))
+                                                 fx-sliders)))]
+                        (str "<div class=\"ctx-fx-row\">"
+                             "<span class=\"ctx-fx-name\">" name "</span>"
+                             "</div>"
+                             (or sliders ""))))
+                    active-fx))
+             "</details>")))))
+
+
 
 ;;; Code patching for live slider updates
 
@@ -1260,6 +1300,56 @@
           (evaluate! (.. view -state -doc (toString)))))
       150)))
 
+(defn- patch-per-track-fx-param-in-editor!
+  "Update or insert a param in (fx :effect-name ...) scoped to (track :track-name ...)."
+  [track-name effect-name param-name new-val]
+  (when-let [view @editor-view]
+    (let [doc         (.. view -state -doc (toString))
+          track-kw    (str "(track :" track-name)
+          track-start (.indexOf doc track-kw)
+          ;; Scope: from track-start to next (track : or end of doc
+          next-start  (let [p (.indexOf doc "(track :" (inc track-start))]
+                        (if (>= p 0) p (.-length doc)))
+          sub-doc     (when (>= track-start 0) (.substring doc track-start next-start))
+          primary?    (= param-name (get FX-PRIMARY-PARAM effect-name))
+          fmtd        (if (== new-val (Math/round new-val))
+                        (str (int new-val))
+                        (.toFixed new-val 2))]
+      (when sub-doc
+        (let [re-named (js/RegExp. (str "\\(fx\\s+:" effect-name "[^)]*:" param-name
+                                        "\\s+(-?[0-9]*\\.?[0-9]+)"))
+              match    (.exec re-named sub-doc)
+              re-pos   (when (and (not match) primary?)
+                         (js/RegExp. (str "\\(fx\\s+:" effect-name "\\s+(-?[0-9]*\\.?[0-9]+)")))
+              match    (or match (when re-pos (.exec re-pos sub-doc)))]
+          (if match
+            (let [full  (aget match 0)
+                  num   (aget match 1)
+                  start (+ track-start (.-index match) (- (.-length full) (.-length num)))
+                  end   (+ start (.-length num))]
+              (.dispatch view #js {:changes #js {:from start :to end :insert fmtd}}))
+            (let [re-fx    (js/RegExp. (str "\\(fx\\s+:" effect-name "[^)]*\\)"))
+                  fx-match (.exec re-fx sub-doc)]
+              (when fx-match
+                (let [close-pos (+ track-start (.-index fx-match)
+                                   (dec (.-length (aget fx-match 0))))]
+                  (.dispatch view #js {:changes #js {:from close-pos
+                                                     :to   close-pos
+                                                     :insert (str " :" param-name " " fmtd)}}))))))))))
+
+(defn- per-track-fx-slider-patch-and-eval! [track-name effect-name param-name new-val]
+  (fx/set-track-param! (keyword track-name) effect-name param-name new-val)
+  (patch-per-track-fx-param-in-editor! track-name effect-name param-name new-val)
+  (when @slider-timeout (js/clearTimeout @slider-timeout))
+  (reset! slider-timeout
+    (js/setTimeout
+      (fn []
+        (reset! slider-timeout nil)
+        (when-let [view @editor-view]
+          (evaluate! (.. view -state -doc (toString)))))
+      150)))
+
+
 (defn- render-status-section []
   (let [bpm      (Math/round (/ 240.0 (:cycle-dur @audio/scheduler-state)))
         playing? (audio/playing?)
@@ -1321,7 +1411,9 @@
                              (when (and (not muted?) (seq slider-pkeys))
                                (apply str
                                  (map #(render-track-slider track-name % (get params %))
-                                      slider-pkeys))))))
+                                      slider-pkeys)))
+                             ;; Per-track FX subsection
+                             (render-track-fx-subsection track-name))))
                     (sort-by (comp name first) tracks)))
              "</div>")))))
 
@@ -1571,8 +1663,15 @@
                                (str (int new-val))
                                (.toFixed new-val 2))]
               (when val-el (set! (.-textContent val-el) fmtd))
-              (if (seq fx-name)
+              (cond
+                ;; Per-track FX slider: has both data-track and data-fx
+                (and (seq fx-name) (seq track-name))
+                (per-track-fx-slider-patch-and-eval! track-name fx-name param-name new-val)
+                ;; Global FX slider: has data-fx only
+                (seq fx-name)
                 (fx-slider-patch-and-eval! fx-name param-name new-val)
+                ;; Track param slider: has data-track only
+                :else
                 (slider-patch-and-eval! track-name param-name new-val)))))))))
 
 (defn init []
