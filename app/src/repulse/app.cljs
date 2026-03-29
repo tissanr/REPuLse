@@ -203,6 +203,11 @@
 (declare evaluate!)
 (declare set-diagnostics!)
 
+;; Tracks which track names have been defined in the current evaluation pass.
+;; Reset by evaluate! before each eval; checked by the `track` builtin to
+;; detect duplicate track names in the same buffer.
+(defonce ^:private seen-tracks (atom #{}))
+
 ;;; Environment — created once, reused across evaluations
 
 (defonce env-atom
@@ -583,7 +588,17 @@
                    "track"
                    (fn [track-name pat]
                      (let [name' (leval/unwrap track-name)
-                           pat'  (leval/unwrap pat)]
+                           pat'  (leval/unwrap pat)
+                           ;; Source position of the track-name keyword (for squiggle).
+                           ;; Keywords are SourcedVal records; :source holds {:from N :to N}.
+                           src   (:source track-name)]
+                       ;; Duplicate track name in this evaluation pass → hard error.
+                       (when (contains? @seen-tracks name')
+                         (throw (ex-info (str "Duplicate track name :" (cljs.core/name name')
+                                             " — each track must have a unique name in the buffer")
+                                         (cond-> {:type :eval-error}
+                                           src (merge {:from (:from src) :to (:to src)})))))
+                       (swap! seen-tracks conj name')
                        (if (core/pattern? pat')
                          (do
                            (audio/play-track! name' pat' on-beat highlight-range!)
@@ -1049,6 +1064,8 @@
   (ensure-env!)
   ;; Reset active flags so removed (fx ...) calls disappear from the panel
   (swap! fx/chain (fn [c] (mapv #(assoc % :active? false) c)))
+  ;; Clear per-evaluation duplicate-track detector
+  (reset! seen-tracks #{})
   ;; Keep stop fn up to date (in case env was reset)
   (let [env (assoc @env-atom "stop" (make-stop-fn))
         result (lisp/eval-string code env)]
