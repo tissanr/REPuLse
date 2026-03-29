@@ -303,22 +303,19 @@ See full spec: [PROMPTS/phase-e-context-panel.md](PROMPTS/phase-e-context-panel.
 
 ---
 
-## Phase E2 — Live Session Dashboard 📋 *planned*
+## Phase E2 — Live Session Dashboard ✅ *delivered*
 
-Upgrade the session context panel from a basic status display into a **full live
-mirror of the session** — per-track params, arrangement state, MIDI mappings, loaded
-sources, conditional FX display.
+Upgraded the context panel from a basic status display into a full live mirror of the session.
 
 **Key additions:**
-- **Tracks section** — each active track with inline params (`amp`, `pan`, `decay`, …),
-  mute/solo state icons (`▶ ■ ★`), synth type, sample bank; params extracted by querying
-  one pattern cycle
-- **Arrangement section** — current scene name, cycle progress; hidden when no arrangement
-- **FX section** — only shown when at least one non-bypassed effect is active
-- **MIDI section** — UI slot for CC mappings (populated by Phase N1); hidden when empty
-- **Sources section** — loaded GitHub repos and Freesound queries; hidden when none
-- Rendering throttled via `requestAnimationFrame`; section-based HTML approach
-- `samples/loaded-sources` atom tracks external sources for display
+- **Tracks section** — every active track with state icon (`▶`/`■`/`★`), name, and inline params extracted from cycle 0 of its pattern (`amp`, `pan`, `decay`, `attack`, `release`, `synth`, `bank`, `rate`, `begin`, `end`); muted/solo states indicated; hidden when no tracks active
+- **Conditional FX section** — only shown when at least one effect has been explicitly activated via `(fx :name value)`; `:active?` flag added to `fx/chain` entries, set to `true` by `set-param!`; bypassed active effects still shown with `off` indicator
+- **MIDI section** — UI slot ready; appears automatically when `midi/cc-mappings` is non-empty (Phase N1)
+- **Sources section** — tracks `(samples! "github:…")` loads via new `loaded-sources` atom in `samples.cljs`; `(freesound! …)` appends Freesound entries; hidden when none loaded
+- **Bindings section** — hidden when empty (no more `—` placeholder)
+- **Status bar** — adds `[wasm]`/`[js]` audio backend tag
+- **rAF throttling** — `schedule-render!` debounces via `requestAnimationFrame`; all watchers call this instead of rendering directly
+- **New watchers** — `samples/loaded-sources` and `midi/cc-mappings` now trigger panel updates
 
 See full spec: [PROMPTS/phase-e2-live-session-dashboard.md](PROMPTS/phase-e2-live-session-dashboard.md)
 
@@ -341,6 +338,7 @@ the editor code live and change the audio immediately, without re-evaluation.
 See full spec: [PROMPTS/phase-e2b-param-sliders.md](PROMPTS/phase-e2b-param-sliders.md)
 
 ---
+
 
 ## Phase F — Drum Machine Bank Prefix ✅ *delivered*
 

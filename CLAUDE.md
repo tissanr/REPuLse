@@ -207,7 +207,7 @@ After code edits, follow the standard `<verification_workflow>` using the previe
 | M     | Lisp superpowers — defsynth, defmacro, loop/recur, rationals  | ✓ delivered  |
 | N     | MIDI & I/O — controller input, note out, clock out, Freesound | ✓ delivered  |
 | B     | Richer visuals — audiomotion-analyzer spectrum, p5.js support  | ✓ delivered  |
-| E2    | Live session dashboard — per-track params, conditional FX, sources | planned  |
+| E2    | Live session dashboard — per-track params, conditional FX, sources | ✓ delivered  |
 | E2b   | Parameter sliders — dashboard sliders that update code live    | ✓ delivered  |
 | 10a   | Editor diagnostics — red squiggle underlines on eval errors    | ✓ delivered  |
 | D2    | Full session persistence — all state in localStorage + reset!  | planned      |
