@@ -120,7 +120,8 @@
 
     (symbol? form)
     (let [n    (str form)
-          defs (some-> (:*defs* env) deref)]
+          defs (some-> (:*defs* env) deref)
+          src  (source-of form)]
       (cond
         (contains? env n)   (get env n)
         (contains? defs n)  (get defs n)
@@ -130,7 +131,7 @@
           (throw (ex-info (str "Undefined symbol: " n
                                (when-let [h (typo-hint n known)]
                                  (str " — did you mean " h "?")))
-                          {:type :eval-error})))))
+                          {:type :eval-error :from (:from src) :to (:to src)})))))
 
     (seq? form)
     (let [[head & tail] form]
@@ -282,11 +283,22 @@
             (let [expanded (apply macro-fn tail)]
               (eval-form expanded env))
             ;; Normal function call
-            (let [f (eval-form head env)]
+            (let [f   (eval-form head env)
+                  src (source-of head)]
               (if (fn? f)
-                (apply f (map #(eval-form % env) tail))
+                (try
+                  (apply f (map #(eval-form % env) tail))
+                  (catch :default e
+                    ;; Re-throw with the source position of the call head,
+                    ;; unless the error already carries a more specific range.
+                    (let [data (ex-data e)
+                          loc  (if (contains? data :from)
+                                 (select-keys data [:from :to])
+                                 {:from (:from src) :to (:to src)})]
+                      (throw (ex-info (.-message e)
+                                      (merge {:type :eval-error} loc))))))
                 (throw (ex-info (str (pr-str head) " is not a function")
-                                {:type :eval-error}))))))))
+                                {:type :eval-error :from (:from src) :to (:to src)}))))))))
 
     :else
     (throw (ex-info (str "Cannot evaluate: " (pr-str form)) {:type :eval-error}))))

@@ -209,6 +209,7 @@ After code edits, follow the standard `<verification_workflow>` using the previe
 | B     | Richer visuals — audiomotion-analyzer spectrum, p5.js support  | ✓ delivered  |
 | E2    | Live session dashboard — per-track params, conditional FX, sources | planned  |
 | E2b   | Parameter sliders — dashboard sliders that update code live    | ✓ delivered  |
+| 10a   | Editor diagnostics — red squiggle underlines on eval errors    | ✓ delivered  |
 | D2    | Full session persistence — all state in localStorage + reset!  | planned      |
 | N1    | MIDI CC mapping — bind controller knobs to any parameter      | planned      |
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |

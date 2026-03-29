@@ -16,6 +16,7 @@
             ["@codemirror/state" :refer [EditorState StateEffect StateField]]
             ["@codemirror/commands" :refer [defaultKeymap historyKeymap history selectAll]]
             ["@codemirror/language" :refer [bracketMatching]]
+            ["@codemirror/lint" :refer [setDiagnostics lintGutter]]
             ["@codemirror/theme-one-dark" :refer [oneDark]]
             ["./lisp-lang/index.js" :refer [lispLanguage]]
             ["./lisp-lang/providers.js" :refer [setBankNamesProvider setFxNamesProvider]]))
@@ -1032,6 +1033,15 @@
 
 ;;; Evaluation
 
+(defn- set-diagnostics!
+  "Push a single error diagnostic into the editor, or clear all diagnostics.
+   Pass nil for from/to/message to clear."
+  [view from to message]
+  (let [diags (if (and from to (< from to))
+                #js [#js {:from from :to to :severity "error" :message message}]
+                #js [])]
+    (.dispatch view (setDiagnostics (.-state view) diags))))
+
 (defn evaluate! [code]
   (ensure-env!)
   ;; Reset active flags so removed (fx ...) calls disappear from the panel
@@ -1042,7 +1052,13 @@
     (if-let [err (:error result)]
       (do
         (clear-highlights!)
+        (when-let [view @editor-view]
+          (set-diagnostics! view (:from result) (:to result) err))
         (set-output! (str "Error: " err) :error))
+      (do
+        ;; Clear stale diagnostics on success
+        (when-let [view @editor-view]
+          (set-diagnostics! view nil nil nil))
       (let [val (:result result)]
         (cond
           ;; Pattern — start playing (legacy single-pattern mode)
@@ -1073,7 +1089,7 @@
           (set-output! val :success)
 
           :else
-          (set-output! (str "=> " (pr-str val)) :success))))))
+          (set-output! (str "=> " (pr-str val)) :success)))))))
 
 ;;; Context panel
 
@@ -1552,6 +1568,15 @@
                           (.. update -state -doc (toString)))
                 (catch :default _))))))
 
+;; Clear diagnostics immediately when the user starts editing, so stale
+;; squiggles don't linger after the source has changed.
+(def ^:private clear-diag-listener
+  (.of EditorView.updateListener
+       (fn [^js update]
+         (when (.-docChanged update)
+           (.dispatch (.-view update)
+                      (setDiagnostics (.-state update) #js []))))))
+
 (defn make-cmd-editor 
   "Single-line CodeMirror editor for the command bar. Enter evaluates + clears."
   [container]
@@ -1599,7 +1624,9 @@
                         lispLanguage
                         (bracketMatching)
                         highlights-field
+                        (lintGutter)
                         save-listener
+                        clear-diag-listener
                         (.-lineWrapping EditorView)
                         (.of keymap (.concat
                                      #js [escape-binding eval-binding upd-binding upd-f9-binding]
