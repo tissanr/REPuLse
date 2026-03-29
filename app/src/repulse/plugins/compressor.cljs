@@ -69,8 +69,9 @@
 
          :getParams
          (fn []
-           (if-let [{:keys [comp]} @state]
-             #js {:threshold (.. comp -threshold -value)
+           (if-let [{:keys [comp wet]} @state]
+             #js {:wet       (.. wet  -gain      -value)
+                  :threshold (.. comp -threshold -value)
                   :ratio     (.. comp -ratio     -value)
                   :attack    (.. comp -attack    -value)
                   :release   (.. comp -release   -value)
@@ -82,6 +83,11 @@
            (when-let [{:keys [input out]} @state]
              (.disconnect input)
              (.disconnect out))
-           (reset! state nil))}))
+           (reset! state nil))
+
+         ;; Return a fresh instance with its own independent state atom.
+         ;; Object.create/assign copies method *references*, so all clones
+         ;; would share this closure's `state`.  clone() calls make() again.
+         :clone make}))
 
 (def plugin (make))

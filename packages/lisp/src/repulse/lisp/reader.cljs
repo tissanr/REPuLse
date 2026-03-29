@@ -41,16 +41,18 @@
     ch))
 
 (defn read-string* [r]
-  (advance r) ; consume "
-  (loop [acc []]
-    (let [ch (peek-char r)]
-      (cond
-        (nil? ch)  (throw (ex-info "Unterminated string" {:type :read-error}))
-        (= \" ch)  (do (advance r) (apply str acc))
-        (= \\ ch)  (do (advance r)
-                       (let [e (advance r)]
-                         (recur (conj acc (case e \n \newline \t \tab \\ \\ \" \" e)))))
-        :else      (recur (conj acc (advance r)))))))
+  (let [open-pos @(:pos r)]
+    (advance r) ; consume "
+    (loop [acc []]
+      (let [ch (peek-char r)]
+        (cond
+          (nil? ch)  (throw (ex-info "Unterminated string — missing closing \""
+                                     {:type :read-error :from open-pos :to (inc open-pos)}))
+          (= \" ch)  (do (advance r) (apply str acc))
+          (= \\ ch)  (do (advance r)
+                         (let [e (advance r)]
+                           (recur (conj acc (case e \n \newline \t \tab \\ \\ \" \" e)))))
+          :else      (recur (conj acc (advance r))))))))
 
 (defn read-number
   "Read a numeric literal. Returns:
@@ -112,38 +114,44 @@
             :else         (symbol s)))))))
 
 (defn read-list [r]
-  (advance r) ; consume (
-  (loop [forms []]
-    (skip-ws-comments r)
-    (let [ch (peek-char r)]
-      (cond
-        (nil? ch) (throw (ex-info "Unterminated list" {:type :read-error}))
-        (= \) ch) (do (advance r) (apply list forms))
-        :else     (recur (conj forms (read-form r)))))))
+  (let [open-pos @(:pos r)]
+    (advance r) ; consume (
+    (loop [forms []]
+      (skip-ws-comments r)
+      (let [ch (peek-char r)]
+        (cond
+          (nil? ch) (throw (ex-info "Unterminated list — missing closing )"
+                                    {:type :read-error :from open-pos :to (inc open-pos)}))
+          (= \) ch) (do (advance r) (apply list forms))
+          :else     (recur (conj forms (read-form r))))))))
 
 (defn read-vector [r]
-  (advance r) ; consume [
-  (loop [forms []]
-    (skip-ws-comments r)
-    (let [ch (peek-char r)]
-      (cond
-        (nil? ch) (throw (ex-info "Unterminated vector" {:type :read-error}))
-        (= \] ch) (do (advance r) forms)
-        :else     (recur (conj forms (read-form r)))))))
+  (let [open-pos @(:pos r)]
+    (advance r) ; consume [
+    (loop [forms []]
+      (skip-ws-comments r)
+      (let [ch (peek-char r)]
+        (cond
+          (nil? ch) (throw (ex-info "Unterminated vector — missing closing ]"
+                                    {:type :read-error :from open-pos :to (inc open-pos)}))
+          (= \] ch) (do (advance r) forms)
+          :else     (recur (conj forms (read-form r))))))))
 
 (defn read-map [r]
-  (advance r) ; consume {
-  (loop [m {}]
-    (skip-ws-comments r)
-    (let [ch (peek-char r)]
-      (cond
-        (nil? ch) (throw (ex-info "Unterminated map" {:type :read-error}))
-        (= \} ch) (do (advance r) m)
-        :else
-        (let [k (read-form r)
-              _ (skip-ws-comments r)
-              v (read-form r)]
-          (recur (assoc m k v)))))))
+  (let [open-pos @(:pos r)]
+    (advance r) ; consume {
+    (loop [m {}]
+      (skip-ws-comments r)
+      (let [ch (peek-char r)]
+        (cond
+          (nil? ch) (throw (ex-info "Unterminated map — missing closing }"
+                                    {:type :read-error :from open-pos :to (inc open-pos)}))
+          (= \} ch) (do (advance r) m)
+          :else
+          (let [k (read-form r)
+                _ (skip-ws-comments r)
+                v (read-form r)]
+            (recur (assoc m k v))))))))
 
 ;; read-form* is the raw reader — no source annotation.
 ;; It does NOT call skip-ws-comments (the outer read-form does).
@@ -197,7 +205,9 @@
                            (swap! (:pos r) dec)
                            (read-symbol r))))
       (sym-char? ch) (read-symbol r)
-      :else          (throw (ex-info (str "Unexpected char: " ch) {:type :read-error})))))
+      :else          (let [p @(:pos r)]
+                       (throw (ex-info (str "Unexpected character: " ch)
+                                       {:type :read-error :from p :to (inc p)}))))))
 
 ;; read-form: skip whitespace, capture source range, then wrap result.
 ;; - Collections (list, vector) and symbols support with-meta.

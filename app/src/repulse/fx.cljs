@@ -76,10 +76,14 @@
   (when-let [entry (some #(when (= effect-name (:name %)) %) @chain)]
     (let [ac     (audio/get-ctx)
           ^js p  (:plugin entry)
-          ;; Create a fresh instance by cloning the prototype-based plugin object
-          ^js fresh (let [o (js/Object.create (.getPrototypeOf js/Object p))]
-                      (js/Object.assign o p)
-                      o)
+          ;; Prefer a plugin-provided clone() factory (needed for CLJS plugins
+          ;; whose state lives in a closure atom rather than on `this`).
+          ;; Fall back to Object.create/assign for plain JS object plugins.
+          ^js fresh (if (fn? (.-clone p))
+                      (.clone p)
+                      (let [o (js/Object.create (.getPrototypeOf js/Object p))]
+                        (js/Object.assign o p)
+                        o))
           nodes  (.createNodes fresh ac)]
       (swap! audio/track-nodes update-in [track-name :fx-chain]
              conj {:name      effect-name

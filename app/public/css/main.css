@@ -176,6 +176,14 @@ footer {
   transition: background-color 0.08s ease-out;
 }
 
+/* Lint error squiggle — override the default near-invisible 0.7px SVG
+   with a solid bright-red bottom border that's clearly visible in dark theme */
+.cm-lintRange.cm-lintRange-error {
+  background-image: none !important;
+  border-bottom: 2px solid #e06c75;
+  padding-bottom: 0 !important;
+}
+
 /* Main area — flex row containing editor + context panel */
 .main-area {
   display: flex;
@@ -335,6 +343,37 @@ footer {
   font-size: 10px;
   color: #d19a66;
 }
+
+/* Per-track FX subsection */
+.ctx-track-fx {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+.ctx-track-fx > summary {
+  padding: 2px 10px 2px 22px;
+  font-size: 10px;
+  color: var(--dim);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ctx-track-fx > summary::-webkit-details-marker { display: none; }
+.ctx-track-fx > summary::before {
+  content: "▸";
+  font-size: 8px;
+  color: var(--dim);
+}
+.ctx-track-fx[open] > summary::before { content: "▾"; }
+.ctx-fx-row {
+  padding: 1px 10px 0 28px;
+  font-size: 10px;
+  color: #61afef;
+}
+.ctx-track-fx .ctx-slider-row { padding-left: 32px; }
 
 /* Source lines */
 .ctx-source {

@@ -19,4 +19,6 @@
                 result
                 (recur (rest remaining) result)))))))
     (catch :default e
-      {:error (or (.-message e) (str e))})))
+      (let [data (ex-data e)]
+        (cond-> {:error (or (.-message e) (str e))}
+          (:from data) (assoc :from (:from data) :to (:to data)))))))

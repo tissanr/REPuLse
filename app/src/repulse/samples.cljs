@@ -120,7 +120,11 @@
                   :begin — start offset as fraction 0.0–1.0 (default 0.0)
                   :end   — end offset as fraction 0.0–1.0 (default 1.0)
                   :loop  — boolean, loop the sample (default false)
-   dest       — AudioNode to connect to (default: ac.destination)"
+   dest       — AudioNode to connect to (default: ac.destination)
+
+   NOTE: envelope parameters (attack, decay, release) from per-event transformers
+   are NOT applied to samples — they only affect synthesised sounds (note keywords,
+   saw, square, sine, noise). To shorten a sample use the :end key in extra."
   ([ac t bank n] (play! ac t bank n 1.0 0.0 {} nil))
   ([ac t bank n amp] (play! ac t bank n amp 0.0 {} nil))
   ([ac t bank n amp pan] (play! ac t bank n amp pan {} nil))

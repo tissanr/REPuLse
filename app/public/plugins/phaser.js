@@ -34,6 +34,7 @@ export default {
 
     this._baseFreq = 1000;
     this._depth    = 0.7;
+    this._active   = false;  // LFO silenced until wet > 0
 
     // 4 all-pass stages
     this._filters = Array.from({ length: 4 }, () => {
@@ -52,7 +53,7 @@ export default {
     // LFO sweeps all filter frequencies
     this._lfo.type = "sine";
     this._lfo.frequency.value = 0.5;
-    this._depthGain.gain.value = this._depth * this._baseFreq;
+    this._depthGain.gain.value = 0;  // silenced until wet > 0; prevents BiquadFilter instability
     this._lfo.connect(this._depthGain);
     this._filters.forEach(f => this._depthGain.connect(f.frequency));
 
@@ -81,16 +82,20 @@ export default {
 
   setParam(name, value) {
     if (name === "wet" || name === "value") {
-      this._wet.gain.value = Math.max(0, Math.min(1, value));
+      const wet = Math.max(0, Math.min(1, value));
+      this._wet.gain.value = wet;
+      // Enable/silence LFO modulation to prevent BiquadFilter instability when unused
+      this._active = wet > 0;
+      this._depthGain.gain.value = this._active ? this._depth * this._baseFreq : 0;
     } else if (name === "rate") {
       this._lfo.frequency.value = value;
     } else if (name === "depth") {
       this._depth = value;
-      this._depthGain.gain.value = value * this._baseFreq;
+      if (this._active) this._depthGain.gain.value = value * this._baseFreq;
     } else if (name === "freq") {
       this._baseFreq = value;
       this._filters.forEach(f => f.frequency.value = value);
-      this._depthGain.gain.value = this._depth * value;
+      if (this._active) this._depthGain.gain.value = this._depth * value;
     } else if (name === "feedback") {
       this._fbGain.gain.value = Math.max(0, Math.min(0.95, value));
     }
@@ -98,10 +103,15 @@ export default {
 
   bypass(on) {
     if (on) {
-      this._savedWet       = this._wet.gain.value;
+      this._savedWet = this._wet.gain.value;
       this._wet.gain.value = 0;
+      this._active = false;
+      this._depthGain.gain.value = 0;
     } else {
-      this._wet.gain.value = this._savedWet ?? 0.5;
+      const wet = this._savedWet ?? 0.5;
+      this._wet.gain.value = wet;
+      this._active = wet > 0;
+      this._depthGain.gain.value = this._active ? this._depth * this._baseFreq : 0;
     }
   },
 
