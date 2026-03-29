@@ -201,6 +201,7 @@
 
 ;;; Forward declarations
 (declare evaluate!)
+(declare set-diagnostics!)
 
 ;;; Environment — created once, reused across evaluations
 
@@ -639,7 +640,9 @@
                              result (lisp/eval-string code env)]
                          (if-let [err (:error result)]
                            (do (clear-highlights!)
+                               (set-diagnostics! view (:from result) (:to result) err)
                                (set-output! (str "Error: " err) :error))
+                           (do (set-diagnostics! view nil nil nil)
                            (let [val (:result result)]
                              (cond
                                (core/pattern? val)
@@ -648,7 +651,7 @@
                                    (set-output! "updated" :success))
                                (nil? val) nil
                                (string? val) (set-output! val :success)
-                               :else (set-output! (str "=> " (pr-str val)) :success)))))
+                               :else (set-output! (str "=> " (pr-str val)) :success))))))
                      ;; Always return nil so evaluate! does not re-process upd's output
                      nil))
                    ;; --- Tap tempo ---
@@ -1055,11 +1058,13 @@
         (when-let [view @editor-view]
           (set-diagnostics! view (:from result) (:to result) err))
         (set-output! (str "Error: " err) :error))
-      (do
-        ;; Clear stale diagnostics on success
-        (when-let [view @editor-view]
-          (set-diagnostics! view nil nil nil))
       (let [val (:result result)]
+        ;; Clear stale diagnostics only when there is a real result.
+        ;; A nil val means the command handled output itself (e.g. (upd), (stop))
+        ;; and may have already set its own diagnostics — don't clobber them.
+        (when (some? val)
+          (when-let [view @editor-view]
+            (set-diagnostics! view nil nil nil)))
         (cond
           ;; Pattern — start playing (legacy single-pattern mode)
           (core/pattern? val)
@@ -1089,7 +1094,7 @@
           (set-output! val :success)
 
           :else
-          (set-output! (str "=> " (pr-str val)) :success)))))))
+          (set-output! (str "=> " (pr-str val)) :success))))))
 
 ;;; Context panel
 
