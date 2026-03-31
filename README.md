@@ -13,6 +13,37 @@ sound.
 
 ---
 
+## What REPuLse is (and isn't)
+
+REPuLse is a **pattern-based** live coding instrument. Patterns describe **what** sounds play and **when** — not **how** synthesis works internally.
+
+**REPuLse is NOT** a signal-flow language like SuperCollider, Overtone, or Extempore. There is no manual oscillator routing, no inline filter chaining, no bus/send architecture at the pattern level.
+
+- Sound sources: sample keywords (`:bd`, `:sd`), note keywords (`:c4`), Hz numbers (`440`), or `(synth :saw)` / `(synth :fm :index 4)`
+- Timing/structure: `seq`, `stack`, `fast`, `slow`, `every`, `cat`, `euclidean`
+- Parameters: `amp`, `decay`, `attack`, `pan`, `synth` — applied via `->>` (thread-last)
+- Effects: `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)` — not inline filter graphs
+- The only signal-flow construct is `defsynth`, which defines reusable instruments from UGen primitives — this is a separate layer from pattern code
+
+### Quick example
+
+```clojure
+(bpm 130)
+
+(def kick  (seq :bd :_ :bd :_))
+(def snare (seq :_ :sd :_ :sd))
+(def hats  (fast 2 (seq :hh :_)))
+(def bass  (->> (scale :minor :c2 (seq 1 :_ 5 :_))
+                (synth :saw)
+                (amp 0.5) (decay 0.3)))
+
+(stack kick snare hats bass)
+```
+
+See [docs/USAGE.md](./docs/USAGE.md) for the full language reference.
+
+---
+
 ## Quick start
 
 **Requirements:** Node.js 18+, Java 11+ (for shadow-cljs), Rust + wasm-pack (for WASM synthesis)
