@@ -8,6 +8,9 @@ evaluate them with **Ctrl+Enter** (or the **▶ play** button), and hear them lo
 ## Table of Contents
 
 1. [Getting started](#getting-started)
+   - [Key design principles](#key-design-principles-read-this-first)
+   - [Complete example](#complete-example--from-silence-to-a-full-track)
+   - [Common mistakes](#common-mistakes)
 2. [The editor](#the-editor)
 3. [Language basics](#language-basics)
    - [Comments](#comments)
@@ -37,7 +40,8 @@ evaluate them with **Ctrl+Enter** (or the **▶ play** button), and hear them lo
 18. [Available sample banks](#available-sample-banks)
 19. [MIDI & External I/O](#midi--external-io)
 20. [Error messages](#error-messages)
-21. [Examples](#examples)
+21. [Grammar summary](#grammar-summary)
+22. [Examples](#examples)
 
 ---
 
@@ -110,6 +114,152 @@ program — press **Alt+Enter** to hear it, read the comments, experiment, then 
 
 Hover the mouse over any built-in name in the editor to see its signature, a
 description, and an example in a tooltip.
+
+---
+
+## Key design principles (read this first)
+
+REPuLse is a **pattern-based** live coding instrument. There are two distinct layers — do not mix their syntax:
+
+### Layer 1: Pattern layer (99% of your code)
+
+Patterns describe **what** sounds and **when**. All composition happens here:
+
+- **Sources:** `seq`, `stack`, `pure`, `~` (mini-notation)
+- **Transforms:** `fast`, `slow`, `rev`, `every`, `cat`, `euclidean`, `jux`, `off`, `sometimes`
+- **Parameters:** `amp`, `decay`, `attack`, `release`, `pan`, `synth`, `rate`, `begin`, `end`
+- **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`
+- **Composition:** `->>` (thread-last) chains transforms, parameters, and effects
+- **Structure:** `def`, `let`, `fn`, `if`, `do`, `track`, `arrange`
+
+### Layer 2: Instrument definition layer (defsynth only)
+
+`defsynth` defines custom synthesis instruments from Web Audio UGen primitives. This is the **only** place where signal-flow constructs exist:
+
+- **Oscillators:** `sin`, `saw`, `square`, `tri`, `noise`
+- **Filters:** `lpf`, `hpf`, `bpf`
+- **Envelopes:** `env-perc`, `env-asr`
+- **Routing:** `mix`, `gain`, `delay-node`
+- **Threading:** `->` (thread-first) — **only valid inside defsynth**
+
+⚠️ **The `->` macro only works inside `defsynth` bodies. At the pattern level, always use `->>`.**
+
+### What REPuLse is NOT
+
+REPuLse is not a signal-flow language. Unlike SuperCollider, Overtone, or Extempore:
+
+- There is **no** inline oscillator/filter routing at the pattern level
+- There is **no** `patch`, `instrument`, or `synth-def` block that wires oscillators to filters to outputs
+- There is **no** bus/send architecture
+- There are **no** UGen functions like `osc-wt`, `filter-lp`, `distort` at the pattern level
+- Effects are **not** inline signal processors — they are applied via `(fx :name value)` or inside a `->>` pipeline
+
+---
+
+## Complete example — from silence to a full track
+
+```clojure
+;; 1. Set tempo
+(bpm 130)
+
+;; 2. Define patterns — keywords are samples, note-keywords are pitches
+(def kick  (seq :bd :_ :bd :_))
+(def snare (seq :_ :sd :_ :sd))
+(def hats  (fast 2 (seq :hh :_)))
+
+;; 3. Melodic content — scale maps degree numbers to frequencies
+(def bass
+  (->> (scale :minor :c2 (seq 1 :_ 5 :_))
+       (synth :saw)            ; sawtooth voice
+       (amp 0.5)               ; amplitude
+       (decay 0.3)))           ; note length
+
+;; 4. Chords — chord returns a stack of simultaneous pitches
+(def pad
+  (->> (slow 4 (chord :minor :a3))
+       (synth :fm :index 2)
+       (amp 0.3)
+       (attack 0.2)
+       (decay 1.5)))
+
+;; 5. Layer everything
+(stack kick snare hats bass pad)
+
+;; 6. Add evolution — double-speed fill every 4th bar
+(every 4 (fast 2) (stack kick snare hats bass pad))
+
+;; 7. Effects (global)
+(fx :reverb 0.3)
+(fx :delay :wet 0.2 :time 0.25)
+(fx :compressor :threshold -18)
+
+;; 8. Or use named tracks for independent control
+(track :kick  kick)
+(track :snare snare)
+(track :hats  hats)
+(track :bass  (->> bass (fx :filter 600)))           ; per-track effect
+(track :pad   (->> pad  (fx :dattorro-reverb 0.5)))   ; per-track effect
+```
+
+---
+
+## Common mistakes
+
+These patterns are **wrong** in REPuLse. If you see AI-generated code that looks like this, it is hallucinated from other live coding languages.
+
+### ❌ Inline signal-flow routing (SuperCollider/Overtone style)
+
+```clojure
+;; WRONG — no inline oscillator/filter wiring exists
+(-> (osc :saw 110) (filter-lp 800 :res 0.4) (out :gain 0.5))
+(patch :bass (let [o (osc-wt :table "growl")] (-> o (lpf 800) (out))))
+
+;; RIGHT — use synth for voice selection, fx for effects
+(->> (pure :c2) (synth :saw) (amp 0.5) (fx :filter 800))
+```
+
+### ❌ Thread-first `->` at pattern level
+
+```clojure
+;; WRONG — -> is only for defsynth bodies
+(-> (seq :bd :sd) (fast 2) (amp 0.8))
+
+;; RIGHT — ->> (thread-last) at pattern level
+(->> (seq :bd :sd) (fast 2) (amp 0.8))
+```
+
+### ❌ Nonexistent functions
+
+```clojure
+;; WRONG — these functions do not exist in REPuLse
+(osc-wt :table "heavy-growl")    ; no wavetable oscillator function
+(filter-lp :cutoff 800)          ; no filter-lp — use (fx :filter 800)
+(distort :drive 2.0)             ; no distort — use (fx :overdrive 0.7)
+(adsr :a 0.01 :d 0.3 :s 0.1)    ; no adsr — use (attack 0.01) (decay 0.3) (release 0.1)
+(lfo :rate 0.25)                 ; no lfo function
+(mod source amount)              ; no mod routing
+(out :gain env)                  ; no out function
+
+;; RIGHT equivalents
+(synth :saw)                              ; voice selection
+(fx :filter 800)                          ; filtering
+(fx :overdrive 0.7)                       ; distortion
+(->> pat (attack 0.01) (decay 0.3))       ; envelope params
+;; LFO-like variation: use (every), (sometimes), patterned params
+(amp (seq 0.9 0.4 0.9 0.4) pat)          ; patterned amplitude
+```
+
+### ❌ Keyword arguments on pattern functions
+
+```clojure
+;; WRONG — pattern functions use positional args, not keyword args
+(seq :bd :sd :rate 0.5 :sync true)
+(fast :speed 2 :pattern (seq :bd :sd))
+
+;; RIGHT — positional arguments
+(fast 2 (seq :bd :sd))
+(->> (seq :bd :sd) (rate 0.5))
+```
 
 ---
 
@@ -1741,6 +1891,79 @@ Error: seq is not a function  (when called wrong)
 
 Typo detection uses Levenshtein distance — if your symbol is within 3 edits of a known
 name, a suggestion is shown.
+
+---
+
+## Grammar summary
+
+Compact reference for the REPuLse-Lisp syntax. This is not exhaustive — see the sections above for full documentation.
+
+```
+expr       = literal | call | let-expr | fn-expr | if-expr | do-expr | def-expr
+call       = "(" name expr* ")"
+literal    = integer | float | string | keyword | boolean | nil | map | rational
+
+keyword    = ":" [a-zA-Z0-9_-]+
+note-kw    = ":" [a-g] ("s"|"b")? [0-9]         ;; :c4 :eb3 :fs5
+rest-kw    = ":_"                                 ;; silence
+sample-kw  = ":" [a-z][a-z0-9]*                   ;; :bd :sd :hh :arpy
+rational   = integer "/" integer                   ;; 1/4 3/2
+
+;; Pattern constructors
+pattern    = seq-expr | stack-expr | pure-expr | mini-expr | euclidean-expr
+seq-expr   = "(seq" expr+ ")"                     ;; spread values across one cycle
+stack-expr = "(stack" pattern+ ")"                ;; layer patterns simultaneously
+pure-expr  = "(pure" expr ")"                     ;; single value per cycle
+mini-expr  = "(~" string ")"                      ;; Tidal-style mini-notation
+
+;; Pattern transforms (pattern in, pattern out)
+transform  = "(fast"  number pattern ")"
+           | "(slow"  number pattern ")"
+           | "(rev"   pattern ")"
+           | "(every" integer fn pattern ")"
+           | "(cat"   pattern+ ")"
+           | "(euclidean" k n sound [rotation] ")"
+           | "(late"  number pattern ")"
+           | "(early" number pattern ")"
+           | "(jux"   fn pattern ")"
+           | "(off"   number fn pattern ")"
+           | "(sometimes" fn pattern ")"
+           | "(degrade" pattern ")"
+           | "(fmap"  fn pattern ")"
+
+;; Per-event parameters (value + pattern, or pattern → pattern transformer)
+param      = "(amp"     value pattern ")"
+           | "(decay"   value pattern ")"
+           | "(attack"  value pattern ")"
+           | "(release" value pattern ")"
+           | "(pan"     value pattern ")"
+           | "(synth"   voice-kw [options...] pattern ")"
+           | "(rate"    value pattern ")"
+           | "(begin"   value pattern ")"
+           | "(end"     value pattern ")"
+
+;; Effects
+effect     = "(fx" effect-name value ")"                   ;; positional shorthand
+           | "(fx" effect-name ":key" value [":key" value]* ")"  ;; named params
+           | "(fx :off" effect-name ")"
+           | "(fx :on"  effect-name ")"
+
+;; Pipeline — the idiomatic way to compose transforms + params + effects
+pipeline   = "(->>" pattern transform* param* effect* ")"
+
+;; Tracks
+track-expr = "(track" keyword pattern ")"
+
+;; Arrangement
+arrange    = "(arrange" "[[" pattern cycles "]" ["[" pattern cycles "]"]* "])"
+
+;; Definitions
+def-expr   = "(def" name expr ")"
+let-expr   = "(let [" (name expr)+ "]" expr+ ")"
+fn-expr    = "(fn [" name* "]" expr+ ")"
+if-expr    = "(if" expr expr [expr] ")"
+do-expr    = "(do" expr+ ")"
+```
 
 ---
 
