@@ -626,6 +626,86 @@ See full spec: [PROMPTS/phase-p-modular-routing.md](PROMPTS/phase-p-modular-rout
 
 ---
 
+## Phase DST1 — Soft Clipping Distortion 📋 *planned*
+
+Add `:distort` to the `(fx ...)` effect chain — a musical soft-clip waveshaper with
+drive, tone, dry/wet, and three clipping algorithms (`:tanh`, `:sigmoid`, `:atan`).
+
+**Key additions:**
+- `(fx :distort :drive 8)` — soft clip with 1–100 drive range and gain compensation
+- `:tone` — post-distortion lowpass cutoff (200–20000 Hz)
+- `:mix` — dry/wet blend
+- `:algo` — clipping curve: `:tanh` (default), `:sigmoid`, `:atan`
+
+See full spec: [PROMPTS/PHASE-DST1.md](PROMPTS/PHASE-DST1.md)
+
+---
+
+## Phase DST2 — Asymmetric Soft Clipping 📋 *planned*
+
+Extends Phase DST1. Adds `:asym` parameter to `:distort` for even-harmonic "warm tube"
+coloration, plus a DC blocker to remove the offset asymmetric clipping introduces.
+
+**Key additions:**
+- `:asym` (-1.0–1.0) — positive values produce harder clipping on the positive half-wave
+- DC blocker (`IIRFilterNode`, ~5 Hz highpass) always in path to enable click-free live changes
+
+See full spec: [PROMPTS/PHASE-DST2.md](PROMPTS/PHASE-DST2.md)
+
+---
+
+## Phase DST3 — Multi-Stage Amp Simulation 📋 *planned*
+
+New `(fx :amp-sim ...)` effect — cascaded tube preamp stages with inter-stage filters,
+a 3-band tone stack with presets, and power supply sag simulation.
+
+**Key additions:**
+- `:gain` (1–100), `:stages` (1–4), `:tone`, `:mix`
+- `:tonestack` — `:neutral`, `:bright`, `:dark`, `:mid-scoop`, `:mid-hump` presets
+- `:sag` (0–1) — transient compression / "spongy" feel
+
+See full spec: [PROMPTS/PHASE-DST3.md](PROMPTS/PHASE-DST3.md)
+
+---
+
+## Phase DST4 — Oversampling Wrapper 📋 *planned*
+
+Adds `:oversample 1/2/4` to both `:distort` and `:amp-sim` using the native
+`WaveShaperNode.oversample` property — zero-cost anti-aliasing at high drive.
+
+See full spec: [PROMPTS/PHASE-DST4.md](PROMPTS/PHASE-DST4.md)
+
+---
+
+## Phase DST5 — Waveshaper Lookup Table 📋 *planned*
+
+New `(fx :waveshape :curve C ...)` effect for arbitrary transfer-function distortion,
+plus three Lisp built-in curve generators.
+
+**Key additions:**
+- `(fx :waveshape :curve (chebyshev 3))` — specific harmonic distortion
+- `(fx :waveshape :curve (fold))` — wavefolding
+- `(fx :waveshape :curve (bitcrush 4))` — bit-reduction staircase
+- Custom float-array curves via CLJS vectors
+
+See full spec: [PROMPTS/PHASE-DST5.md](PROMPTS/PHASE-DST5.md)
+
+---
+
+## Phase DST6 — Cabinet Simulation 📋 *planned*
+
+New `(fx :cab :ir :4x12)` effect — convolution-based speaker cabinet simulation using
+Web Audio `ConvolverNode` with procedurally generated impulse responses.
+
+**Key additions:**
+- `:ir` — `:1x12`, `:2x12`, `:4x12` (synthetic cabinet IRs), `:di` (bypass)
+- IRs generated via `OfflineAudioContext` filtered noise — no external files
+- Pairs naturally with `(fx :amp-sim ...)` for a full amp chain
+
+See full spec: [PROMPTS/PHASE-DST6.md](PROMPTS/PHASE-DST6.md)
+
+---
+
 ## Future ideas (unscheduled)
 
 See [docs/FUTURE-FEATURES.md](docs/FUTURE-FEATURES.md) for the full prioritised feature
