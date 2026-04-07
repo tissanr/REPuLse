@@ -225,6 +225,46 @@ See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full deliv
 
 ---
 
+## Phase lifecycle rules (IMPORTANT — follow these every time)
+
+These rules apply in every Claude Code session. They are not optional.
+
+### Rule 1 — Creating a new phase prompt
+
+When writing a new `PROMPTS/PHASE-*.md` file, **always also**:
+
+1. Add a row to the phase status table above:
+   ```
+   | XYZ   | Short description                                              | planned      |
+   ```
+2. Add a `## Phase XYZ — Title 📋 *planned*` section to `ROADMAP.md` with:
+   - 2–4 bullet points summarising key additions
+   - A `See full spec: [PROMPTS/PHASE-XYZ.md](PROMPTS/PHASE-XYZ.md)` link
+3. Commit all three files together.
+
+### Rule 2 — Implementing a phase
+
+When the code for a phase is complete and working, **always also**:
+
+1. Change the phase row in the table above from `planned` to `✓ delivered`.
+2. In `ROADMAP.md`, change the heading from `📋 *planned*` to `✅ *delivered*` and
+   add a **Delivered:** section listing what was actually built (match the style of
+   existing delivered phases in ROADMAP.md).
+3. Update `docs/USAGE.md`: add every new built-in, effect, or parameter to the
+   relevant reference tables and add at least one usage example.
+4. Update `README.md` if the phase adds user-facing syntax or changes the quick-start
+   example.
+5. Commit all documentation changes in the same commit as (or immediately after) the
+   implementation commit.
+
+### Rule 3 — Documentation is part of done
+
+A phase is **not complete** until Rules 2.1–2.5 are satisfied. "The code works" is
+necessary but not sufficient. If you finish implementing a phase and realise the docs
+haven't been updated, do not mark the task done — update the docs first.
+
+---
+
 ## What REPuLse is not
 
 - Not a general-purpose Lisp. The language exists to describe music patterns.
