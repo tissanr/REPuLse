@@ -607,6 +607,24 @@ See full spec: [PROMPTS/phase-b-richer-visuals.md](PROMPTS/phase-b-richer-visual
 
 ---
 
+## Phase T1 — Parameter Transitions 📋 *planned*
+
+Smooth parameter changes over musical time via a `tween` built-in. A single message
+is sent to the WASM audio engine, which handles per-sample interpolation — no polling
+from ClojureScript.
+
+**Key additions:**
+- `(tween curve start end bars)` — returns a tween descriptor stored inside event maps; curve is `:linear`, `:exp`, or `:sine`
+- `CurveType` enum + `Transition` struct in `packages/audio/src/lib.rs` — zero-allocation per-sample interpolation
+- `start_transition` / `clear_transitions` on `AudioEngine` — replaces any running transition for `"amp"` or `"pan"`
+- `{type: "transition"}` worklet message — WASM receives the full ramp spec at note-on time
+- `arm-transitions!` in `app/src/repulse/audio.cljs` — detects tween descriptors in the first cycle and dispatches transition messages; re-evaluation restarts the transition
+- Rust unit tests: linear quartiles, exp midpoint, sine symmetry, clamp-at-end, zero-duration
+
+See full spec: [PROMPTS/PHASE-T1.md](PROMPTS/PHASE-T1.md)
+
+---
+
 ## Phase P — Modular Routing: Busses & Control Rate 📋 *planned*
 
 Named audio and control-rate busses for inter-synth modulation — patch an LFO
