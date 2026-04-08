@@ -17,6 +17,7 @@ const BUILTINS = [
   { label: "transpose",    type: "function", detail: "(transpose n pat) — shift Hz values by n semitones" },
   // --- Per-event parameters ---
   { label: "->>",          type: "keyword",  detail: "(->> pat (amp 0.8) (attack 0.02)) — thread pattern through transformers (last arg)" },
+  { label: "tween",        type: "function", detail: "(tween curve start end bars) — smooth parameter transition over bars; curve: :linear :exp :sine" },
   { label: "amp",          type: "function", detail: "(amp val pat) — amplitude 0.0–1.0; (amp val) returns transformer" },
   { label: "attack",       type: "function", detail: "(attack secs pat) — envelope attack time in seconds; (attack secs) returns transformer" },
   { label: "decay",        type: "function", detail: "(decay secs pat) — envelope decay time in seconds; (decay secs) returns transformer" },

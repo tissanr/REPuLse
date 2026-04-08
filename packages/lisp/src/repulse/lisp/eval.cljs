@@ -514,6 +514,18 @@
      "identity" (fn [x] x)
      "and"     (fn [& args] (reduce (fn [_ a] (if (unwrap a) a false)) true args))
      "or"      (fn [& args] (reduce (fn [_ a] (if (unwrap a) a nil)) nil args))
+     "tween"  (fn [curve-arg start-arg end-arg dur-arg]
+                (let [curve (unwrap curve-arg)
+                      start (->num start-arg)
+                      end   (->num end-arg)
+                      dur   (->num dur-arg)]
+                  (when-not (#{:linear :exp :sine} curve)
+                    (throw (js/Error.
+                             (str "Unknown curve type " curve
+                                  ". Available: :linear, :exp, :sine"))))
+                  (when-not (pos? dur)
+                    (throw (js/Error. "Transition duration must be > 0")))
+                  {:type :tween :curve curve :start start :end end :duration-bars dur}))
      "stop"   stop-fn
      :*defs*  defs
      :*macros* macros

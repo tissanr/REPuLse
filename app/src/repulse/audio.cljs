@@ -468,6 +468,9 @@
 
 ;;; Scheduler state
 
+(defn- tween? [v]
+  (and (map? v) (= (:type v) :tween)))
+
 (def scheduler-state
   (atom {:playing?     false
          :tracks       {}     ; keyword → Pattern
@@ -478,7 +481,8 @@
          :interval-id  nil
          :on-beat      nil
          :on-event     nil
-         :on-fx-event  nil})) ; callback for sidechain/plugin event notifications
+         :on-fx-event  nil
+         :tween-armed  {}}))  ; track-name → #{param-keys already sent}
 
 (defn set-bpm!
   "Set the tempo in BPM. One cycle = one bar (4 beats)."
@@ -502,7 +506,21 @@
                   t                 (+ cycle-audio-start event-offset)
                   dur               (* (- part-end part-start) cycle-dur)]
               (when (> t (.-currentTime ac))
-                (play-event ac t (:value ev) track-name)
+                (let [armed  (get-in state [:tween-armed track-name] #{})
+                      raw    (:value ev)
+                      value  (if (and (map? raw) (seq armed))
+                               (reduce (fn [m k]
+                                         (if (tween? (get m k))
+                                           (assoc m k (if @worklet-ready?
+                                                         (case k
+                                                           :amp 1.0
+                                                           :pan 0.0
+                                                           (get-in m [k :start]))
+                                                         (get-in m [k :start])))
+                                           m))
+                                       raw armed)
+                               raw)]
+                (play-event ac t value track-name)
                 ;; MIDI note output — triggered by :midi-ch key added via (midi-out ch pat)
                 (when-let [midi-ch (:midi-ch (:value ev))]
                   (let [value    (:value ev)
@@ -531,7 +549,7 @@
                     (js/setTimeout #(on-event (:source ev)) delay-ms)))
                 (when on-beat
                   (let [delay-ms (* 1000 (- t (.-currentTime ac)))]
-                    (js/setTimeout on-beat delay-ms)))))))))))
+                    (js/setTimeout on-beat delay-ms))))))))))))
 
 (defn tick! []
   (let [ac    (get-ctx)
@@ -577,6 +595,34 @@
          :tracks       {}
          :muted        #{}))
 
+(defn- arm-transitions!
+  "Detect tween descriptors in the first cycle of pattern and send transition messages
+   to the WASM worklet. Re-evaluation clears the armed set so the transition is restarted."
+  [track-name pattern ac]
+  (let [cycle-dur (:cycle-dur @scheduler-state)
+        sr        (.-sampleRate ac)
+        sp        {:start [0 1] :end [1 1]}
+        evs       (try (core/query pattern sp) (catch :default _ []))
+        tweens    (into {}
+                    (for [ev   evs
+                          :let [v (:value ev)]
+                          :when (map? v)
+                          [k pv] v
+                          :when (tween? pv)]
+                      [k pv]))]
+    (swap! scheduler-state update :tween-armed assoc track-name #{})
+    (doseq [[k pv] tweens]
+      (let [dur-samples (Math/round (* (:duration-bars pv) cycle-dur sr))]
+        (when (and @worklet-ready? @worklet-node)
+          (.. @worklet-node -port
+              (postMessage #js {:type             "transition"
+                                :param            (name k)
+                                :start            (float (:start pv))
+                                :end              (float (:end pv))
+                                :duration_samples dur-samples
+                                :curve            (name (:curve pv))})))
+        (swap! scheduler-state update-in [:tween-armed track-name] (fnil conj #{}) k)))))
+
 (defn play-track!
   "Add or replace a named track. Creates a per-track GainNode if needed.
    Starts the scheduler if not already running."
@@ -584,6 +630,7 @@
   (let [ac (get-ctx)]
     (.resume ac)
     (ensure-track-node! ac track-name)
+    (arm-transitions! track-name pattern ac)
     (swap! scheduler-state update :tracks assoc track-name pattern)
     (ensure-running! ac on-beat-fn on-event-fn)))
 

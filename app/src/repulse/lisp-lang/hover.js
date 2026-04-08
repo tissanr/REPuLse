@@ -151,6 +151,11 @@ const DOCS = {
     description: "Thread-last: pass the pattern as the last argument of each successive form. The natural way to chain parameter transforms.",
     example: "(->> (seq :c4 :e4) (amp 0.7) (decay 0.5))",
   },
+  "tween": {
+    signature: "(tween curve start end bars)",
+    description: "Interpolate a parameter from start to end over the given duration in bars. The audio engine handles per-sample interpolation — a single message is sent; no polling occurs. After the transition completes, the end value is held. Re-evaluating code restarts the transition.\n\ncurve: :linear — constant rate of change\n       :exp    — slow start, fast end (good for volume fades)\n       :sine   — S-curve: slow at both ends, fast in the middle",
+    example: "(->> (seq :c4 :e4 :g4) (synth :saw) (amp (tween :linear 0.0 1.0 2)))",
+  },
   "amp": {
     signature: "(amp val pat) or (amp val)",
     description: "Set event amplitude (0.0 = silent, 1.0 = full). One-arg form returns a transformer for use with ->> or comp.",
