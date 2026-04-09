@@ -3,6 +3,7 @@
             [repulse.lisp.eval :as leval]
             [repulse.core :as core]
             [repulse.audio :as audio]
+            [repulse.bus :as bus]
             [repulse.midi :as midi]
             [repulse.theory :as theory]
             [repulse.params :as params]
@@ -718,6 +719,18 @@
                    (fn [prefix]
                      (samples/set-bank-prefix! (leval/unwrap prefix))
                      (str "bank: " (if prefix (name (leval/unwrap prefix)) "cleared")))
+                   ;; --- Named audio/control buses ---
+                   "bus"
+                   (fn [& args]
+                     (let [args'     (mapv leval/unwrap args)
+                           bus-name  (first args')
+                           bus-type  (or (second args') :control)]
+                       (when-not (keyword? bus-name)
+                         (throw (js/Error. "bus: first argument must be a keyword, e.g. (bus :lfo :control)")))
+                       (when-not (#{:control :audio} bus-type)
+                         (throw (js/Error. (str "bus: type must be :control or :audio, got " bus-type))))
+                       (bus/create-bus! (audio/get-ctx) bus-name bus-type)
+                       (str "=> bus " bus-name " (" (name bus-type) ")")))
                    ;; fx: context-aware — per-track transformer when called from ->>, global otherwise
                    "fx"
                    (fn [& raw-args]
@@ -1527,6 +1540,20 @@
                   sources))
            "</div>"))))
 
+(defn- render-buses-section []
+  (let [buses (bus/active-buses)]
+    (when (seq buses)
+      (str "<div class=\"ctx-section\">"
+           "<div class=\"ctx-section-title\">Buses</div>"
+           (apply str
+             (map (fn [[bus-name {:keys [type]}]]
+                    (str "<div class=\"ctx-row\">"
+                         "<span class=\"ctx-name\">" bus-name "</span>"
+                         "<span class=\"ctx-type\">" (name type) "</span>"
+                         "</div>"))
+                  (sort-by (comp name key) buses)))
+           "</div>"))))
+
 (defn- render-bindings-section []
   (let [env      (or @env-atom {})
         builtins @builtin-names
@@ -1553,6 +1580,7 @@
                (render-tracks-section)
                (render-fx-section)
                (render-midi-section)
+               (render-buses-section)
                (render-sources-section)
                (render-bindings-section)))))
 

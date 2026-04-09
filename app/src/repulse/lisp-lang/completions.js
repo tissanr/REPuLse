@@ -116,6 +116,13 @@ const BUILTINS = [
   { label: "delay-node",   type: "function", detail: "(delay-node time signal) — delay line UGen" },
   { label: "env-perc",     type: "function", detail: "(env-perc attack decay signal) — percussive envelope UGen" },
   { label: "env-asr",      type: "function", detail: "(env-asr attack sustain release signal) — ASR envelope UGen" },
+  { label: "env",          type: "function", detail: "(env levels times curves?) — general envelope descriptor; e.g. (env [0 1 0] [0.01 0.5] [:lin :exp])" },
+  { label: "env-gen",      type: "function", detail: "(env-gen env-data signal) — apply a general envelope to a signal UGen" },
+  // --- Bus UGens ---
+  { label: "bus",          type: "function", detail: "(bus :name :control|:audio) — declare a named bus; default type is :control" },
+  { label: "out",          type: "function", detail: "(out :bus-name signal) — write signal to a named bus (inside defsynth)" },
+  { label: "in",           type: "function", detail: "(in :bus-name) — read from a named bus as a UGen source (inside defsynth)" },
+  { label: "kr",           type: "function", detail: "(kr rate signal) — control-rate pass-through (rate is informational)" },
   // --- Iteration ---
   { label: "loop",         type: "keyword",  detail: "(loop [i 0 sum 0] body) — iteration with recursion point; use recur to jump back" },
   { label: "recur",        type: "keyword",  detail: "(recur new-i new-sum) — jump to enclosing loop with new binding values" },

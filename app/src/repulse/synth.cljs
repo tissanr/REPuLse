@@ -1,5 +1,7 @@
 (ns repulse.synth
-  (:require [repulse.lisp.eval :as leval]))
+  (:require [repulse.lisp.eval :as leval]
+            [repulse.bus :as bus]
+            [repulse.envelope :as env]))
 
 (declare make-build-fn)
 
@@ -14,7 +16,7 @@
    param-names is a vector of strings. body is a vector of AST forms.
    closed-env is the eval env at defsynth time."
   [synth-name param-names body closed-env]
-  (let [build-fn (make-build-fn param-names body closed-env)]
+  (let [build-fn (make-build-fn synth-name param-names body closed-env)]
     (swap! synth-defs assoc synth-name {:params param-names :build-fn build-fn})))
 
 (defn lookup-synth [synth-name]
@@ -148,6 +150,80 @@
     (.connect source g)
     {:node g :duration total}))
 
+;;; ── General envelope UGen ───────────────────────────────────────────
+
+(defn- apply-env-automation!
+  "Automate `param` according to envelope data, starting at audio time `t0`.
+   Uses the pure envelope/segment-samples fn to build Float32Arrays for
+   curve-based segments; direct Web Audio ramp methods for :lin/:exp/:step."
+  [param t0 levels times curves]
+  (let [n-segs (count times)]
+    (.setValueAtTime param (float (max 0.0001 (first levels))) t0)
+    (loop [i      0
+           cur-t  t0]
+      (when (< i n-segs)
+        (let [from-val (nth levels i)
+              to-val   (nth levels (inc i))
+              seg-time (nth times i)
+              curve    (nth curves i :lin)
+              end-t    (+ cur-t seg-time)]
+          (case curve
+            :lin  (.linearRampToValueAtTime param (float to-val) end-t)
+            :exp  (.exponentialRampToValueAtTime param (float (max 0.0001 to-val)) end-t)
+            :step (.setValueAtTime param (float to-val) end-t)
+            ;; Curve-based: compute sample array and use setValueCurveAtTime
+            (let [samples (env/segment-samples from-val to-val curve 32)
+                  arr     (js/Float32Array. (count samples))]
+              (dotimes [j (count samples)]
+                (aset arr j (float (nth samples j))))
+              (.setValueCurveAtTime param arr cur-t seg-time)))
+          (recur (inc i) end-t))))))
+
+(defn env-gen-node
+  "General envelope: (env-gen env-data source).
+   env-data is a map produced by (env levels times curves?).
+   Applies the envelope to source via a GainNode; returns {:node g :duration d}."
+  [ac t env-data source]
+  (let [{:keys [levels times curves]} env-data
+        g      (.createGain ac)
+        curves (or curves (vec (repeat (count times) :lin)))]
+    (apply-env-automation! (.-gain g) t levels times curves)
+    (.connect source g)
+    {:node g :duration (env/total-duration env-data)}))
+
+;;; ── Bus UGens ───────────────────────────────────────────────────────
+
+(defn out-node
+  "Write a signal to a named bus.
+   synth-name tracks the sending synth so re-triggers replace (not accumulate)
+   the previous oscillator on that bus.
+   Returns {:node nil :bus-writer true} — no audio output to the track."
+  [synth-name bus-name signal]
+  (let [kw (if (keyword? bus-name) bus-name (keyword bus-name))]
+    (if (bus/get-bus-node kw)
+      (bus/replace-synth-writer! synth-name kw signal)
+      (js/console.warn "[REPuLse] bus" (str kw) "not found — declare it with (bus :name) first")))
+  {:node nil :bus-writer true})
+
+(defn in-node
+  "Read from a named bus, returning its AudioNode as a UGen source.
+   If the bus does not exist, logs a warning and returns a silent GainNode."
+  [ac bus-name]
+  (let [kw (if (keyword? bus-name) bus-name (keyword bus-name))]
+    (or (bus/get-bus-node kw)
+        (do
+          (js/console.warn "[REPuLse] bus" (str kw) "not found — returning silence")
+          (let [g (.createGain ac)]
+            (.setValueAtTime (.-gain g) 0.0 0)
+            g)))))
+
+(defn kr-node
+  "Control-rate pass-through.
+   Web Audio does not expose control-rate processing to JS, so this is a
+   transparent identity wrapper — the signal is returned unchanged."
+  [_rate signal]
+  signal)
+
 ;;; ── Build-fn factory ─────────────────────────────────────────────────
 
 (defn- unwrap [x] (leval/unwrap x))
@@ -155,8 +231,9 @@
 (defn- make-build-fn
   "Creates the Web Audio graph builder function for a defsynth.
    When called with [ac t param-map] it evaluates the synth body
-   with UGen functions and param bindings in scope."
-  [param-names body closed-env]
+   with UGen functions and param bindings in scope.
+   synth-name is used by out-node for replace-on-retrigger tracking."
+  [synth-name param-names body closed-env]
   (fn [ac t param-map]
     (let [;; Bind param values from the event's parameter map
           param-bindings (zipmap param-names
@@ -176,7 +253,16 @@
                     "mix"        (fn [a b]           (mix-node   ac (unwrap a)      (unwrap b)))
                     ;; Envelope UGens: source is last arg — use with ->>
                     "env-perc"   (fn [atk dec src]   (env-perc-node ac t (unwrap atk) (unwrap dec) (unwrap src)))
-                    "env-asr"    (fn [atk sus rel src] (env-asr-node ac t (unwrap atk) (unwrap sus) (unwrap rel) (unwrap src)))}
+                    "env-asr"    (fn [atk sus rel src] (env-asr-node ac t (unwrap atk) (unwrap sus) (unwrap rel) (unwrap src)))
+                    ;; General envelope UGen
+                    "env-gen"    (fn [env-data src]  (env-gen-node ac t (unwrap env-data) (unwrap src)))
+                    ;; Bus UGens
+                    "out"        (fn [bus-name-v signal-v]
+                                   (out-node synth-name (unwrap bus-name-v) (unwrap signal-v)))
+                    "in"         (fn [bus-name-v]
+                                   (in-node ac (unwrap bus-name-v)))
+                    "kr"         (fn [rate-v signal-v]
+                                   (kr-node (unwrap rate-v) (unwrap signal-v)))}
           local (merge closed-env param-bindings ugen-env)]
       (last (map #(leval/eval-form % local) body)))))
 
@@ -191,12 +277,27 @@
         result   (build-fn ac t param-map)
         ;; result is either:
         ;;   AudioNode               — no envelope, use 1.5 s default duration
-        ;;   {:node AudioNode :duration N} — from env-perc / env-asr
-        [out-node duration] (if (and result (map? result) (:node result))
-                              [(:node result) (:duration result)]
-                              [result 1.5])]
-    (when out-node
-      (.connect out-node dest)
-      (js/setTimeout
-        (fn [] (try (.disconnect out-node) (catch :default _)))
-        (* (+ duration 0.1) 1000)))))
+        ;;   {:node AudioNode :duration N} — from env-perc / env-asr / env-gen
+        ;;   {:node nil :bus-writer true}  — synth writes to bus, no audio output
+        ]
+    (cond
+      ;; Bus writer — no audio connection, oscillator keeps running in bus
+      (and result (map? result) (:bus-writer result))
+      nil
+
+      ;; Envelope result
+      (and result (map? result) (:node result))
+      (let [out-n (:node result)
+            dur   (:duration result)]
+        (.connect out-n dest)
+        (js/setTimeout
+          (fn [] (try (.disconnect out-n) (catch :default _)))
+          (* (+ dur 0.1) 1000)))
+
+      ;; Raw AudioNode — no envelope
+      result
+      (do
+        (.connect result dest)
+        (js/setTimeout
+          (fn [] (try (.disconnect result) (catch :default _)))
+          (* (+ 1.5 0.1) 1000))))))
