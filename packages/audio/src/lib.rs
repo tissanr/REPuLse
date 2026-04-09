@@ -254,14 +254,67 @@ struct Pending {
     pan:    f32,   // -1.0–1.0, default 0.0
 }
 
+// ── Parameter transitions ──────────────────────────────────────────────────
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CurveType { Linear, Exp, Sine }
+
+impl CurveType {
+    fn from_str(s: &str) -> Self {
+        match s {
+            "exp"  => CurveType::Exp,
+            "sine" => CurveType::Sine,
+            _      => CurveType::Linear,
+        }
+    }
+}
+
+/// One-shot parameter transition. Zero heap allocation — all state is inline.
+#[derive(Clone, Copy, Debug)]
+pub struct Transition {
+    start_value:      f32,
+    end_value:        f32,
+    duration_samples: u64,
+    elapsed_samples:  u64,
+    curve:            CurveType,
+}
+
+impl Transition {
+    fn new(start: f32, end: f32, duration_samples: u64, curve: CurveType) -> Self {
+        Transition { start_value: start, end_value: end,
+                     duration_samples, elapsed_samples: 0, curve }
+    }
+
+    /// Advance one sample, return interpolated value. Clamps at end — never resets.
+    fn tick(&mut self) -> f32 {
+        self.elapsed_samples = self.elapsed_samples.saturating_add(1);
+        let t = if self.duration_samples == 0 { 1.0_f32 }
+                else {
+                    (self.elapsed_samples as f32 / self.duration_samples as f32).min(1.0)
+                };
+        self.interpolate(t)
+    }
+
+    fn interpolate(&self, t: f32) -> f32 {
+        let k = match self.curve {
+            CurveType::Linear => t,
+            CurveType::Exp    => t * t,
+            CurveType::Sine   => 0.5 * (1.0 - f32::cos(std::f32::consts::PI * t)),
+        };
+        self.start_value + (self.end_value - self.start_value) * k
+    }
+}
+
 // ── AudioEngine ────────────────────────────────────────────────────────────
 
 #[wasm_bindgen]
 pub struct AudioEngine {
-    sample_rate: f32,
-    voices: Vec<ActiveVoice>,
-    pending: Vec<Pending>,
-    noise_seed: u32,
+    sample_rate:    f32,
+    voices:         Vec<ActiveVoice>,
+    pending:        Vec<Pending>,
+    noise_seed:     u32,
+    amp_transition: Option<Transition>,
+    pan_transition: Option<Transition>,
 }
 
 #[wasm_bindgen]
@@ -269,7 +322,33 @@ impl AudioEngine {
     #[wasm_bindgen(constructor)]
     pub fn new(sample_rate: f32) -> AudioEngine {
         log(&format!("[REPuLse WASM] PCM engine ready (sr={})", sample_rate));
-        AudioEngine { sample_rate, voices: Vec::new(), pending: Vec::new(), noise_seed: 0xDEAD_BEEF }
+        AudioEngine {
+            sample_rate, voices: Vec::new(), pending: Vec::new(),
+            noise_seed: 0xDEAD_BEEF,
+            amp_transition: None,
+            pan_transition: None,
+        }
+    }
+
+    /// Start a parameter transition. Replaces any existing transition for that param.
+    /// param: "amp" or "pan"
+    /// duration_samples: pre-computed on the JS side from bars * BPM * sample_rate
+    pub fn start_transition(
+        &mut self, param: &str, start: f32, end: f32,
+        duration_samples: u64, curve: &str,
+    ) {
+        let tr = Transition::new(start, end, duration_samples, CurveType::from_str(curve));
+        match param {
+            "amp" => self.amp_transition = Some(tr),
+            "pan" => self.pan_transition = Some(tr),
+            _     => warn(&format!("[REPuLse WASM] unknown transition param: {}", param)),
+        }
+    }
+
+    /// Clear all active transitions (called by stop_all).
+    pub fn clear_transitions(&mut self) {
+        self.amp_transition = None;
+        self.pan_transition = None;
     }
 
     /// Schedule a sound event at the given AudioContext time (uses default parameters).
@@ -317,8 +396,24 @@ impl AudioEngine {
                 l += s * angle.cos();
                 r += s * angle.sin();
             }
-            buf[i * 2]     = l.clamp(-1.0, 1.0);
-            buf[i * 2 + 1] = r.clamp(-1.0, 1.0);
+
+            // Apply amp transition (global post-mix multiplier)
+            let amp_scale = if let Some(ref mut tr) = self.amp_transition {
+                tr.tick()
+            } else {
+                1.0
+            };
+
+            // Apply pan transition (global stereo balance, additive on top of per-voice pan)
+            if let Some(ref mut tr) = self.pan_transition {
+                let pan_val = tr.tick().clamp(-1.0, 1.0);
+                let bal_angle = (pan_val + 1.0) / 2.0 * std::f32::consts::FRAC_PI_2;
+                buf[i * 2]     = ((l + r) * bal_angle.cos() * amp_scale).clamp(-1.0, 1.0);
+                buf[i * 2 + 1] = ((l + r) * bal_angle.sin() * amp_scale).clamp(-1.0, 1.0);
+            } else {
+                buf[i * 2]     = (l * amp_scale).clamp(-1.0, 1.0);
+                buf[i * 2 + 1] = (r * amp_scale).clamp(-1.0, 1.0);
+            }
         }
         self.voices.retain(|av| !av.voice.is_silent());
 
@@ -330,6 +425,7 @@ impl AudioEngine {
     pub fn stop_all(&mut self) {
         self.voices.clear();
         self.pending.clear();
+        self.clear_transitions();
     }
 }
 
@@ -425,5 +521,71 @@ impl AudioEngine {
             }
         };
         self.voices.push(ActiveVoice { voice, pan: p.pan.clamp(-1.0, 1.0) });
+    }
+}
+
+#[cfg(test)]
+mod transition_tests {
+    use super::{Transition, CurveType};
+
+    #[test]
+    fn linear_values_at_quartiles() {
+        let mut tr = Transition::new(0.0, 1.0, 100, CurveType::Linear);
+        for _ in 0..25 { tr.tick(); }
+        assert!((tr.interpolate(0.25) - 0.25).abs() < 1e-5);
+        for _ in 0..25 { tr.tick(); }
+        assert!((tr.interpolate(0.5) - 0.5).abs() < 1e-5);
+        for _ in 0..25 { tr.tick(); }
+        assert!((tr.interpolate(0.75) - 0.75).abs() < 1e-5);
+    }
+
+    #[test]
+    fn exp_midpoint_below_linear() {
+        let tr = Transition::new(0.0, 1.0, 100, CurveType::Exp);
+        assert!(tr.interpolate(0.5) < 0.5,
+                "exp at t=0.5 should be < 0.5, got {}", tr.interpolate(0.5));
+    }
+
+    #[test]
+    fn sine_midpoint_at_half() {
+        let tr = Transition::new(0.0, 1.0, 100, CurveType::Sine);
+        assert!((tr.interpolate(0.5) - 0.5).abs() < 1e-5,
+                "sine at t=0.5 should be ≈0.5, got {}", tr.interpolate(0.5));
+    }
+
+    #[test]
+    fn clamps_at_end_value_no_overshoot() {
+        let mut tr = Transition::new(0.0, 1.0, 100, CurveType::Linear);
+        for _ in 0..200 { tr.tick(); }
+        assert!((tr.tick() - 1.0).abs() < 1e-6, "should hold at end value");
+    }
+
+    #[test]
+    fn start_value_at_t_zero() {
+        let tr = Transition::new(0.3, 0.9, 100, CurveType::Linear);
+        assert!((tr.interpolate(0.0) - 0.3).abs() < 1e-6);
+    }
+
+    #[test]
+    fn end_value_at_t_one() {
+        let tr = Transition::new(0.3, 0.9, 100, CurveType::Sine);
+        assert!((tr.interpolate(1.0) - 0.9).abs() < 1e-6);
+    }
+
+    #[test]
+    fn zero_duration_clamps_to_end() {
+        let mut tr = Transition::new(0.0, 1.0, 0, CurveType::Linear);
+        assert!((tr.tick() - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    #[cfg(target_arch = "wasm32")]
+    fn amp_transition_applied_in_engine() {
+        use super::AudioEngine;
+        let mut eng = AudioEngine::new(44100.0);
+        eng.start_transition("amp", 0.0, 1.0, 44100, "linear");
+        assert!(eng.amp_transition.is_some());
+        eng.clear_transitions();
+        assert!(eng.amp_transition.is_none());
     }
 }

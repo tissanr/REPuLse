@@ -891,6 +891,61 @@ cycle-aligned, so different densities create polyrhythmic parameter changes:
 
 ---
 
+## Transitions
+
+A **transition** changes a parameter smoothly from one value to another over musical time. The
+audio engine handles per-sample interpolation — there is no polling:
+
+    (tween curve start end bars)
+
+Every note that fires during the transition picks up the interpolated value at its scheduled time.
+When the transition completes the end value is held indefinitely. Re-evaluating the code restarts
+the transition.
+
+| Curve      | Behaviour                                                  |
+|------------|------------------------------------------------------------|
+| `:linear`  | Constant rate — equal change per unit time                 |
+| `:exp`     | Slow start, fast end — good for volume fades               |
+| `:sine`    | S-curve — slow at both ends, fast in the middle            |
+
+### Examples
+
+```lisp
+;; Amp fade-in over 2 bars
+(->> (seq :c4 :e4 :g4 :c5)
+     (synth :saw)
+     (amp (tween :linear 0.0 1.0 2)))
+
+;; Exponential fade-out over 8 bars
+(->> (fast 2 (seq :hh))
+     (amp (tween :exp 1.0 0.0 8)))
+
+;; S-curve pan sweep over half a bar
+(->> (fast 4 (seq :sd))
+     (pan (tween :sine -1.0 1.0 0.5)))
+
+;; Different transitions per voice in a stack
+(stack
+  (->> (seq :bd :_ :bd :_) (amp (tween :linear 0.2 1.0 2)))
+  (->> (fast 4 (seq :hh))  (pan (tween :sine -0.8 0.8 1))))
+```
+
+### Transitions vs. envelopes
+
+`attack`, `decay`, and `release` shape the amplitude of **individual notes** over milliseconds.
+`tween` changes **any parameter** across multiple bars. They operate at different timescales and
+complement each other:
+
+```lisp
+;; A slow attack on each note, AND a fade-in across all notes
+(->> (seq :c4 :e4 :g4)
+     (synth :saw)
+     (attack 0.3)                     ; each note swells in over 300ms
+     (amp (tween :linear 0.0 1.0 4))) ; overall sequence fades in over 4 bars
+```
+
+---
+
 ## Sound and samples
 
 REPuLse loads the **TidalCycles Dirt-Samples** and the **Tidal Drum Machines** sample library

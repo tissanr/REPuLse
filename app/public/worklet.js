@@ -51,6 +51,16 @@ class RepulseProcessor extends AudioWorkletProcessor {
       }
     } else if (msg.type === 'stop') {
       if (this.engine) this.engine.stop_all();
+    } else if (msg.type === 'transition') {
+      if (this.engine) {
+        this.engine.start_transition(
+          msg.param,
+          msg.start,
+          msg.end,
+          BigInt(Math.round(msg.duration_samples)),
+          msg.curve
+        );
+      }
     }
   }
 

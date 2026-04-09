@@ -607,7 +607,7 @@ See full spec: [PROMPTS/phase-b-richer-visuals.md](PROMPTS/phase-b-richer-visual
 
 ---
 
-## Phase T1 — Parameter Transitions 📋 *planned*
+## Phase T1 — Parameter Transitions ✅ *delivered*
 
 Smooth parameter changes over musical time via a `tween` built-in. A single message
 is sent to the WASM audio engine, which handles per-sample interpolation — no polling
@@ -620,6 +620,15 @@ from ClojureScript.
 - `{type: "transition"}` worklet message — WASM receives the full ramp spec at note-on time
 - `arm-transitions!` in `app/src/repulse/audio.cljs` — detects tween descriptors in the first cycle and dispatches transition messages; re-evaluation restarts the transition
 - Rust unit tests: linear quartiles, exp midpoint, sine symmetry, clamp-at-end, zero-duration
+
+**Delivered:**
+- `tween` built-in in the Lisp evaluator: validates curve type and duration, returns a plain data map stored as a parameter value
+- `Transition` struct with per-sample `tick()` interpolation and three curve shapes (linear, quadratic/exp, sine S-curve)
+- `AudioEngine::start_transition` / `clear_transitions` wasm_bindgen methods; `stop_all` clears transitions
+- Global amp + pan transitions applied in `process_block` after voice mix; holds end value indefinitely on completion
+- `arm-transitions!` function queries the first cycle of each pattern, detects tween descriptors, and sends a single `transition` message to the worklet on (re-)evaluation
+- `schedule-cycle!` replaces tween descriptors with neutral values (`1.0` for amp, `0.0` for pan) so the WASM ramp applies correctly
+- Grammar, completions, and hover docs updated; `parser.js` regenerated
 
 See full spec: [PROMPTS/PHASE-T1.md](PROMPTS/PHASE-T1.md)
 

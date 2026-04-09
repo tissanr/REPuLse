@@ -213,7 +213,7 @@ After code edits, follow the standard `<verification_workflow>` using the previe
 | D2    | Full session persistence — all state in localStorage + reset!  | planned      |
 | N1    | MIDI CC mapping — bind controller knobs to any parameter      | planned      |
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
-| T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | planned      |
+| T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | ✓ delivered  |
 | P     | Modular routing — busses, control rate, general envelopes      | planned      |
 | DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | planned      |
 | DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | planned      |
