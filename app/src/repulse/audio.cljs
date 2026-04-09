@@ -471,6 +471,21 @@
 (defn- tween? [v]
   (and (map? v) (= (:type v) :tween)))
 
+(defn- interp-tween
+  "Compute the interpolated value for a tween at audio time t.
+   ts = {:tween pv :start-time t0} stored by arm-transitions!
+   cycle-dur = seconds per bar (cycle)."
+  [{:keys [tween start-time]} t cycle-dur]
+  (let [{:keys [start end duration-bars curve]} tween
+        u (-> (/ (- t start-time) (* duration-bars cycle-dur))
+              (max 0.0)
+              (min 1.0))
+        k (case curve
+            :exp  (* u u)
+            :sine (* 0.5 (- 1.0 (Math/cos (* Math/PI u))))
+            u)]
+    (+ start (* (- end start) k))))
+
 (def scheduler-state
   (atom {:playing?     false
          :tracks       {}     ; keyword → Pattern
@@ -482,7 +497,7 @@
          :on-beat      nil
          :on-event     nil
          :on-fx-event  nil
-         :tween-armed  {}}))  ; track-name → #{param-keys already sent}
+         :tween-state  {}}))  ; track-name → {param-key {:tween pv :start-time t}}
 
 (defn set-bpm!
   "Set the tempo in BPM. One cycle = one bar (4 beats)."
@@ -506,20 +521,15 @@
                   t                 (+ cycle-audio-start event-offset)
                   dur               (* (- part-end part-start) cycle-dur)]
               (when (> t (.-currentTime ac))
-                (let [armed  (get-in state [:tween-armed track-name] #{})
-                      raw    (:value ev)
-                      value  (if (and (map? raw) (seq armed))
-                               (reduce (fn [m k]
-                                         (if (tween? (get m k))
-                                           (assoc m k (if @worklet-ready?
-                                                         (case k
-                                                           :amp 1.0
-                                                           :pan 0.0
-                                                           (get-in m [k :start]))
-                                                         (get-in m [k :start])))
-                                           m))
-                                       raw armed)
-                               raw)]
+                (let [tween-st (get-in state [:tween-state track-name] {})
+                      raw      (:value ev)
+                      value    (if (and (map? raw) (seq tween-st))
+                                 (reduce-kv (fn [m k ts]
+                                              (if (tween? (get m k))
+                                                (assoc m k (interp-tween ts t cycle-dur))
+                                                m))
+                                            raw tween-st)
+                                 raw)]
                 (play-event ac t value track-name)
                 ;; MIDI note output — triggered by :midi-ch key added via (midi-out ch pat)
                 (when-let [midi-ch (:midi-ch (:value ev))]
@@ -593,35 +603,25 @@
          :playing?     false
          :interval-id  nil
          :tracks       {}
-         :muted        #{}))
+         :muted        #{}
+         :tween-state  {}))
 
 (defn- arm-transitions!
-  "Detect tween descriptors in the first cycle of pattern and send transition messages
-   to the WASM worklet. Re-evaluation clears the armed set so the transition is restarted."
+  "Detect tween descriptors in the first cycle of pattern and record their start time.
+   schedule-cycle! uses this to interpolate values per event at schedule time,
+   which works uniformly for WASM synths, JS synths, and sample-based sounds."
   [track-name pattern ac]
-  (let [cycle-dur (:cycle-dur @scheduler-state)
-        sr        (.-sampleRate ac)
-        sp        {:start [0 1] :end [1 1]}
-        evs       (try (core/query pattern sp) (catch :default _ []))
-        tweens    (into {}
-                    (for [ev   evs
-                          :let [v (:value ev)]
-                          :when (map? v)
-                          [k pv] v
-                          :when (tween? pv)]
-                      [k pv]))]
-    (swap! scheduler-state update :tween-armed assoc track-name #{})
-    (doseq [[k pv] tweens]
-      (let [dur-samples (Math/round (* (:duration-bars pv) cycle-dur sr))]
-        (when (and @worklet-ready? @worklet-node)
-          (.. @worklet-node -port
-              (postMessage #js {:type             "transition"
-                                :param            (name k)
-                                :start            (float (:start pv))
-                                :end              (float (:end pv))
-                                :duration_samples dur-samples
-                                :curve            (name (:curve pv))})))
-        (swap! scheduler-state update-in [:tween-armed track-name] (fnil conj #{}) k)))))
+  (let [sp   {:start [0 1] :end [1 1]}
+        evs  (try (core/query pattern sp) (catch :default _ []))
+        now  (.-currentTime ac)
+        ts   (into {}
+               (for [ev   evs
+                     :let [v (:value ev)]
+                     :when (map? v)
+                     [k pv] v
+                     :when (tween? pv)]
+                 [k {:tween pv :start-time now}]))]
+    (swap! scheduler-state update :tween-state assoc track-name ts)))
 
 (defn play-track!
   "Add or replace a named track. Creates a per-track GainNode if needed.
@@ -664,6 +664,7 @@
   (stop!)
   (let [ac (get-ctx)]
     (.resume ac)
+    (arm-transitions! :_ pattern ac)
     (let [now       (.-currentTime ac)
           cycle-dur (:cycle-dur @scheduler-state)
           start-cycle (int (Math/floor (/ now cycle-dur)))]
