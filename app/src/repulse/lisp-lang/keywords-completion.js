@@ -26,7 +26,13 @@ export function keywordsCompletionSource(context) {
     detail: "effect",
   }));
 
-  const options = [...bankOptions, ...fxOptions]
+  const staticOptions = [
+    { label: ":linear", type: "keyword", detail: "tween curve — linear ramp" },
+    { label: ":exp",    type: "keyword", detail: "tween curve — quadratic ease-in" },
+    { label: ":sine",   type: "keyword", detail: "tween curve — S-curve (sine ease)" },
+  ];
+
+  const options = [...staticOptions, ...bankOptions, ...fxOptions]
     .filter(opt => opt.label.slice(1).startsWith(prefix));
 
   if (options.length === 0) return null;
