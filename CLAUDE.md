@@ -152,7 +152,7 @@ npm run build:wasm       # compiles Rust → WASM
 npm run dev              # build:wasm + shadow-cljs watch app
 
 # Tests
-npm run test:core        # cljs.test for packages/core
+npm run test             # cljs.test for packages/core
 
 # Lezer grammar (syntax highlighting) — run after editing repulse-lisp.grammar
 npm run gen:grammar      # regenerates parser.js + parser.terms.js
