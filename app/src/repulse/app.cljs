@@ -1879,6 +1879,9 @@
                   (fx/set-param! name (cljs.core/name k) v))
                 (when bypassed
                   (fx/bypass! name true))))
+            ;; set-param! marks effects :active? true — reset so the context panel
+            ;; only shows effects that the user's code explicitly activates via (fx ...).
+            (swap! fx/chain (fn [c] (mapv #(assoc % :active? false) c)))
             ;; Store mutes for application after the user's first eval creates tracks
             (reset! pending-mutes (set (map keyword (or (:muted active-sess) [])))))
           500))
