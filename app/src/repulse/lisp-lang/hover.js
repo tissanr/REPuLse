@@ -372,6 +372,11 @@ const DOCS = {
     description: "Load tutorial chapter n into the editor without auto-playing. Defaults to chapter 1. Press Alt+Enter to hear it.",
     example: "(tutorial 3)",
   },
+  "reset!": {
+    signature: "(reset!)",
+    description: "Stop playback, clear all persisted state (editor, BPM, effects, bank, sample sources, mute/solo, MIDI mappings), and reload the page with a fresh demo. Use when you want a clean slate.",
+    example: "(reset!)",
+  },
 
   // --- General envelopes ---
   "env": {

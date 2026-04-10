@@ -1136,6 +1136,47 @@ Render `n` cycles of the current tracks to a downloadable WAV file via `OfflineA
 
 ---
 
+## Session persistence
+
+REPuLse automatically saves all session state to `localStorage` and restores it on every page reload. No explicit save action is needed.
+
+### What is persisted
+
+| State | Notes |
+|-------|-------|
+| Editor text | Full buffer contents |
+| BPM | Current tempo |
+| FX chain | Effect names, parameters, bypass state |
+| Bank prefix | Active `(bank :Name)` prefix |
+| External sample repos | URLs loaded via `(samples! ...)` |
+| Track mute/solo state | Restored after the first eval |
+
+Playback state (playing/stopped), audio nodes, and active cycle position are **not** persisted — the page always starts stopped.
+
+### First visit
+
+When no session exists (first visit or after `(reset!)`), a random demo template is loaded into the editor. A welcome message tells you to press **Alt+Enter** to start playing.
+
+### `(reset!)` — wipe session
+
+```lisp
+(reset!)
+```
+
+Stops playback, deletes all persisted state (editor, BPM, effects, bank, sample sources, mutes), and reloads the page to first-visit state with a fresh demo. Use this when you want a clean slate.
+
+### URL sharing
+
+Click the **share** button or call `(share!)` to copy a full session URL to the clipboard. The URL encodes the complete session state (editor text, BPM, effects, bank, mutes) in the URL hash using base64. Loading the URL restores the full session immediately.
+
+```lisp
+(share!)  ; copies URL like https://repulse.app/#v2:eyJ2...
+```
+
+Old `#v1:...` share URLs are still supported.
+
+---
+
 ## Tempo control
 
 ### `bpm` — beats per minute
