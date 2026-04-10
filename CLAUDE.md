@@ -210,7 +210,7 @@ After code edits, follow the standard `<verification_workflow>` using the previe
 | E2    | Live session dashboard — per-track params, conditional FX, sources | ✓ delivered  |
 | E2b   | Parameter sliders — dashboard sliders that update code live    | ✓ delivered  |
 | 10a   | Editor diagnostics — red squiggle underlines on eval errors    | ✓ delivered  |
-| D2    | Full session persistence — all state in localStorage + reset!  | planned      |
+| D2    | Full session persistence — all state in localStorage + reset!  | ✓ delivered  |
 | N1    | MIDI CC mapping — bind controller knobs to any parameter      | planned      |
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
 | T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | ✓ delivered  |

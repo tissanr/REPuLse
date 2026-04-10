@@ -272,7 +272,7 @@ See full spec: [PROMPTS/phase-d-editor-persistence.md](PROMPTS/phase-d-editor-pe
 
 ---
 
-## Phase D2 — Full Session Persistence 📋 *planned*
+## Phase D2 — Full Session Persistence ✅ *delivered*
 
 Persist **all session state** to localStorage so a page reload restores exactly what
 the user had — effects, bank prefix, sample sources, mute/solo state, MIDI mappings,
@@ -283,6 +283,17 @@ and BPM. Adds `(reset!)` to wipe everything back to defaults.
 - Persist loaded external sample sources (`samples!` calls)
 - `(reset!)` — stops playback, clears all localStorage, reloads default demo
 - New localStorage keys with versioned schema; forward-compat handling for unknown keys
+
+**Delivered:**
+- New `app/src/repulse/session.cljs` module — `build-session-snapshot`, `save-session!`, `schedule-save!` (debounced 300ms), `load-session`, `migrate-legacy!`, `wipe!`
+- Single `"repulse-session"` v2 JSON blob replaces separate `"repulse-editor"` / `"repulse-bpm"` keys
+- Automatic migration: existing Phase D users silently upgraded on first load, legacy keys deleted
+- Watchers on `audio/scheduler-state`, `fx/chain`, `samples/active-bank-prefix`, `samples/loaded-sources` trigger debounced saves
+- Session restore at boot: BPM, bank prefix, editor text, FX chain params+bypass, muted tracks, external sample sources
+- First-visit flow: random demo template loaded (from `:techno` / `:ambient` / `:house` / `:dnb` / `:minimal`), welcome message shown, not auto-played
+- `(reset!)` built-in: stops playback, wipes all localStorage keys, reloads page to first-visit state
+- `(share!)` upgraded to `#v2:` encoding with full session state; `#v1:` URLs remain backward-compatible
+- `reset!` added to grammar (`npm run gen:grammar` run), completions, and hover docs
 
 See full spec: [PROMPTS/phase-d2-session-persistence.md](PROMPTS/phase-d2-session-persistence.md)
 

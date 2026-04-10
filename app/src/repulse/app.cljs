@@ -11,6 +11,7 @@
             [repulse.samples :as samples]
             [repulse.plugins :as plugins]
             [repulse.fx :as fx]
+            [repulse.session :as session]
             [repulse.plugins.compressor :as compressor-plugin]
             [clojure.string :as cstr]
             ["@codemirror/view" :refer [EditorView Decoration keymap lineNumbers]]
@@ -165,31 +166,48 @@
 
 ;;; Session persistence
 
+(defn- b64-encode
+  "Unicode-safe base64 encode: handles em-dashes and other non-Latin-1 chars."
+  [s]
+  (js/btoa (js/unescape (js/encodeURIComponent s))))
+
+(defn- b64-decode
+  "Unicode-safe base64 decode: inverse of b64-encode."
+  [s]
+  (js/decodeURIComponent (js/escape (js/atob s))))
+
 (defn- encode-session []
-  (let [bpm    (js/Math.round (audio/get-bpm))
-        editor (when-let [v @editor-view]
-                 (.. v -state -doc (toString)))
-        obj    (clj->js {:v 1 :bpm bpm :editor (or editor "")})]
-    (str "#v1:" (js/btoa (js/JSON.stringify obj)))))
+  (let [snap (session/build-session-snapshot)
+        obj  (clj->js snap)]
+    (str "#v2:" (b64-encode (js/JSON.stringify obj)))))
 
-(defn- decode-session [hash]
+(defn- decode-session
+  "Decode a URL hash into a session map. Handles #v1: and #v2: formats.
+   Returns a keyword-keyed map or nil."
+  [hash]
   (try
-    (when (and hash (cstr/starts-with? hash "#v1:"))
-      (let [b64 (subs hash 4)
-            obj (js->clj (js/JSON.parse (js/atob b64)))]
-        obj))
-    (catch :default _ nil)))
+    (cond
+      (and hash (cstr/starts-with? hash "#v2:"))
+      (let [b64  (subs hash 4)
+            data (js->clj (js/JSON.parse (b64-decode b64)) :keywordize-keys true)]
+        (when (= (:v data) 2) data))
 
-(defn- restore-session! [session]
-  (when session
-    (when-let [bpm (get session "bpm")]
-      (audio/set-bpm! bpm))
-    (when-let [ed (get session "editor")]
-      (when-let [view @editor-view]
-        (.dispatch view
-                   #js {:changes #js {:from   0
-                                      :to     (.. view -state -doc -length)
-                                      :insert ed}})))))
+      (and hash (cstr/starts-with? hash "#v1:"))
+      (let [b64  (subs hash 4)
+            data (js->clj (js/JSON.parse (js/atob b64)) :keywordize-keys true)]
+        ;; Normalize v1 {v bpm editor} to v2 shape so restore works uniformly
+        (when data
+          {:v       2
+           :bpm     (:bpm data)
+           :editor  (:editor data)
+           :fx      []
+           :bank    nil
+           :sources []
+           :muted   []
+           :midi    {}}))
+
+      :else nil)
+    (catch :default _ nil)))
 
 (defn share! []
   (let [session (encode-session)
@@ -203,6 +221,9 @@
 ;;; Forward declarations
 (declare evaluate!)
 (declare set-diagnostics!)
+
+;; Muted tracks restored from localStorage — applied after the first eval creates tracks.
+(defonce ^:private pending-mutes (atom #{}))
 
 ;; Tracks which track names have been defined in the current evaluation pass.
 ;; Reset by evaluate! before each eval; checked by the `track` builtin to
@@ -578,6 +599,30 @@
     (clear-highlights!)
     (set-playing! false)
     (set-output! "stopped" :idle)))
+
+;;; ── First-visit demo ─────────────────────────────────────────────────────
+
+(defn- set-editor-content!
+  "Replace the editor buffer with text."
+  [text]
+  (when-let [view @editor-view]
+    (.dispatch view
+               #js {:changes #js {:from   0
+                                  :to     (.. view -state -doc -length)
+                                  :insert text}})))
+
+(defn- first-visit-setup!
+  "Load a random demo template on first visit (no localStorage) or after reset!."
+  []
+  (let [demos [:techno :ambient :house :dnb :minimal]
+        pick  (rand-nth demos)
+        demo  (get demo-templates pick)]
+    (set-editor-content! (:code demo))
+    (audio/set-bpm! (:bpm demo))
+    (set-output!
+      (str "Welcome to REPuLse! Loaded :" (name pick)
+           " — press Alt+Enter to play")
+      :success)))
 
 (defn ensure-env! []
   (when (nil? @env-atom)
@@ -1056,6 +1101,13 @@
                                (.catch (fn [e]
                                          (set-output! (str "Freesound error: " e) :error))))
                            "searching freesound…"))))
+                   ;; --- Session reset ---
+                   "reset!"
+                   (fn []
+                     (audio/stop!)
+                     (session/wipe!)
+                     (.reload js/window.location)
+                     nil)
     ;; Wire the FX event notification callback (used by sidechain plugin)
     ))
     (swap! audio/scheduler-state assoc :on-fx-event fx/notify-fx-event!)
@@ -1137,7 +1189,17 @@
           (let [defs-vals (vals @(:*defs* env))
                 pats      (filter core/pattern? defs-vals)]
             (when (= 1 (count pats))
-              (audio/play-track! :_ (first pats) on-beat highlight-range!))))))))
+              (audio/play-track! :_ (first pats) on-beat highlight-range!))))
+
+        ;; ── Apply restored mutes after first eval ─────────────────────────
+        ;; pending-mutes is populated during session restore; applied once tracks exist.
+        (when (seq @pending-mutes)
+          (let [tracks (set (keys (:tracks @audio/scheduler-state)))]
+            (when (seq tracks)
+              (doseq [tk @pending-mutes]
+                (when (contains? tracks tk)
+                  (audio/mute-track! tk)))
+              (reset! pending-mutes #{}))))))))
 
 ;;; Context panel
 
@@ -1609,27 +1671,12 @@
 
 ;;; CodeMirror editor
 
-(def ^:private storage-key "repulse-editor")
-(def ^:private bpm-storage-key "repulse-bpm")
-
-(defn- load-editor-content [fallback]
-  (or (try (.getItem js/localStorage storage-key) (catch :default _ nil))
-      fallback))
-
-(defn- load-saved-bpm []
-  (try
-    (when-let [s (.getItem js/localStorage bpm-storage-key)]
-      (let [n (js/parseFloat s)]
-        (when-not (js/isNaN n) n)))
-    (catch :default _ nil)))
-
+;; On every document change, schedule a debounced full-session save.
 (def ^:private save-listener
   (.of EditorView.updateListener
        (fn [^js update]
          (when (.-docChanged update)
-           (try (.setItem js/localStorage storage-key
-                          (.. update -state -doc (toString)))
-                (catch :default _))))))
+           (session/schedule-save!)))))
 
 ;; Clear diagnostics immediately when the user starts editing, so stale
 ;; squiggles don't linger after the source has changed.
@@ -1696,7 +1743,7 @@
                                      (clj->js defaultKeymap)
                                      (clj->js historyKeymap)))]
         state (.. EditorState
-                  (create #js {:doc (load-editor-content initial-value)
+                  (create #js {:doc initial-value
                                :extensions extensions}))
         view (EditorView. #js {:state state :parent container})]
     view))
@@ -1790,18 +1837,6 @@
   (setBankNamesProvider (fn [] (clj->js (samples/bank-names))))
   (setFxNamesProvider   (fn [] (clj->js (mapv :name @fx/chain))))
 
-  ;; Restore saved BPM from localStorage
-  (when-let [bpm (load-saved-bpm)]
-    (audio/set-bpm! bpm))
-
-  ;; Restore session from URL hash if present
-  (let [hash (.-hash js/location)]
-    (when-let [session (decode-session hash)]
-      ;; Remove hash from URL without reload
-      (.replaceState js/history nil nil (.-pathname js/location))
-      ;; Editor isn't mounted yet — defer restore
-      (js/setTimeout #(restore-session! session) 0)))
-
   ;; Register global mute-toggle for track panel onclick
   (set! (.-_repulseMuteToggle js/window)
         (fn [track-name-str]
@@ -1812,10 +1847,64 @@
 
   (reset! cmd-view (make-cmd-editor (el "cmd-container")))
 
-  (let [container (el "editor-container")
-        view (make-editor container "(seq :bd :sd :bd :sd)" evaluate!)]
-    (reset! editor-view view)
-    (.focus view))
+  ;; ── Session restore ───────────────────────────────────────────────────────
+  ;; Precedence: URL hash (#v2:/#v1:) > localStorage v2 > legacy keys > first visit
+  (let [hash        (.-hash js/location)
+        url-session (decode-session hash)
+        stored      (or (session/load-session) (session/migrate-legacy!))
+        active-sess (or url-session stored)
+        init-text   (or (:editor active-sess) "")]
+
+    ;; Remove hash from URL (avoid re-consuming on F5)
+    (when url-session
+      (.replaceState js/history nil nil (.-pathname js/location)))
+
+    ;; Create editor with the session content (or empty for first-visit)
+    (let [container (el "editor-container")
+          view      (make-editor container init-text evaluate!)]
+      (reset! editor-view view)
+      (.focus view))
+
+    ;; Register the editor-text getter for session snapshots
+    (reset! session/editor-text-fn
+      (fn [] (when-let [v @editor-view] (.. v -state -doc (toString)))))
+
+    (if active-sess
+      ;; ── Restore existing session ──────────────────────────────────────────
+      (do
+        (audio/set-bpm! (or (:bpm active-sess) 120))
+        ;; Bank prefix (stored as string, set-bank-prefix! accepts string or keyword)
+        (when (:bank active-sess)
+          (samples/set-bank-prefix! (:bank active-sess)))
+        ;; Re-fetch external github sample sources asynchronously
+        (doseq [{:keys [type id]} (or (:sources active-sess) [])]
+          (when (and id (= "github" (str type)))
+            (samples/load-external! (str "github:" id))))
+        ;; Restore effect params + bypass after plugins finish loading (~500ms)
+        (js/setTimeout
+          (fn []
+            (doseq [{:keys [name params bypassed]} (or (:fx active-sess) [])]
+              (when name
+                (doseq [[k v] (or params {})]
+                  (fx/set-param! name (cljs.core/name k) v))
+                (when bypassed
+                  (fx/bypass! name true))))
+            ;; set-param! marks effects :active? true — reset so the context panel
+            ;; only shows effects that the user's code explicitly activates via (fx ...).
+            (swap! fx/chain (fn [c] (mapv #(assoc % :active? false) c)))
+            ;; Store mutes for application after the user's first eval creates tracks
+            (reset! pending-mutes (set (map keyword (or (:muted active-sess) [])))))
+          500))
+
+      ;; ── First visit / after (reset!) ─────────────────────────────────────
+      (first-visit-setup!)))
+
+  ;; ── Session save watchers ────────────────────────────────────────────────
+  ;; Debounced; the editor's save-listener covers document changes.
+  (add-watch audio/scheduler-state  :session-save (fn [_ _ _ _] (session/schedule-save!)))
+  (add-watch fx/chain               :session-save (fn [_ _ _ _] (session/schedule-save!)))
+  (add-watch samples/active-bank-prefix :session-save (fn [_ _ _ _] (session/schedule-save!)))
+  (add-watch samples/loaded-sources     :session-save (fn [_ _ _ _] (session/schedule-save!)))
 
   ;; Global keyboard shortcuts — capture phase so we fire before any child handler
   ;; (including CodeMirror) can stop propagation.
@@ -1884,12 +1973,7 @@
   (add-watch fx/chain                   ::ctx (fn [_ _ _ _] (schedule-render!)))
   (add-watch audio/scheduler-state      ::ctx (fn [_ _ _ _]
                                                 (schedule-render!)
-                                                (render-track-panel!)
-                                                ;; Persist BPM
-                                                (try
-                                                  (.setItem js/localStorage bpm-storage-key
-                                                            (str (audio/get-bpm)))
-                                                  (catch :default _))))
+                                                (render-track-panel!)))
   (add-watch samples/active-bank-prefix ::ctx (fn [_ _ _ _] (schedule-render!)))
   (add-watch samples/loaded-sources     ::ctx (fn [_ _ _ _] (schedule-render!)))
   (add-watch midi/cc-mappings           ::ctx (fn [_ _ _ _] (schedule-render!)))

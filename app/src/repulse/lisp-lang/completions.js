@@ -89,6 +89,7 @@ const BUILTINS = [
   // --- Onboarding ---
   { label: "demo",        type: "function", detail: "(demo :name) — load a starter template and play it; (demo) lists available demos" },
   { label: "tutorial",    type: "function", detail: "(tutorial n) — load tutorial chapter n into the editor (1–8); (tutorial) loads chapter 1" },
+  { label: "reset!",      type: "function", detail: "(reset!) — stop playback, wipe all persisted state, and reload with a fresh demo" },
   // --- Arrangement ---
   { label: "arrange",      type: "function", detail: "(arrange [[pat cycles] …]) — sequence patterns by duration" },
   { label: "play-scenes",  type: "function", detail: "(play-scenes [pat …]) — play patterns as 1-cycle scenes" },
