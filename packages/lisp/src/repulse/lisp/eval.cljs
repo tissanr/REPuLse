@@ -530,17 +530,18 @@
      ;; inside defsynth bodies.  Passed to (env-gen data source) inside a synth.
      "env"    (fn [& args]
                 (let [args'  (mapv unwrap args)
-                      levels (nth args' 0 [])
-                      times  (nth args' 1 [])
-                      curves (nth args' 2 [])]
+                      ;; Unwrap SourcedVal records inside each vector element
+                      levels (mapv unwrap (nth args' 0 []))
+                      times  (mapv unwrap (nth args' 1 []))
+                      curves (mapv unwrap (nth args' 2 []))]
                   (when (not= (count times) (dec (count levels)))
                     (throw (js/Error.
                              (str "env: times must have exactly (count levels - 1) elements. "
                                   "Got " (count levels) " levels and " (count times) " times."))))
                   {:type   :envelope
-                   :levels (vec levels)
-                   :times  (vec times)
-                   :curves (into (vec curves)
+                   :levels levels
+                   :times  times
+                   :curves (into curves
                                  (repeat (max 0 (- (count times) (count curves))) :lin))}))
      "stop"   stop-fn
      :*defs*  defs
