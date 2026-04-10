@@ -34,7 +34,7 @@ Map    { "{" expr* "}" }
     "track" | "mute!" | "unmute!" | "solo!" | "clear!" | "tracks" | "tap!" | "midi-sync!" |
     "midi-map" | "midi-out" | "midi-clock-out!" | "midi-export" |
     "freesound!" | "freesound-key!" |
-    "upd" | "demo" | "tutorial" |
+    "upd" | "demo" | "tutorial" | "share!" |
     "~" | "alt" | "load-gist" | "export" |
     "rate" | "begin" | "end" | "loop-sample" |
     "saw" | "square" | "noise" | "fm" | "synth" |
