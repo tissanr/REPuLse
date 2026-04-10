@@ -1124,7 +1124,20 @@
           (set-output! val :success)
 
           :else
-          (set-output! (str "=> " (pr-str val)) :success))))))
+          (set-output! (str "=> " (pr-str val)) :success))
+
+        ;; ── Legacy :_ track hot-swap ──────────────────────────────────────
+        ;; When the last form is not a pattern (e.g. (defsynth lfo ...) follows
+        ;; (def bass ...)), the scheduler's :_ track is never updated because
+        ;; no play-track! call is made.  After evaluation, if :_ is active and
+        ;; exactly one pattern exists in *defs*, update :_ with it so slider
+        ;; changes and re-evaluations are reflected immediately.
+        (when (and (not (core/pattern? val))
+                   (contains? (:tracks @audio/scheduler-state) :_))
+          (let [defs-vals (vals @(:*defs* env))
+                pats      (filter core/pattern? defs-vals)]
+            (when (= 1 (count pats))
+              (audio/play-track! :_ (first pats) on-beat highlight-range!))))))))
 
 ;;; Context panel
 
