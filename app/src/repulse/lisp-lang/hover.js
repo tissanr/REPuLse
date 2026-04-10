@@ -372,6 +372,40 @@ const DOCS = {
     description: "Load tutorial chapter n into the editor without auto-playing. Defaults to chapter 1. Press Alt+Enter to hear it.",
     example: "(tutorial 3)",
   },
+
+  // --- General envelopes ---
+  "env": {
+    signature: "(env levels times) or (env levels times curves)",
+    description: "Construct a general envelope descriptor from breakpoint levels and segment durations. Pass to env-gen inside a defsynth body. Supported curves: :lin :exp :sin :welch :step or a positive number.",
+    example: "(env [0 1 0.3 0] [0.01 0.1 0.5] [:lin :exp :exp])",
+  },
+  "env-gen": {
+    signature: "(env-gen env-data signal)",
+    description: "Apply a general envelope (created with env) to a UGen signal. Returns the enveloped signal with duration equal to the total envelope time.",
+    example: "(-> (sin freq) (env-gen (env [0 1 0] [0.01 0.5] [:lin :exp])))",
+  },
+
+  // --- Bus system ---
+  "bus": {
+    signature: "(bus :name) or (bus :name :control|:audio)",
+    description: "Declare a named bus. :control (default) uses a ConstantSourceNode — ideal for LFOs and modulation signals. :audio uses a GainNode for mixing audio-rate signals.",
+    example: "(bus :lfo :control)",
+  },
+  "out": {
+    signature: "(out :bus-name signal)",
+    description: "Write a UGen signal to a named bus. Use inside defsynth bodies. Re-triggers replace the previous connection for the same synth→bus pair.",
+    example: "(out :lfo (sin 4))",
+  },
+  "in": {
+    signature: "(in :bus-name)",
+    description: "Read from a named bus as a UGen audio source. Returns silence and logs a warning if the bus does not exist.",
+    example: "(lpf (* 2000 (in :lfo)) (saw freq))",
+  },
+  "kr": {
+    signature: "(kr rate signal)",
+    description: "Control-rate pass-through. In Web Audio, control-rate is not separately exposed — this is an informational wrapper that returns the signal unchanged.",
+    example: "(kr 100 (in :lfo))",
+  },
 };
 
 /**

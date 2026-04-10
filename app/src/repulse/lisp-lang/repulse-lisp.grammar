@@ -39,7 +39,8 @@ Map    { "{" expr* "}" }
     "rate" | "begin" | "end" | "loop-sample" |
     "saw" | "square" | "noise" | "fm" | "synth" |
     "sin" | "tri" | "lpf" | "hpf" | "bpf" | "mix" | "gain" | "delay-node" |
-    "env-perc" | "env-asr" |
+    "env-perc" | "env-asr" | "env-gen" | "env" |
+    "bus" | "out" | "in" | "kr" |
     "conj" | "count" | "nth" | "first" | "rest" | "empty?" |
     "cons" | "concat" | "vec" | "map" | "filter" | "reduce" | "range" |
     "mod" | "quot" | "abs" | "max" | "min" | "identity" | "apply" | "list" |

@@ -3,6 +3,7 @@
             [repulse.theory :as theory]
             [repulse.samples :as samples]
             [repulse.synth :as synth]
+            [repulse.bus :as bus]
             [repulse.midi :as midi]))
 
 ;; Web Audio API scheduler
@@ -599,6 +600,8 @@
     (doseq [{:keys [plugin]} fx-chain]
       (try (.destroy ^js plugin) (catch :default _))))
   (reset! track-nodes {})
+  ;; Clean up all named buses and their persistent synth writers
+  (bus/cleanup-all!)
   (swap! scheduler-state assoc
          :playing?     false
          :interval-id  nil

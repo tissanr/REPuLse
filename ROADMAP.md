@@ -634,20 +634,27 @@ See full spec: [PROMPTS/PHASE-T1.md](PROMPTS/PHASE-T1.md)
 
 ---
 
-## Phase P — Modular Routing: Busses & Control Rate 📋 *planned*
+## Phase P — Modular Routing: Busses & Control Rate ✅ *delivered*
 
 Named audio and control-rate busses for inter-synth modulation — patch an LFO
 into a filter cutoff, sidechain one synth from another, build modular-style rigs.
 
 **Key additions:**
-- `(bus :name)` / `(bus :name :control)` — create named audio or control-rate busses in `app/src/repulse/bus.cljs`
-- `(out :bus-name signal)` — write a synth's output to a named bus (inside `defsynth`)
-- `(in :bus-name)` — read from a bus as a UGen source (inside `defsynth`)
-- `(kr freq signal)` — control-rate wrapper; downsamples to per-block updates instead of per-sample
-- `(env [levels] [times] [curves])` — general envelope constructor with per-segment curve types (`:lin`, `:exp`, `:sin`, `:welch`, `:step`, or a numeric curvature)
-- `(env-gen envelope gate)` — apply any envelope to a signal, with gate-based sustain/release
-- Bus inspector in the context panel — shows active busses and their current values
-- Unit tests for envelope math in `packages/core/test/repulse/envelope_test.cljs`
+- `(bus :name)` / `(bus :name :control|:audio)` — creates a named bus backed by a `ConstantSourceNode` (control) or `GainNode` (audio); registry in `app/src/repulse/bus.cljs`
+- `(out :bus-name signal)` / `(in :bus-name)` — write/read bus signals inside `defsynth` bodies; re-triggers replace the previous oscillator so connections don't accumulate
+- `(kr rate signal)` — control-rate pass-through wrapper (informational; Web Audio is sample-rate throughout)
+- `(env levels times curves?)` — general envelope descriptor with per-segment curve types: `:lin`, `:exp`, `:sin`, `:welch`, `:step`, or a numeric curvature value
+- `(env-gen env-data signal)` — apply any `env` envelope to a UGen signal via `GainNode` automation; uses `setValueCurveAtTime` for non-linear shapes
+- Pure envelope math (`packages/core/src/repulse/envelope.cljs`) with `lin-samples`, `sin-samples`, `welch-samples`, `exp-samples`, `custom-curve-samples`; tested in `envelope_test.cljs`
+- Bus inspector section in the context panel — lists active bus names and types at a glance
+- `(stop)` and `(clear!)` clean up all bus nodes and tracked synth writers
+
+**Delivered:**
+- `app/src/repulse/bus.cljs` — bus registry with per-synth writer tracking
+- `app/src/repulse/synth.cljs` — `out-node`, `in-node`, `kr-node`, `env-gen-node`, `apply-env-automation!`
+- `packages/core/src/repulse/envelope.cljs` — pure curve math (no Web Audio dependency)
+- `packages/core/src/repulse/envelope_test.cljs` — 126 total tests passing, 0 failures
+- Grammar + completions + hover docs for `bus`, `out`, `in`, `kr`, `env`, `env-gen`
 
 See full spec: [PROMPTS/phase-p-modular-routing.md](PROMPTS/phase-p-modular-routing.md)
 

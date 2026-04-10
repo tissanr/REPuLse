@@ -214,7 +214,7 @@ After code edits, follow the standard `<verification_workflow>` using the previe
 | N1    | MIDI CC mapping — bind controller knobs to any parameter      | planned      |
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
 | T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | ✓ delivered  |
-| P     | Modular routing — busses, control rate, general envelopes      | planned      |
+| P     | Modular routing — busses, control rate, general envelopes      | ✓ delivered  |
 | DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | planned      |
 | DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | planned      |
 | DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | planned      |

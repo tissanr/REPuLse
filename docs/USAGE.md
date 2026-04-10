@@ -138,7 +138,7 @@ Patterns describe **what** sounds and **when**. All composition happens here:
 
 - **Oscillators:** `sin`, `saw`, `square`, `tri`, `noise`
 - **Filters:** `lpf`, `hpf`, `bpf`
-- **Envelopes:** `env-perc`, `env-asr`
+- **Envelopes:** `env-perc`, `env-asr`, `env` + `env-gen` (general envelope)
 - **Routing:** `mix`, `gain`, `delay-node`
 - **Threading:** `->` (thread-first) — **only valid inside defsynth**
 
@@ -150,7 +150,7 @@ REPuLse is not a signal-flow language. Unlike SuperCollider, Overtone, or Extemp
 
 - There is **no** inline oscillator/filter routing at the pattern level
 - There is **no** `patch`, `instrument`, or `synth-def` block that wires oscillators to filters to outputs
-- There is **no** bus/send architecture
+- There is **no** internal patch bay — use `bus`/`out`/`in` for inter-synth routing (Phase P)
 - There are **no** UGen functions like `osc-wt`, `filter-lp`, `distort` at the pattern level
 - Effects are **not** inline signal processors — they are applied via `(fx :name value)` or inside a `->>` pipeline
 
@@ -1367,8 +1367,87 @@ Available UGens:
 | `(mix a b)` | Mix two signals |
 | `(env-perc attack decay src)` | Percussive envelope |
 | `(env-asr attack sustain release src)` | Sustain + release envelope |
+| `(env-gen env-data src)` | General envelope — takes data from `(env ...)` |
+| `(out :bus-name src)` | Write signal to a named bus |
+| `(in :bus-name)` | Read from a named bus as a UGen source |
+| `(kr rate src)` | Control-rate pass-through (informational wrapper) |
 
 Synths are ephemeral — nodes are created at event time and disconnected after the envelope.
+
+### `env` — general envelope constructor
+
+Build arbitrary multi-segment envelopes with per-segment curve types:
+
+```lisp
+;; (env levels times) — 3 levels, 2 segments, both linear
+(env [0 1 0] [0.01 0.5])
+
+;; (env levels times curves) — per-segment curve types
+(env [0 1 0.3 0] [0.01 0.1 0.5] [:lin :exp :exp])
+```
+
+Curve types:
+
+| Curve | Behaviour |
+|---|---|
+| `:lin` | Linear ramp (default) |
+| `:exp` | Exponential ramp (values must be non-zero) |
+| `:sin` | Sine ease-in/ease-out (slow at both ends) |
+| `:welch` | Quarter-sine — fast at start, slow at end |
+| `:step` | Instant jump at segment end |
+| `2.5` (number) | Power curve — `>1` concave-up, `<1` concave-down |
+
+Use `env` with `env-gen` inside a `defsynth` body:
+
+```lisp
+(defsynth pluck [freq]
+  (-> (saw freq)
+      (lpf 3000)
+      (env-gen (env [0 1 0.3 0] [0.001 0.05 0.4] [:lin :exp :exp]))))
+```
+
+### `bus` / `out` / `in` — named audio and control-rate buses
+
+Buses let synths communicate — use an LFO to modulate a filter, sidechain one synth
+from another, or mix multiple sources.
+
+```lisp
+;; Declare a control-rate bus (ConstantSourceNode)
+(bus :lfo :control)
+
+;; Declare an audio-rate bus (GainNode)
+(bus :aux :audio)
+
+;; LFO writer synth — plays on a track each cycle
+(defsynth lfo-sine []
+  (out :lfo (sin 4)))     ; 4 Hz sine to bus
+
+;; Synth that reads the LFO bus
+(defsynth wobble [freq]
+  (-> (saw freq)
+      (lpf (* 2000 (in :lfo)))   ; LFO modulates cutoff
+      (env-perc 0.01 0.4)))
+
+;; Wire it up
+(track :lfo-src (seq :lfo-sine))
+(->> (scale :minor :c3 (seq 0 3 5 7))
+     (synth :wobble))
+```
+
+Bus rules:
+- `(bus :name)` defaults to `:control`
+- `(out :bus signal)` inside `defsynth` replaces the previous connection from that synth, preventing oscillator accumulation
+- `(in :bus)` returns silence and logs a warning if the bus has not been declared
+- `(stop)` and `(clear!)` destroy all buses and release their nodes
+
+| Function | Description |
+|---|---|
+| `(bus :name)` | Create a control-rate bus (ConstantSourceNode) |
+| `(bus :name :control)` | Same as above, explicit type |
+| `(bus :name :audio)` | Create an audio-rate bus (GainNode) |
+| `(out :bus signal)` | Write signal to bus inside `defsynth` |
+| `(in :bus)` | Read bus as a UGen source inside `defsynth` |
+| `(kr rate signal)` | Control-rate pass-through (no-op; informational) |
 
 ### `defmacro` — compile-time transforms
 

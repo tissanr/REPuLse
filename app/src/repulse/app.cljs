@@ -3,6 +3,7 @@
             [repulse.lisp.eval :as leval]
             [repulse.core :as core]
             [repulse.audio :as audio]
+            [repulse.bus :as bus]
             [repulse.midi :as midi]
             [repulse.theory :as theory]
             [repulse.params :as params]
@@ -718,6 +719,18 @@
                    (fn [prefix]
                      (samples/set-bank-prefix! (leval/unwrap prefix))
                      (str "bank: " (if prefix (name (leval/unwrap prefix)) "cleared")))
+                   ;; --- Named audio/control buses ---
+                   "bus"
+                   (fn [& args]
+                     (let [args'     (mapv leval/unwrap args)
+                           bus-name  (first args')
+                           bus-type  (or (second args') :control)]
+                       (when-not (keyword? bus-name)
+                         (throw (js/Error. "bus: first argument must be a keyword, e.g. (bus :lfo :control)")))
+                       (when-not (#{:control :audio} bus-type)
+                         (throw (js/Error. (str "bus: type must be :control or :audio, got " bus-type))))
+                       (bus/create-bus! (audio/get-ctx) bus-name bus-type)
+                       (str "=> bus " bus-name " (" (name bus-type) ")")))
                    ;; fx: context-aware — per-track transformer when called from ->>, global otherwise
                    "fx"
                    (fn [& raw-args]
@@ -1111,7 +1124,20 @@
           (set-output! val :success)
 
           :else
-          (set-output! (str "=> " (pr-str val)) :success))))))
+          (set-output! (str "=> " (pr-str val)) :success))
+
+        ;; ── Legacy :_ track hot-swap ──────────────────────────────────────
+        ;; When the last form is not a pattern (e.g. (defsynth lfo ...) follows
+        ;; (def bass ...)), the scheduler's :_ track is never updated because
+        ;; no play-track! call is made.  After evaluation, if :_ is active and
+        ;; exactly one pattern exists in *defs*, update :_ with it so slider
+        ;; changes and re-evaluations are reflected immediately.
+        (when (and (not (core/pattern? val))
+                   (contains? (:tracks @audio/scheduler-state) :_))
+          (let [defs-vals (vals @(:*defs* env))
+                pats      (filter core/pattern? defs-vals)]
+            (when (= 1 (count pats))
+              (audio/play-track! :_ (first pats) on-beat highlight-range!))))))))
 
 ;;; Context panel
 
@@ -1527,6 +1553,20 @@
                   sources))
            "</div>"))))
 
+(defn- render-buses-section []
+  (let [buses (bus/active-buses)]
+    (when (seq buses)
+      (str "<div class=\"ctx-section\">"
+           "<div class=\"ctx-section-title\">Buses</div>"
+           (apply str
+             (map (fn [[bus-name {:keys [type]}]]
+                    (str "<div class=\"ctx-row\">"
+                         "<span class=\"ctx-name\">" bus-name "</span>"
+                         "<span class=\"ctx-type\">" (name type) "</span>"
+                         "</div>"))
+                  (sort-by (comp name key) buses)))
+           "</div>"))))
+
 (defn- render-bindings-section []
   (let [env      (or @env-atom {})
         builtins @builtin-names
@@ -1553,6 +1593,7 @@
                (render-tracks-section)
                (render-fx-section)
                (render-midi-section)
+               (render-buses-section)
                (render-sources-section)
                (render-bindings-section)))))
 

@@ -526,6 +526,23 @@
                   (when-not (pos? dur)
                     (throw (js/Error. "Transition duration must be > 0")))
                   {:type :tween :curve curve :start start :end end :duration-bars dur}))
+     ;; General envelope constructor — returns pure data, usable at top level and
+     ;; inside defsynth bodies.  Passed to (env-gen data source) inside a synth.
+     "env"    (fn [& args]
+                (let [args'  (mapv unwrap args)
+                      ;; Unwrap SourcedVal records inside each vector element
+                      levels (mapv unwrap (nth args' 0 []))
+                      times  (mapv unwrap (nth args' 1 []))
+                      curves (mapv unwrap (nth args' 2 []))]
+                  (when (not= (count times) (dec (count levels)))
+                    (throw (js/Error.
+                             (str "env: times must have exactly (count levels - 1) elements. "
+                                  "Got " (count levels) " levels and " (count times) " times."))))
+                  {:type   :envelope
+                   :levels levels
+                   :times  times
+                   :curves (into curves
+                                 (repeat (max 0 (- (count times) (count curves))) :lin))}))
      "stop"   stop-fn
      :*defs*  defs
      :*macros* macros
