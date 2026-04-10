@@ -166,10 +166,20 @@
 
 ;;; Session persistence
 
+(defn- b64-encode
+  "Unicode-safe base64 encode: handles em-dashes and other non-Latin-1 chars."
+  [s]
+  (js/btoa (js/unescape (js/encodeURIComponent s))))
+
+(defn- b64-decode
+  "Unicode-safe base64 decode: inverse of b64-encode."
+  [s]
+  (js/decodeURIComponent (js/escape (js/atob s))))
+
 (defn- encode-session []
   (let [snap (session/build-session-snapshot)
         obj  (clj->js snap)]
-    (str "#v2:" (js/btoa (js/JSON.stringify obj)))))
+    (str "#v2:" (b64-encode (js/JSON.stringify obj)))))
 
 (defn- decode-session
   "Decode a URL hash into a session map. Handles #v1: and #v2: formats.
@@ -179,7 +189,7 @@
     (cond
       (and hash (cstr/starts-with? hash "#v2:"))
       (let [b64  (subs hash 4)
-            data (js->clj (js/JSON.parse (js/atob b64)) :keywordize-keys true)]
+            data (js->clj (js/JSON.parse (b64-decode b64)) :keywordize-keys true)]
         (when (= (:v data) 2) data))
 
       (and hash (cstr/starts-with? hash "#v1:"))
