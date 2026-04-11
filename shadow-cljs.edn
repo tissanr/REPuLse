@@ -10,9 +10,7 @@
    :output-dir "app/public/js"
    :asset-path "/js"
    :modules {:main {:init-fn repulse.app/init}}
-   :devtools {:after-load repulse.app/reload}
-   ;; Target ES2020 so Closure Compiler leaves dynamic import() calls intact
-   :compiler-options {:language-out :ecmascript-2020}}
+   :devtools {:after-load repulse.app/reload}}
 
   :test
   {:target :node-script
