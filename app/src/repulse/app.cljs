@@ -822,6 +822,9 @@
                                      (fx/set-param! effect-name (cljs.core/name k) v))
                                    (fx/set-param! effect-name "value" (first rest-args))))))
                            nil))))
+                   ;; --- Share ---
+                   "share!"
+                   (fn [] (share!) nil)
                    ;; --- Demo templates ---
                    "demo"
                    (fn [& args]

@@ -44,6 +44,7 @@ const BUILTINS = [
   { label: "~",            type: "function", detail: "(~ \"bd sd [hh hh] bd\") — parse mini-notation string into pattern" },
   { label: "alt",          type: "function", detail: "(alt pat-a pat-b …) — cycle-based alternation: play pat-a on cycle 0, pat-b on cycle 1, …" },
   // --- Sharing ---
+  { label: "share!",       type: "function", detail: "(share!) — copy shareable session URL to clipboard" },
   { label: "load-gist",    type: "function", detail: "(load-gist url) — fetch a Gist and load into editor" },
   { label: "export",       type: "function", detail: "(export) — render all tracks to WAV; (export n) — n cycles; (export :track) — single track" },
   // --- Sample playback control ---
