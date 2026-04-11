@@ -11,9 +11,15 @@
    :asset-path "/js"
    :modules {:main {:init-fn repulse.app/init}}
    :devtools {:after-load repulse.app/reload}
-   ;; ES2020 output prevents Closure from downcompiling @lezer/lr to ES5,
-   ;; which causes property-renaming mismatches that break LRParser.deserialize.
-   :compiler-options {:language-out :ecmascript-2020}}
+   ;; Closure advanced mode renames properties in source JS files (parser.js)
+   ;; but npm modules (@lezer/lr) are bundled separately and not advanced-compiled,
+   ;; so their internal accesses keep the original names.  The externs file below
+   ;; prevents Closure from renaming the LRParser.deserialize spec properties
+   ;; (nodeNames, tokenData, topRules, …), fixing the blank-page crash on Netlify.
+   ;; :language-out :ecmascript-2020 preserves dynamic import() emitted via the
+   ;; Function-constructor workaround in app.cljs.
+   :compiler-options {:language-out :ecmascript-2020
+                      :externs ["app/externs/lezer-lr.js"]}}
 
   :test
   {:target :node-script
