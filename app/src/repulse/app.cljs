@@ -209,6 +209,13 @@
       :else nil)
     (catch :default _ nil)))
 
+;; Closure Compiler cannot transpile dynamic import() expressions that appear
+;; in ClojureScript-compiled (goog.module) code.  Wrapping the call inside a
+;; Function constructor hides the syntax from Closure's static analysis;
+;; the browser executes it natively at runtime.
+(def ^:private dynamic-import!
+  (js/Function. "url" "return import(url)"))
+
 (defn share! []
   (let [session (encode-session)
         url     (str (.-origin js/location) (.-pathname js/location) session)]
@@ -739,7 +746,7 @@
                    "load-plugin"
                    (fn [url]
                      (let [url' (leval/unwrap url)]
-                       (-> (js* "import(~{})" url')
+                       (-> (dynamic-import! url')
                            (.then (fn [m]
                                     (let [plug (.-default m)]
                                       (when (= "effect" (.-type plug))
@@ -1939,7 +1946,7 @@
     true) ;; true = capture phase
 
   ;; Auto-load built-in visual plugins
-  (-> (js* "import('/plugins/spectrum.js')")
+  (-> (dynamic-import! "/plugins/spectrum.js")
       (.then (fn [m]
                (let [plug (.-default m)]
                  (plugins/register! plug (make-host))
@@ -1960,7 +1967,7 @@
                "/plugins/overdrive.js"
                "/plugins/bitcrusher.js"
                "/plugins/sidechain.js"]]
-    (-> (js* "import(~{})" url)
+    (-> (dynamic-import! url)
         (.then (fn [m]
                  (let [plug (.-default m)]
                    (plugins/register! plug (make-host))
