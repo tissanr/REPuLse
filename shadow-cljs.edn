@@ -10,7 +10,9 @@
    :output-dir "app/public/js"
    :asset-path "/js"
    :modules {:main {:init-fn repulse.app/init}}
-   :devtools {:after-load repulse.app/reload}}
+   :devtools {:after-load repulse.app/reload}
+   ;; Target ES2020 so Closure Compiler doesn't try to transpile dynamic import()
+   :compiler-options {:output-feature-set :es2020}}
 
   :test
   {:target :node-script
