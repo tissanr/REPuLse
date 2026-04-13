@@ -215,6 +215,7 @@ After code edits, follow the standard `<verification_workflow>` using the previe
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
 | T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | ✓ delivered  |
 | P     | Modular routing — busses, control rate, general envelopes      | ✓ delivered  |
+| J2    | Contextual insertion buttons — hover `+` on parens for wrap/chain | planned      |
 | DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | planned      |
 | DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | planned      |
 | DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | planned      |

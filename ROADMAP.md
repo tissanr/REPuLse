@@ -751,6 +751,25 @@ See full spec: [PROMPTS/PHASE-DST6.md](PROMPTS/PHASE-DST6.md)
 
 ---
 
+## Phase J2 — Contextual Insertion Buttons 📋 *planned*
+
+Point-and-click code scaffolding: `+` buttons appear on hover over parentheses and
+at empty line beginnings. Opening-paren `+` wraps the form (e.g., `fast`, `rev`,
+`every`); closing-paren `+` chains after it via `->>` (e.g., `amp`, `pan`, effects);
+empty-line `+` inserts a new top-level form.
+
+**Key additions:**
+- `app/src/repulse/lisp-lang/insert-helper.js` — ViewPlugin + WidgetType for `+` buttons and dropdown
+- `app/src/repulse/lisp-lang/insert-categories.js` — categorised function lists (wrap, chain, top-level) with templates
+- Opening `(` dropdown: `fast`, `slow`, `rev`, `every`, `jux`, `off`, `sometimes`, `degrade`, `stack`
+- Closing `)` dropdown: `amp`, `pan`, `decay`, `attack`, `release`, and effects (`reverb`, `delay`, `filter`, …)
+- Auto `->>` wrapping: extends existing `->>` chains or creates new ones
+- Reuses `BUILTINS` from `completions.js` and `DOCS` from `hover.js`
+
+See full spec: [PROMPTS/PHASE-J2.md](PROMPTS/PHASE-J2.md)
+
+---
+
 ## Future ideas (unscheduled)
 
 See [docs/FUTURE-FEATURES.md](docs/FUTURE-FEATURES.md) for the full prioritised feature
