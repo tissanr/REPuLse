@@ -770,12 +770,11 @@ See full spec: [PROMPTS/PHASE-J2.md](PROMPTS/PHASE-J2.md)
 
 ---
 
-## Phase R0 — Correctness & Safety Fixes 📋 *planned*
+## Phase R0 — Correctness & Safety Fixes ✅ *delivered*
 
-Fix a small set of concrete correctness and security issues surfaced in code
-review. Must land **before** R1 (so bug fixes don't entangle with the refactor)
-and **before** S1–S4 (two of the four issues become exploitable the moment
-community content exists).
+Fixed a small set of concrete correctness and security issues surfaced in code
+review. This phase landed ahead of the larger refactor work and snippet-library
+phases so those changes build on a safer baseline.
 
 **Key additions:**
 - `and` / `or` become short-circuiting special forms in `eval.cljs` (not eager functions)

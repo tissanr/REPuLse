@@ -184,7 +184,7 @@ If you edit `packages/audio/src/lib.rs`, rebuild with `npm run build:wasm` befor
 re-testing the browser app.
 
 Last known clean test baseline:
-- `npm run test` → 126 tests, 399 assertions, 0 failures
+- `npm run test` → 132 tests, 421 assertions, 0 failures
 
 ---
 
@@ -219,10 +219,25 @@ Last known clean test baseline:
 | E2    | Live session dashboard — per-track params, conditional FX, sources | ✓ delivered  |
 | E2b   | Parameter sliders — dashboard sliders that update code live    | ✓ delivered  |
 | 10a   | Editor diagnostics — red squiggle underlines on eval errors    | ✓ delivered  |
-| D2    | Full session persistence — all state in localStorage + reset!  | planned      |
+| D2    | Full session persistence — all state in localStorage + reset!  | ✓ delivered  |
 | N1    | MIDI CC mapping — bind controller knobs to any parameter      | planned      |
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
-| P     | Modular routing — busses, control rate, general envelopes      | planned      |
+| T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | ✓ delivered  |
+| P     | Modular routing — busses, control rate, general envelopes      | ✓ delivered  |
+| J2    | Contextual insertion buttons — hover `+` on parens for wrap/chain | planned   |
+| R0    | Correctness & safety — and/or short-circuit, BPM clamp, plugin consent | ✓ delivered |
+| S1    | Local snippet library — curated JSON, browse/preview/insert    | planned      |
+| R1    | Refactor — split app.cljs into focused modules                 | planned      |
+| S2    | Backend & auth — Vercel + Supabase, GitHub OAuth, REST API     | planned      |
+| S3    | Community snippets — submit, star, rank, usage tracking        | planned      |
+| S4    | Snippet audio preview — sandboxed eval, waveforms, indicators  | planned      |
+| R2    | Refactor — decompose eval.cljs builtin map into domain namespaces | planned    |
+| DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | planned      |
+| DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | planned      |
+| DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | planned      |
+| DST4  | Distortion — oversampling wrapper (:oversample 1/2/4)          | planned      |
+| DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | planned   |
+| DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | planned      |
 
 See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full delivery notes.
 
