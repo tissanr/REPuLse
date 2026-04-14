@@ -770,6 +770,144 @@ See full spec: [PROMPTS/PHASE-J2.md](PROMPTS/PHASE-J2.md)
 
 ---
 
+## Phase R0 — Correctness & Safety Fixes 📋 *planned*
+
+Fix a small set of concrete correctness and security issues surfaced in code
+review. Must land **before** R1 (so bug fixes don't entangle with the refactor)
+and **before** S1–S4 (two of the four issues become exploitable the moment
+community content exists).
+
+**Key additions:**
+- `and` / `or` become short-circuiting special forms in `eval.cljs` (not eager functions)
+- `coerce-bpm` helper clamps BPM to `[20, 400]`, rejects NaN/non-number — applied at `audio.cljs`, `session.cljs`, and `app.cljs` write sites
+- `load-plugin` shows a confirmation dialog on first load per origin; consent remembered for the session
+- Eval errors use a typed marker (`EvalError` record) instead of `{:error msg}` maps — so user data like `{:error "x"}` round-trips correctly
+- `session_test.cljs` — first app-layer test, exercising BPM coercion on restore
+- Remove unused `svelte` dependency from `app/package.json`
+- `CLAUDE.md` corrections: remove "Svelte 5" claim, fix `npm run dev` description
+
+See full spec: [PROMPTS/PHASE-R0.md](PROMPTS/PHASE-R0.md)
+
+---
+
+## Phase S1 — Local Snippet Library 📋 *planned*
+
+Browsable, auditionable snippet library inside the editor — curated starter set
+shipped as static JSON. No backend required; runs on current Netlify deployment.
+First step of the Snippet Library epic (S1–S4); validates the UX before building
+the community backend.
+
+**Key additions:**
+- `app/public/snippets/library.json` — 20–30 curated snippets with metadata (title, author, tags, code, BPM)
+- `app/src/repulse/snippets.cljs` — snippet registry, search, filter, insert
+- `app/src/repulse/ui/snippet_panel.cljs` — collapsible browser panel below editor
+- **Solo preview**: snippet plays in isolation via a temporary `:__preview__` track
+- **Mix preview**: snippet plays alongside the running session
+- **Insert** appends snippet code to the editor and triggers `(upd)`
+- Controlled tag vocabulary: rhythm, bassline, melody, chord-progression, fx-demo, …
+- `(snippet :name)` Lisp built-in for programmatic access
+
+See full spec: [PROMPTS/PHASE-S1.md](PROMPTS/PHASE-S1.md)
+
+---
+
+## Phase R1 — App.cljs Modularization 📋 *planned*
+
+Pure refactor: split the 1997-line `app.cljs` into focused namespaces so the
+upcoming Snippet Library backend (S2–S4) has a clean place to land. No new
+features, no API changes — move-and-organize only.
+
+**Key additions:**
+- `app/src/repulse/content/demos.cljs`, `content/tutorial.cljs`, `content/first_visit.cljs` — extract 900+ lines of content data
+- `app/src/repulse/ui/editor.cljs` — CodeMirror setup + highlight infrastructure
+- `app/src/repulse/ui/timeline.cljs`, `ui/context_panel.cljs` — UI panels
+- `app/src/repulse/eval_orchestrator.cljs` — evaluate/upd/code-patching glue
+- `app/src/repulse/session_test.cljs` — first test for the app layer (v1→v2 migration round-trip)
+- `docs/ARCHITECTURE.md` — document module boundaries and dependency direction
+- Target: `app.cljs` ≤ 700 lines (from 1997)
+
+See full spec: [PROMPTS/PHASE-R1.md](PROMPTS/PHASE-R1.md)
+
+---
+
+## Phase S2 — Backend & Authentication 📋 *planned*
+
+Migrate from static Netlify to Vercel + Supabase. Add user accounts (OAuth via
+GitHub), snippet CRUD API, and database schema for community snippets. Pure
+infrastructure phase — community features ship in S3.
+
+**Key additions:**
+- `vercel.json` replaces `netlify.toml`
+- Supabase project: `profiles`, `snippets`, `stars` tables with RLS policies
+- GitHub OAuth login via Supabase Auth; login button in app header
+- `api/snippets.ts`, `api/snippets/[id]/star.ts` — serverless REST endpoints
+- `app/src/repulse/api.cljs` — API client with auth token handling
+- `app/src/repulse/auth.cljs` — login state atom, session restore
+- S1 curated snippets seeded into Supabase
+- `docs/DEPLOYMENT.md` — Vercel + Supabase setup guide
+
+See full spec: [PROMPTS/PHASE-S2.md](PROMPTS/PHASE-S2.md)
+
+---
+
+## Phase S3 — Community Snippets 📋 *planned*
+
+User-submitted snippets with ranking, usage tracking, and community browsing.
+Depends on S2.
+
+**Key additions:**
+- **Share as snippet** button in editor header — opens submit modal with title, description, tags, BPM
+- Star toggle per card, with optimistic UI updates
+- Usage counter incremented silently on insert
+- Sort options: newest, most starred, most used, trending
+- Filter by tag, author, or free-text search
+- Report button + `reports` table for minimal moderation
+- Anonymous users: browse + preview + insert; logged-in users: submit + star + report
+
+See full spec: [PROMPTS/PHASE-S3.md](PROMPTS/PHASE-S3.md)
+
+---
+
+## Phase S4 — Snippet Audio Preview 📋 *planned*
+
+Production-quality audition for community snippets: sandboxed eval, state
+isolation, visual playing indicators, and per-card mini waveforms. Upgrades
+S1's minimal preview.
+
+**Key additions:**
+- `app/src/repulse/snippets/preview.cljs` — isolated preview engine
+- `app/src/repulse/snippets/sandbox.cljs` — env snapshot/restore so previews don't mutate user state
+- 500ms execution time limit for runaway snippets
+- Playing indicator (animated) on the active snippet card
+- Mini waveform canvas per card, client-rendered via AnalyserNode during preview
+- Syntax errors show as tooltip on the card, never crash the app
+- Solo + mix preview both routed through the sandbox
+
+See full spec: [PROMPTS/PHASE-S4.md](PROMPTS/PHASE-S4.md)
+
+---
+
+## Phase R2 — Builtin Table Decomposition 📋 *planned*
+
+Pure refactor of the Lisp evaluator: split the monolithic built-in map in
+`packages/lisp/src/repulse/lisp/eval.cljs` (~250 lines starting at line 306)
+into domain-grouped namespaces. No behaviour change, no new built-ins. Lower
+urgency than R1 — covered by existing test suite, not blocking any feature.
+
+**Key additions:**
+- `packages/lisp/src/repulse/lisp/builtins/pattern.cljs` — pattern constructors and transforms
+- `packages/lisp/src/repulse/lisp/builtins/math.cljs` — arithmetic and number ops
+- `packages/lisp/src/repulse/lisp/builtins/music.cljs` — scale, chord, transpose
+- `packages/lisp/src/repulse/lisp/builtins/params.cljs` — amp, pan, envelope params
+- `packages/lisp/src/repulse/lisp/builtins/collection.cljs` — map, filter, reduce, conj, get
+- `packages/lisp/src/repulse/lisp/builtins/control.cljs` — not, comparison, truthy helpers
+- `make-env` shrinks to <30 lines: imports + merges
+- `eval.cljs` shrinks from ~557 lines to ~300 lines (evaluator + special forms only)
+
+See full spec: [PROMPTS/PHASE-R2.md](PROMPTS/PHASE-R2.md)
+
+---
+
 ## Future ideas (unscheduled)
 
 See [docs/FUTURE-FEATURES.md](docs/FUTURE-FEATURES.md) for the full prioritised feature

@@ -55,7 +55,7 @@ repulse/
 │   ├── core/          # Pattern algebra — pure CLJS, no DOM, no audio
 │   ├── lisp/          # REPuLse-Lisp reader + evaluator (CLJS)
 │   └── audio/         # Rust crate → wasm-pack → WASM module
-├── app/               # Svelte 5 browser app — wires everything together
+├── app/               # Browser app (CLJS + vanilla DOM) — wires everything together
 ├── PROMPTS/           # Phase prompts (one per Claude Code session)
 ├── docs/              # Architecture, usage, and future-features docs
 ├── README.md          # Quick start and language reference
@@ -119,7 +119,7 @@ and calls into Rust/WASM for synthesis:
 | Lisp interpreter     | ClojureScript                     |
 | Audio synthesis      | Rust → WASM (via wasm-pack)       |
 | Audio scheduling     | Web Audio API + setInterval (JS)  |
-| Browser app          | Svelte 5                          |
+| Browser app          | ClojureScript + vanilla DOM       |
 | Build tool (CLJS)    | shadow-cljs                       |
 | Build tool (Rust)    | wasm-pack (`--target web`)        |
 | Package management   | npm workspaces                    |
@@ -149,7 +149,8 @@ npm install
 npm run build:wasm       # compiles Rust → WASM
 
 # Development
-npm run dev              # build:wasm + shadow-cljs watch app
+npm run dev              # shadow-cljs watch app only (no WASM build)
+npm run dev:full         # build:wasm + shadow-cljs watch app
 
 # Tests
 npm run test             # cljs.test for packages/core
@@ -174,8 +175,10 @@ Skipping step 2 means the grammar change has no effect at runtime.
 ## Dev server
 
 Use `preview_start` to start the dev server before verifying UI changes. The server
-runs on port 3000 via `npm run dev` (builds Rust/WASM then starts shadow-cljs watch).
-After code edits, follow the standard `<verification_workflow>` using the preview tools.
+runs on port 3000 via `npm run dev` (shadow-cljs watch only — does **not** build WASM).
+Use `npm run dev:full` on the first run of a session to build WASM first, then start
+the watcher. After code edits, follow the standard `<verification_workflow>` using the
+preview tools.
 
 ---
 
@@ -216,6 +219,13 @@ After code edits, follow the standard `<verification_workflow>` using the previe
 | T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | ✓ delivered  |
 | P     | Modular routing — busses, control rate, general envelopes      | ✓ delivered  |
 | J2    | Contextual insertion buttons — hover `+` on parens for wrap/chain | planned      |
+| R0    | Correctness & safety — and/or short-circuit, BPM clamp, plugin consent | planned      |
+| S1    | Local snippet library — curated JSON, browse/preview/insert    | planned      |
+| R1    | Refactor — split app.cljs into focused modules                 | planned      |
+| S2    | Backend & auth — Vercel + Supabase, GitHub OAuth, REST API     | planned      |
+| S3    | Community snippets — submit, star, rank, usage tracking        | planned      |
+| S4    | Snippet audio preview — sandboxed eval, waveforms, indicators  | planned      |
+| R2    | Refactor — decompose eval.cljs builtin map into domain namespaces | planned      |
 | DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | planned      |
 | DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | planned      |
 | DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | planned      |
