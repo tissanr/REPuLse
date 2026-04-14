@@ -55,7 +55,7 @@ repulse/
 │   ├── core/          # Pattern algebra — pure CLJS, no DOM, no audio
 │   ├── lisp/          # REPuLse-Lisp reader + evaluator (CLJS)
 │   └── audio/         # Rust crate → wasm-pack → WASM module
-├── app/               # Svelte 5 browser app — wires everything together
+├── app/               # Browser app assets + CLJS UI/audio integration
 ├── PROMPTS/           # Phase prompts (one per Codex session)
 ├── docs/              # Architecture, usage, and future-features docs
 ├── README.md          # Quick start and language reference
@@ -119,7 +119,7 @@ and calls into Rust/WASM for synthesis:
 | Lisp interpreter     | ClojureScript                     |
 | Audio synthesis      | Rust → WASM (via wasm-pack)       |
 | Audio scheduling     | Web Audio API + setInterval (JS)  |
-| Browser app          | Svelte 5                          |
+| Browser app          | ClojureScript + CodeMirror 6 + plain DOM |
 | Build tool (CLJS)    | shadow-cljs                       |
 | Build tool (Rust)    | wasm-pack (`--target web`)        |
 | Package management   | npm workspaces                    |
@@ -133,11 +133,13 @@ and calls into Rust/WASM for synthesis:
   Never `(/ 1.0 4.0)` for time values.
 - **No external CLJS libraries** in `core` or `lisp`. Only `cljs.core` and `cljs.test`.
 - **No external Rust audio libraries** in `audio`. Only `web-sys` Web Audio API bindings.
-- **Errors are data.** Return `{:error "message"}` maps, not thrown exceptions, from
-  the Lisp evaluator.
+- **Errors surface as typed values at the boundary.** Reader/evaluator internals may throw
+  `ex-info`, but `repulse.lisp.core/eval-string` converts failures into a typed
+  eval-error result for the app layer.
 - **Fuzzy-match typos** in the evaluator. If a symbol is undefined, suggest the closest
   known name.
-- **Tests for core.** Every function in `packages/core` has a unit test in `cljs.test`.
+- **Tests for core and lisp.** The repo currently runs both `packages/core` and
+  `packages/lisp` tests through the shared Shadow test build.
 
 ---
 
@@ -149,10 +151,11 @@ npm install
 npm run build:wasm       # compiles Rust → WASM
 
 # Development
-npm run dev              # build:wasm + shadow-cljs watch app
+npm run dev              # shadow-cljs watch app + dev server on :3000
+npm run dev:full         # build:wasm first, then shadow-cljs watch app
 
 # Tests
-npm run test:core        # cljs.test for packages/core
+npm run test             # shared cljs.test runner for core + lisp + app session tests
 
 # Lezer grammar (syntax highlighting) — run after editing repulse-lisp.grammar
 npm run gen:grammar      # regenerates parser.js + parser.terms.js
@@ -173,9 +176,15 @@ Skipping step 2 means the grammar change has no effect at runtime.
 
 ## Dev server
 
-Use `preview_start` to start the dev server before verifying UI changes. The server
-runs on port 3000 via `npm run dev` (builds Rust/WASM then starts shadow-cljs watch).
-After code edits, follow the standard `<verification_workflow>` using the preview tools.
+For browser verification, start the app with `npm run dev` if the existing WASM build is
+already present, or `npm run dev:full` if you changed Rust audio code or the generated
+WASM assets are missing/stale. The Shadow dev server serves `app/public` on port 3000.
+
+If you edit `packages/audio/src/lib.rs`, rebuild with `npm run build:wasm` before
+re-testing the browser app.
+
+Last known clean test baseline:
+- `npm run test` → 126 tests, 399 assertions, 0 failures
 
 ---
 
