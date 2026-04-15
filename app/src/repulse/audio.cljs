@@ -501,13 +501,14 @@
          :tween-state  {}}))  ; track-name → {param-key {:tween pv :start-time t}}
 
 (defn coerce-bpm
-  "Clamp BPM to a sensible range. Invalid input falls back to 120."
+  "Clamp BPM to the safe scheduler range [20, 640]. Invalid, NaN, or
+   non-positive input falls back to 120."
   [x]
   (let [n (if (number? x) x js/NaN)]
     (cond
       (or (js/isNaN n) (not (pos? n))) 120
       (< n 20) 20
-      (> n 400) 400
+      (> n 640) 640
       :else n)))
 
 (defn set-bpm!
