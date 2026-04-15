@@ -171,24 +171,24 @@
             (when e (eval-form e env))))
 
         "and"
-        (loop [forms tail
-               last-value true]
+        (loop [forms tail]
           (if (empty? forms)
-            last-value
+            true
             (let [value (eval-form (first forms) env)]
-              (if (unwrap value)
-                (recur (rest forms) value)
-                value))))
+              (if (empty? (rest forms))
+                value
+                (if (unwrap value)
+                  (recur (rest forms))
+                  value)))))
 
         "or"
-        (loop [forms tail
-               last-value nil]
+        (loop [forms tail]
           (if (empty? forms)
-            last-value
+            nil
             (let [value (eval-form (first forms) env)]
-              (if (unwrap value)
+              (if (or (unwrap value) (empty? (rest forms)))
                 value
-                (recur (rest forms) value)))))
+                (recur (rest forms))))))
 
         "quote"
         ;; (quote form) — return form unevaluated (no SourcedVal stripping)

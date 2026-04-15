@@ -19,14 +19,17 @@
     (let [forms (reader/read-all src)]
       (if (empty? forms)
         {:result nil}
-        (loop [remaining forms
-               last-result nil]
-          (if (empty? remaining)
-            {:result last-result}
-            (let [result (evaluator/eval-form (first remaining) env)]
-              (if (eval-error? result)
-                result
-                (recur (rest remaining) result)))))))
+        (let [final-result (loop [remaining forms
+                                  last-result nil]
+                             (if (empty? remaining)
+                               last-result
+                               (let [result (evaluator/eval-form (first remaining) env)]
+                                 (if (eval-error? result)
+                                   result
+                                   (recur (rest remaining) result)))))]
+          (if (eval-error? final-result)
+            final-result
+            {:result final-result}))))
     (catch :default e
       (let [data (ex-data e)]
         (eval-error (or (.-message e) (str e))

@@ -274,3 +274,18 @@
           result (lisp/eval-string "(do (def err {:error \"x\"}) err)" env)]
       (is (map? (:result result)))
       (is (= {:error "x"} (:result result))))))
+
+(deftest eval-string-single-form-eval-error-bubbles
+  (testing "a single-form EvalError is returned directly"
+    (let [env    (assoc (make-test-env) "fail-now" (fn [] (lisp/eval-error "nope")))
+          result (lisp/eval-string "(fail-now)" env)]
+      (is (lisp/eval-error? result))
+      (is (= "nope" (:message result))))))
+
+(deftest eval-string-final-form-eval-error-bubbles
+  (testing "a final-form EvalError in a multi-form program is returned directly"
+    (let [env    (assoc (make-test-env)
+                        "fail-later" (fn [] (lisp/eval-error "nope")))
+          result (lisp/eval-string "(def ok 1)\n(fail-later)" env)]
+      (is (lisp/eval-error? result))
+      (is (= "nope" (:message result))))))
