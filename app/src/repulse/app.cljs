@@ -209,12 +209,13 @@
       :else nil)
     (catch :default _ nil)))
 
-;; Closure Compiler cannot transpile dynamic import() expressions that appear
-;; in ClojureScript-compiled (goog.module) code.  Wrapping the call inside a
-;; Function constructor hides the syntax from Closure's static analysis;
-;; the browser executes it natively at runtime.
+;; Closure Compiler rewrites bare import() to require() under :advanced, so
+;; we hide the syntax inside js/Function and let the browser execute it natively.
 (def ^:private dynamic-import!
   (js/Function. "url" "return import(url)"))
+
+;; Session-scoped plugin consent: origin string -> :granted | :denied
+(defonce ^:private plugin-consent (atom {}))
 
 (defn- plugin-origin [url]
   (try
@@ -268,9 +269,6 @@
 
 ;; Freesound API key — set via (freesound-key! "...")
 (defonce ^:private freesound-api-key (atom nil))
-
-;; Session-scoped plugin consent: origin string -> :granted | :denied
-(defonce ^:private plugin-consent (atom {}))
 
 ;;; Plugin support
 
