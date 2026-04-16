@@ -1,6 +1,6 @@
 import { completeFromList } from "@codemirror/autocomplete";
 
-const BUILTINS = [
+export const BUILTINS = [
   // --- Pattern constructors ---
   { label: "seq",          type: "function", detail: "(seq val …) — sequence of values, one per cycle step" },
   { label: "stack",        type: "function", detail: "(stack pat …) — play patterns in parallel" },
