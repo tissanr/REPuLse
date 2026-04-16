@@ -218,7 +218,7 @@ preview tools.
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
 | T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | ✓ delivered  |
 | P     | Modular routing — busses, control rate, general envelopes      | ✓ delivered  |
-| J2    | Contextual insertion buttons — hover `+` on parens for wrap/chain | planned      |
+| J2    | Contextual insertion buttons — hover `+` on parens for wrap/chain | ✓ delivered      |
 | R0    | Correctness & safety — and/or short-circuit, BPM clamp, plugin consent | ✓ delivered  |
 | S1    | Local snippet library — curated JSON, browse/preview/insert    | planned      |
 | R1    | Refactor — split app.cljs into focused modules                 | planned      |
