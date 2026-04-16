@@ -11,7 +11,7 @@
             ["@codemirror/language" :refer [bracketMatching]]
             ["@codemirror/lint" :refer [setDiagnostics lintGutter]]
             ["@codemirror/theme-one-dark" :refer [oneDark]]
-            ["./lisp-lang/index.js" :refer [lispLanguage]]
+            ["../lisp-lang/index.js" :refer [lispLanguage]]
             [clojure.string :as cstr]))
 
 ;;; Atoms
