@@ -209,12 +209,34 @@
       :else nil)
     (catch :default _ nil)))
 
-;; Closure Compiler cannot transpile dynamic import() expressions that appear
-;; in ClojureScript-compiled (goog.module) code.  Wrapping the call inside a
-;; Function constructor hides the syntax from Closure's static analysis;
-;; the browser executes it natively at runtime.
+;; Closure Compiler rewrites bare import() to require() under :advanced, so
+;; we hide the syntax inside js/Function and let the browser execute it natively.
 (def ^:private dynamic-import!
   (js/Function. "url" "return import(url)"))
+
+;; Session-scoped plugin consent: origin string -> :granted | :denied
+(defonce ^:private plugin-consent (atom {}))
+
+(defn- plugin-origin [url]
+  (try
+    (.-origin (js/URL. url (.-href js/location)))
+    (catch :default _ nil)))
+
+(defn- plugin-denied-error [origin]
+  (lisp/eval-error
+   (str "Plugin from " origin
+        " was previously denied. Reload the page to reconsider.")))
+
+(defn- confirm-plugin-origin! [origin]
+  (case (get @plugin-consent origin)
+    :granted true
+    :denied false
+    (let [allowed? (js/confirm
+                    (str "This code wants to load a plugin from " origin
+                         ". Plugins run JavaScript in your session. Only load from "
+                         "sources you trust. Load?"))]
+      (swap! plugin-consent assoc origin (if allowed? :granted :denied))
+      allowed?)))
 
 (defn share! []
   (let [session (encode-session)
@@ -706,10 +728,11 @@
                        (let [code   (.. view -state -doc (toString))
                              env    (assoc @env-atom "stop" (make-stop-fn))
                              result (lisp/eval-string code env)]
-                         (if-let [err (:error result)]
+                         (if (lisp/eval-error? result)
                            (do (clear-highlights!)
-                               (set-diagnostics! view (:from result) (:to result) err)
-                               (set-output! (str "Error: " err) :error))
+                               (let [{:keys [from to]} (:source result)]
+                                 (set-diagnostics! view from to (:message result)))
+                               (set-output! (str "Error: " (:message result)) :error))
                            (do (set-diagnostics! view nil nil nil)
                            (let [val (:result result)]
                              (cond
@@ -745,20 +768,33 @@
                    ;; --- Plugins ---
                    "load-plugin"
                    (fn [url]
-                     (let [url' (leval/unwrap url)]
-                       (-> (dynamic-import! url')
-                           (.then (fn [m]
-                                    (let [plug (.-default m)]
-                                      (when (= "effect" (.-type plug))
-                                        (fx/remove-effect! (.-name plug)))
-                                      (plugins/register! plug (make-host))
-                                      (if (= "visual" (.-type plug))
-                                        (mount-visual! plug)
-                                        (when (= "effect" (.-type plug))
-                                          (fx/add-effect! plug))))))
-                           (.catch (fn [e]
-                                     (js/console.warn "[REPuLse] Plugin load failed:" e))))
-                       nil))
+                     (let [url'   (leval/unwrap url)
+                           origin (plugin-origin url')]
+                       (cond
+                         (nil? origin)
+                         (lisp/eval-error (str "Invalid plugin URL: " url'))
+
+                         (= :denied (get @plugin-consent origin))
+                         (plugin-denied-error origin)
+
+                         (not (confirm-plugin-origin! origin))
+                         (plugin-denied-error origin)
+
+                         :else
+                         (do
+                           (-> (dynamic-import! url')
+                               (.then (fn [m]
+                                        (let [plug (.-default m)]
+                                          (when (= "effect" (.-type plug))
+                                            (fx/remove-effect! (.-name plug)))
+                                          (plugins/register! plug (make-host))
+                                          (if (= "visual" (.-type plug))
+                                            (mount-visual! plug)
+                                            (when (= "effect" (.-type plug))
+                                              (fx/add-effect! plug))))))
+                               (.catch (fn [e]
+                                         (js/console.warn "[REPuLse] Plugin load failed:" e))))
+                           nil))))
                    "unload-plugin"
                    (fn [name]
                      (let [name' (leval/unwrap name)]
@@ -766,7 +802,7 @@
                          (do (plugins/unregister! name')
                              (maybe-hide-visual-panel!)
                              (str "unloaded: " name'))
-                         {:error (str "no plugin named \"" name' "\"")})))
+                         (lisp/eval-error (str "no plugin named \"" name' "\"")))))
                    "bank"
                    (fn [prefix]
                      (samples/set-bank-prefix! (leval/unwrap prefix))
@@ -1144,12 +1180,13 @@
   ;; Keep stop fn up to date (in case env was reset)
   (let [env (assoc @env-atom "stop" (make-stop-fn))
         result (lisp/eval-string code env)]
-    (if-let [err (:error result)]
+    (if (lisp/eval-error? result)
       (do
         (clear-highlights!)
         (when-let [view @editor-view]
-          (set-diagnostics! view (:from result) (:to result) err))
-        (set-output! (str "Error: " err) :error))
+          (let [{:keys [from to]} (:source result)]
+            (set-diagnostics! view from to (:message result))))
+        (set-output! (str "Error: " (:message result)) :error))
       (let [val (:result result)]
         ;; Clear stale diagnostics only when there is a real result.
         ;; A nil val means the command handled output itself (e.g. (upd), (stop))
@@ -1882,7 +1919,7 @@
     (if active-sess
       ;; ── Restore existing session ──────────────────────────────────────────
       (do
-        (audio/set-bpm! (or (:bpm active-sess) 120))
+        (audio/set-bpm! (audio/coerce-bpm (:bpm active-sess)))
         ;; Bank prefix (stored as string, set-bank-prefix! accepts string or keyword)
         (when (:bank active-sess)
           (samples/set-bank-prefix! (:bank active-sess)))

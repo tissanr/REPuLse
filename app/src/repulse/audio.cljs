@@ -500,10 +500,21 @@
          :on-fx-event  nil
          :tween-state  {}}))  ; track-name → {param-key {:tween pv :start-time t}}
 
+(defn coerce-bpm
+  "Clamp BPM to the safe scheduler range [20, 640]. Invalid, NaN, or
+   non-positive input falls back to 120."
+  [x]
+  (let [n (if (number? x) x js/NaN)]
+    (cond
+      (or (js/isNaN n) (not (pos? n))) 120
+      (< n 20) 20
+      (> n 640) 640
+      :else n)))
+
 (defn set-bpm!
   "Set the tempo in BPM. One cycle = one bar (4 beats)."
   [bpm]
-  (swap! scheduler-state assoc :cycle-dur (/ 240.0 bpm)))
+  (swap! scheduler-state assoc :cycle-dur (/ 240.0 (coerce-bpm bpm))))
 
 (defn get-bpm []
   (/ 240.0 (:cycle-dur @scheduler-state)))

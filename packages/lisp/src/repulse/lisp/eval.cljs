@@ -170,6 +170,26 @@
             (eval-form t env)
             (when e (eval-form e env))))
 
+        "and"
+        (loop [forms tail]
+          (if (empty? forms)
+            true
+            (let [value (eval-form (first forms) env)]
+              (if (empty? (rest forms))
+                value
+                (if (unwrap value)
+                  (recur (rest forms))
+                  value)))))
+
+        "or"
+        (loop [forms tail]
+          (if (empty? forms)
+            nil
+            (let [value (eval-form (first forms) env)]
+              (if (or (unwrap value) (empty? (rest forms)))
+                value
+                (recur (rest forms))))))
+
         "quote"
         ;; (quote form) — return form unevaluated (no SourcedVal stripping)
         (first tail)
@@ -512,8 +532,6 @@
      "vector?" (fn [x] (vector? (unwrap x)))
      "nil?"    (fn [x] (nil? (unwrap x)))
      "identity" (fn [x] x)
-     "and"     (fn [& args] (reduce (fn [_ a] (if (unwrap a) a false)) true args))
-     "or"      (fn [& args] (reduce (fn [_ a] (if (unwrap a) a nil)) nil args))
      "tween"  (fn [curve-arg start-arg end-arg dur-arg]
                 (let [curve (unwrap curve-arg)
                       start (->num start-arg)
@@ -547,11 +565,3 @@
      :*defs*  defs
      :*macros* macros
      :*synths* synths}))
-
-(defn eval-top
-  "Evaluate a form in the given env, returning the result or {:error ...}"
-  [form env]
-  (try
-    (eval-form form env)
-    (catch :default e
-      {:error (or (.-message e) (str e))})))

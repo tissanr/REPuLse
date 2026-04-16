@@ -7,6 +7,14 @@
 (def current-version 2)
 (def storage-key "repulse-session")
 
+(defn- normalize-bpm
+  [bpm context]
+  (let [coerced (audio/coerce-bpm bpm)]
+    (when (and (some? bpm) (not= bpm coerced))
+      (.warn js/console
+             (str "[REPuLse] Coerced invalid BPM from " context ": " bpm " -> " coerced)))
+    coerced))
+
 ;;; ── Editor text injection ────────────────────────────────────────────────
 ;;; Set by app.cljs init after the editor view is created.
 ;;; Returns the current editor buffer as a string.
@@ -61,7 +69,7 @@
     (when-let [raw (.getItem js/localStorage storage-key)]
       (let [data (js->clj (js/JSON.parse raw) :keywordize-keys true)]
         (when (= (:v data) current-version)
-          data)))
+          (update data :bpm #(normalize-bpm % "localStorage")))))
     (catch :default _ nil)))
 
 ;;; ── Migration from Phase D ────────────────────────────────────────────────
@@ -75,7 +83,7 @@
     (when (or editor bpm)
       (let [session {:v       current-version
                      :editor  (or editor "(seq :bd :sd :bd :sd)")
-                     :bpm     (or (some-> bpm js/parseFloat) 120)
+                     :bpm     (normalize-bpm (some-> bpm js/parseFloat) "legacy localStorage")
                      :fx      []
                      :bank    nil
                      :sources []

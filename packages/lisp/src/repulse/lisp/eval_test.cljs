@@ -246,3 +246,46 @@
       ;; pattern should have 4 events per cycle
       (let [evs (core/query r one-cycle)]
         (is (= 4 (count evs)))))))
+
+;;; ── R0: correctness fixes ───────────────────────────────────────────
+
+(deftest and-short-circuits
+  (testing "(and) returns true"
+    (is (= true (leval/unwrap (:result (lisp/eval-string "(and)" (make-test-env)))))))
+  (testing "(and false ...) does not evaluate later operands"
+    (is (= false (leval/unwrap (:result (lisp/eval-string "(and false undefined-sym)" (make-test-env)))))))
+  (testing "(and ...) returns the last truthy value"
+    (is (= :c (leval/unwrap (:result (lisp/eval-string "(and :a :b :c)" (make-test-env))))))))
+
+(deftest or-short-circuits
+  (testing "(or) returns nil"
+    (is (= nil (:result (lisp/eval-string "(or)" (make-test-env))))))
+  (testing "(or truthy ...) does not evaluate later operands"
+    (is (= :found (leval/unwrap (:result (lisp/eval-string "(or :found undefined-sym)" (make-test-env)))))))
+  (testing "nested combinations preserve short-circuit behaviour"
+    (is (= :ok
+           (leval/unwrap (:result (lisp/eval-string "(or nil (and true :ok) undefined-sym)" (make-test-env))))))
+    (is (= false
+           (leval/unwrap (:result (lisp/eval-string "(and true (or nil false) undefined-sym)" (make-test-env))))))))
+
+(deftest eval-error-map-is-data
+  (testing "a user map with :error is returned as plain data"
+    (let [env    (make-test-env)
+          result (lisp/eval-string "(do (def err {:error \"x\"}) err)" env)]
+      (is (map? (:result result)))
+      (is (= {:error "x"} (:result result))))))
+
+(deftest eval-string-single-form-eval-error-bubbles
+  (testing "a single-form EvalError is returned directly"
+    (let [env    (assoc (make-test-env) "fail-now" (fn [] (lisp/eval-error "nope")))
+          result (lisp/eval-string "(fail-now)" env)]
+      (is (lisp/eval-error? result))
+      (is (= "nope" (:message result))))))
+
+(deftest eval-string-final-form-eval-error-bubbles
+  (testing "a final-form EvalError in a multi-form program is returned directly"
+    (let [env    (assoc (make-test-env)
+                        "fail-later" (fn [] (lisp/eval-error "nope")))
+          result (lisp/eval-string "(def ok 1)\n(fail-later)" env)]
+      (is (lisp/eval-error? result))
+      (is (= "nope" (:message result))))))

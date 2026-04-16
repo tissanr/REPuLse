@@ -55,12 +55,12 @@ repulse/
 │   ├── core/          # Pattern algebra — pure CLJS, no DOM, no audio
 │   ├── lisp/          # REPuLse-Lisp reader + evaluator (CLJS)
 │   └── audio/         # Rust crate → wasm-pack → WASM module
-├── app/               # Browser app (CLJS + vanilla DOM) — wires everything together
-├── PROMPTS/           # Phase prompts (one per Claude Code session)
+├── app/               # Browser app assets + CLJS UI/audio integration
+├── PROMPTS/           # Phase prompts (one per Codex session)
 ├── docs/              # Architecture, usage, and future-features docs
 ├── README.md          # Quick start and language reference
 ├── ROADMAP.md         # Detailed phase history and delivery status
-├── CLAUDE.md          # This file
+├── AGENTS.md          # This file
 ├── package.json       # npm workspaces root
 └── shadow-cljs.edn    # Shared CLJS build config
 ```
@@ -119,7 +119,7 @@ and calls into Rust/WASM for synthesis:
 | Lisp interpreter     | ClojureScript                     |
 | Audio synthesis      | Rust → WASM (via wasm-pack)       |
 | Audio scheduling     | Web Audio API + setInterval (JS)  |
-| Browser app          | ClojureScript + vanilla DOM       |
+| Browser app          | ClojureScript + CodeMirror 6 + plain DOM |
 | Build tool (CLJS)    | shadow-cljs                       |
 | Build tool (Rust)    | wasm-pack (`--target web`)        |
 | Package management   | npm workspaces                    |
@@ -133,11 +133,13 @@ and calls into Rust/WASM for synthesis:
   Never `(/ 1.0 4.0)` for time values.
 - **No external CLJS libraries** in `core` or `lisp`. Only `cljs.core` and `cljs.test`.
 - **No external Rust audio libraries** in `audio`. Only `web-sys` Web Audio API bindings.
-- **Errors are data.** Return `{:error "message"}` maps, not thrown exceptions, from
-  the Lisp evaluator.
+- **Errors surface as typed values at the boundary.** Reader/evaluator internals may throw
+  `ex-info`, but `repulse.lisp.core/eval-string` converts failures into a typed
+  eval-error result for the app layer.
 - **Fuzzy-match typos** in the evaluator. If a symbol is undefined, suggest the closest
   known name.
-- **Tests for core.** Every function in `packages/core` has a unit test in `cljs.test`.
+- **Tests for core and lisp.** The repo currently runs both `packages/core` and
+  `packages/lisp` tests through the shared Shadow test build.
 
 ---
 
@@ -149,11 +151,11 @@ npm install
 npm run build:wasm       # compiles Rust → WASM
 
 # Development
-npm run dev              # shadow-cljs watch app only (no WASM build)
-npm run dev:full         # build:wasm + shadow-cljs watch app
+npm run dev              # shadow-cljs watch app + dev server on :3000
+npm run dev:full         # build:wasm first, then shadow-cljs watch app
 
 # Tests
-npm run test             # cljs.test for packages/core
+npm run test             # shared cljs.test runner for core + lisp + app session tests
 
 # Lezer grammar (syntax highlighting) — run after editing repulse-lisp.grammar
 npm run gen:grammar      # regenerates parser.js + parser.terms.js
@@ -174,11 +176,15 @@ Skipping step 2 means the grammar change has no effect at runtime.
 
 ## Dev server
 
-Use `preview_start` to start the dev server before verifying UI changes. The server
-runs on port 3000 via `npm run dev` (shadow-cljs watch only — does **not** build WASM).
-Use `npm run dev:full` on the first run of a session to build WASM first, then start
-the watcher. After code edits, follow the standard `<verification_workflow>` using the
-preview tools.
+For browser verification, start the app with `npm run dev` if the existing WASM build is
+already present, or `npm run dev:full` if you changed Rust audio code or the generated
+WASM assets are missing/stale. The Shadow dev server serves `app/public` on port 3000.
+
+If you edit `packages/audio/src/lib.rs`, rebuild with `npm run build:wasm` before
+re-testing the browser app.
+
+Last known clean test baseline:
+- `npm run test` → 132 tests, 421 assertions, 0 failures
 
 ---
 
@@ -218,14 +224,14 @@ preview tools.
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
 | T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | ✓ delivered  |
 | P     | Modular routing — busses, control rate, general envelopes      | ✓ delivered  |
-| J2    | Contextual insertion buttons — hover `+` on parens for wrap/chain | planned      |
-| R0    | Correctness & safety — and/or short-circuit, BPM clamp, plugin consent | ✓ delivered  |
+| J2    | Contextual insertion buttons — hover `+` on parens for wrap/chain | planned   |
+| R0    | Correctness & safety — and/or short-circuit, BPM clamp, plugin consent | ✓ delivered |
 | S1    | Local snippet library — curated JSON, browse/preview/insert    | planned      |
 | R1    | Refactor — split app.cljs into focused modules                 | planned      |
 | S2    | Backend & auth — Vercel + Supabase, GitHub OAuth, REST API     | planned      |
 | S3    | Community snippets — submit, star, rank, usage tracking        | planned      |
 | S4    | Snippet audio preview — sandboxed eval, waveforms, indicators  | planned      |
-| R2    | Refactor — decompose eval.cljs builtin map into domain namespaces | planned      |
+| R2    | Refactor — decompose eval.cljs builtin map into domain namespaces | planned    |
 | DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | planned      |
 | DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | planned      |
 | DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | planned      |
@@ -234,46 +240,6 @@ preview tools.
 | DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | planned      |
 
 See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full delivery notes.
-
----
-
-## Phase lifecycle rules (IMPORTANT — follow these every time)
-
-These rules apply in every Claude Code session. They are not optional.
-
-### Rule 1 — Creating a new phase prompt
-
-When writing a new `PROMPTS/PHASE-*.md` file, **always also**:
-
-1. Add a row to the phase status table above:
-   ```
-   | XYZ   | Short description                                              | planned      |
-   ```
-2. Add a `## Phase XYZ — Title 📋 *planned*` section to `ROADMAP.md` with:
-   - 2–4 bullet points summarising key additions
-   - A `See full spec: [PROMPTS/PHASE-XYZ.md](PROMPTS/PHASE-XYZ.md)` link
-3. Commit all three files together.
-
-### Rule 2 — Implementing a phase
-
-When the code for a phase is complete and working, **always also**:
-
-1. Change the phase row in the table above from `planned` to `✓ delivered`.
-2. In `ROADMAP.md`, change the heading from `📋 *planned*` to `✅ *delivered*` and
-   add a **Delivered:** section listing what was actually built (match the style of
-   existing delivered phases in ROADMAP.md).
-3. Update `docs/USAGE.md`: add every new built-in, effect, or parameter to the
-   relevant reference tables and add at least one usage example.
-4. Update `README.md` if the phase adds user-facing syntax or changes the quick-start
-   example.
-5. Commit all documentation changes in the same commit as (or immediately after) the
-   implementation commit.
-
-### Rule 3 — Documentation is part of done
-
-A phase is **not complete** until Rules 2.1–2.5 are satisfied. "The code works" is
-necessary but not sufficient. If you finish implementing a phase and realise the docs
-haven't been updated, do not mark the task done — update the docs first.
 
 ---
 
