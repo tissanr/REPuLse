@@ -299,14 +299,46 @@ masterGain → effect1.input → effect1.output
 
 All disconnections happen before reconnection to avoid duplicate signal paths.
 
-### `app.cljs` — UI and wiring
+### `app.cljs` — Orchestrator (thin bootstrap layer)
 
-- Builds the DOM (header, CodeMirror editor, plugin panel, footer)
-- Creates the Lisp environment via `leval/make-env`; injects `samples!`, `sample-banks`, `load-plugin`, and `fx` built-ins
-- On startup, auto-loads the spectrum (visual) plus effect plugins via dynamic `import()`
-- Effect plugins auto-loaded: `reverb`, `delay`, `filter`, `compressor`, `dattorro-reverb`
-- Routes evaluated results: Pattern → audio scheduler, other → output line
-- **▶ play / ■ stop** button evaluates the editor buffer or stops playback
+`app.cljs` is the entry point and thin wiring layer (~370 lines). It owns DOM helpers,
+session persistence (encode/decode URL hash), and the `init` function that wires all
+modules together at startup. All domain logic lives in focused namespaces:
+
+```
+app/src/repulse/
+├── app.cljs                      Orchestrator: DOM helpers, session, bootstrap, init
+├── eval_orchestrator.cljs        evaluate!, set-diagnostics!, slider code-patching
+├── plugin_loading.cljs           load-plugin consent dialog + load/unload builtins
+├── env/
+│   └── builtins.cljs             ensure-env! — assembles the full Lisp environment
+├── ui/
+│   ├── editor.cljs               CodeMirror editor, highlighting (highlight-range!)
+│   ├── timeline.cljs             SVG track timeline + RAF playhead loop
+│   └── context_panel.cljs        Context panel DOM, slider config, schedule-render!
+└── content/
+    ├── demos.cljs                Demo template data + demo builtin factory
+    ├── tutorial.cljs             Tutorial chapters + tutorial builtin factory
+    └── first_visit.cljs          First-visit random demo loader
+```
+
+**Module dependency rules:**
+- `content/*` depend only on audio/samples/core/lisp — not on app, ui, or eval
+- `ui/*` depend only on audio/fx/midi/samples/bus/core — not on app or eval
+- `eval_orchestrator` depends on ui/editor and ui/context_panel — not on app
+- `env/builtins` depends on content/*, ui/editor, plugin_loading — not on eval-orchestrator
+- `app.cljs` is the only module that depends on everything
+- No circular dependencies
+
+**Circular-dependency break:** `env/builtins/ensure-env!` builds builtins that call
+`evaluate!` (demo, load-gist). Since `eval_orchestrator` requires `env.builtins` (not
+vice-versa), the cycle is broken via `builtins/evaluate-ref` — an atom populated by
+`app.cljs` at startup: `(reset! builtins/evaluate-ref eo/evaluate!)`.
+
+**Built-in plugins auto-loaded at startup:**
+- **Visual:** `spectrum.js` (audiomotion-analyzer)
+- **Effects:** `reverb`, `delay`, `filter`, `dattorro-reverb`, `chorus`, `phaser`,
+  `tremolo`, `overdrive`, `bitcrusher`, `sidechain`, `compressor` (built-in CLJS)
 
 ### `lisp-lang/` — CodeMirror 6 language extension
 
