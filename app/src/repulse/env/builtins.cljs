@@ -159,7 +159,7 @@
                                    (string? val) (set-output! val :success)
                                    :else (set-output! (str "=> " (pr-str val)) :success))))))
                        ;; Always return nil so evaluate! does not re-process upd's output
-                       nil)
+                       nil))
                      ;; --- Tap tempo ---
                      "tap!"
                      (fn []
