@@ -541,6 +541,7 @@ footer {
 }
 
 .insert-plus-anchor {
+  --insert-btn-size: 18px; /* button 16px + 2px border */
   display: inline-block;
   width: 0;
   position: relative;
@@ -549,7 +550,7 @@ footer {
 }
 
 .insert-plus-anchor-wrap {
-  transform: translateX(-18px);
+  transform: translateX(calc(-1 * var(--insert-btn-size)));
 }
 
 .insert-plus-anchor-chain,

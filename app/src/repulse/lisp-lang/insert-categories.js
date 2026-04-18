@@ -116,7 +116,7 @@ export const INSERT_CATEGORIES = {
       ],
     },
     {
-      title: "Control",
+      title: "Commands",
       items: [
         withBuiltinDetail("bpm", "(bpm ¦120)"),
         withBuiltinDetail("stop", "(stop)"),
@@ -128,9 +128,14 @@ export const INSERT_CATEGORIES = {
       title: "Audio",
       items: [
         withBuiltinDetail("fx", "(fx ¦:reverb 0.3)"),
+        withBuiltinDetail("sound", "(sound ¦:808 0)"),
+      ],
+    },
+    {
+      title: "Samples",
+      items: [
         withBuiltinDetail("samples!", "(samples! ¦\"github:tidalcycles/Dirt-Samples\")"),
         withBuiltinDetail("bank", "(bank ¦:AkaiLinn)"),
-        withBuiltinDetail("sound", "(sound ¦:808 0)"),
       ],
     },
     {

@@ -267,7 +267,6 @@ export const insertHelper = [
       this.view = view;
       this.hoverTimer = null;
       this.dropdown = null;
-      this.lastMenuTarget = null;
       this.boundDocMouseDown = event => {
         if (!this.dropdown) return;
         if (this.dropdown.contains(event.target)) return;
@@ -290,7 +289,6 @@ export const insertHelper = [
       } else if (next.menu && (update.viewportChanged || update.geometryChanged)) {
         this.positionDropdown(next.menu);
       }
-      this.lastMenuTarget = next.menu;
     }
 
     destroy() {
@@ -420,6 +418,8 @@ export const insertHelper = [
       }
 
       const rect = button.getBoundingClientRect();
+      // Force layout so getBoundingClientRect returns real dimensions.
+      void this.dropdown.offsetHeight;
       const menuRect = this.dropdown.getBoundingClientRect();
       const gap = 6;
       const maxLeft = Math.max(12, window.innerWidth - menuRect.width - 12);
