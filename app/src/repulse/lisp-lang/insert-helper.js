@@ -41,22 +41,28 @@ function scheduleHover(view, target) {
   hoverTimers.set(view, timer);
 }
 
+function closestFromNode(node, selector) {
+  if (!node) return null;
+  const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+  return element && element.closest ? element.closest(selector) : null;
+}
+
 function handlePointerMove(view, event) {
-  if (event.target.closest && (event.target.closest(".insert-plus-btn") || event.target.closest(".insert-dropdown"))) {
+  if (closestFromNode(event.target, ".insert-plus-btn") || closestFromNode(event.target, ".insert-dropdown")) {
     return;
   }
   scheduleHover(view, hoverTargetAtCoords(view, event.clientX, event.clientY));
 }
 
 function handlePointerLeave(view, event) {
-  if (event.relatedTarget && event.relatedTarget.closest && event.relatedTarget.closest(".insert-plus-btn")) {
+  if (closestFromNode(event.relatedTarget, ".insert-plus-btn")) {
     return;
   }
   scheduleHover(view, null);
 }
 
 function handlePointerDown(view, event) {
-  const button = event.target.closest && event.target.closest(".insert-plus-btn");
+  const button = closestFromNode(event.target, ".insert-plus-btn");
   if (button) {
     event.preventDefault();
     event.stopPropagation();
@@ -65,7 +71,7 @@ function handlePointerDown(view, event) {
     return;
   }
 
-  const insideDropdown = event.target.closest && event.target.closest(".insert-dropdown");
+  const insideDropdown = closestFromNode(event.target, ".insert-dropdown");
   if (view.state.field(insertStateField).menu && !insideDropdown) {
     view.dispatch({ effects: closeInsertMenu.of(null) });
   }
