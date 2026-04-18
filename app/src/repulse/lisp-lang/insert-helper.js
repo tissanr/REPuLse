@@ -1,4 +1,4 @@
-import { Decoration, EditorView, ViewPlugin, WidgetType } from "@codemirror/view";
+import { Decoration, ViewPlugin, WidgetType } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import { RangeSetBuilder, StateEffect, StateField } from "@codemirror/state";
 import { getInsertCategories } from "./insert-categories.js";
@@ -367,6 +367,13 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
     constructor(view) {
       this.view = view;
       this.dropdown = null;
+      // Closure-safe DOM listeners: capture `view` in closure, never rely on `this` binding
+      this._onMouseMove = (event) => handlePointerMove(view, event);
+      this._onMouseLeave = (event) => handlePointerLeave(view, event);
+      this._onMouseDown = (event) => handlePointerDown(view, event);
+      view.contentDOM.addEventListener("mousemove", this._onMouseMove);
+      view.contentDOM.addEventListener("mouseleave", this._onMouseLeave);
+      view.contentDOM.addEventListener("mousedown", this._onMouseDown);
       this.boundDocMouseDown = event => {
         if (!this.dropdown) return;
         if (this.dropdown.contains(event.target)) return;
@@ -394,6 +401,9 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
     destroy() {
       clearHoverTimer(this.view);
       this.destroyDropdown();
+      this.view.contentDOM.removeEventListener("mousemove", this._onMouseMove);
+      this.view.contentDOM.removeEventListener("mouseleave", this._onMouseLeave);
+      this.view.contentDOM.removeEventListener("mousedown", this._onMouseDown);
     }
 
     closeMenu() {
@@ -491,20 +501,6 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
     }
   }, {
     decorations: plugin => buildDecorations(plugin.view.state),
-    eventHandlers: {
-      mousemove(event) {
-        const view = EditorView.findFromDOM(event.currentTarget);
-        if (view) handlePointerMove(view, event);
-      },
-      mouseleave(event) {
-        const view = EditorView.findFromDOM(event.currentTarget);
-        if (view) handlePointerLeave(view, event);
-      },
-      mousedown(event) {
-        const view = EditorView.findFromDOM(event.currentTarget);
-        if (view) handlePointerDown(view, event);
-      },
-    },
   });
 
 export const insertHelper = [
