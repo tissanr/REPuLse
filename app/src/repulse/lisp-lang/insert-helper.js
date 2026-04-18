@@ -223,7 +223,10 @@ function listAllowsInsertion(state, node) {
 }
 
 function findListNode(state, target) {
-  const node = enclosingListAt(state, target.from);
+  // Resolve one char inside the list so Lezer's side=-1 doesn't skip to the parent
+  const inner = clampPos(state, target.from + 1);
+  let node = syntaxTree(state).resolveInner(inner, -1);
+  while (node && node.name !== "List") node = node.parent;
   if (node && node.from === target.from && node.to === target.to) return node;
   return null;
 }
@@ -490,13 +493,16 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
     decorations: plugin => buildDecorations(plugin.view.state),
     eventHandlers: {
       mousemove(event) {
-        handlePointerMove(this.view, event);
+        const view = EditorView.findFromDOM(event.currentTarget);
+        if (view) handlePointerMove(view, event);
       },
       mouseleave(event) {
-        handlePointerLeave(this.view, event);
+        const view = EditorView.findFromDOM(event.currentTarget);
+        if (view) handlePointerLeave(view, event);
       },
       mousedown(event) {
-        handlePointerDown(this.view, event);
+        const view = EditorView.findFromDOM(event.currentTarget);
+        if (view) handlePointerDown(view, event);
       },
     },
   });
