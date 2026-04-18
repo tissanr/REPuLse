@@ -6,6 +6,7 @@ import { getInsertCategories } from "./insert-categories.js";
 const HOVER_DELAY_MS = 50;
 const CURSOR_MARKER = "¦";
 const SLOT_MARKER = "__TARGET__";
+const hoverTimers = new WeakMap();
 const NON_PATTERN_HEADS = new Set([
   "def", "defn", "defmacro", "defsynth", "let", "fn", "lambda", "if", "do",
   "bpm", "stop", "fx", "load-plugin", "unload-plugin", "track",
@@ -20,13 +21,54 @@ const setHoverTarget = StateEffect.define();
 const openInsertMenu = StateEffect.define();
 const closeInsertMenu = StateEffect.define();
 
-function resolvePluginInstance(view, fallbackThis) {
-  const plugin = view.plugin(insertHelperPlugin);
-  if (plugin && typeof plugin.handlePointerMove === "function") return plugin;
-  if (fallbackThis && fallbackThis.value && typeof fallbackThis.value.handlePointerMove === "function") {
-    return fallbackThis.value;
+function clearHoverTimer(view) {
+  const timer = hoverTimers.get(view);
+  if (timer) {
+    clearTimeout(timer);
+    hoverTimers.delete(view);
   }
-  return null;
+}
+
+function scheduleHover(view, target) {
+  if (view.state.field(insertStateField).menu) return;
+  clearHoverTimer(view);
+  const timer = setTimeout(() => {
+    const current = view.state.field(insertStateField).hover;
+    if (!sameTarget(current, target)) {
+      view.dispatch({ effects: setHoverTarget.of(target) });
+    }
+  }, HOVER_DELAY_MS);
+  hoverTimers.set(view, timer);
+}
+
+function handlePointerMove(view, event) {
+  if (event.target.closest && (event.target.closest(".insert-plus-btn") || event.target.closest(".insert-dropdown"))) {
+    return;
+  }
+  scheduleHover(view, hoverTargetAtCoords(view, event.clientX, event.clientY));
+}
+
+function handlePointerLeave(view, event) {
+  if (event.relatedTarget && event.relatedTarget.closest && event.relatedTarget.closest(".insert-plus-btn")) {
+    return;
+  }
+  scheduleHover(view, null);
+}
+
+function handlePointerDown(view, event) {
+  const button = event.target.closest && event.target.closest(".insert-plus-btn");
+  if (button) {
+    event.preventDefault();
+    event.stopPropagation();
+    const target = targetFromButton(button);
+    if (target) view.dispatch({ effects: openInsertMenu.of(target) });
+    return;
+  }
+
+  const insideDropdown = event.target.closest && event.target.closest(".insert-dropdown");
+  if (view.state.field(insertStateField).menu && !insideDropdown) {
+    view.dispatch({ effects: closeInsertMenu.of(null) });
+  }
 }
 
 function sameTarget(a, b) {
@@ -272,7 +314,6 @@ function targetFromButton(button) {
 const insertHelperPlugin = ViewPlugin.fromClass(class {
     constructor(view) {
       this.view = view;
-      this.hoverTimer = null;
       this.dropdown = null;
       this.boundDocMouseDown = event => {
         if (!this.dropdown) return;
@@ -299,56 +340,8 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
     }
 
     destroy() {
-      this.clearHoverTimer();
+      clearHoverTimer(this.view);
       this.destroyDropdown();
-    }
-
-    clearHoverTimer() {
-      if (this.hoverTimer) {
-        clearTimeout(this.hoverTimer);
-        this.hoverTimer = null;
-      }
-    }
-
-    scheduleHover(target) {
-      if (this.view.state.field(insertStateField).menu) return;
-      this.clearHoverTimer();
-      this.hoverTimer = setTimeout(() => {
-        const current = this.view.state.field(insertStateField).hover;
-        if (!sameTarget(current, target)) {
-          this.view.dispatch({ effects: setHoverTarget.of(target) });
-        }
-      }, HOVER_DELAY_MS);
-    }
-
-    handlePointerMove(event) {
-      if (event.target.closest && (event.target.closest(".insert-plus-btn") || event.target.closest(".insert-dropdown"))) {
-        return;
-      }
-      this.scheduleHover(hoverTargetAtCoords(this.view, event.clientX, event.clientY));
-    }
-
-    handlePointerLeave(event) {
-      if (event.relatedTarget && event.relatedTarget.closest && event.relatedTarget.closest(".insert-plus-btn")) {
-        return;
-      }
-      this.scheduleHover(null);
-    }
-
-    handlePointerDown(event) {
-      const button = event.target.closest && event.target.closest(".insert-plus-btn");
-      if (button) {
-        event.preventDefault();
-        event.stopPropagation();
-        const target = targetFromButton(button);
-        if (target) this.view.dispatch({ effects: openInsertMenu.of(target) });
-        return;
-      }
-
-      const insideDropdown = event.target.closest && event.target.closest(".insert-dropdown");
-      if (this.view.state.field(insertStateField).menu && !insideDropdown) {
-        this.closeMenu();
-      }
     }
 
     closeMenu() {
@@ -443,16 +436,13 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
     decorations: plugin => buildDecorations(plugin.view.state),
     eventHandlers: {
       mousemove(event, view) {
-        const plugin = resolvePluginInstance(view, this);
-        if (plugin) plugin.handlePointerMove(event);
+        handlePointerMove(view, event);
       },
       mouseleave(event, view) {
-        const plugin = resolvePluginInstance(view, this);
-        if (plugin) plugin.handlePointerLeave(event);
+        handlePointerLeave(view, event);
       },
       mousedown(event, view) {
-        const plugin = resolvePluginInstance(view, this);
-        if (plugin) plugin.handlePointerDown(event);
+        handlePointerDown(view, event);
       },
     },
   });
