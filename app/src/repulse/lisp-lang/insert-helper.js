@@ -237,6 +237,49 @@ function findThreadAncestor(state, node) {
   return null;
 }
 
+function listChildren(node) {
+  const children = [];
+  for (let child = node.firstChild; child; child = child.nextSibling) {
+    children.push(child);
+  }
+  return children;
+}
+
+function usedChainItems(state, target) {
+  const node = findListNode(state, target);
+  if (!node) return new Set();
+
+  const threadNode = findThreadAncestor(state, node);
+  if (!threadNode) return new Set();
+
+  const used = new Set();
+  const children = listChildren(threadNode);
+
+  for (const child of children) {
+    if (child.name !== "List") continue;
+    const head = listHead(state, child);
+    if (!head) continue;
+
+    if (head === "fx") {
+      const stepChildren = listChildren(child);
+      const effectName = stepChildren[1] ? state.sliceDoc(stepChildren[1].from, stepChildren[1].to) : "";
+      if (effectName.startsWith(":")) {
+        used.add(effectName.slice(1));
+      }
+      continue;
+    }
+
+    used.add(head);
+
+    const stepText = state.sliceDoc(child.from, child.to);
+    if (/\(tween\b/.test(stepText)) {
+      used.add("tween");
+    }
+  }
+
+  return used;
+}
+
 function materializeTemplate(template, replacement = "") {
   const cursorToken = "__REPuLse_CURSOR__";
   const slotToken = "__REPuLse_SLOT__";
@@ -324,7 +367,7 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
       this.boundDocMouseDown = event => {
         if (!this.dropdown) return;
         if (this.dropdown.contains(event.target)) return;
-        if (event.target.closest && event.target.closest(".insert-plus-btn")) return;
+        if (closestFromNode(event.target, ".insert-plus-btn")) return;
         this.closeMenu();
       };
       this.boundKeyDown = event => {
@@ -361,14 +404,18 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
 
       const dropdown = document.createElement("div");
       dropdown.className = "insert-dropdown";
+      const usedItems = target.kind === "chain" ? usedChainItems(this.view.state, target) : new Set();
 
       for (const category of getInsertCategories(target.kind)) {
+        const items = category.items.filter(item => !usedItems.has(item.label));
+        if (!items.length) continue;
+
         const header = document.createElement("div");
         header.className = "insert-category-header";
         header.textContent = category.title;
         dropdown.appendChild(header);
 
-        for (const item of category.items) {
+        for (const item of items) {
           const row = document.createElement("button");
           row.type = "button";
           row.className = "insert-dropdown-item";
@@ -386,6 +433,7 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
 
           row.addEventListener("mousedown", event => {
             event.preventDefault();
+            event.stopPropagation();
             applyInsertion(this.view, target, item);
             this.closeMenu();
           });
@@ -441,14 +489,14 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
   }, {
     decorations: plugin => buildDecorations(plugin.view.state),
     eventHandlers: {
-      mousemove(event, view) {
-        handlePointerMove(view, event);
+      mousemove(event) {
+        handlePointerMove(this.view, event);
       },
-      mouseleave(event, view) {
-        handlePointerLeave(view, event);
+      mouseleave(event) {
+        handlePointerLeave(this.view, event);
       },
-      mousedown(event, view) {
-        handlePointerDown(view, event);
+      mousedown(event) {
+        handlePointerDown(this.view, event);
       },
     },
   });
