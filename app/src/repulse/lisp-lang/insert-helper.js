@@ -136,7 +136,11 @@ class InsertButtonWidget extends WidgetType {
     button.dataset.from = String(this.target.from);
     button.dataset.to = String(this.target.to);
     button.setAttribute("aria-label", ariaLabelForTarget(this.target.kind));
-    button.textContent = "+";
+    button.innerHTML =
+      '<svg width="9" height="9" viewBox="0 0 9 9" fill="none" aria-hidden="true">' +
+      '<line x1="4.5" y1="1" x2="4.5" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+      '<line x1="1" y1="4.5" x2="8" y2="4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+      '</svg>';
 
     wrap.appendChild(button);
     return wrap;
@@ -183,8 +187,8 @@ function lineTargetAt(state, pos) {
   return { kind: "top", from: line.from, to: line.to };
 }
 
-function enclosingListAt(state, pos) {
-  let node = syntaxTree(state).resolveInner(clampPos(state, pos), -1);
+function enclosingListAt(state, pos, side = -1) {
+  let node = syntaxTree(state).resolveInner(clampPos(state, pos), side);
   while (node && node.name !== "List") node = node.parent;
   return node;
 }
@@ -193,13 +197,15 @@ function listEdgeTargetAt(state, pos) {
   const candidates = [pos, pos - 1, pos + 1];
   for (const candidate of candidates) {
     if (candidate < 0 || candidate > state.doc.length) continue;
-    const node = enclosingListAt(state, candidate);
-    if (!node) continue;
-    if (candidate === node.from && listAllowsInsertion(state, node)) {
-      return { kind: "wrap", from: node.from, to: node.to };
+    // Wrap: use side=1 so resolveInner finds the list STARTING at this position.
+    const wrapNode = enclosingListAt(state, candidate, 1);
+    if (wrapNode && candidate === wrapNode.from && listAllowsInsertion(state, wrapNode)) {
+      return { kind: "wrap", from: wrapNode.from, to: wrapNode.to };
     }
-    if (candidate === node.to - 1 && listAllowsInsertion(state, node)) {
-      return { kind: "chain", from: node.from, to: node.to };
+    // Chain: use side=-1 so resolveInner finds the list ENDING here.
+    const chainNode = enclosingListAt(state, candidate, -1);
+    if (chainNode && candidate === chainNode.to - 1 && listAllowsInsertion(state, chainNode)) {
+      return { kind: "chain", from: chainNode.from, to: chainNode.to };
     }
   }
   return null;
