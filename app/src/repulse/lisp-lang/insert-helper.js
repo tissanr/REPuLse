@@ -20,6 +20,15 @@ const setHoverTarget = StateEffect.define();
 const openInsertMenu = StateEffect.define();
 const closeInsertMenu = StateEffect.define();
 
+function resolvePluginInstance(view, fallbackThis) {
+  const plugin = view.plugin(insertHelperPlugin);
+  if (plugin && typeof plugin.handlePointerMove === "function") return plugin;
+  if (fallbackThis && fallbackThis.value && typeof fallbackThis.value.handlePointerMove === "function") {
+    return fallbackThis.value;
+  }
+  return null;
+}
+
 function sameTarget(a, b) {
   if (a === b) return true;
   if (!a || !b) return false;
@@ -434,15 +443,15 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
     decorations: plugin => buildDecorations(plugin.view.state),
     eventHandlers: {
       mousemove(event, view) {
-        const plugin = view.plugin(insertHelperPlugin);
+        const plugin = resolvePluginInstance(view, this);
         if (plugin) plugin.handlePointerMove(event);
       },
       mouseleave(event, view) {
-        const plugin = view.plugin(insertHelperPlugin);
+        const plugin = resolvePluginInstance(view, this);
         if (plugin) plugin.handlePointerLeave(event);
       },
       mousedown(event, view) {
-        const plugin = view.plugin(insertHelperPlugin);
+        const plugin = resolvePluginInstance(view, this);
         if (plugin) plugin.handlePointerDown(event);
       },
     },
