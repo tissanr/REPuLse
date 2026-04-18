@@ -62,6 +62,7 @@ Object.prototype.configure;
 Object.prototype.lineComment;
 Object.prototype.number;
 Object.prototype.string;
+Object.prototype.atom;
 Object.prototype.keyword;
 Object.prototype.variableName;
 Object.prototype.paren;
