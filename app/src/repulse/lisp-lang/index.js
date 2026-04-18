@@ -13,13 +13,13 @@ const lispParser = parser.configure({
   props: [
     repulseLispHighlight,
     indentNodeProp.add({
-      List:   cx => cx.baseIndent + 2,
-      Vector: cx => cx.baseIndent + 2,
-      Map:    cx => cx.baseIndent + 2,
+      "List":   cx => cx.baseIndent + 2,
+      "Vector": cx => cx.baseIndent + 2,
+      "Map":    cx => cx.baseIndent + 2,
     }),
     foldNodeProp.add({
-      List:   node => ({ from: node.from + 1, to: node.to - 1 }),
-      Vector: node => ({ from: node.from + 1, to: node.to - 1 }),
+      "List":   node => ({ from: node.from + 1, to: node.to - 1 }),
+      "Vector": node => ({ from: node.from + 1, to: node.to - 1 }),
     }),
   ],
 });

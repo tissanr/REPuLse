@@ -62,6 +62,7 @@ Object.prototype.configure;
 Object.prototype.lineComment;
 Object.prototype.number;
 Object.prototype.string;
+Object.prototype.atom;
 Object.prototype.keyword;
 Object.prototype.variableName;
 Object.prototype.paren;
@@ -86,6 +87,7 @@ Object.prototype.mark;
 // ---------------------------------------------------------------------------
 Object.prototype.docChanged;
 Object.prototype.viewportChanged;
+Object.prototype.view;
 
 // ---------------------------------------------------------------------------
 // @codemirror/view — EditorView / EditorState properties
@@ -103,9 +105,10 @@ Object.prototype.create;
 Object.prototype.dom;
 
 // ---------------------------------------------------------------------------
-// @codemirror/language — LRLanguage
+// @codemirror/language — LRLanguage.define spec
 // ---------------------------------------------------------------------------
 Object.prototype.define;
+Object.prototype.parser;
 Object.prototype.languageData;
 Object.prototype.commentTokens;
 Object.prototype.line;
@@ -126,6 +129,9 @@ Object.prototype.name;
 Object.prototype.from;
 Object.prototype.to;
 Object.prototype.parent;
+Object.prototype.node;
+Object.prototype.firstChild;
+Object.prototype.nextSibling;
 
 // ---------------------------------------------------------------------------
 // @codemirror/language — IndentContext
@@ -142,6 +148,8 @@ Object.prototype.finish;
 // ---------------------------------------------------------------------------
 Object.prototype.override;
 Object.prototype.matchBefore;
+Object.prototype.explicit;
+Object.prototype.text;
 Object.prototype.label;
 Object.prototype.type;
 Object.prototype.detail;

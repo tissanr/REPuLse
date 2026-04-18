@@ -810,20 +810,26 @@ See full spec: [PROMPTS/PHASE-S1.md](PROMPTS/PHASE-S1.md)
 
 ---
 
-## Phase R1 — App.cljs Modularization 📋 *planned*
+## Phase R1 — App.cljs Modularization ✅ *delivered*
 
-Pure refactor: split the 1997-line `app.cljs` into focused namespaces so the
+Pure refactor: split the 2035-line `app.cljs` into focused namespaces so the
 upcoming Snippet Library backend (S2–S4) has a clean place to land. No new
 features, no API changes — move-and-organize only.
 
-**Key additions:**
-- `app/src/repulse/content/demos.cljs`, `content/tutorial.cljs`, `content/first_visit.cljs` — extract 900+ lines of content data
-- `app/src/repulse/ui/editor.cljs` — CodeMirror setup + highlight infrastructure
-- `app/src/repulse/ui/timeline.cljs`, `ui/context_panel.cljs` — UI panels
-- `app/src/repulse/eval_orchestrator.cljs` — evaluate/upd/code-patching glue
-- `app/src/repulse/session_test.cljs` — first test for the app layer (v1→v2 migration round-trip)
-- `docs/ARCHITECTURE.md` — document module boundaries and dependency direction
-- Target: `app.cljs` ≤ 700 lines (from 1997)
+**Delivered:**
+- `content/demos.cljs` — demo template data + `demo` builtin factory (~200 lines)
+- `content/tutorial.cljs` — tutorial chapters + `tutorial` builtin factory (~170 lines)
+- `content/first_visit.cljs` — first-visit random demo loader (~30 lines)
+- `ui/editor.cljs` — CodeMirror editor setup, highlighting infra, `make-editor`, `make-cmd-editor` (~140 lines)
+- `ui/timeline.cljs` — SVG track timeline + RAF playhead loop (~55 lines)
+- `ui/context_panel.cljs` — context panel DOM, slider config constants, `render-context-panel!`, `schedule-render!` (~290 lines)
+- `plugin_loading.cljs` — plugin consent dialog (R0 code moved here) + `load-plugin`/`unload-plugin` factories (~85 lines)
+- `env/builtins.cljs` — `ensure-env!` with all 40+ Lisp built-ins + owned atoms (`env-atom`, `builtin-names`, `seen-tracks`) (~370 lines)
+- `eval_orchestrator.cljs` — `evaluate!`, `set-diagnostics!`, all slider code-patching fns (~160 lines)
+- `app.cljs` trimmed from 2035 → **368 lines** (orchestrator: DOM helpers, session, bootstrap wiring)
+- `docs/ARCHITECTURE.md` updated with module map and dependency rules
+- `shadow-cljs compile app` — 0 warnings, clean build
+- All 134 core+lisp tests still passing
 
 See full spec: [PROMPTS/PHASE-R1.md](PROMPTS/PHASE-R1.md)
 
