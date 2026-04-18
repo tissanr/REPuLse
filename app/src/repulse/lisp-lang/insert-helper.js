@@ -260,9 +260,7 @@ function targetFromButton(button) {
   };
 }
 
-export const insertHelper = [
-  insertStateField,
-  ViewPlugin.fromClass(class {
+const insertHelperPlugin = ViewPlugin.fromClass(class {
     constructor(view) {
       this.view = view;
       this.hoverTimer = null;
@@ -435,15 +433,22 @@ export const insertHelper = [
   }, {
     decorations: plugin => buildDecorations(plugin.view.state),
     eventHandlers: {
-      mousemove(event) {
-        this.handlePointerMove(event);
+      mousemove(event, view) {
+        const plugin = view.plugin(insertHelperPlugin);
+        if (plugin) plugin.handlePointerMove(event);
       },
-      mouseleave(event) {
-        this.handlePointerLeave(event);
+      mouseleave(event, view) {
+        const plugin = view.plugin(insertHelperPlugin);
+        if (plugin) plugin.handlePointerLeave(event);
       },
-      mousedown(event) {
-        this.handlePointerDown(event);
+      mousedown(event, view) {
+        const plugin = view.plugin(insertHelperPlugin);
+        if (plugin) plugin.handlePointerDown(event);
       },
     },
-  }),
+  });
+
+export const insertHelper = [
+  insertStateField,
+  insertHelperPlugin,
 ];
