@@ -1,0 +1,221 @@
+{
+  "version": 1,
+  "snippets": [
+    {
+      "id": "four-on-the-floor",
+      "title": "Four on the Floor",
+      "author": "repulse",
+      "tags": ["rhythm", "house"],
+      "bpm": 124,
+      "description": "Classic 4/4 house kick pattern",
+      "code": "(track :kick (seq :bd :bd :bd :bd))"
+    },
+    {
+      "id": "boom-bap",
+      "title": "Boom-Bap",
+      "author": "repulse",
+      "tags": ["rhythm", "breakbeat"],
+      "bpm": 90,
+      "description": "Classic hip-hop kick and snare groove",
+      "code": "(track :boom-bap\n  (stack\n    (seq :bd :_ :_ :bd :_ :_ :bd :_)\n    (seq :_ :_ :sd :_ :_ :_ :sd :_)))"
+    },
+    {
+      "id": "amen-break",
+      "title": "Amen Break",
+      "author": "repulse",
+      "tags": ["rhythm", "dnb", "breakbeat"],
+      "bpm": 165,
+      "description": "Classic breakbeat from the Amen Brother",
+      "code": "(track :amen\n  (seq :bd :_ :_ :bd :_ :_ :sd :_\n       :bd :_ :bd :_ :_ :sd :_ :_))"
+    },
+    {
+      "id": "minimal-techno",
+      "title": "Minimal Techno",
+      "author": "repulse",
+      "tags": ["rhythm", "techno", "minimal"],
+      "bpm": 130,
+      "description": "Sparse techno kick with offbeat hats",
+      "code": "(track :minimal\n  (stack\n    (seq :bd :_ :_ :_ :bd :_ :_ :_)\n    (->> (seq :_ :hh :_ :hh :_ :hh :_ :_)\n         (amp 0.4))))"
+    },
+    {
+      "id": "euclidean-kick",
+      "title": "Euclidean 5/8 Kick",
+      "author": "repulse",
+      "tags": ["rhythm", "euclidean", "polyrhythm"],
+      "bpm": 120,
+      "description": "Björklund algorithm: 5 onsets in 8 steps",
+      "code": "(track :kick (euclidean 5 8 :bd))"
+    },
+    {
+      "id": "polyrhythm-3-4",
+      "title": "Polyrhythm 3:4",
+      "author": "repulse",
+      "tags": ["rhythm", "polyrhythm"],
+      "bpm": 120,
+      "description": "Three against four: kick triplets over snare quarters",
+      "code": "(track :poly\n  (stack\n    (fast 3 (seq :bd :_ :_))\n    (fast 4 (seq :_ :sd :_ :sd))))"
+    },
+    {
+      "id": "clave-3-2",
+      "title": "Clave 3-2",
+      "author": "repulse",
+      "tags": ["rhythm", "percussive"],
+      "bpm": 110,
+      "description": "Afro-Cuban 3-2 clave timeline pattern",
+      "code": "(track :clave\n  (seq :bd :_ :_ :bd :_ :_ :bd :_\n       :_ :_ :bd :_ :_ :bd :_ :_))"
+    },
+    {
+      "id": "acid-303",
+      "title": "Acid 303 Line",
+      "author": "repulse",
+      "tags": ["bassline", "techno", "house"],
+      "bpm": 130,
+      "description": "Squelchy acid bassline with fast decay",
+      "code": "(track :acid\n  (->> (scale :minor :c2 (seq 0 :_ 0 3 :_ 5 3 :_))\n       (decay 0.12)\n       (amp 0.8)))"
+    },
+    {
+      "id": "sub-bass-walk",
+      "title": "Sub Bass Walk",
+      "author": "repulse",
+      "tags": ["bassline", "minimal"],
+      "bpm": 120,
+      "description": "Deep sub bass with ascending minor walk",
+      "code": "(track :sub\n  (->> (scale :minor :c1 (seq 0 3 5 7))\n       (slow 2)\n       (amp 0.9)\n       (decay 0.3)))"
+    },
+    {
+      "id": "reese-bass",
+      "title": "Reese Bass",
+      "author": "repulse",
+      "tags": ["bassline", "dnb"],
+      "bpm": 174,
+      "description": "Classic DnB detuned synth bassline",
+      "code": "(track :reese\n  (->> (scale :minor :e1 (seq 0 :_ 0 :_ 3 :_ 5 :_))\n       (amp 0.9)\n       (decay 0.2)))"
+    },
+    {
+      "id": "walking-bass",
+      "title": "Walking Bass",
+      "author": "repulse",
+      "tags": ["bassline", "jazz"],
+      "bpm": 130,
+      "description": "Jazz-style stepwise bass movement",
+      "code": "(track :walk\n  (->> (scale :major :c2 (seq 0 2 4 5 3 1 0 :_))\n       (decay 0.6)\n       (amp 0.7)))"
+    },
+    {
+      "id": "offbeat-bass",
+      "title": "Offbeat Bass",
+      "author": "repulse",
+      "tags": ["bassline"],
+      "bpm": 140,
+      "description": "Reggae-style bass hitting on the offbeats",
+      "code": "(track :bass\n  (->> (scale :minor :c2 (seq :_ 0 :_ 0))\n       (amp 0.8)\n       (attack 0.01)\n       (decay 0.4)))"
+    },
+    {
+      "id": "minor-arpeggio",
+      "title": "Minor Arpeggio",
+      "author": "repulse",
+      "tags": ["melody", "chord-progression"],
+      "bpm": 120,
+      "description": "Ascending minor arpeggio pattern",
+      "code": "(track :arp\n  (->> (scale :minor :c4 (seq 0 3 7 0))\n       (fast 2)\n       (amp 0.5)\n       (decay 0.3)))"
+    },
+    {
+      "id": "chromatic-descent",
+      "title": "Chromatic Descent",
+      "author": "repulse",
+      "tags": ["melody", "lead"],
+      "bpm": 120,
+      "description": "Stepwise descending line through minor scale",
+      "code": "(track :descent\n  (->> (scale :minor :a4 (seq 7 6 5 4 3 2 1 0))\n       (slow 2)\n       (amp 0.5)\n       (decay 0.5)))"
+    },
+    {
+      "id": "pentatonic-loop",
+      "title": "Pentatonic Loop",
+      "author": "repulse",
+      "tags": ["melody", "lead"],
+      "bpm": 120,
+      "description": "Smooth pentatonic melodic phrase",
+      "code": "(track :penta\n  (->> (scale :pentatonic :a4 (seq 0 1 2 3 4 3 2 1))\n       (amp 0.6)\n       (decay 0.4)))"
+    },
+    {
+      "id": "blues-riff",
+      "title": "Blues Scale Riff",
+      "author": "repulse",
+      "tags": ["melody", "lead"],
+      "bpm": 100,
+      "description": "Gritty minor-pentatonic blues lick",
+      "code": "(track :blues\n  (->> (scale :minor-pentatonic :a3 (seq 0 2 3 4 3 2 0 :_))\n       (amp 0.6)\n       (decay 0.4)))"
+    },
+    {
+      "id": "algo-lead",
+      "title": "Algorithmic Lead",
+      "author": "repulse",
+      "tags": ["melody", "lead", "technique"],
+      "bpm": 110,
+      "description": "Minor scale phrase reversed every 3 cycles",
+      "code": "(track :lead\n  (->> (every 3 rev (scale :minor :c5 (seq 0 2 5 7 5 2)))\n       (amp 0.5)\n       (decay 0.35)))"
+    },
+    {
+      "id": "maj7-progression",
+      "title": "Major 7 Progression",
+      "author": "repulse",
+      "tags": ["chord-progression"],
+      "bpm": 90,
+      "description": "I-IV major 7th chord movement",
+      "code": "(track :chords\n  (->> (cat (chord :major7 :c4) (chord :major7 :f4))\n       (amp 0.4)\n       (attack 0.05)\n       (decay 1.5)))"
+    },
+    {
+      "id": "dreamy-pad",
+      "title": "Dreamy Pad",
+      "author": "repulse",
+      "tags": ["chord-progression", "ambient", "pad"],
+      "bpm": 72,
+      "description": "Slow-moving major 7 pad with long attack",
+      "code": "(track :pad\n  (->> (chord :major7 :d4)\n       (slow 4)\n       (amp 0.3)\n       (attack 0.4)\n       (decay 3.0)))"
+    },
+    {
+      "id": "iivi-jazz",
+      "title": "ii-V-I Jazz Turnaround",
+      "author": "repulse",
+      "tags": ["chord-progression", "jazz"],
+      "bpm": 130,
+      "description": "Classic jazz ii-V-I cadence",
+      "code": "(track :jazz\n  (->> (cat (chord :minor7 :d4) (chord :dom7 :g3) (chord :major7 :c4))\n       (slow 2)\n       (amp 0.35)\n       (attack 0.03)\n       (decay 1.0)))"
+    },
+    {
+      "id": "reverb-tail",
+      "title": "Reverb Tail",
+      "author": "repulse",
+      "tags": ["fx-demo", "ambient"],
+      "bpm": 80,
+      "description": "Sparse snare hit with long cathedral reverb",
+      "code": "(track :reverb-demo\n  (->> (seq :sd :_ :_ :_ :_ :_ :_ :_)\n       (amp 0.6)\n       (fx :reverb :wet 0.9 :size 0.9)))"
+    },
+    {
+      "id": "delay-feedback",
+      "title": "Delay Feedback",
+      "author": "repulse",
+      "tags": ["fx-demo"],
+      "bpm": 120,
+      "description": "Hi-hat with rhythmic dotted-eighth delay echo",
+      "code": "(track :delay-demo\n  (->> (seq :hh :_ :_ :hh :_ :_ :hh :_)\n       (amp 0.5)\n       (fx :delay :time 0.375 :feedback 0.5 :wet 0.6)))"
+    },
+    {
+      "id": "dattorro-shimmer",
+      "title": "Dattorro Shimmer",
+      "author": "repulse",
+      "tags": ["fx-demo", "ambient"],
+      "bpm": 72,
+      "description": "Sparse melody through ethereal shimmer reverb",
+      "code": "(track :shimmer\n  (->> (scale :major :c5 (seq 0 :_ :_ 4 :_ :_ 7 :_))\n       (slow 2)\n       (amp 0.4)\n       (attack 0.1)\n       (decay 2.0)\n       (fx :dattorro :wet 0.8 :shimmer 0.6)))"
+    },
+    {
+      "id": "filter-sweep",
+      "title": "Filter Sweep",
+      "author": "repulse",
+      "tags": ["fx-demo", "technique"],
+      "bpm": 120,
+      "description": "Drum loop with resonant lowpass filter",
+      "code": "(track :filter-demo\n  (->> (fast 2 (seq :bd :hh :sd :hh))\n       (amp 0.7)\n       (fx :filter :value 600 :resonance 6.0)))"
+    }
+  ]
+}

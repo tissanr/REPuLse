@@ -87,6 +87,8 @@ export const BUILTINS = [
   // --- Freesound ---
   { label: "freesound-key!", type: "function", detail: "(freesound-key! \"key\") — set your Freesound API key (one-time setup)" },
   { label: "freesound!",     type: "function", detail: "(freesound! \"query\") — search Freesound and load up to 5 results as :freesound-N" },
+  // --- Snippet library ---
+  { label: "snippet",     type: "function", detail: "(snippet :id) — insert a snippet from the library; (snippet) lists available IDs" },
   // --- Onboarding ---
   { label: "demo",        type: "function", detail: "(demo :name) — load a starter template and play it; (demo) lists available demos" },
   { label: "tutorial",    type: "function", detail: "(tutorial n) — load tutorial chapter n into the editor (1–8); (tutorial) loads chapter 1" },

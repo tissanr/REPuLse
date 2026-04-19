@@ -1,0 +1,91 @@
+(ns repulse.snippets
+  "Snippet library registry — loads library.json, provides search/filter,
+   and exports the `snippet` Lisp built-in factory.
+   Exports: library-atom, loaded?, load!, all-snippets, all-tags,
+            filter-snippets, by-id, snippet-builtin."
+  (:require [repulse.lisp.eval :as leval]
+            [clojure.string :as cstr]))
+
+;;; State
+
+(defonce library-atom (atom {:version 1 :snippets []}))
+(defonce loaded? (atom false))
+(defonce ^:private loading? (atom false))
+
+;;; Data access
+
+(defn all-snippets [] (:snippets @library-atom))
+
+(defn all-tags []
+  (->> (all-snippets)
+       (mapcat :tags)
+       distinct
+       sort))
+
+(defn by-id [id]
+  (first (filter #(= (:id %) (str id)) (all-snippets))))
+
+(defn filter-snippets
+  "Return snippets matching query (searches title, description, code) and tag."
+  [query tag]
+  (let [q       (when (and query (seq (cstr/trim query)))
+                  (cstr/lower-case (cstr/trim query)))
+        snippets (all-snippets)]
+    (cond->> snippets
+      tag (filter #(some #{tag} (:tags %)))
+      q   (filter (fn [s]
+                    (or (cstr/includes? (cstr/lower-case (or (:title s) "")) q)
+                        (cstr/includes? (cstr/lower-case (or (:description s) "")) q)
+                        (cstr/includes? (cstr/lower-case (or (:code s) "")) q)))))))
+
+;;; Loading
+
+(defn load!
+  "Fetch /snippets/library.json and populate library-atom.
+   No-ops if already loaded or loading."
+  []
+  (when (and (not @loaded?) (not @loading?))
+    (reset! loading? true)
+    (-> (js/fetch "/snippets/library.json")
+        (.then #(.json %))
+        (.then (fn [data]
+                 (let [d (js->clj data :keywordize-keys true)]
+                   (reset! library-atom d)
+                   (reset! loaded? true)
+                   (reset! loading? false))))
+        (.catch (fn [e]
+                  (reset! loading? false)
+                  (js/console.warn "[REPuLse] snippet library load failed:" e))))))
+
+;;; Lisp built-in factory
+
+(defn snippet-builtin
+  "Returns the Lisp `snippet` built-in fn.
+   editor-view-atom — atom holding the current CodeMirror EditorView.
+   evaluate-ref     — atom holding the evaluate! fn (populated after eval-orchestrator init)."
+  [editor-view-atom evaluate-ref]
+  (fn [& args]
+    (load!)
+    (let [id-arg (when (seq args) (leval/unwrap (first args)))]
+      (if (nil? id-arg)
+        ;; No args: list available snippet IDs
+        (if @loaded?
+          (str "available snippets: "
+               (cstr/join " " (map #(str ":" (:id %)) (all-snippets))))
+          "loading snippet library…")
+        ;; With arg: insert snippet by ID
+        (let [id      (cljs.core/name id-arg)
+              snippet (by-id id)]
+          (if snippet
+            (do
+              (when-let [view @editor-view-atom]
+                (let [code    (:code snippet)
+                      doc-len (.. view -state -doc -length)]
+                  (.dispatch view
+                             #js {:changes #js {:from doc-len
+                                                :to   doc-len
+                                                :insert (str "\n\n" code)}})
+                  (js/setTimeout #(when-let [f @evaluate-ref] (f "(upd)")) 50)))
+              (str "=> inserted snippet :" id))
+            (str "unknown snippet :" id
+                 " — try (snippet) to list available")))))))

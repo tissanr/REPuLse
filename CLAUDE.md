@@ -220,7 +220,7 @@ preview tools.
 | P     | Modular routing — busses, control rate, general envelopes      | ✓ delivered  |
 | J2    | Contextual insertion buttons — hover `+` on parens for wrap/chain | ✓ delivered      |
 | R0    | Correctness & safety — and/or short-circuit, BPM clamp, plugin consent | ✓ delivered  |
-| S1    | Local snippet library — curated JSON, browse/preview/insert    | planned      |
+| S1    | Local snippet library — curated JSON, browse/preview/insert    | ✓ delivered  |
 | R1    | Refactor — split app.cljs into focused modules                 | ✓ delivered  |
 | S2    | Backend & auth — Vercel + Supabase, GitHub OAuth, REST API     | planned      |
 | S3    | Community snippets — submit, star, rank, usage tracking        | planned      |
