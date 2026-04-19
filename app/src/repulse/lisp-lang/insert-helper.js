@@ -137,9 +137,9 @@ class InsertButtonWidget extends WidgetType {
     button.dataset.to = String(this.target.to);
     button.setAttribute("aria-label", ariaLabelForTarget(this.target.kind));
     button.innerHTML =
-      '<svg width="9" height="9" viewBox="0 0 9 9" fill="none" aria-hidden="true">' +
-      '<line x1="4.5" y1="1" x2="4.5" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
-      '<line x1="1" y1="4.5" x2="8" y2="4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>' +
+      '<svg width="7" height="7" viewBox="0 0 7 7" fill="none" aria-hidden="true">' +
+      '<line x1="3.5" y1="0.5" x2="3.5" y2="6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+      '<line x1="0.5" y1="3.5" x2="6.5" y2="3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
       '</svg>';
 
     wrap.appendChild(button);

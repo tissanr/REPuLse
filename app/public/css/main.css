@@ -541,21 +541,24 @@ footer {
 }
 
 .insert-plus-anchor {
-  --insert-btn-size: 18px;
+  --insert-btn-size: 14px;
   display: inline-block;
   width: 0;
+  line-height: 0;   /* collapse so button starts at line-box top, not baseline */
   position: relative;
   overflow: visible;
-  vertical-align: middle;
+  vertical-align: top;
 }
 
+/* wrap button: sit just above the opening ( */
 .insert-plus-anchor-wrap {
-  transform: translateX(calc(-1 * var(--insert-btn-size)));
+  transform: translate(calc(-1 * var(--insert-btn-size) - 1px), -5px);
 }
 
+/* chain / top buttons: sit just above the closing ) */
 .insert-plus-anchor-chain,
 .insert-plus-anchor-top {
-  transform: translateX(3px);
+  transform: translate(2px, -5px);
 }
 
 .insert-plus-btn {
@@ -563,17 +566,16 @@ footer {
   width: var(--insert-btn-size);
   height: var(--insert-btn-size);
   padding: 0;
-  border: 1.5px solid rgba(var(--btn-color), 0.45);
+  border: 1px solid rgba(var(--btn-color), 0.5);
   border-radius: 999px;
-  background: rgba(24, 27, 34, 0.92);
-  color: rgba(var(--btn-color), 0.8);
+  background: rgba(24, 27, 34, 0.95);
+  color: rgba(var(--btn-color), 0.85);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.65;
+  opacity: 0.7;
   cursor: pointer;
   pointer-events: auto;
-  backdrop-filter: blur(4px);
   transition: opacity 0.1s ease, border-color 0.1s ease, color 0.1s ease,
               background 0.1s ease, box-shadow 0.1s ease, transform 0.1s ease;
 }
@@ -587,10 +589,10 @@ footer {
   opacity: 1;
   color: rgb(var(--btn-color));
   border-color: rgba(var(--btn-color), 0.9);
-  background: rgba(30, 33, 42, 0.98);
-  box-shadow: 0 0 0 3px rgba(var(--btn-color), 0.18),
-              0 2px 10px rgba(0, 0, 0, 0.5);
-  transform: scale(1.15);
+  background: rgba(30, 33, 42, 1);
+  box-shadow: 0 0 0 2px rgba(var(--btn-color), 0.2),
+              0 2px 8px rgba(0, 0, 0, 0.5);
+  transform: scale(1.2);
   outline: none;
 }
 
