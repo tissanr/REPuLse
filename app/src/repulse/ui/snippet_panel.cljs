@@ -88,12 +88,19 @@
 (defn- tag-pill [t]
   (str "<span class=\"snippet-tag\">" t "</span>"))
 
+(defn- escape-html [s]
+  (-> s
+      (cstr/replace "&" "&amp;")
+      (cstr/replace "<" "&lt;")
+      (cstr/replace ">" "&gt;")))
+
 (defn- render-card [snippet]
   (let [id    (:id snippet)
         title (:title snippet)
         auth  (or (:author snippet) "repulse")
         tags  (or (:tags snippet) [])
-        desc  (or (:description snippet) "")]
+        desc  (or (:description snippet) "")
+        code  (or (:code snippet) "")]
     (str "<div class=\"snippet-card\">"
          "<div class=\"snippet-card-top\">"
          "<span class=\"snippet-title\">" title "</span>"
@@ -108,6 +115,10 @@
          "<button class=\"snippet-btn snippet-mix-btn\" data-id=\"" id "\">&oplus; mix</button>"
          "<button class=\"snippet-btn snippet-insert-btn\" data-id=\"" id "\">&#8595; insert</button>"
          "</div>"
+         "<details class=\"snippet-code-details\">"
+         "<summary class=\"snippet-code-summary\">{ } code</summary>"
+         "<pre class=\"snippet-code-block\">" (escape-html code) "</pre>"
+         "</details>"
          "</div>")))
 
 (defn- render-cards!

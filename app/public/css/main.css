@@ -849,3 +849,31 @@ footer {
   text-align: center;
   width: 100%;
 }
+
+.snippet-code-details {
+  margin-top: 4px;
+}
+
+.snippet-code-summary {
+  font-size: 0.65rem;
+  color: var(--dim);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  padding: 1px 0;
+}
+.snippet-code-summary::-webkit-details-marker { display: none; }
+
+.snippet-code-block {
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 0.65rem;
+  color: #98c379;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.4;
+  overflow-x: auto;
+}

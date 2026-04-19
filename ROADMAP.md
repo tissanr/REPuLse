@@ -576,6 +576,20 @@ See full spec: [PROMPTS/phase-n1-midi-cc-mapping.md](PROMPTS/phase-n1-midi-cc-ma
 
 ---
 
+## Phase O1 — Embeddable Component 📋 *planned*
+
+Drop a live REPuLse editor into any static website with one `<script>` tag.
+
+**Key additions:**
+- **`<repulse-editor>` custom element** — Shadow DOM isolation; attributes: `code`, `snippet`, `autoplay`, `bpm`, `height`, `theme`
+- **`snippet="id"` attribute** — pre-seeds editor from S1's `library.json` by snippet ID
+- **Separate `embed.js` bundle** — shadow-cljs `:embed` build target; target < 500 KB gzipped
+- **`embed-test.html`** — minimal host page exercising all three attribute modes
+
+See full spec: [PROMPTS/PHASE-O1.md](PROMPTS/PHASE-O1.md)
+
+---
+
 ## Phase O — Platform & Deployment 📋 *planned*
 
 Expand where REPuLse runs and who can use it.
