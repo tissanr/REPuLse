@@ -539,3 +539,119 @@ footer {
   padding-top: 4px;
   border-top: 1px solid #3a3f4b;
 }
+
+.insert-plus-anchor {
+  --insert-btn-size: 14px;
+  display: inline-block;
+  width: 0;
+  line-height: 0;   /* collapse so button starts at line-box top, not baseline */
+  position: relative;
+  overflow: visible;
+  vertical-align: top;
+}
+
+/* wrap button: sit just above the opening ( */
+.insert-plus-anchor-wrap {
+  transform: translate(calc(-1 * var(--insert-btn-size) - 1px), -5px);
+}
+
+/* chain / top buttons: sit just above the closing ) */
+.insert-plus-anchor-chain,
+.insert-plus-anchor-top {
+  transform: translate(2px, -5px);
+}
+
+.insert-plus-btn {
+  --btn-color: 97, 175, 239;        /* blue — chain / top */
+  width: var(--insert-btn-size);
+  height: var(--insert-btn-size);
+  padding: 0;
+  border: 1px solid rgba(var(--btn-color), 0.5);
+  border-radius: 999px;
+  background: rgba(24, 27, 34, 0.95);
+  color: rgba(var(--btn-color), 0.85);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: opacity 0.1s ease, border-color 0.1s ease, color 0.1s ease,
+              background 0.1s ease, box-shadow 0.1s ease, transform 0.1s ease;
+}
+
+.insert-plus-anchor-wrap .insert-plus-btn {
+  --btn-color: 198, 120, 221;       /* purple — wrap */
+}
+
+.insert-plus-btn:hover,
+.insert-plus-btn:focus-visible {
+  opacity: 1;
+  color: rgb(var(--btn-color));
+  border-color: rgba(var(--btn-color), 0.9);
+  background: rgba(30, 33, 42, 1);
+  box-shadow: 0 0 0 2px rgba(var(--btn-color), 0.2),
+              0 2px 8px rgba(0, 0, 0, 0.5);
+  transform: scale(1.2);
+  outline: none;
+}
+
+.insert-plus-btn svg {
+  display: block;
+  pointer-events: none;
+}
+
+.insert-dropdown {
+  position: fixed;
+  z-index: 1000;
+  min-width: 300px;
+  max-width: min(420px, calc(100vw - 24px));
+  max-height: min(420px, calc(100vh - 24px));
+  overflow-y: auto;
+  padding: 8px;
+  background: #21252b;
+  border: 1px solid #3a3f4b;
+  border-radius: 8px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.35);
+}
+
+.insert-category-header {
+  padding: 8px 10px 4px;
+  color: #5c6370;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.insert-dropdown-item {
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.insert-dropdown-item:hover,
+.insert-dropdown-item:focus-visible {
+  background: rgba(97, 175, 239, 0.12);
+  outline: none;
+}
+
+.insert-fn-name {
+  color: #61afef;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.insert-fn-detail {
+  color: #abb2bf;
+  font-size: 12px;
+  line-height: 1.35;
+}

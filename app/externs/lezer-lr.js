@@ -87,13 +87,47 @@ Object.prototype.mark;
 // ---------------------------------------------------------------------------
 Object.prototype.docChanged;
 Object.prototype.viewportChanged;
+Object.prototype.geometryChanged;
+Object.prototype.startState;
 Object.prototype.view;
 
 // ---------------------------------------------------------------------------
-// @codemirror/view — EditorView / EditorState properties
+// @codemirror/view — EditorView / EditorState properties and methods
 // ---------------------------------------------------------------------------
 Object.prototype.state;
 Object.prototype.sliceDoc;
+Object.prototype.dispatch;
+Object.prototype.focus;
+Object.prototype.contentDOM;
+Object.prototype.scrollDOM;
+Object.prototype.posAtCoords;
+Object.prototype.field;
+Object.prototype.doc;
+Object.prototype.lineAt;
+Object.prototype.effects;
+Object.prototype.scrollIntoView;
+Object.prototype.changes;
+Object.prototype.selection;
+Object.prototype.anchor;
+
+// ---------------------------------------------------------------------------
+// @codemirror/state — StateEffect / StateField
+// ---------------------------------------------------------------------------
+Object.prototype.of;
+Object.prototype.is;
+
+// ---------------------------------------------------------------------------
+// @codemirror/view — Decoration.widget spec
+// ---------------------------------------------------------------------------
+Object.prototype.widget;
+Object.prototype.side;
+
+// ---------------------------------------------------------------------------
+// @codemirror/view — WidgetType methods called by CodeMirror
+// ---------------------------------------------------------------------------
+Object.prototype.toDOM;
+Object.prototype.eq;
+Object.prototype.ignoreEvent;
 
 // ---------------------------------------------------------------------------
 // @codemirror/view — hoverTooltip return spec
