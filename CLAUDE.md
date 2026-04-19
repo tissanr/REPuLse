@@ -216,6 +216,7 @@ preview tools.
 | D2    | Full session persistence — all state in localStorage + reset!  | ✓ delivered  |
 | N1    | MIDI CC mapping — bind controller knobs to any parameter      | planned      |
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
+| O1    | Embeddable component — `<repulse-editor>` custom element, snippet attr | planned |
 | T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | ✓ delivered  |
 | P     | Modular routing — busses, control rate, general envelopes      | ✓ delivered  |
 | J2    | Contextual insertion buttons — hover `+` on parens for wrap/chain | ✓ delivered      |

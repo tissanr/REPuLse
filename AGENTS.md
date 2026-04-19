@@ -222,12 +222,13 @@ Last known clean test baseline:
 | D2    | Full session persistence — all state in localStorage + reset!  | ✓ delivered  |
 | N1    | MIDI CC mapping — bind controller knobs to any parameter      | planned      |
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
+| O1    | Embeddable component — `<repulse-editor>` custom element, snippet attr | planned |
 | T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | ✓ delivered  |
 | P     | Modular routing — busses, control rate, general envelopes      | ✓ delivered  |
 | J2    | Contextual insertion buttons — hover `+` on parens for wrap/chain | ✓ delivered   |
 | R0    | Correctness & safety — and/or short-circuit, BPM clamp, plugin consent | ✓ delivered |
-| S1    | Local snippet library — curated JSON, browse/preview/insert    | planned      |
-| R1    | Refactor — split app.cljs into focused modules                 | planned      |
+| S1    | Local snippet library — curated JSON, browse/preview/insert    | ✓ delivered  |
+| R1    | Refactor — split app.cljs into focused modules                 | ✓ delivered  |
 | S2    | Backend & auth — Vercel + Supabase, GitHub OAuth, REST API     | planned      |
 | S3    | Community snippets — submit, star, rank, usage tracking        | planned      |
 | S4    | Snippet audio preview — sandboxed eval, waveforms, indicators  | planned      |
