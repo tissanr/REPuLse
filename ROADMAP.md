@@ -789,22 +789,22 @@ See full spec: [PROMPTS/PHASE-R0.md](PROMPTS/PHASE-R0.md)
 
 ---
 
-## Phase S1 — Local Snippet Library 📋 *planned*
+## Phase S1 — Local Snippet Library ✅ *delivered*
 
 Browsable, auditionable snippet library inside the editor — curated starter set
 shipped as static JSON. No backend required; runs on current Netlify deployment.
 First step of the Snippet Library epic (S1–S4); validates the UX before building
 the community backend.
 
-**Key additions:**
-- `app/public/snippets/library.json` — 20–30 curated snippets with metadata (title, author, tags, code, BPM)
-- `app/src/repulse/snippets.cljs` — snippet registry, search, filter, insert
-- `app/src/repulse/ui/snippet_panel.cljs` — collapsible browser panel below editor
-- **Solo preview**: snippet plays in isolation via a temporary `:__preview__` track
-- **Mix preview**: snippet plays alongside the running session
-- **Insert** appends snippet code to the editor and triggers `(upd)`
-- Controlled tag vocabulary: rhythm, bassline, melody, chord-progression, fx-demo, …
-- `(snippet :name)` Lisp built-in for programmatic access
+**Delivered:**
+- `app/public/snippets/library.json` — 24 curated snippets across 5 genres (rhythm, bassline, melody, chord-progression, fx-demo) with title, author, tags, BPM, description, and code
+- `app/src/repulse/snippets.cljs` — snippet registry, async fetch, full-text + tag search/filter
+- `app/src/repulse/ui/snippet_panel.cljs` — collapsible panel ("lib" button in header) with card grid, search input, and tag dropdown
+- **Solo preview** (`▶ solo`): stops current session and plays snippet in isolation
+- **Mix preview** (`⊕ mix`): adds snippet track alongside the running session
+- **Insert** (`↓ insert`): appends snippet code to the editor and triggers `(upd)`; warns if track name conflicts
+- `(snippet :id)` Lisp built-in for programmatic insertion; `(snippet)` lists available IDs
+- `snippet` added to grammar, autocomplete, and hover docs
 
 See full spec: [PROMPTS/PHASE-S1.md](PROMPTS/PHASE-S1.md)
 

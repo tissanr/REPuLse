@@ -390,6 +390,13 @@ const DOCS = {
     example: "(-> (sin freq) (env-gen (env [0 1 0] [0.01 0.5] [:lin :exp])))",
   },
 
+  // --- Snippet library ---
+  "snippet": {
+    signature: "(snippet :id)",
+    description: "Insert a snippet from the curated library by ID. The snippet code is appended to the editor and the session is hot-swapped with (upd). Call (snippet) with no args to list all available IDs.",
+    example: "(snippet :four-on-the-floor)",
+  },
+
   // --- Bus system ---
   "bus": {
     signature: "(bus :name) or (bus :name :control|:audio)",

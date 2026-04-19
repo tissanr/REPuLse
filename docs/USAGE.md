@@ -68,6 +68,42 @@ To stop: type `(stop)` and evaluate it, or click **■ stop**.
 
 ---
 
+## Snippet library
+
+The snippet library gives you 24 ready-to-play patterns — rhythms, basslines, melodies, chords, and FX demos — that you can audition and insert into your session.
+
+### Opening the panel
+
+Click the **lib** button in the header to open or close the snippet browser. You can also press **Escape** to close it.
+
+### Browsing and filtering
+
+- **Search box** — type any word to filter by title, description, or code content
+- **Tag dropdown** — filter by role: `rhythm`, `bassline`, `melody`, `chord-progression`, `fx-demo`, `house`, `techno`, `dnb`, `jazz`, `euclidean`, `polyrhythm`, `ambient`, `breakbeat`, `minimal`, `percussive`
+
+### Preview and insert
+
+Each card has three buttons:
+
+| Button | Action |
+|---|---|
+| `▶ solo` | Stops the current session and plays the snippet in isolation |
+| `⊕ mix` | Adds the snippet track alongside your running session |
+| `↓ insert` | Appends the snippet code to the editor and triggers `(upd)` |
+
+Insert warns you if the snippet's track name already exists in your session.
+
+### Lisp built-in
+
+```clojure
+(snippet :four-on-the-floor)  ;; insert snippet by ID
+(snippet)                     ;; list available snippet IDs
+```
+
+`snippet` supports autocomplete and hover docs in the editor.
+
+---
+
 ## Demos and tutorials
 
 ### Starter templates

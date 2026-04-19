@@ -9,6 +9,7 @@
             [repulse.ui.editor :as editor]
             [repulse.ui.timeline :as timeline]
             [repulse.ui.context-panel :as ctx-panel]
+            [repulse.ui.snippet-panel :as snippet-panel]
             [repulse.env.builtins :as builtins]
             [repulse.eval-orchestrator :as eo]
             [repulse.plugin-loading :as plugin-loading]
@@ -137,6 +138,7 @@
                "  <div class=\"header-controls\">"
                "    <button id=\"tap-btn\" class=\"tap-btn\">tap</button>"
                "    <button id=\"share-btn\" class=\"share-btn\">share</button>"
+               "    <button id=\"snippet-toggle-btn\" class=\"snippet-toggle-btn\">lib</button>"
                "    <button id=\"play-btn\" class=\"play-btn\">&#9654; play</button>"
                "    <div id=\"playing-dot\" class=\"playing-dot\"></div>"
                "  </div>"
@@ -150,14 +152,16 @@
                "  <div id=\"cmd-container\" class=\"cmd-container\"></div>"
                "</div>"
                "<div id=\"track-panel\" class=\"track-panel\"></div>"
+               "<div id=\"snippet-panel\" class=\"snippet-panel hidden\"></div>"
                "<div id=\"plugin-panel\" class=\"plugin-panel hidden\"></div>"
                "<footer>"
                "  <span id=\"output\" class=\"output\">ready &mdash; Alt+Enter or click play</span>"
                "  <span class=\"hint\">Alt+Enter to eval</span>"
                "</footer>")))
-  (.addEventListener (el "play-btn")  "click" on-play-btn-click)
-  (.addEventListener (el "tap-btn")   "click" (fn [] (eo/evaluate! "(tap!)")))
-  (.addEventListener (el "share-btn") "click" share!))
+  (.addEventListener (el "play-btn")          "click" on-play-btn-click)
+  (.addEventListener (el "tap-btn")           "click" (fn [] (eo/evaluate! "(tap!)")))
+  (.addEventListener (el "share-btn")         "click" share!)
+  (.addEventListener (el "snippet-toggle-btn") "click" snippet-panel/toggle-panel!))
 
 (defn- attach-slider-listener! []
   (when-let [panel (el "context-panel")]
@@ -215,6 +219,7 @@
   (reset! builtins/evaluate-ref eo/evaluate!)
 
   (build-dom!)
+  (snippet-panel/init!)
   (attach-slider-listener!)
   (builtins/ensure-env!)
   (setBankNamesProvider (fn [] (clj->js (samples/bank-names))))

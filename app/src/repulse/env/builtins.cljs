@@ -20,6 +20,7 @@
             [repulse.ui.editor :as editor]
             [repulse.content.demos :as demos]
             [repulse.content.tutorial :as tutorial]
+            [repulse.snippets :as snippets]
             [repulse.plugin-loading :as plugin-loading]
             [clojure.string :as cstr]
             ["@codemirror/lint" :refer [setDiagnostics]]))
@@ -248,6 +249,8 @@
                      ;; --- Share ---
                      "share!"
                      (fn [] (when-let [f (:share! @cbs)] (f)) nil)
+                     ;; --- Snippet library ---
+                     "snippet" (snippets/snippet-builtin editor/editor-view evaluate-ref)
                      ;; --- Demo templates ---
                      "demo" (demos/demo-builtin editor/editor-view evaluate-ref)
                      ;; --- Interactive tutorial ---
