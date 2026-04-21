@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "rustup default stable && curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh && npm run build:wasm && npx shadow-cljs release app",
+  "buildCommand": "rustup default stable && rustup target add wasm32-unknown-unknown && export PATH=\"$HOME/.cargo/bin:$PATH\" && curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh && npm run build:wasm && npx shadow-cljs release app",
   "outputDirectory": "app/public",
   "installCommand": "npm install",
   "framework": null,
