@@ -130,11 +130,26 @@
     (when-let [view @editor/editor-view]
       (eo/evaluate! (.. view -state -doc (toString))))))
 
+(defn- start-icon-rotation! []
+  (let [icons #js ["/icon.png" "/icon1.png"]
+        idx   (atom 0)]
+    (js/setInterval
+      (fn []
+        (swap! idx #(mod (inc %) 2))
+        (when-let [img (el "header-icon")]
+          (set! (.-style.-opacity img) "0")
+          (js/setTimeout
+            (fn []
+              (set! (.-src img) (aget icons @idx))
+              (set! (.-style.-opacity img) "1"))
+            400)))
+      8000)))
+
 (defn build-dom! []
   (let [app (el "app")]
     (set! (.-innerHTML app)
           (str "<header>"
-               "  <h1>REPuLse</h1>"
+               "  <h1><img id=\"header-icon\" src=\"/icon.png\" class=\"header-icon\" alt=\"\"> REPuLse</h1>"
                "  <div class=\"header-controls\">"
                "    <button id=\"tap-btn\" class=\"tap-btn\">tap</button>"
                "    <button id=\"share-btn\" class=\"share-btn\">share</button>"
@@ -158,10 +173,11 @@
                "  <span id=\"output\" class=\"output\">ready &mdash; Alt+Enter or click play</span>"
                "  <span class=\"hint\">Alt+Enter to eval</span>"
                "</footer>")))
-  (.addEventListener (el "play-btn")          "click" on-play-btn-click)
-  (.addEventListener (el "tap-btn")           "click" (fn [] (eo/evaluate! "(tap!)")))
-  (.addEventListener (el "share-btn")         "click" share!)
-  (.addEventListener (el "snippet-toggle-btn") "click" snippet-panel/toggle-panel!))
+  (.addEventListener (el "play-btn")           "click" on-play-btn-click)
+  (.addEventListener (el "tap-btn")            "click" (fn [] (eo/evaluate! "(tap!)")))
+  (.addEventListener (el "share-btn")          "click" share!)
+  (.addEventListener (el "snippet-toggle-btn") "click" snippet-panel/toggle-panel!)
+  (start-icon-rotation!))
 
 (defn- attach-slider-listener! []
   (when-let [panel (el "context-panel")]
