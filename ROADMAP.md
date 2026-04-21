@@ -849,21 +849,25 @@ See full spec: [PROMPTS/PHASE-R1.md](PROMPTS/PHASE-R1.md)
 
 ---
 
-## Phase S2 — Backend & Authentication 📋 *planned*
+## Phase S2 — Backend & Authentication ✅ *delivered*
 
-Migrate from static Netlify to Vercel + Supabase. Add user accounts (OAuth via
-GitHub), snippet CRUD API, and database schema for community snippets. Pure
-infrastructure phase — community features ship in S3.
+Migrated from static Netlify to Vercel + Supabase. Adds user accounts (GitHub OAuth),
+snippet CRUD API, and database schema for community snippets. Pure infrastructure —
+community browsing UI ships in S3.
 
-**Key additions:**
-- `vercel.json` replaces `netlify.toml`
-- Supabase project: `profiles`, `snippets`, `stars` tables with RLS policies
-- GitHub OAuth login via Supabase Auth; login button in app header
-- `api/snippets.ts`, `api/snippets/[id]/star.ts` — serverless REST endpoints
-- `app/src/repulse/api.cljs` — API client with auth token handling
-- `app/src/repulse/auth.cljs` — login state atom, session restore
-- S1 curated snippets seeded into Supabase
-- `docs/DEPLOYMENT.md` — Vercel + Supabase setup guide
+**Delivered:**
+- `vercel.json` — Vercel build config (WASM + shadow-cljs release, API functions, SPA rewrites)
+- `supabase/schema.sql` — `profiles`, `snippets`, `stars` tables with RLS policies and star-count trigger
+- `supabase/seed.sql` — all 24 S1 curated snippets seeded as system content
+- `api/env.ts` — serves public Supabase credentials to the browser SPA
+- `api/snippets.ts` — `GET` list (public) + `POST` create (authenticated)
+- `api/snippets/[id]/star.ts` — `POST` toggle star for authenticated users
+- `app/src/repulse/auth.cljs` — `auth-atom`, `init-auth!`, `login!`, `logout!` via `@supabase/supabase-js`
+- `app/src/repulse/api.cljs` — fetch wrapper with JWT `Authorization` header
+- `app/src/repulse/ui/auth_button.cljs` — login/avatar button in the app header
+- `snippets.cljs` updated: loads from API when authenticated, falls back to static JSON for anonymous users
+- `docs/DEPLOYMENT.md` — complete Vercel + Supabase setup guide
+- Anonymous users: S1 static library unchanged; session URL sharing unaffected
 
 See full spec: [PROMPTS/PHASE-S2.md](PROMPTS/PHASE-S2.md)
 
