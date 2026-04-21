@@ -1,9 +1,11 @@
 (ns repulse.snippets
-  "Snippet library registry — loads library.json, provides search/filter,
-   and exports the `snippet` Lisp built-in factory.
+  "Snippet library registry — loads library.json or /api/snippets, provides
+   search/filter, and exports the `snippet` Lisp built-in factory.
    Exports: library-atom, loaded?, load!, all-snippets, all-tags,
             filter-snippets, by-id, snippet-builtin."
   (:require [repulse.lisp.eval :as leval]
+            [repulse.auth :as auth]
+            [repulse.api :as api]
             [clojure.string :as cstr]))
 
 ;;; State
@@ -40,22 +42,40 @@
 
 ;;; Loading
 
+(defn- load-from-api! []
+  (-> (api/fetch-snippets)
+      (.then (fn [result]
+               (if-let [snippets (:data result)]
+                 (do (reset! library-atom {:version 2 :snippets snippets})
+                     (reset! loaded? true)
+                     (reset! loading? false))
+                 (do (js/console.warn "[REPuLse] API snippet load failed:" (:error result))
+                     (load-from-static!)))))
+      (.catch (fn [e]
+                (js/console.warn "[REPuLse] API snippet fetch error:" e)
+                (load-from-static!)))))
+
+(defn- load-from-static! []
+  (-> (js/fetch "/snippets/library.json")
+      (.then #(.json %))
+      (.then (fn [data]
+               (let [d (js->clj data :keywordize-keys true)]
+                 (reset! library-atom d)
+                 (reset! loaded? true)
+                 (reset! loading? false))))
+      (.catch (fn [e]
+                (reset! loading? false)
+                (js/console.warn "[REPuLse] snippet library load failed:" e)))))
+
 (defn load!
-  "Fetch /snippets/library.json and populate library-atom.
+  "Populate library-atom from the API (when authenticated) or static JSON.
    No-ops if already loaded or loading."
   []
   (when (and (not @loaded?) (not @loading?))
     (reset! loading? true)
-    (-> (js/fetch "/snippets/library.json")
-        (.then #(.json %))
-        (.then (fn [data]
-                 (let [d (js->clj data :keywordize-keys true)]
-                   (reset! library-atom d)
-                   (reset! loaded? true)
-                   (reset! loading? false))))
-        (.catch (fn [e]
-                  (reset! loading? false)
-                  (js/console.warn "[REPuLse] snippet library load failed:" e))))))
+    (if (auth/session)
+      (load-from-api!)
+      (load-from-static!))))
 
 ;;; Lisp built-in factory
 

@@ -2178,6 +2178,36 @@ do-expr    = "(do" expr+ ")"
 
 ---
 
+## User accounts & community (Phase S2)
+
+### Sign in
+
+Click **sign in** in the top-right of the header to authenticate with GitHub via
+Supabase OAuth. After sign-in your avatar and username appear in the button.
+
+Click the button again while signed in to sign out.
+
+Anonymous users can still browse and play all built-in snippets — sign-in is only
+required to submit snippets (Phase S3) or star them.
+
+### REST API
+
+The app exposes a serverless REST API on Vercel:
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/env` | GET | None | Returns public Supabase credentials |
+| `/api/snippets` | GET | None | List snippets (supports `?tag=`, `?q=`, `?limit=`) |
+| `/api/snippets` | POST | Required | Create a new snippet |
+| `/api/snippets/:id/star` | POST | Required | Toggle star on a snippet |
+
+### Snippet loading
+
+- **Anonymous:** the snippet browser loads `app/public/snippets/library.json` (the 24 built-in patterns)
+- **Authenticated:** the snippet browser loads snippets from `/api/snippets` (Supabase DB), falling back to static JSON on error
+
+---
+
 ## Examples
 
 ### Basic beat

@@ -10,6 +10,8 @@
             [repulse.ui.timeline :as timeline]
             [repulse.ui.context-panel :as ctx-panel]
             [repulse.ui.snippet-panel :as snippet-panel]
+            [repulse.ui.auth-button :as auth-button]
+            [repulse.auth :as auth]
             [repulse.env.builtins :as builtins]
             [repulse.eval-orchestrator :as eo]
             [repulse.plugin-loading :as plugin-loading]
@@ -235,6 +237,8 @@
   (reset! builtins/evaluate-ref eo/evaluate!)
 
   (build-dom!)
+  (auth/init-auth! :on-change-fn (fn [_] (auth-button/render-auth-btn!)))
+  (auth-button/init!)
   (snippet-panel/init!)
   (attach-slider-listener!)
   (builtins/ensure-env!)

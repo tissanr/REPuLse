@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "buildCommand": "rustup default stable && curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh && npm run build:wasm && npx shadow-cljs release app",
+  "outputDirectory": "app/public",
+  "installCommand": "npm install",
+  "framework": null,
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "nodejs20.x"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "env": {
+    "SUPABASE_URL": "@supabase-url",
+    "SUPABASE_ANON_KEY": "@supabase-anon-key",
+    "SUPABASE_SERVICE_ROLE_KEY": "@supabase-service-role-key"
+  }
+}

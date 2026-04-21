@@ -229,7 +229,7 @@ Last known clean test baseline:
 | R0    | Correctness & safety — and/or short-circuit, BPM clamp, plugin consent | ✓ delivered |
 | S1    | Local snippet library — curated JSON, browse/preview/insert    | ✓ delivered  |
 | R1    | Refactor — split app.cljs into focused modules                 | ✓ delivered  |
-| S2    | Backend & auth — Vercel + Supabase, GitHub OAuth, REST API     | planned      |
+| S2    | Backend & auth — Vercel + Supabase, GitHub OAuth, REST API     | ✓ delivered  |
 | S3    | Community snippets — submit, star, rank, usage tracking        | planned      |
 | S4    | Snippet audio preview — sandboxed eval, waveforms, indicators  | planned      |
 | R2    | Refactor — decompose eval.cljs builtin map into domain namespaces | planned    |
