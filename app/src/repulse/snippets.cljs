@@ -42,6 +42,18 @@
 
 ;;; Loading
 
+(defn- load-from-static! []
+  (-> (js/fetch "/snippets/library.json")
+      (.then #(.json %))
+      (.then (fn [data]
+               (let [d (js->clj data :keywordize-keys true)]
+                 (reset! library-atom d)
+                 (reset! loaded? true)
+                 (reset! loading? false))))
+      (.catch (fn [e]
+                (reset! loading? false)
+                (js/console.warn "[REPuLse] snippet library load failed:" e)))))
+
 (defn- load-from-api! []
   (-> (api/fetch-snippets)
       (.then (fn [result]
@@ -54,18 +66,6 @@
       (.catch (fn [e]
                 (js/console.warn "[REPuLse] API snippet fetch error:" e)
                 (load-from-static!)))))
-
-(defn- load-from-static! []
-  (-> (js/fetch "/snippets/library.json")
-      (.then #(.json %))
-      (.then (fn [data]
-               (let [d (js->clj data :keywordize-keys true)]
-                 (reset! library-atom d)
-                 (reset! loaded? true)
-                 (reset! loading? false))))
-      (.catch (fn [e]
-                (reset! loading? false)
-                (js/console.warn "[REPuLse] snippet library load failed:" e)))))
 
 (defn load!
   "Populate library-atom from the API (when authenticated) or static JSON.
