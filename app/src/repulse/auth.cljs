@@ -5,9 +5,7 @@
 
 ;;; State
 
-(defonce auth-atom
-  "Holds {:user {...} :session {...}} or nil when logged out."
-  (atom nil))
+(defonce auth-atom (atom nil))
 
 (defonce ^:private client-atom (atom nil))
 
