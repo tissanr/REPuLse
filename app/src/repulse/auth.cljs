@@ -29,14 +29,14 @@
 
 (defn login! []
   (when-let [sb @client-atom]
-    (-> (.signInWithOAuth (.-auth sb)
-                          #js {:provider "github"
-                               :options  #js {:redirectTo (.-href js/location)}})
+    (-> (js-invoke (.-auth sb) "signInWithOAuth"
+                   #js {:provider "github"
+                        :options  #js {:redirectTo (.-href js/location)}})
         (.catch (fn [e] (js/console.error "[REPuLse/auth] login failed:" e))))))
 
 (defn logout! []
   (when-let [sb @client-atom]
-    (-> (.signOut (.-auth sb))
+    (-> (js-invoke (.-auth sb) "signOut")
         (.then (fn [_] (reset! auth-atom nil)))
         (.catch (fn [e] (js/console.error "[REPuLse/auth] logout failed:" e))))))
 
@@ -44,7 +44,8 @@
 
 (defn- apply-session! [session]
   (if session
-    (reset! auth-atom {:session session :user (.-user session)})
+    (reset! auth-atom {:session session
+                       :user (js->clj (.-user session) :keywordize-keys true)})
     (reset! auth-atom nil)))
 
 (defn init-auth!
@@ -64,16 +65,15 @@
                    (let [sb (createClient url key)]
                      (reset! client-atom sb)
                      ;; Restore existing session
-                     (-> (.getSession (.-auth sb))
+                     (-> (js-invoke (.-auth sb) "getSession")
                          (.then (fn [result]
                                   (apply-session! (.. result -data -session))
                                   (when on-change-fn (on-change-fn @auth-atom)))))
                      ;; Subscribe to future changes
-                     (.onAuthStateChange
-                       (.-auth sb)
-                       (fn [_event session]
-                         (apply-session! session)
-                         (when on-change-fn (on-change-fn @auth-atom)))))))))
+                     (js-invoke (.-auth sb) "onAuthStateChange"
+                                (fn [_event session]
+                                  (apply-session! session)
+                                  (when on-change-fn (on-change-fn @auth-atom)))))))))
       (.catch (fn [e]
                 ;; Supabase not configured — app works anonymously
                 (js/console.info "[REPuLse/auth] running without backend:" (.-message e))))))
