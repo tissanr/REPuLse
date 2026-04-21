@@ -131,11 +131,11 @@
       (eo/evaluate! (.. view -state -doc (toString))))))
 
 (defn- start-icon-rotation! []
-  (let [icons #js ["/icon.png" "/icon1.png" "/icon2.png"]
+  (let [icons #js ["/icon.png" "/icon1.png"]
         idx   (atom 0)]
     (js/setInterval
       (fn []
-        (swap! idx #(mod (inc %) 3))
+        (swap! idx #(mod (inc %) 2))
         (when-let [img (el "header-icon")]
           (set! (.-style.-opacity img) "0")
           (js/setTimeout
