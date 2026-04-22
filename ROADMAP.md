@@ -576,15 +576,22 @@ See full spec: [PROMPTS/phase-n1-midi-cc-mapping.md](PROMPTS/phase-n1-midi-cc-ma
 
 ---
 
-## Phase O1 — Embeddable Component 📋 *planned*
+## Phase O1 — Embeddable Component ✅ *delivered*
 
 Drop a live REPuLse editor into any static website with one `<script>` tag.
 
 **Key additions:**
 - **`<repulse-editor>` custom element** — Shadow DOM isolation; attributes: `code`, `snippet`, `autoplay`, `bpm`, `height`, `theme`
 - **`snippet="id"` attribute** — pre-seeds editor from S1's `library.json` by snippet ID
-- **Separate `embed.js` bundle** — shadow-cljs `:embed` build target; target < 500 KB gzipped
-- **`embed-test.html`** — minimal host page exercising all three attribute modes
+- **Separate `embed.js` bundle** — shadow-cljs `:embed` build target outputting `app/public/embed.js`
+- **`embed-test.html`** — minimal host page exercising all three attribute modes (inline code, snippet, no-autoplay)
+
+**Delivered:**
+- `app/src/repulse/embed.cljs` — custom element entry point; defines `<repulse-editor>` via `js*` ES6 class expression extending `HTMLElement`
+- `app/src/repulse/embed_css.cljs` — Shadow DOM CSS string (editor styles, rainbow delimiters, active-event highlight, lint squiggle, hover tooltip)
+- `app/public/embed-test.html` — three-instance test page demonstrating inline code + autoplay, snippet library, and no-autoplay modes
+- `shadow-cljs.edn` `:embed` build target — produces `app/public/embed.js` (dev build ~647 KB gzipped; release build significantly smaller)
+- All 134 core/lisp tests continue to pass
 
 See full spec: [PROMPTS/PHASE-O1.md](PROMPTS/PHASE-O1.md)
 
