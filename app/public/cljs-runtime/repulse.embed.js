@@ -13,15 +13,15 @@ repulse.embed.instance_views = cljs.core.atom.cljs$core$IFn$_invoke$arity$1(cljs
  */
 repulse.embed.mount_instance_BANG_ = (function repulse$embed$mount_instance_BANG_(host_el){
 var shadow__$1 = host_el.attachShadow(({"mode": "open"}));
-var style = (function (){var G__6054 = document.createElement("style");
-(G__6054.textContent = repulse.embed_css.EMBED_CSS);
+var style = (function (){var G__24690 = document.createElement("style");
+(G__24690.textContent = repulse.embed_css.EMBED_CSS);
 
-return G__6054;
+return G__24690;
 })();
-var wrap = (function (){var G__6055 = document.createElement("div");
-G__6055.classList.add("editor-wrap");
+var wrap = (function (){var G__24691 = document.createElement("div");
+G__24691.classList.add("editor-wrap");
 
-return G__6055;
+return G__24691;
 })();
 shadow__$1.appendChild(style);
 
@@ -148,20 +148,12 @@ return null;
  */
 repulse.embed.init_BANG_ = (function repulse$embed$init_BANG_(){
 if(cljs.core.truth_(window.customElements)){
-var ctor = (function (){
-var this$ = this;
-HTMLElement.call(this$);
-
-return this$;
-});
-(ctor.prototype = Object.create(HTMLElement.prototype));
-
-(ctor.prototype.connectedCallback = (function (){
-var this$ = this;
-return repulse.embed.connect_callback(this$);
-}));
-
-return window.customElements.define("repulse-editor",ctor);
+var cb = repulse.embed.connect_callback;
+var klass = class extends HTMLElement {
+                        constructor() { super(); }
+                        connectedCallback() { cb(this); }
+                      };
+return window.customElements.define("repulse-editor",klass);
 } else {
 return null;
 }
