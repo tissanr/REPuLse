@@ -98,13 +98,12 @@
    Called automatically when embed.js loads."
   []
   (when (.-customElements js/window)
-    (let [ctor (fn []
-                 (this-as this
-                   (.call js/HTMLElement this)
-                   this))]
-      (set! (.-prototype ctor) (js/Object.create (.-prototype js/HTMLElement)))
-      (set! (.. ctor -prototype -connectedCallback)
-            (fn []
-              (this-as this
-                (connect-callback this))))
-      (.define (.-customElements js/window) "repulse-editor" ctor))))
+    ;; Use js* to define a real ES6 class — the only reliable way to extend
+    ;; HTMLElement in browsers. ClojureScript's fn-based approach cannot satisfy
+    ;; the browser's requirement that the constructor returns a proper HTMLElement.
+    (let [cb connect-callback
+          klass (js* "class extends HTMLElement {
+                        constructor() { super(); }
+                        connectedCallback() { ~{}(this); }
+                      }" cb)]
+      (.define (.-customElements js/window) "repulse-editor" klass))))
