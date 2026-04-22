@@ -42,8 +42,10 @@
     wrap))
 
 ;;; Click-to-play overlay — satisfies the browser's AudioContext user-gesture policy.
+;; view-atom is the embed-local EditorView; we reset the global editor/editor-view
+;; to it before evaluating so highlight-range! targets the correct instance.
 
-(defn- add-play-overlay! [^js wrap code-fn]
+(defn- add-play-overlay! [^js wrap view-atom code-fn]
   (let [overlay (.createElement js/document "div")
         btn     (.createElement js/document "div")]
     (set! (.-className overlay) "embed-play-overlay")
@@ -57,6 +59,8 @@
     (.addEventListener overlay "click"
       (fn []
         (.remove overlay)
+        ;; Re-claim the global editor-view so highlight-range! targets this instance.
+        (reset! editor/editor-view @view-atom)
         (code-fn)))))
 
 ;;; Attribute-driven connection logic
@@ -81,11 +85,12 @@
         (let [seed-from-library!
               (fn []
                 (if-let [s (snippets/by-id snippet-attr)]
-                  (let [code (:code s)
-                        view (editor/make-editor wrap code eo/evaluate!)]
+                  (let [code     (:code s)
+                        view     (editor/make-editor wrap code eo/evaluate!)
+                        view-atm (atom view)]
                     (reset! editor/editor-view view)
                     (when autoplay?
-                      (add-play-overlay! wrap #(eo/evaluate! code))))
+                      (add-play-overlay! wrap view-atm #(eo/evaluate! code))))
                   ;; Snippet not found — mount empty editor
                   (reset! editor/editor-view
                           (editor/make-editor wrap (or code-attr "") eo/evaluate!))))]
@@ -96,11 +101,12 @@
                 (remove-watch snippets/library-atom ::embed-load)
                 (seed-from-library!))))))
       ;; ── Code-attribute mode ────────────────────────────────────────────────
-      (let [code (or code-attr "")
-            view (editor/make-editor wrap code eo/evaluate!)]
+      (let [code     (or code-attr "")
+            view     (editor/make-editor wrap code eo/evaluate!)
+            view-atm (atom view)]
         (reset! editor/editor-view view)
         (when (and autoplay? (seq code))
-          (add-play-overlay! wrap #(eo/evaluate! code)))))))
+          (add-play-overlay! wrap view-atm #(eo/evaluate! code)))))))
 
 ;;; Custom element class — use js* to emit a raw ES6 class expression
 ;; js/class is not a valid CLJS form; js* lets us splice connect! as a JS value.
