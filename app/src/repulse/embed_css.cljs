@@ -156,4 +156,34 @@
 .insert-dropdown-item:focus-visible { background: rgba(97,175,239,0.12); outline: none; }
 .insert-fn-name   { color: #61afef; font-size: 13px; font-weight: 600; }
 .insert-fn-detail { color: #abb2bf; font-size: 12px; line-height: 1.35; }
+
+/* Autoplay click-to-start overlay */
+.embed-play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(24, 27, 34, 0.72);
+  cursor: pointer;
+  z-index: 10;
+  transition: background 0.15s ease;
+}
+.embed-play-overlay:hover { background: rgba(24, 27, 34, 0.55); }
+.embed-play-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(233, 69, 96, 0.9);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  transition: transform 0.1s ease, background 0.1s ease;
+  pointer-events: none;
+}
+.embed-play-overlay:hover .embed-play-btn { transform: scale(1.1); background: #e94560; }
+.embed-play-btn svg { display: block; }
 ")

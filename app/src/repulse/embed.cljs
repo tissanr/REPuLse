@@ -36,9 +36,28 @@
     (set! (.-textContent style) EMBED_CSS)
     (set! (.-className wrap) "embed-wrap")
     (set! (.. wrap -style -height) height)
+    (set! (.. wrap -style -position) "relative")
     (.appendChild shadow style)
     (.appendChild shadow wrap)
     wrap))
+
+;;; Click-to-play overlay — satisfies the browser's AudioContext user-gesture policy.
+
+(defn- add-play-overlay! [^js wrap code-fn]
+  (let [overlay (.createElement js/document "div")
+        btn     (.createElement js/document "div")]
+    (set! (.-className overlay) "embed-play-overlay")
+    (set! (.-className btn) "embed-play-btn")
+    (set! (.-innerHTML btn)
+          "<svg width='18' height='18' viewBox='0 0 18 18' fill='white'>
+             <polygon points='4,2 16,9 4,16'/>
+           </svg>")
+    (.appendChild overlay btn)
+    (.appendChild wrap overlay)
+    (.addEventListener overlay "click"
+      (fn []
+        (.remove overlay)
+        (code-fn)))))
 
 ;;; Attribute-driven connection logic
 
@@ -56,7 +75,7 @@
         (when (and (js/isFinite bpm) (> bpm 0))
           (audio/set-bpm! bpm))))
     (if (and snippet-attr (seq snippet-attr))
-      ;; ── Snippet mode: fetch library, seed editor, optionally autoplay ──────
+      ;; ── Snippet mode: fetch library, seed editor, optionally show overlay ──
       (do
         (snippets/load!)
         (let [seed-from-library!
@@ -66,7 +85,7 @@
                         view (editor/make-editor wrap code eo/evaluate!)]
                     (reset! editor/editor-view view)
                     (when autoplay?
-                      (js/setTimeout #(eo/evaluate! code) 150)))
+                      (add-play-overlay! wrap #(eo/evaluate! code))))
                   ;; Snippet not found — mount empty editor
                   (reset! editor/editor-view
                           (editor/make-editor wrap (or code-attr "") eo/evaluate!))))]
@@ -81,7 +100,7 @@
             view (editor/make-editor wrap code eo/evaluate!)]
         (reset! editor/editor-view view)
         (when (and autoplay? (seq code))
-          (js/setTimeout #(eo/evaluate! code) 150))))))
+          (add-play-overlay! wrap #(eo/evaluate! code)))))))
 
 ;;; Custom element class — use js* to emit a raw ES6 class expression
 ;; js/class is not a valid CLJS form; js* lets us splice connect! as a JS value.
