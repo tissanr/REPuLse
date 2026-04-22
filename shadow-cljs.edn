@@ -19,7 +19,8 @@
    ;; :language-out :ecmascript-2020 preserves dynamic import() emitted via the
    ;; Function-constructor workaround in app.cljs.
    :compiler-options {:language-out :ecmascript-2020
-                      :externs ["app/externs/lezer-lr.js"]}}
+                      :externs ["app/externs/lezer-lr.js"
+                                "app/externs/supabase.js"]}}
 
   :test
   {:target :node-script

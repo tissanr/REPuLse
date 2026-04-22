@@ -11,6 +11,10 @@ export default function handler(_req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  // createClient requires the bare project URL (https://xxx.supabase.co).
+  // Strip any accidental path suffix (e.g. /rest/v1) that may have been stored.
+  const projectUrl = new URL(url).origin;
+
   res.setHeader("Cache-Control", "public, max-age=3600");
-  res.status(200).json({ url, key });
+  res.status(200).json({ url: projectUrl, key });
 }
