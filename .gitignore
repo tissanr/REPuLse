@@ -28,3 +28,4 @@ app/public/repulse_audio.js
 .claude/settings.local.json
 .claude/worktrees/
 .vercel
+.aider*

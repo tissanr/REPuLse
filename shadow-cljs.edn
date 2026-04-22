@@ -24,5 +24,13 @@
   :test
   {:target :node-script
    :output-to "out/test.js"
-   :main repulse.test-runner/main}}}
+   :main repulse.test-runner/main}
+
+  :embed
+  {:target :browser
+   :output-dir "app/public"
+   :asset-path "/"
+   :modules {:embed {:init-fn repulse.embed/init!}}
+   :compiler-options {:language-out :ecmascript-2020
+                      :externs ["app/externs/lezer-lr.js"]}}}}
 

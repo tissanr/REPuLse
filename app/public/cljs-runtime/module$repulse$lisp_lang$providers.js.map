@@ -1,0 +1,9 @@
+{
+"version":3,
+"file":"module$repulse$lisp_lang$providers.js",
+"lineCount":25,
+"mappings":"AAIA,IAAIA,oDAAgB,EAAAA,IAAM,EAA1B;AACA,IAAIC,kDAAgB,EAAAA,IAAM,EAA1B;AAEOC,QAASA,yDAAoB,CAACC,EAAD,CAAK;AAAEH,mDAAA,GAAgBG,EAAhB;AAAF;AAClCC,QAASA,uDAAkB,CAACD,EAAD,CAAO;AAAEF,iDAAA,GAAgBE,EAAhB;AAAF;AAClCE,QAASA,iDAAY,EAAG;AAAE,SAAOL,iDAAA,EAAP;AAAF;AACxBM,QAASA,+CAAU,EAAK;AAAE,SAAOL,+CAAA,EAAP;AAAF;AAV/B;AAAA,IAAAM,qCAAA,EAAA;AASgBF;AAAAA,kCAAAA,CAAAA,YAAAA,GAAAA,gDAAAA;AACAC;AAAAA,kCAAAA,CAAAA,UAAAA,GAAAA,8CAAAA;AAHAJ;AAAAA,kCAAAA,CAAAA,oBAAAA,GAAAA,wDAAAA;AACAE;AAAAA,kCAAAA,CAAAA,kBAAAA,GAAAA,sDAAAA;;",
+"sources":["repulse/lisp-lang/providers.js"],
+"sourcesContent":["// Runtime value providers \u2014 set by ClojureScript, read by completion sources.\n// Setters are called once from app.cljs init; lambdas close over CLJS atoms\n// so every call returns the current live state (banks load async after startup).\n\nlet _getBankNames = () => [];\nlet _getFxNames   = () => [];\n\nexport function setBankNamesProvider(fn) { _getBankNames = fn; }\nexport function setFxNamesProvider(fn)   { _getFxNames   = fn; }\nexport function getBankNames() { return _getBankNames(); }\nexport function getFxNames()   { return _getFxNames();   }\n"],
+"names":["_getBankNames","_getFxNames","setBankNamesProvider","fn","setFxNamesProvider","getBankNames","getFxNames","$jscomp$tmp$exports$module$name"]
+}

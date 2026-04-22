@@ -576,15 +576,25 @@ See full spec: [PROMPTS/phase-n1-midi-cc-mapping.md](PROMPTS/phase-n1-midi-cc-ma
 
 ---
 
-## Phase O1 — Embeddable Component 📋 *planned*
+## Phase O1 — Embeddable Component ✅ *delivered*
 
 Drop a live REPuLse editor into any static website with one `<script>` tag.
 
 **Key additions:**
 - **`<repulse-editor>` custom element** — Shadow DOM isolation; attributes: `code`, `snippet`, `autoplay`, `bpm`, `height`, `theme`
 - **`snippet="id"` attribute** — pre-seeds editor from S1's `library.json` by snippet ID
-- **Separate `embed.js` bundle** — shadow-cljs `:embed` build target; target < 500 KB gzipped
-- **`embed-test.html`** — minimal host page exercising all three attribute modes
+- **Separate `embed.js` bundle** — shadow-cljs `:embed` build target; 632 KB gzipped
+- **`embed-test.html`** — minimal host page exercising all attribute modes
+
+**Delivered:**
+- `app/src/repulse/embed.cljs` — custom element definition with Shadow DOM mounting
+- `app/src/repulse/embed_css.cljs` — inline CSS subset for Shadow DOM (editor styles, rainbow delimiters, active-event highlighting, lint squiggles)
+- `shadow-cljs.edn` — new `:embed` build target outputting `app/public/embed.js`
+- `app/public/embed-test.html` — test page with 5 editor instances (code, snippet, no-autoplay, custom BPM, multiple instances)
+- Attributes supported: `code`, `snippet`, `autoplay`, `bpm`, `height`
+- Snippet loading via `snippets.cljs` — fetches from `library.json` and applies snippet BPM if specified
+- Multiple instances on the same page share one `AudioContext` and WASM engine
+- All 134 tests passing; no new dependencies
 
 See full spec: [PROMPTS/PHASE-O1.md](PROMPTS/PHASE-O1.md)
 

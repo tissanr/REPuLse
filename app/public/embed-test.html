@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>REPuLse Embed Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      padding: 40px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    h2 {
+      margin-top: 40px;
+      margin-bottom: 12px;
+      font-size: 1.1rem;
+      color: #888;
+    }
+    h2:first-of-type {
+      margin-top: 0;
+    }
+    /* Test that host CSS doesn't bleed into the editor */
+    * {
+      font-family: Georgia, serif !important;
+    }
+    .note {
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: #666;
+    }
+  </style>
+  <script src="/embed.js" defer></script>
+</head>
+<body>
+  <h1 style="color: #e94560; margin-bottom: 30px;">REPuLse Embed Test</h1>
+
+  <h2>Default code with autoplay</h2>
+  <repulse-editor
+    code='(track :kick (seq :bd :bd :bd :bd))'
+    autoplay
+    height="200px">
+  </repulse-editor>
+  <p class="note">Should play a four-on-the-floor kick pattern automatically.</p>
+
+  <h2>From snippet library (acid-303)</h2>
+  <repulse-editor snippet="acid-303" autoplay height="220px"></repulse-editor>
+  <p class="note">Loads the "acid-303" snippet from library.json and plays it.</p>
+
+  <h2>No autoplay — manual evaluation</h2>
+  <repulse-editor
+    code='(track :melody (scale :minor :c4 (seq 0 3 5 7)))'
+    height="180px">
+  </repulse-editor>
+  <p class="note">Press Alt+Enter (or F9) to evaluate. Should show a static editor.</p>
+
+  <h2>Custom BPM</h2>
+  <repulse-editor
+    code='(track :fast (fast 2 (seq :hh :hh)))'
+    bpm="160"
+    autoplay
+    height="160px">
+  </repulse-editor>
+  <p class="note">Plays at 160 BPM instead of the default 120.</p>
+
+  <h2>Multiple instances (isolation test)</h2>
+  <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+    <repulse-editor
+      code='(track :left (seq :bd :_ :sd :_))'
+      autoplay
+      height="150px"
+      style="flex: 1; min-width: 300px;">
+    </repulse-editor>
+    <repulse-editor
+      code='(track :right (seq :hh :hh :hh :hh))'
+      autoplay
+      height="150px"
+      style="flex: 1; min-width: 300px;">
+    </repulse-editor>
+  </div>
+  <p class="note">Two editors on the same page. Shadow DOM should prevent style conflicts.</p>
+</body>
+</html>

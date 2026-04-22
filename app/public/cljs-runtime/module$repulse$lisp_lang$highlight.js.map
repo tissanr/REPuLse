@@ -1,0 +1,9 @@
+{
+"version":3,
+"file":"module$repulse$lisp_lang$highlight.js",
+"lineCount":8,
+"mappings":"A;AAEO,IAAMA,2DAAuB,GAAAC,mDAAAA,CAAAA,SAAA,EAAU,CAC5C,cAAgBC,mDAAAA,CAAAA,IAAKC,CAAAA,WADuB,EAE5C,SAAgBD,mDAAAA,CAAAA,IAAKE,CAAAA,MAFuB,EAG5C,SAAgBF,mDAAAA,CAAAA,IAAKG,CAAAA,MAHuB,EAI5C,UAAgBH,mDAAAA,CAAAA,IAAKI,CAAAA,IAJuB,EAK5C,cAAgBJ,mDAAAA,CAAAA,IAAKK,CAAAA,OALuB;AAM5C,SAAgBL,mDAAAA,CAAAA,IAAKM,CAAAA,YANuB,EAO5C,MAAgBN,mDAAAA,CAAAA,IAAKO,CAAAA,KAPuB,EAQ5C,MAAgBP,mDAAAA,CAAAA,IAAKQ,CAAAA,aARuB,EAS5C,MAAgBR,mDAAAA,CAAAA,IAAKS,CAAAA,KATuB,CAAV,CAA7B;AAFP;AAAA,IAAAC,qCAAA,EAAA;AAEaZ;AAAAA,kCAAAA,CAAAA,oBAAAA,GAAAA,wDAAAA;;",
+"sources":["repulse/lisp-lang/highlight.js"],
+"sourcesContent":["import { styleTags, tags } from \"goog:module$node_modules$$lezer$highlight$dist$index_cjs\";\n\nexport const repulseLispHighlight = styleTags({\n  \"LineComment\":  tags.lineComment,\n  \"Number\":       tags.number,\n  \"String\":       tags.string,\n  \"Keyword\":      tags.atom,         // :bd, :sd, ... \u2014 oneDark renders atoms as orange\n  \"BuiltinName\":  tags.keyword,      // seq, stack, ... \u2014 oneDark renders keywords as purple\n  \"Symbol\":       tags.variableName, // user-defined names \u2014 default colour\n  \"( )\":          tags.paren,\n  \"[ ]\":          tags.squareBracket,\n  \"{ }\":          tags.brace,\n});\n"],
+"names":["repulseLispHighlight","styleTags","tags","lineComment","number","string","atom","keyword","variableName","paren","squareBracket","brace","$jscomp$tmp$exports$module$name"]
+}
