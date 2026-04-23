@@ -1,0 +1,19 @@
+{:lint-as
+ {;; ClojureScript type/record forms
+  cljs.core/deftype   clojure.core/deftype
+  cljs.core/defrecord clojure.core/defrecord
+  ;; cljs.test macros
+  cljs.test/deftest   clojure.test/deftest
+  cljs.test/is        clojure.test/is
+  cljs.test/testing   clojure.test/testing
+  cljs.test/use-fixtures clojure.test/use-fixtures}
+
+ :config-in-ns
+ {;; shadow-cljs test runner namespace — allow js* and other interop
+  repulse.test-runner {:linters {:unresolved-symbol {:level :off}}}}
+
+ :linters
+ {;; js/... interop calls are intentional throughout app/
+  :unresolved-namespace {:level :warning}
+  ;; Unused private vars are common in CLJS protocol implementations
+  :unused-private-var {:level :off}}}
