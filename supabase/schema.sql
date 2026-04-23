@@ -124,7 +124,36 @@ create trigger stars_count_delete
 
 -- ── Indexes ───────────────────────────────────────────────────────────────────
 
-create index if not exists snippets_author_idx on public.snippets (author_id);
-create index if not exists snippets_tags_idx   on public.snippets using gin (tags);
-create index if not exists snippets_stars_idx  on public.snippets (star_count desc);
-create index if not exists stars_snippet_idx   on public.stars (snippet_id);
+create index if not exists snippets_author_idx   on public.snippets (author_id);
+create index if not exists snippets_tags_idx     on public.snippets using gin (tags);
+create index if not exists snippets_stars_idx    on public.snippets (star_count desc);
+create index if not exists snippets_usage_idx    on public.snippets (usage_count desc);
+create index if not exists snippets_created_idx  on public.snippets (created_at desc);
+create index if not exists stars_snippet_idx     on public.stars (snippet_id);
+
+-- ── Reports ───────────────────────────────────────────────────────────────────
+
+create table if not exists public.reports (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid references public.profiles(id) on delete set null,
+  snippet_id uuid references public.snippets(id) on delete cascade,
+  reason     text,
+  created_at timestamptz default now()
+);
+
+alter table public.reports enable row level security;
+
+create policy "reports insertable by authed users"
+  on public.reports for insert
+  with check (auth.uid() = user_id);
+
+create index if not exists reports_snippet_idx on public.reports (snippet_id);
+
+-- ── Helper: increment usage count atomically ─────────────────────────────────
+
+create or replace function public.increment_snippet_usage(p_snippet_id uuid)
+returns void language sql security definer as $$
+  update public.snippets
+  set usage_count = usage_count + 1
+  where id = p_snippet_id;
+$$;
