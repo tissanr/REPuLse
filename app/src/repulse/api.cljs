@@ -1,7 +1,8 @@
 (ns repulse.api
   "Thin fetch wrapper for the REPuLse REST API.
    All calls return a JS Promise that resolves to {:data ...} or {:error ...}."
-  (:require [repulse.auth :as auth]))
+  (:require [clojure.string :as str]
+            [repulse.auth :as auth]))
 
 (defn- auth-headers []
   (if-let [sess (auth/session)]
@@ -26,7 +27,7 @@
                   q     (assoc :q q)
                   limit (assoc :limit limit))
          qs     (when (seq params)
-                  (str "?" (clojure.string/join "&"
+                  (str "?" (str/join "&"
                              (map (fn [[k v]] (str (name k) "=" (js/encodeURIComponent v)))
                                   params))))]
      (-> (js/fetch (str "/api/snippets" qs) #js {:headers (auth-headers)})

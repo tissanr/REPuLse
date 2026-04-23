@@ -16,4 +16,11 @@
  {;; js/... interop calls are intentional throughout app/
   :unresolved-namespace {:level :warning}
   ;; Unused private vars are common in CLJS protocol implementations
-  :unused-private-var {:level :off}}}
+  :unused-private-var {:level :off}
+  ;; Docstrings placed after arg vector in test helpers — cosmetic, not a bug
+  :misplaced-docstring {:level :off}
+  ;; (str x) where x is already a string — acceptable style in CLJS
+  :redundant-str-call {:level :off}
+  ;; Redundant do/let — common in macro-expanded CLJS forms
+  :redundant-do {:level :off}
+  :redundant-let {:level :off}}}

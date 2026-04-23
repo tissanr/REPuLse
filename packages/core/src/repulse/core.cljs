@@ -234,7 +234,7 @@
     (if (zero? n)
       (pattern (fn [_] []))
       (pattern
-       (fn [{:keys [start end] :as sp}]
+       (fn [{:keys [start] :as sp}]
          (let [cycle  (int (Math/floor (rat->float start)))
                idx    (mod cycle n)
                pat    (nth pats idx)]
@@ -270,7 +270,7 @@
                   (rat (- (int (* amount 1000))) 1000))]
     (late neg-off pat)))
 
-(defn- cycle-hash
+(defn cycle-hash
   "Deterministic hash of a cycle number. Returns 0–99."
   [cycle]
   (mod (+ (* (Math/abs cycle) 48271) 12345) 100))
@@ -338,7 +338,7 @@
   ([xs sources]
    (let [n (count xs)]
      (pattern
-      (fn [{:keys [start end] :as sp}]
+      (fn [{:keys [start end]}]
         (let [start-c (int (Math/floor (rat->float start)))
               end-c   (int (Math/ceil  (rat->float end)))]
           (for [c (range start-c end-c)
@@ -361,7 +361,7 @@
          cumulative (reductions + (map #(* 100 (/ (first %) total)) pairs))
          values     (mapv second pairs)]
      (pattern
-      (fn [{:keys [start end] :as sp}]
+      (fn [{:keys [start end]}]
         (let [start-c (int (Math/floor (rat->float start)))
               end-c   (int (Math/ceil  (rat->float end)))]
           (for [c (range start-c end-c)

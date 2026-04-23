@@ -16,6 +16,7 @@
             [repulse.eval-orchestrator :as eo]
             [repulse.plugin-loading :as plugin-loading]
             [repulse.content.first-visit :as first-visit]
+            [clojure.string :as str]
             ["./lisp-lang/providers.js" :refer [setBankNamesProvider setFxNamesProvider]]
             ["@codemirror/commands" :refer [selectAll]]))
 
@@ -91,12 +92,12 @@
   [hash]
   (try
     (cond
-      (and hash (clojure.string/starts-with? hash "#v2:"))
+      (and hash (str/starts-with? hash "#v2:"))
       (let [b64  (subs hash 4)
             data (js->clj (js/JSON.parse (b64-decode b64)) :keywordize-keys true)]
         (when (= (:v data) 2) data))
 
-      (and hash (clojure.string/starts-with? hash "#v1:"))
+      (and hash (str/starts-with? hash "#v1:"))
       (let [b64  (subs hash 4)
             data (js->clj (js/JSON.parse (js/atob b64)) :keywordize-keys true)]
         (when data
