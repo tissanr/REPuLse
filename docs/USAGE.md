@@ -42,6 +42,7 @@ evaluate them with **Ctrl+Enter** (or the **▶ play** button), and hear them lo
 20. [Error messages](#error-messages)
 21. [Grammar summary](#grammar-summary)
 22. [Examples](#examples)
+23. [Embeddable component](#embeddable-component)
 
 ---
 
@@ -2354,4 +2355,87 @@ The app exposes a serverless REST API on Vercel:
 
 ```lisp
 (stop)
+```
+
+---
+
+## Embeddable component
+
+Phase O1 ships a `<repulse-editor>` [Custom Element](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements) so you can drop a live, editable REPuLse pattern into any static webpage without a build step.
+
+### Quick start
+
+```html
+<!-- 1. Load the embed bundle (served from the REPuLse host) -->
+<script src="https://repulse.example.com/embed.js" defer></script>
+
+<!-- 2. Place the element wherever you want the editor -->
+<repulse-editor
+  code='(track :kick (seq :bd :bd :bd :bd))'
+  autoplay
+  height="220px">
+</repulse-editor>
+```
+
+### Attributes
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `code` | string | `""` | REPuLse-Lisp code to pre-load into the editor |
+| `snippet` | string | — | Snippet ID from `library.json`; overrides `code` if both present |
+| `autoplay` | boolean (presence) | false | Evaluate code automatically on connect |
+| `bpm` | number | 120 | Initial BPM; applied before autoplay |
+| `height` | CSS length | `"220px"` | Height of the editor region |
+| `theme` | `"dark"` | `"dark"` | Colour theme (light TBD) |
+
+### Examples
+
+**Inline code with autoplay:**
+```html
+<repulse-editor
+  code='(track :bass (fast 2 (seq :bd :sd :bd :sd)))'
+  autoplay
+  height="200px">
+</repulse-editor>
+```
+
+**Pre-seed from the snippet library:**
+```html
+<repulse-editor snippet="acid-303" autoplay height="240px"></repulse-editor>
+```
+
+**No autoplay — reader presses Alt+Enter to evaluate:**
+```html
+<repulse-editor
+  code='(track :melody (scale :minor :c4 (seq 0 3 5 7)))'
+  height="180px">
+</repulse-editor>
+```
+
+**Custom BPM:**
+```html
+<repulse-editor
+  code='(track :kick (seq :bd :bd :bd :bd))'
+  bpm="140"
+  autoplay>
+</repulse-editor>
+```
+
+### Shadow DOM isolation
+
+Each `<repulse-editor>` uses Shadow DOM (`mode: "open"`), so:
+- Host-page CSS cannot style the editor internals.
+- The editor's styles cannot leak into the surrounding page.
+- Multiple instances on the same page are visually independent.
+
+### Known limitations (O1)
+
+- Multiple instances on the same page **share the audio scheduler**. Track names must be unique across all instances; a `:kick` track in one embed will conflict with a `:kick` in another.
+- The `(upd)` command and some editor-centric builtins operate on the **globally tracked editor view** (the most recently mounted embed). In practice this is not an issue for read-only embeds. Full per-instance isolation is deferred to Phase O.
+
+### Building the embed bundle
+
+```bash
+npx shadow-cljs compile embed    # dev build → app/public/embed.js
+npx shadow-cljs release embed    # optimised release build (much smaller)
 ```

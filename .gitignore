@@ -1,8 +1,11 @@
 # Dependencies
 node_modules/
+node_modules
 
 # shadow-cljs build output
 app/public/js/
+app/public/cljs-runtime/
+app/public/manifest.edn
 out/
 .shadow-cljs/
 

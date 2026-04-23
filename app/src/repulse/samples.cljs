@@ -214,7 +214,7 @@
                       owner "/" repo "/" branch "/")]
     (-> (js/fetch api-url)
         (.then #(.json %))
-        (.then (fn [data]
+        (.then (fn [^js data]
                  (let [tree    (js->clj (.-tree data) :keywordize-keys true)
                        blobs   (filter #(and (= (:type %) "blob")
                                              (audio-ext? (:path %)))

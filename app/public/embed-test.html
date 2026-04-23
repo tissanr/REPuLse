@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>REPuLse Embed Test</title>
+  <script src="/embed.js" defer></script>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #111;
+      color: #ccc;
+      padding: 24px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 { color: #e94560; margin-bottom: 4px; }
+    h2 { color: #56b6c2; font-size: 1rem; margin: 24px 0 8px; }
+    p  { font-size: 0.85rem; color: #888; margin-bottom: 8px; }
+    repulse-editor { border: 1px solid #0f3460; border-radius: 4px; display: block; }
+
+    /* Host-page font that must NOT bleed into the shadow root */
+    * { font-family: Georgia, serif; }
+  </style>
+</head>
+<body>
+  <h1>REPuLse Embed Test</h1>
+  <p>Three independent <code>&lt;repulse-editor&gt;</code> instances. The page uses Georgia (serif) — the editors should still render in a monospace font (Shadow DOM isolation).</p>
+
+  <h2>1. Inline code + autoplay</h2>
+  <p>Should start playing a four-on-the-floor kick immediately.</p>
+  <repulse-editor
+    code="(track :kick (seq :bd :bd :bd :bd))"
+    autoplay
+    height="200px">
+  </repulse-editor>
+
+  <h2>2. Snippet library — four-on-the-floor (autoplay)</h2>
+  <p>Fetches from <code>/snippets/library.json</code>, seeds editor, and plays on load.</p>
+  <repulse-editor snippet="four-on-the-floor" autoplay height="220px"></repulse-editor>
+
+  <h2>3. No autoplay — Alt+Enter to evaluate</h2>
+  <p>Editor is pre-seeded but silent. Press <kbd>Alt+Enter</kbd> inside the editor to play.</p>
+  <repulse-editor
+    code="(track :melody (scale :minor :c4 (seq 0 3 5 7)))"
+    height="180px">
+  </repulse-editor>
+</body>
+</html>
