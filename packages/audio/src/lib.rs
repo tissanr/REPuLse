@@ -443,8 +443,8 @@ impl AudioEngine {
         let amp = p.amp.clamp(0.0, 1.0);
         let value = p.value.trim_start_matches(':');
 
-        let voice = if value.starts_with("saw:") {
-            let freq = value[4..].parse::<f64>().unwrap_or(440.0);
+        let voice = if let Some(rest) = value.strip_prefix("saw:") {
+            let freq = rest.parse::<f64>().unwrap_or(440.0);
             let peak = amp * 0.5;
             let attack_samples = (p.attack * sr).max(1.0);
             Voice::Saw {
@@ -452,8 +452,8 @@ impl AudioEngine {
                 gain_decay: decay_rate(p.decay, sr),
                 attack_inc: peak / attack_samples, in_attack: true,
             }
-        } else if value.starts_with("square:") {
-            let parts: Vec<&str> = value[7..].splitn(2, ':').collect();
+        } else if let Some(rest) = value.strip_prefix("square:") {
+            let parts: Vec<&str> = rest.splitn(2, ':').collect();
             let freq = parts[0].parse::<f64>().unwrap_or(440.0);
             let pw = if parts.len() > 1 { parts[1].parse::<f32>().unwrap_or(0.5) } else { 0.5 };
             let peak = amp * 0.5;
@@ -470,9 +470,9 @@ impl AudioEngine {
                 gain: amp * 0.3,
                 gain_decay: decay_rate(p.decay, sr),
             }
-        } else if value.starts_with("fm:") {
+        } else if let Some(rest) = value.strip_prefix("fm:") {
             // Format: "fm:<carrier_hz>:<index>:<ratio>"
-            let parts: Vec<&str> = value[3..].splitn(3, ':').collect();
+            let parts: Vec<&str> = rest.splitn(3, ':').collect();
             let carrier_freq = parts[0].parse::<f64>().unwrap_or(440.0);
             let index = if parts.len() > 1 { parts[1].parse::<f32>().unwrap_or(1.0) } else { 1.0 };
             let ratio = if parts.len() > 2 { parts[2].parse::<f64>().unwrap_or(2.0) } else { 2.0 };
