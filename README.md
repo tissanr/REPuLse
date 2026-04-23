@@ -1,5 +1,8 @@
 # REPuLse
 
+[![CI](https://github.com/tissanr/REPuLse/actions/workflows/ci.yml/badge.svg)](https://github.com/tissanr/REPuLse/actions/workflows/ci.yml)
+[![Lint](https://github.com/tissanr/REPuLse/actions/workflows/lint.yml/badge.svg)](https://github.com/tissanr/REPuLse/actions/workflows/lint.yml)
+
 A browser-based live coding instrument where music is written in a small, purpose-built Lisp.
 Think [Strudel](https://strudel.cc), but the user-facing language is a minimal Lisp and the
 pattern engine is implemented in ClojureScript.

@@ -1,5 +1,5 @@
 (ns repulse.lisp.mini-test
-  (:require [cljs.test :refer-macros [deftest is testing]]
+  (:require [cljs.test :refer-macros [deftest is]]
             [repulse.lisp.mini :as mini]
             [repulse.core :as core]))
 

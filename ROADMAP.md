@@ -938,19 +938,21 @@ See full spec: [PROMPTS/PHASE-R2.md](PROMPTS/PHASE-R2.md)
 
 ---
 
-## Phase CI1 — CI Pipeline 📋 *planned*
+## Phase CI1 — CI Pipeline ✅ *delivered*
 
 GitHub Actions CI pipeline that runs on every PR and push to `main`: test suite,
 CLJS lint, Rust checks, grammar-drift guard, and release build smoke test. No
 feature changes — pure infrastructure. CD is unchanged (Vercel continues to
 handle preview + production via git integration).
 
-**Key additions:**
-- `.github/workflows/ci.yml` — Node 20 + Rust toolchain + `wasm-pack`; steps: `npm ci` → `npm run build:wasm` → `npm run test` → `npx shadow-cljs release app`
-- `.github/workflows/lint.yml` — `clj-kondo` across `packages/` and `app/src/`; `cargo clippy -D warnings` + `cargo fmt --check` in `packages/audio/`
-- Grammar-drift guard — re-runs `npm run gen:grammar` and fails if `parser.js` / `parser.terms.js` diffs from committed
-- Caching: `actions/cache` for `node_modules`, `~/.cargo`, `.shadow-cljs`, `wasm-pack` output
-- Status badges in `README.md`; `docs/CONTRIBUTING.md` stub describing the pipeline and how to reproduce each check locally
+**Delivered:**
+- `.github/workflows/ci.yml` — two jobs: `test` (`npm test` with Maven cache) and `release-build` (`npm run build:wasm` + `npx shadow-cljs release app` with Cargo + Maven cache)
+- `.github/workflows/lint.yml` — three jobs: `lint` (clj-kondo across `packages/` and `app/src/`), `cargo-lint` (`cargo test` + `cargo clippy -D warnings` + `cargo fmt --check`), and `grammar` (drift check via `npm run gen:grammar` + `git diff --exit-code`)
+- `.clj-kondo/config.edn` — silences CLJS false-positives (`deftype`, `defrecord`, `cljs.test` macros, `js/` interop) while keeping all real error classes active
+- Status badges (`CI` and `Lint`) added to `README.md` header
+- `docs/CONTRIBUTING.md` — pipeline overview table and local reproduction commands for all five checks
+
+See full spec: [PROMPTS/PHASE-CI1.md](PROMPTS/PHASE-CI1.md)
 
 See full spec: [PROMPTS/PHASE-CI1.md](PROMPTS/PHASE-CI1.md)
 

@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Test (cljs.test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Cache shadow-cljs deps
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: m2-${{ hashFiles('shadow-cljs.edn') }}
+          restore-keys: m2-
+
+      - run: npm ci
+      - run: npm test
+
+  release-build:
+    name: Release build (shadow-cljs release app)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Cache shadow-cljs deps
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: m2-${{ hashFiles('shadow-cljs.edn') }}
+          restore-keys: m2-
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/audio/target
+          key: cargo-${{ hashFiles('packages/audio/Cargo.lock') }}
+          restore-keys: cargo-
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install wasm-pack
+        run: cargo install --locked wasm-pack@0.14.0
+
+      - run: npm ci
+      - run: npm run build:wasm
+      - run: npx shadow-cljs release app

@@ -1,0 +1,75 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    name: CLJS lint (clj-kondo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clj-kondo
+        run: |
+          curl -sLO https://raw.githubusercontent.com/clj-kondo/clj-kondo/master/script/install-clj-kondo
+          chmod +x install-clj-kondo
+          sudo ./install-clj-kondo --dir /usr/local/bin --version 2024.11.14
+
+      - run: clj-kondo --parallel --lint packages/ app/src/
+
+  cargo-lint:
+    name: Rust lint (clippy + fmt)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/audio/target
+          key: cargo-lint-${{ hashFiles('packages/audio/Cargo.lock') }}
+          restore-keys: cargo-lint-
+
+      - name: cargo test
+        working-directory: packages/audio
+        run: cargo test
+
+      - name: cargo clippy
+        working-directory: packages/audio
+        run: cargo clippy -- -D warnings
+
+      - name: cargo fmt
+        working-directory: packages/audio
+        run: cargo fmt --check
+
+  grammar:
+    name: Grammar drift check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Regenerate parser
+        run: npm run gen:grammar
+
+      - name: Fail if parser.js or parser.terms.js drifted
+        run: |
+          git diff --exit-code \
+            app/src/repulse/lisp-lang/parser.js \
+            app/src/repulse/lisp-lang/parser.terms.js

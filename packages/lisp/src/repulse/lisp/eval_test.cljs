@@ -135,8 +135,9 @@
 
 ;;; ── Phase M: defn ────────────────────────────────────────────────────
 
-(defn- eval-seq [src]
+(defn- eval-seq
   "Evaluate multiple forms sharing one env. Returns result of last form."
+  [src]
   (let [env (make-test-env)
         forms (reader/read-all src)]
     (last (map #(leval/eval-form % env) forms))))

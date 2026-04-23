@@ -12,10 +12,15 @@ extern "C" {
 // ── Biquad filter (Direct Form I) ──────────────────────────────────────────
 
 struct Biquad {
-    b0: f32, b1: f32, b2: f32,
-    a1: f32, a2: f32,
-    x1: f32, x2: f32,
-    y1: f32, y2: f32,
+    b0: f32,
+    b1: f32,
+    b2: f32,
+    a1: f32,
+    a2: f32,
+    x1: f32,
+    x2: f32,
+    y1: f32,
+    y2: f32,
 }
 
 impl Biquad {
@@ -25,9 +30,15 @@ impl Biquad {
         let cos_w0 = w0.cos();
         let a0 = 1.0 + alpha;
         Biquad {
-            b0: alpha / a0, b1: 0.0, b2: -alpha / a0,
-            a1: -2.0 * cos_w0 / a0, a2: (1.0 - alpha) / a0,
-            x1: 0.0, x2: 0.0, y1: 0.0, y2: 0.0,
+            b0: alpha / a0,
+            b1: 0.0,
+            b2: -alpha / a0,
+            a1: -2.0 * cos_w0 / a0,
+            a2: (1.0 - alpha) / a0,
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
         }
     }
 
@@ -38,17 +49,26 @@ impl Biquad {
         let a0 = 1.0 + alpha;
         let b0 = (1.0 + cos_w0) / 2.0;
         Biquad {
-            b0: b0 / a0, b1: -(1.0 + cos_w0) / a0, b2: b0 / a0,
-            a1: -2.0 * cos_w0 / a0, a2: (1.0 - alpha) / a0,
-            x1: 0.0, x2: 0.0, y1: 0.0, y2: 0.0,
+            b0: b0 / a0,
+            b1: -(1.0 + cos_w0) / a0,
+            b2: b0 / a0,
+            a1: -2.0 * cos_w0 / a0,
+            a2: (1.0 - alpha) / a0,
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
         }
     }
 
     fn tick(&mut self, x: f32) -> f32 {
         let y = self.b0 * x + self.b1 * self.x1 + self.b2 * self.x2
-              - self.a1 * self.y1 - self.a2 * self.y2;
-        self.x2 = self.x1; self.x1 = x;
-        self.y2 = self.y1; self.y1 = y;
+            - self.a1 * self.y1
+            - self.a2 * self.y2;
+        self.x2 = self.x1;
+        self.x1 = x;
+        self.y2 = self.y1;
+        self.y1 = y;
         y
     }
 }
@@ -120,7 +140,7 @@ enum Voice {
         gain_decay: f32,
         attack_inc: f32,
         in_attack: bool,
-        pulse_width: f32,  // 0.0–1.0, default 0.5
+        pulse_width: f32, // 0.0–1.0, default 0.5
     },
     Noise {
         state: u32,
@@ -145,7 +165,14 @@ impl Voice {
     fn tick(&mut self, sr: f32) -> f32 {
         use std::f64::consts::TAU;
         match self {
-            Voice::Kick { phase, freq, freq_decay, freq_floor, gain, gain_decay } => {
+            Voice::Kick {
+                phase,
+                freq,
+                freq_decay,
+                freq_floor,
+                gain,
+                gain_decay,
+            } => {
                 *freq = (*freq * *freq_decay).max(*freq_floor);
                 let s = (*phase * TAU).sin() as f32;
                 *phase += *freq / sr as f64;
@@ -153,7 +180,15 @@ impl Voice {
                 *gain *= *gain_decay;
                 out
             }
-            Voice::Snare { noise_state, bpf, gain, gain_decay, phase, tone_gain, tone_gain_decay } => {
+            Voice::Snare {
+                noise_state,
+                bpf,
+                gain,
+                gain_decay,
+                phase,
+                tone_gain,
+                tone_gain_decay,
+            } => {
                 let body = bpf.tick(lcg_next(noise_state)) * *gain;
                 *gain *= *gain_decay;
                 let crack = (*phase * TAU).sin() as f32 * *tone_gain * 0.35;
@@ -161,15 +196,31 @@ impl Voice {
                 *tone_gain *= *tone_gain_decay;
                 body + crack
             }
-            Voice::Hihat { noise_state, hpf, gain, gain_decay } => {
+            Voice::Hihat {
+                noise_state,
+                hpf,
+                gain,
+                gain_decay,
+            } => {
                 let out = hpf.tick(lcg_next(noise_state)) * *gain;
                 *gain *= *gain_decay;
                 out
             }
-            Voice::Tone { phase, freq, amp, gain, gain_decay, attack_inc, in_attack } => {
+            Voice::Tone {
+                phase,
+                freq,
+                amp,
+                gain,
+                gain_decay,
+                attack_inc,
+                in_attack,
+            } => {
                 if *in_attack {
                     *gain += *attack_inc;
-                    if *gain >= *amp { *gain = *amp; *in_attack = false; }
+                    if *gain >= *amp {
+                        *gain = *amp;
+                        *in_attack = false;
+                    }
                 } else {
                     *gain *= *gain_decay;
                 }
@@ -177,10 +228,21 @@ impl Voice {
                 *phase += *freq / sr as f64;
                 s * *gain
             }
-            Voice::Saw { phase, freq, amp, gain, gain_decay, attack_inc, in_attack } => {
+            Voice::Saw {
+                phase,
+                freq,
+                amp,
+                gain,
+                gain_decay,
+                attack_inc,
+                in_attack,
+            } => {
                 if *in_attack {
                     *gain += *attack_inc;
-                    if *gain >= *amp { *gain = *amp; *in_attack = false; }
+                    if *gain >= *amp {
+                        *gain = *amp;
+                        *in_attack = false;
+                    }
                 } else {
                     *gain *= *gain_decay;
                 }
@@ -189,10 +251,22 @@ impl Voice {
                 *phase += *freq / sr as f64;
                 s * *gain
             }
-            Voice::Square { phase, freq, amp, gain, gain_decay, attack_inc, in_attack, pulse_width } => {
+            Voice::Square {
+                phase,
+                freq,
+                amp,
+                gain,
+                gain_decay,
+                attack_inc,
+                in_attack,
+                pulse_width,
+            } => {
                 if *in_attack {
                     *gain += *attack_inc;
-                    if *gain >= *amp { *gain = *amp; *in_attack = false; }
+                    if *gain >= *amp {
+                        *gain = *amp;
+                        *in_attack = false;
+                    }
                 } else {
                     *gain *= *gain_decay;
                 }
@@ -201,24 +275,41 @@ impl Voice {
                 *phase += *freq / sr as f64;
                 s * *gain
             }
-            Voice::Noise { state, gain, gain_decay } => {
+            Voice::Noise {
+                state,
+                gain,
+                gain_decay,
+            } => {
                 let s = lcg_next(state);
                 let out = s * *gain;
                 *gain *= *gain_decay;
                 out
             }
-            Voice::FM { carrier_phase, mod_phase, carrier_freq, mod_freq, index,
-                        amp, gain, gain_decay, attack_inc, in_attack } => {
+            Voice::FM {
+                carrier_phase,
+                mod_phase,
+                carrier_freq,
+                mod_freq,
+                index,
+                amp,
+                gain,
+                gain_decay,
+                attack_inc,
+                in_attack,
+            } => {
                 if *in_attack {
                     *gain += *attack_inc;
-                    if *gain >= *amp { *gain = *amp; *in_attack = false; }
+                    if *gain >= *amp {
+                        *gain = *amp;
+                        *in_attack = false;
+                    }
                 } else {
                     *gain *= *gain_decay;
                 }
                 let mod_sig = (*mod_phase * TAU).sin() as f32;
                 let carrier_sig = (*carrier_phase * TAU + (*index * mod_sig) as f64).sin() as f32;
                 *carrier_phase += *carrier_freq / sr as f64;
-                *mod_phase     += *mod_freq     / sr as f64;
+                *mod_phase += *mod_freq / sr as f64;
                 carrier_sig * *gain
             }
         }
@@ -226,12 +317,22 @@ impl Voice {
 
     fn is_silent(&self) -> bool {
         match self {
-            Voice::Tone     { gain, in_attack, .. }
-            | Voice::Saw    { gain, in_attack, .. }
-            | Voice::Square { gain, in_attack, .. }
-            | Voice::FM     { gain, in_attack, .. } => !*in_attack && *gain < 1e-5,
-            Voice::Kick  { gain, .. } | Voice::Snare { gain, .. }
-            | Voice::Hihat { gain, .. } | Voice::Noise { gain, .. } => *gain < 1e-5,
+            Voice::Tone {
+                gain, in_attack, ..
+            }
+            | Voice::Saw {
+                gain, in_attack, ..
+            }
+            | Voice::Square {
+                gain, in_attack, ..
+            }
+            | Voice::FM {
+                gain, in_attack, ..
+            } => !*in_attack && *gain < 1e-5,
+            Voice::Kick { gain, .. }
+            | Voice::Snare { gain, .. }
+            | Voice::Hihat { gain, .. }
+            | Voice::Noise { gain, .. } => *gain < 1e-5,
         }
     }
 }
@@ -240,31 +341,35 @@ impl Voice {
 
 struct ActiveVoice {
     voice: Voice,
-    pan:   f32,  // -1.0 (left) … 0.0 (centre) … 1.0 (right)
+    pan: f32, // -1.0 (left) … 0.0 (centre) … 1.0 (right)
 }
 
 // ── Pending event ──────────────────────────────────────────────────────────
 
 struct Pending {
-    time:   f64,
-    value:  String,
-    amp:    f32,   // 0.0–1.0, default 1.0
-    attack: f32,   // seconds, default 0.001
-    decay:  f32,   // seconds, default 1.5 for tones
-    pan:    f32,   // -1.0–1.0, default 0.0
+    time: f64,
+    value: String,
+    amp: f32,    // 0.0–1.0, default 1.0
+    attack: f32, // seconds, default 0.001
+    decay: f32,  // seconds, default 1.5 for tones
+    pan: f32,    // -1.0–1.0, default 0.0
 }
 
 // ── Parameter transitions ──────────────────────────────────────────────────
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum CurveType { Linear, Exp, Sine }
+pub enum CurveType {
+    Linear,
+    Exp,
+    Sine,
+}
 
 impl CurveType {
     fn from_str(s: &str) -> Self {
         match s {
-            "exp"  => CurveType::Exp,
+            "exp" => CurveType::Exp,
             "sine" => CurveType::Sine,
-            _      => CurveType::Linear,
+            _ => CurveType::Linear,
         }
     }
 }
@@ -272,34 +377,40 @@ impl CurveType {
 /// One-shot parameter transition. Zero heap allocation — all state is inline.
 #[derive(Clone, Copy, Debug)]
 pub struct Transition {
-    start_value:      f32,
-    end_value:        f32,
+    start_value: f32,
+    end_value: f32,
     duration_samples: u64,
-    elapsed_samples:  u64,
-    curve:            CurveType,
+    elapsed_samples: u64,
+    curve: CurveType,
 }
 
 impl Transition {
     fn new(start: f32, end: f32, duration_samples: u64, curve: CurveType) -> Self {
-        Transition { start_value: start, end_value: end,
-                     duration_samples, elapsed_samples: 0, curve }
+        Transition {
+            start_value: start,
+            end_value: end,
+            duration_samples,
+            elapsed_samples: 0,
+            curve,
+        }
     }
 
     /// Advance one sample, return interpolated value. Clamps at end — never resets.
     fn tick(&mut self) -> f32 {
         self.elapsed_samples = self.elapsed_samples.saturating_add(1);
-        let t = if self.duration_samples == 0 { 1.0_f32 }
-                else {
-                    (self.elapsed_samples as f32 / self.duration_samples as f32).min(1.0)
-                };
+        let t = if self.duration_samples == 0 {
+            1.0_f32
+        } else {
+            (self.elapsed_samples as f32 / self.duration_samples as f32).min(1.0)
+        };
         self.interpolate(t)
     }
 
     fn interpolate(&self, t: f32) -> f32 {
         let k = match self.curve {
             CurveType::Linear => t,
-            CurveType::Exp    => t * t,
-            CurveType::Sine   => 0.5 * (1.0 - f32::cos(std::f32::consts::PI * t)),
+            CurveType::Exp => t * t,
+            CurveType::Sine => 0.5 * (1.0 - f32::cos(std::f32::consts::PI * t)),
         };
         self.start_value + (self.end_value - self.start_value) * k
     }
@@ -309,10 +420,10 @@ impl Transition {
 
 #[wasm_bindgen]
 pub struct AudioEngine {
-    sample_rate:    f32,
-    voices:         Vec<ActiveVoice>,
-    pending:        Vec<Pending>,
-    noise_seed:     u32,
+    sample_rate: f32,
+    voices: Vec<ActiveVoice>,
+    pending: Vec<Pending>,
+    noise_seed: u32,
     amp_transition: Option<Transition>,
     pan_transition: Option<Transition>,
 }
@@ -321,9 +432,14 @@ pub struct AudioEngine {
 impl AudioEngine {
     #[wasm_bindgen(constructor)]
     pub fn new(sample_rate: f32) -> AudioEngine {
-        log(&format!("[REPuLse WASM] PCM engine ready (sr={})", sample_rate));
+        log(&format!(
+            "[REPuLse WASM] PCM engine ready (sr={})",
+            sample_rate
+        ));
         AudioEngine {
-            sample_rate, voices: Vec::new(), pending: Vec::new(),
+            sample_rate,
+            voices: Vec::new(),
+            pending: Vec::new(),
             noise_seed: 0xDEAD_BEEF,
             amp_transition: None,
             pan_transition: None,
@@ -334,14 +450,21 @@ impl AudioEngine {
     /// param: "amp" or "pan"
     /// duration_samples: pre-computed on the JS side from bars * BPM * sample_rate
     pub fn start_transition(
-        &mut self, param: &str, start: f32, end: f32,
-        duration_samples: u64, curve: &str,
+        &mut self,
+        param: &str,
+        start: f32,
+        end: f32,
+        duration_samples: u64,
+        curve: &str,
     ) {
         let tr = Transition::new(start, end, duration_samples, CurveType::from_str(curve));
         match param {
             "amp" => self.amp_transition = Some(tr),
             "pan" => self.pan_transition = Some(tr),
-            _     => warn(&format!("[REPuLse WASM] unknown transition param: {}", param)),
+            _ => warn(&format!(
+                "[REPuLse WASM] unknown transition param: {}",
+                param
+            )),
         }
     }
 
@@ -354,16 +477,32 @@ impl AudioEngine {
     /// Schedule a sound event at the given AudioContext time (uses default parameters).
     pub fn trigger(&mut self, value: &str, time: f64) {
         self.pending.push(Pending {
-            time, value: value.to_string(),
-            amp: 1.0, attack: 0.001, decay: 1.5, pan: 0.0,
+            time,
+            value: value.to_string(),
+            amp: 1.0,
+            attack: 0.001,
+            decay: 1.5,
+            pan: 0.0,
         });
     }
 
     /// Schedule a sound event with explicit synthesis parameters.
-    pub fn trigger_v2(&mut self, value: &str, time: f64, amp: f32, attack: f32, decay: f32, pan: f32) {
+    pub fn trigger_v2(
+        &mut self,
+        value: &str,
+        time: f64,
+        amp: f32,
+        attack: f32,
+        decay: f32,
+        pan: f32,
+    ) {
         self.pending.push(Pending {
-            time, value: value.to_string(),
-            amp, attack, decay, pan,
+            time,
+            value: value.to_string(),
+            amp,
+            attack,
+            decay,
+            pan,
         });
     }
 
@@ -379,8 +518,11 @@ impl AudioEngine {
         let pending = std::mem::take(&mut self.pending);
         let mut deferred = Vec::new();
         for p in pending {
-            if p.time < block_end { self.activate(p); }
-            else { deferred.push(p); }
+            if p.time < block_end {
+                self.activate(p);
+            } else {
+                deferred.push(p);
+            }
         }
         self.pending = deferred;
 
@@ -408,10 +550,10 @@ impl AudioEngine {
             if let Some(ref mut tr) = self.pan_transition {
                 let pan_val = tr.tick().clamp(-1.0, 1.0);
                 let bal_angle = (pan_val + 1.0) / 2.0 * std::f32::consts::FRAC_PI_2;
-                buf[i * 2]     = ((l + r) * bal_angle.cos() * amp_scale).clamp(-1.0, 1.0);
+                buf[i * 2] = ((l + r) * bal_angle.cos() * amp_scale).clamp(-1.0, 1.0);
                 buf[i * 2 + 1] = ((l + r) * bal_angle.sin() * amp_scale).clamp(-1.0, 1.0);
             } else {
-                buf[i * 2]     = (l * amp_scale).clamp(-1.0, 1.0);
+                buf[i * 2] = (l * amp_scale).clamp(-1.0, 1.0);
                 buf[i * 2 + 1] = (r * amp_scale).clamp(-1.0, 1.0);
             }
         }
@@ -431,7 +573,8 @@ impl AudioEngine {
 
 impl AudioEngine {
     fn next_seed(&mut self) -> u32 {
-        self.noise_seed = self.noise_seed
+        self.noise_seed = self
+            .noise_seed
             .wrapping_mul(1_664_525)
             .wrapping_add(1_013_904_223);
         self.noise_seed
@@ -443,25 +586,37 @@ impl AudioEngine {
         let amp = p.amp.clamp(0.0, 1.0);
         let value = p.value.trim_start_matches(':');
 
-        let voice = if value.starts_with("saw:") {
-            let freq = value[4..].parse::<f64>().unwrap_or(440.0);
+        let voice = if let Some(rest) = value.strip_prefix("saw:") {
+            let freq = rest.parse::<f64>().unwrap_or(440.0);
             let peak = amp * 0.5;
             let attack_samples = (p.attack * sr).max(1.0);
             Voice::Saw {
-                phase: 0.0, freq, amp: peak, gain: 0.0,
+                phase: 0.0,
+                freq,
+                amp: peak,
+                gain: 0.0,
                 gain_decay: decay_rate(p.decay, sr),
-                attack_inc: peak / attack_samples, in_attack: true,
+                attack_inc: peak / attack_samples,
+                in_attack: true,
             }
-        } else if value.starts_with("square:") {
-            let parts: Vec<&str> = value[7..].splitn(2, ':').collect();
+        } else if let Some(rest) = value.strip_prefix("square:") {
+            let parts: Vec<&str> = rest.splitn(2, ':').collect();
             let freq = parts[0].parse::<f64>().unwrap_or(440.0);
-            let pw = if parts.len() > 1 { parts[1].parse::<f32>().unwrap_or(0.5) } else { 0.5 };
+            let pw = if parts.len() > 1 {
+                parts[1].parse::<f32>().unwrap_or(0.5)
+            } else {
+                0.5
+            };
             let peak = amp * 0.5;
             let attack_samples = (p.attack * sr).max(1.0);
             Voice::Square {
-                phase: 0.0, freq, amp: peak, gain: 0.0,
+                phase: 0.0,
+                freq,
+                amp: peak,
+                gain: 0.0,
                 gain_decay: decay_rate(p.decay, sr),
-                attack_inc: peak / attack_samples, in_attack: true,
+                attack_inc: peak / attack_samples,
+                in_attack: true,
                 pulse_width: pw.clamp(0.01, 0.99),
             }
         } else if value == "noise" {
@@ -470,93 +625,138 @@ impl AudioEngine {
                 gain: amp * 0.3,
                 gain_decay: decay_rate(p.decay, sr),
             }
-        } else if value.starts_with("fm:") {
+        } else if let Some(rest) = value.strip_prefix("fm:") {
             // Format: "fm:<carrier_hz>:<index>:<ratio>"
-            let parts: Vec<&str> = value[3..].splitn(3, ':').collect();
+            let parts: Vec<&str> = rest.splitn(3, ':').collect();
             let carrier_freq = parts[0].parse::<f64>().unwrap_or(440.0);
-            let index = if parts.len() > 1 { parts[1].parse::<f32>().unwrap_or(1.0) } else { 1.0 };
-            let ratio = if parts.len() > 2 { parts[2].parse::<f64>().unwrap_or(2.0) } else { 2.0 };
+            let index = if parts.len() > 1 {
+                parts[1].parse::<f32>().unwrap_or(1.0)
+            } else {
+                1.0
+            };
+            let ratio = if parts.len() > 2 {
+                parts[2].parse::<f64>().unwrap_or(2.0)
+            } else {
+                2.0
+            };
             let peak = amp * 0.5;
             let attack_samples = (p.attack * sr).max(1.0);
             Voice::FM {
-                carrier_phase: 0.0, mod_phase: 0.0,
-                carrier_freq, mod_freq: carrier_freq * ratio,
-                index, amp: peak, gain: 0.0,
+                carrier_phase: 0.0,
+                mod_phase: 0.0,
+                carrier_freq,
+                mod_freq: carrier_freq * ratio,
+                index,
+                amp: peak,
+                gain: 0.0,
                 gain_decay: decay_rate(p.decay, sr),
-                attack_inc: peak / attack_samples, in_attack: true,
+                attack_inc: peak / attack_samples,
+                in_attack: true,
             }
         } else {
             match value {
                 "bd" => {
                     let sweep_samples = 0.06 * sr as f64;
                     Voice::Kick {
-                        phase: 0.0, freq: 150.0, freq_floor: 40.0,
+                        phase: 0.0,
+                        freq: 150.0,
+                        freq_floor: 40.0,
                         freq_decay: (40.0_f64 / 150.0).powf(1.0 / sweep_samples),
-                        gain: amp, gain_decay: decay_rate(0.4, sr),
+                        gain: amp,
+                        gain_decay: decay_rate(0.4, sr),
                     }
                 }
                 "sd" => Voice::Snare {
-                    noise_state: seed, bpf: Biquad::bandpass(200.0, 0.7, sr),
-                    gain: 0.9 * amp, gain_decay: decay_rate(0.2, sr),
-                    phase: 0.0, tone_gain: amp, tone_gain_decay: decay_rate(0.1, sr),
+                    noise_state: seed,
+                    bpf: Biquad::bandpass(200.0, 0.7, sr),
+                    gain: 0.9 * amp,
+                    gain_decay: decay_rate(0.2, sr),
+                    phase: 0.0,
+                    tone_gain: amp,
+                    tone_gain_decay: decay_rate(0.1, sr),
                 },
                 "hh" => Voice::Hihat {
-                    noise_state: seed, hpf: Biquad::highpass(8000.0, 0.7, sr),
-                    gain: 0.5 * amp, gain_decay: decay_rate(0.045, sr),
+                    noise_state: seed,
+                    hpf: Biquad::highpass(8000.0, 0.7, sr),
+                    gain: 0.5 * amp,
+                    gain_decay: decay_rate(0.045, sr),
                 },
                 "oh" => Voice::Hihat {
-                    noise_state: seed, hpf: Biquad::highpass(8000.0, 0.7, sr),
-                    gain: 0.4 * amp, gain_decay: decay_rate(1.0, sr),
+                    noise_state: seed,
+                    hpf: Biquad::highpass(8000.0, 0.7, sr),
+                    gain: 0.4 * amp,
+                    gain_decay: decay_rate(1.0, sr),
                 },
                 other => {
                     let freq = other.parse::<f64>().unwrap_or(440.0);
                     let peak = amp * 0.5;
                     let attack_samples = (p.attack * sr).max(1.0);
                     Voice::Tone {
-                        phase: 0.0, freq, amp: peak, gain: 0.0,
+                        phase: 0.0,
+                        freq,
+                        amp: peak,
+                        gain: 0.0,
                         gain_decay: decay_rate(p.decay, sr),
-                        attack_inc: peak / attack_samples, in_attack: true,
+                        attack_inc: peak / attack_samples,
+                        in_attack: true,
                     }
                 }
             }
         };
-        self.voices.push(ActiveVoice { voice, pan: p.pan.clamp(-1.0, 1.0) });
+        self.voices.push(ActiveVoice {
+            voice,
+            pan: p.pan.clamp(-1.0, 1.0),
+        });
     }
 }
 
 #[cfg(test)]
 mod transition_tests {
-    use super::{Transition, CurveType};
+    use super::{CurveType, Transition};
 
     #[test]
     fn linear_values_at_quartiles() {
         let mut tr = Transition::new(0.0, 1.0, 100, CurveType::Linear);
-        for _ in 0..25 { tr.tick(); }
+        for _ in 0..25 {
+            tr.tick();
+        }
         assert!((tr.interpolate(0.25) - 0.25).abs() < 1e-5);
-        for _ in 0..25 { tr.tick(); }
+        for _ in 0..25 {
+            tr.tick();
+        }
         assert!((tr.interpolate(0.5) - 0.5).abs() < 1e-5);
-        for _ in 0..25 { tr.tick(); }
+        for _ in 0..25 {
+            tr.tick();
+        }
         assert!((tr.interpolate(0.75) - 0.75).abs() < 1e-5);
     }
 
     #[test]
     fn exp_midpoint_below_linear() {
         let tr = Transition::new(0.0, 1.0, 100, CurveType::Exp);
-        assert!(tr.interpolate(0.5) < 0.5,
-                "exp at t=0.5 should be < 0.5, got {}", tr.interpolate(0.5));
+        assert!(
+            tr.interpolate(0.5) < 0.5,
+            "exp at t=0.5 should be < 0.5, got {}",
+            tr.interpolate(0.5)
+        );
     }
 
     #[test]
     fn sine_midpoint_at_half() {
         let tr = Transition::new(0.0, 1.0, 100, CurveType::Sine);
-        assert!((tr.interpolate(0.5) - 0.5).abs() < 1e-5,
-                "sine at t=0.5 should be ≈0.5, got {}", tr.interpolate(0.5));
+        assert!(
+            (tr.interpolate(0.5) - 0.5).abs() < 1e-5,
+            "sine at t=0.5 should be ≈0.5, got {}",
+            tr.interpolate(0.5)
+        );
     }
 
     #[test]
     fn clamps_at_end_value_no_overshoot() {
         let mut tr = Transition::new(0.0, 1.0, 100, CurveType::Linear);
-        for _ in 0..200 { tr.tick(); }
+        for _ in 0..200 {
+            tr.tick();
+        }
         assert!((tr.tick() - 1.0).abs() < 1e-6, "should hold at end value");
     }
 

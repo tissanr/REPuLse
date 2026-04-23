@@ -1,5 +1,5 @@
 (ns repulse.core-test
-  (:require [cljs.test :refer [deftest is testing run-tests]]
+  (:require [cljs.test :refer [deftest is testing]]
             [repulse.core :as c]))
 
 (deftest test-rat

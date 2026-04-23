@@ -14,7 +14,6 @@
             [repulse.params :as params]
             [repulse.synth :as synth]
             [repulse.samples :as samples]
-            [repulse.plugins :as plugins]
             [repulse.fx :as fx]
             [repulse.session :as session]
             [repulse.ui.editor :as editor]
