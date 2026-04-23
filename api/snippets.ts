@@ -55,8 +55,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
     .order("weighted_rating", { ascending: false })
     .order("created_at",      { ascending: false });
 
-  if (tag) query = query.contains("tags", [tag]);
-  if (q)   query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
+  if (tag)    query = query.contains("tags", [tag]);
+  if (q)      query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
 
   // Author filter: find profile IDs matching display_name
   if (author) {

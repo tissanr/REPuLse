@@ -887,7 +887,7 @@ Depends on S2.
 
 **Key additions:**
 - **Share as snippet** button in snippet panel toolbar (logged-in only) — opens submit modal with title, description, tags, BPM pre-filled from current session; submits via `POST /api/snippets`
-- **Star toggle** on each card with optimistic UI update; reverts on API error; disabled for anonymous users
+- **1-5 rating control** on each card with optimistic UI update; reverts on API error; disabled for anonymous users
 - **Usage counter** incremented silently via `POST /api/snippets/:id/use` when Insert is clicked; uses `increment_snippet_usage` stored function for atomicity
 - **Sort dropdown**: top rated, newest, most used, trending (server-side; trending uses time-decay formula in TypeScript)
 - **Author filter**: debounced input → server-side filter by profile `display_name`; free-text search remains client-side
@@ -904,7 +904,7 @@ Depends on S2.
 - `app/src/repulse/api.cljs` — `track-usage!`, `report-snippet!`, updated `fetch-snippets`
 - `app/src/repulse/snippets.cljs` — `sort-order`, `author-filter`, `ratings` atoms; `reload!` function
 - `app/src/repulse/ui/snippet_submit_modal.cljs` — new submit modal with validation, Escape/click-outside close
-- `app/src/repulse/ui/snippet_panel.cljs` — sort dropdown, author filter, star/report buttons, share button
+- `app/src/repulse/ui/snippet_panel.cljs` — sort dropdown, author filter, rating/report buttons, share button
 
 See full spec: [PROMPTS/PHASE-S3.md](PROMPTS/PHASE-S3.md)
 
