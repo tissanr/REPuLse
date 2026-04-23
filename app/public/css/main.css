@@ -45,9 +45,9 @@ header h1 {
 .header-icon {
   height: 28px;
   width: 28px;
-  object-fit: contain;
   vertical-align: middle;
   margin-right: 6px;
+  overflow: visible;
   border-radius: 4px;
   opacity: 1;
   transition: opacity 0.4s ease;
