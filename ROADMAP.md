@@ -938,6 +938,24 @@ See full spec: [PROMPTS/PHASE-R2.md](PROMPTS/PHASE-R2.md)
 
 ---
 
+## Phase CI1 — CI Pipeline 📋 *planned*
+
+GitHub Actions CI pipeline that runs on every PR and push to `main`: test suite,
+CLJS lint, Rust checks, grammar-drift guard, and release build smoke test. No
+feature changes — pure infrastructure. CD is unchanged (Vercel continues to
+handle preview + production via git integration).
+
+**Key additions:**
+- `.github/workflows/ci.yml` — Node 20 + Rust toolchain + `wasm-pack`; steps: `npm ci` → `npm run build:wasm` → `npm run test` → `npx shadow-cljs release app`
+- `.github/workflows/lint.yml` — `clj-kondo` across `packages/` and `app/src/`; `cargo clippy -D warnings` + `cargo fmt --check` in `packages/audio/`
+- Grammar-drift guard — re-runs `npm run gen:grammar` and fails if `parser.js` / `parser.terms.js` diffs from committed
+- Caching: `actions/cache` for `node_modules`, `~/.cargo`, `.shadow-cljs`, `wasm-pack` output
+- Status badges in `README.md`; `docs/CONTRIBUTING.md` stub describing the pipeline and how to reproduce each check locally
+
+See full spec: [PROMPTS/PHASE-CI1.md](PROMPTS/PHASE-CI1.md)
+
+---
+
 ## Future ideas (unscheduled)
 
 See [docs/FUTURE-FEATURES.md](docs/FUTURE-FEATURES.md) for the full prioritised feature
