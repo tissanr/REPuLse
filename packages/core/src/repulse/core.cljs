@@ -51,8 +51,9 @@
   ;; happen to be Clojure maps) are never mistaken for patterns.
   {:query query-fn, ::pat true})
 
-(defn pattern? [x]
+(defn pattern?
   "True if x is a REPuLse pattern created via (pattern ...)."
+  [x]
   (true? (::pat x)))
 
 (defn query [pat sp]
