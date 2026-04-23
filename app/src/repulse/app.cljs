@@ -24,6 +24,34 @@
 
 (defn el [id] (.getElementById js/document id))
 
+(def ^:private header-icon-svg
+  (str "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 128 128\""
+       " id=\"header-icon\" class=\"header-icon\">"
+       "<defs>"
+       "<filter id=\"icon-gp\" x=\"-50%\" y=\"-50%\" width=\"200%\" height=\"200%\">"
+       "<feGaussianBlur stdDeviation=\"2.5\" result=\"b\"/>"
+       "<feMerge><feMergeNode in=\"b\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>"
+       "</filter>"
+       "<filter id=\"icon-gc\" x=\"-80%\" y=\"-80%\" width=\"260%\" height=\"260%\">"
+       "<feGaussianBlur stdDeviation=\"2.5\" result=\"b\"/>"
+       "<feMerge><feMergeNode in=\"b\"/><feMergeNode in=\"b\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>"
+       "</filter>"
+       "<style>"
+       "@keyframes icon-paren-pulse{0%,100%{stroke-opacity:.6}50%{stroke-opacity:1}}"
+       "@keyframes icon-wave-flow{0%{stroke-dashoffset:0}100%{stroke-dashoffset:-120}}"
+       "#header-icon.playing .icon-paren{animation:icon-paren-pulse 1.2s ease-in-out infinite}"
+       "#header-icon.playing #icon-wave{stroke-dasharray:120;animation:icon-wave-flow 1.2s linear infinite}"
+       "</style>"
+       "</defs>"
+       "<path class=\"icon-paren\" d=\"M 38,16 C 14,16 9,40 9,64 C 9,88 14,112 38,112\""
+       " fill=\"none\" stroke=\"#e94560\" stroke-width=\"7.5\" stroke-linecap=\"round\" filter=\"url(#icon-gp)\"/>"
+       "<path class=\"icon-paren\" d=\"M 90,16 C 114,16 119,40 119,64 C 119,88 114,112 90,112\""
+       " fill=\"none\" stroke=\"#e94560\" stroke-width=\"7.5\" stroke-linecap=\"round\" filter=\"url(#icon-gp)\"/>"
+       "<path id=\"icon-wave\" d=\"M 36,64 L 50,64 L 56,41 L 61,80 L 66,64 L 92,64\""
+       " fill=\"none\" stroke=\"#56b6c2\" stroke-width=\"2.5\" stroke-linecap=\"round\""
+       " stroke-linejoin=\"round\" filter=\"url(#icon-gc)\"/>"
+       "</svg>"))
+
 (defn set-output! [msg status]
   (when-let [e (el "output")]
     (set! (.-textContent e) msg)
@@ -38,7 +66,11 @@
     (set! (.-textContent btn) (if playing? "■ stop" "▶ play"))
     (if playing?
       (.add (.-classList btn) "active")
-      (.remove (.-classList btn) "active"))))
+      (.remove (.-classList btn) "active")))
+  (when-let [icon (el "header-icon")]
+    (if playing?
+      (.add (.-classList icon) "playing")
+      (.remove (.-classList icon) "playing"))))
 
 (defn on-beat []
   (when-let [dot (el "playing-dot")]
@@ -133,26 +165,12 @@
     (when-let [view @editor/editor-view]
       (eo/evaluate! (.. view -state -doc (toString))))))
 
-(defn- start-icon-rotation! []
-  (let [icons #js ["/icon.png" "/icon1.png"]
-        idx   (atom 0)]
-    (js/setInterval
-      (fn []
-        (swap! idx #(mod (inc %) 2))
-        (when-let [img (el "header-icon")]
-          (set! (.-style.-opacity img) "0")
-          (js/setTimeout
-            (fn []
-              (set! (.-src img) (aget icons @idx))
-              (set! (.-style.-opacity img) "1"))
-            400)))
-      8000)))
 
 (defn build-dom! []
   (let [app (el "app")]
     (set! (.-innerHTML app)
           (str "<header>"
-               "  <h1><img id=\"header-icon\" src=\"/icon.png\" class=\"header-icon\" alt=\"\"> REPuLse</h1>"
+               (str "  <h1>" header-icon-svg " REPuLse</h1>")
                "  <div class=\"header-controls\">"
                "    <button id=\"tap-btn\" class=\"tap-btn\">tap</button>"
                "    <button id=\"share-btn\" class=\"share-btn\">share</button>"
@@ -179,8 +197,7 @@
   (.addEventListener (el "play-btn")           "click" on-play-btn-click)
   (.addEventListener (el "tap-btn")            "click" (fn [] (eo/evaluate! "(tap!)")))
   (.addEventListener (el "share-btn")          "click" share!)
-  (.addEventListener (el "snippet-toggle-btn") "click" snippet-panel/toggle-panel!)
-  (start-icon-rotation!))
+  (.addEventListener (el "snippet-toggle-btn") "click" snippet-panel/toggle-panel!))
 
 (defn- attach-slider-listener! []
   (when-let [panel (el "context-panel")]
