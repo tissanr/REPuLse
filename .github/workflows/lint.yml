@@ -16,7 +16,7 @@ jobs:
         run: |
           curl -sLO https://raw.githubusercontent.com/clj-kondo/clj-kondo/master/script/install-clj-kondo
           chmod +x install-clj-kondo
-          sudo ./install-clj-kondo --dir /usr/local/bin --version v2024.11.14
+          sudo ./install-clj-kondo --dir /usr/local/bin --version 2024.11.14
 
       - run: clj-kondo --parallel --lint packages/ app/src/
 
