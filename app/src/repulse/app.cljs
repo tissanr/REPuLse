@@ -171,7 +171,7 @@
   (let [app (el "app")]
     (set! (.-innerHTML app)
           (str "<header>"
-               (str "  <h1>" header-icon-svg " REPuLse</h1>")
+               "  <h1>" header-icon-svg " REPuLse</h1>"
                "  <div class=\"header-controls\">"
                "    <button id=\"tap-btn\" class=\"tap-btn\">tap</button>"
                "    <button id=\"share-btn\" class=\"share-btn\">share</button>"

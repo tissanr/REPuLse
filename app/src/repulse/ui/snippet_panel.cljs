@@ -231,14 +231,14 @@
 
 (defn- handle-star! [snippet-id]
   (when (logged-in?)
-    (let [action (snippets/toggle-starred! snippet-id)]
-      (render-cards!)
-      (-> (api/toggle-star! snippet-id)
-          (.then (fn [result]
-                   (when (:error result)
-                     ;; Revert optimistic update on error
-                     (snippets/toggle-starred! snippet-id)
-                     (render-cards!))))))))
+    (snippets/toggle-starred! snippet-id)
+    (render-cards!)
+    (-> (api/toggle-star! snippet-id)
+        (.then (fn [result]
+                 (when (:error result)
+                   ;; Revert optimistic update on error
+                   (snippets/toggle-starred! snippet-id)
+                   (render-cards!)))))))
 
 ;;; Report handler
 

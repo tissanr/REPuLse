@@ -8,6 +8,7 @@
 (defonce auth-atom (atom nil))
 
 (defonce ^:private client-atom (atom nil))
+(defonce ^:private site-url-atom (atom nil))  ; set from /api/env on init
 
 ;;; Helpers
 
@@ -29,10 +30,14 @@
 
 (defn login! []
   (when-let [sb @client-atom]
-    (-> (js-invoke (.-auth sb) "signInWithOAuth"
-                   #js {:provider "github"
-                        :options  #js {:redirectTo (.-href js/location)}})
-        (.catch (fn [e] (js/console.error "[REPuLse/auth] login failed:" e))))))
+    ;; Use the deployment-specific siteUrl when available (covers Vercel preview
+    ;; deployments where location.origin may not be in Supabase's redirect allow-list).
+    ;; Falls back to current page URL when running locally or if siteUrl wasn't set.
+    (let [redirect-to (or @site-url-atom (.-href js/location))]
+      (-> (js-invoke (.-auth sb) "signInWithOAuth"
+                     #js {:provider "github"
+                          :options  #js {:redirectTo redirect-to}})
+          (.catch (fn [e] (js/console.error "[REPuLse/auth] login failed:" e)))))))
 
 (defn logout! []
   (when-let [sb @client-atom]
@@ -58,9 +63,11 @@
                (if (.-ok r)
                  (.json r)
                  (throw (js/Error. (str "env fetch failed: " (.-status r)))))))
-      (.then (fn [env]
-               (let [url (.-url env)
-                     key (.-key env)]
+      (.then (fn [^js env]
+               (let [url      (.-url env)
+                     key      (.-key env)
+                     site-url (.-siteUrl env)]
+                 (when site-url (reset! site-url-atom site-url))
                  (when (and url key)
                    (let [sb (createClient url key)]
                      (reset! client-atom sb)
