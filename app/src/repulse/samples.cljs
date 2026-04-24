@@ -50,10 +50,18 @@
      {}
      raw)))
 
+(defn- fetch-ok!
+  "Returns a Promise that rejects with a descriptive error if response.ok is false."
+  [^js resp]
+  (if (.-ok resp)
+    (js/Promise.resolve resp)
+    (js/Promise.reject (js/Error. (str "HTTP " (.-status resp) " " (.-statusText resp))))))
+
 (defn load-manifest!
   "Fetch a JSON manifest and merge its banks into the registry."
   [url]
   (-> (js/fetch url)
+      (.then fetch-ok!)
       (.then #(.json %))
       (.then (fn [data]
                (let [banks (parse-manifest data)]
@@ -99,6 +107,7 @@
     (if-let [p (get @in-flight url)]
       p
       (let [p (-> (js/fetch url)
+                  (.then fetch-ok!)
                   (.then #(.arrayBuffer %))
                   (.then #(.decodeAudioData ac %))
                   (.then (fn [buf]
@@ -189,6 +198,7 @@
   "Fetch a REPuLse Lisp (.edn) manifest, parse it, and register the banks."
   [url]
   (-> (js/fetch url)
+      (.then fetch-ok!)
       (.then #(.text %))
       (.then (fn [text]
                (if-let [banks (parse-lisp-manifest text)]
@@ -213,6 +223,7 @@
         raw-base (str "https://raw.githubusercontent.com/"
                       owner "/" repo "/" branch "/")]
     (-> (js/fetch api-url)
+        (.then fetch-ok!)
         (.then #(.json %))
         (.then (fn [^js data]
                  (let [tree    (js->clj (.-tree data) :keywordize-keys true)
