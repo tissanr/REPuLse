@@ -707,7 +707,7 @@ See full spec: [PROMPTS/PHASE-DST1.md](PROMPTS/PHASE-DST1.md)
 
 ---
 
-## Phase DST2 — Asymmetric Soft Clipping 📋 *planned*
+## Phase DST2 — Asymmetric Soft Clipping ✓ *delivered*
 
 Extends Phase DST1. Adds `:asym` parameter to `:distort` for even-harmonic "warm tube"
 coloration, plus a DC blocker to remove the offset asymmetric clipping introduces.
