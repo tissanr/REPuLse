@@ -692,7 +692,7 @@ See full spec: [PROMPTS/phase-p-modular-routing.md](PROMPTS/phase-p-modular-rout
 
 ---
 
-## Phase DST1 — Soft Clipping Distortion 📋 *planned*
+## Phase DST1 — Soft Clipping Distortion ✓ *delivered*
 
 Add `:distort` to the `(fx ...)` effect chain — a musical soft-clip waveshaper with
 drive, tone, dry/wet, and three clipping algorithms (`:tanh`, `:sigmoid`, `:atan`).

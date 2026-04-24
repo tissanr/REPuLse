@@ -311,6 +311,11 @@ const DOCS = {
     description: "Global: sets a master-chain effect parameter. Per-track: use inside ->> to route a track through its own effect chain — re-evaluating play without (fx ...) removes the effect automatically. Use (fx :off :name) / (fx :on :name) to bypass/restore global effects.",
     example: "(->> (seq :bd :_ :bd :_) (fx :filter 1000))",
   },
+  "distort": {
+    signature: "(fx :distort [:drive N] [:tone Hz] [:mix N] [:algo kw])",
+    description: "Soft-clipping waveshaper distortion. :drive sets pre-clip gain from 1.0–100.0 (default 4.0). :tone sets the post-clip lowpass from 200–20000 Hz (default 3000). :mix blends dry/wet from 0.0–1.0 (default 1.0). :algo chooses :tanh, :sigmoid, or :atan clipping curves.",
+    example: "(->> (seq :c2 :g2 :c3 :g2) (synth :saw) (fx :distort :drive 8 :tone 2200))",
+  },
   "load-plugin": {
     signature: '(load-plugin "url")',
     description: "Load a REPuLse plugin from a URL (visual or effect).",
