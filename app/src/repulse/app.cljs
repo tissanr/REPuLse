@@ -382,6 +382,7 @@
                "/plugins/phaser.js"
                "/plugins/tremolo.js"
                "/plugins/overdrive.js"
+               "/plugins/distort.js"
                "/plugins/bitcrusher.js"
                "/plugins/sidechain.js"]]
     (-> (plugin-loading/dynamic-import! url)
