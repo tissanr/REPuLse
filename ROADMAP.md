@@ -966,7 +966,28 @@ handle preview + production via git integration).
 
 See full spec: [PROMPTS/PHASE-CI1.md](PROMPTS/PHASE-CI1.md)
 
-See full spec: [PROMPTS/PHASE-CI1.md](PROMPTS/PHASE-CI1.md)
+---
+
+## Phase DOC1 — User Documentation Overhaul 📋 *planned*
+
+Split the current monolithic user documentation into a friendly manual that works
+for beginners, performers, and reference lookups. No app or language behaviour
+changes — documentation-only.
+
+**Key additions:**
+- New 11-file user documentation structure: index, getting started, tutorial,
+  cookbook, language, patterns, sound, effects, performance, reference,
+  troubleshooting
+- In-app help design: searchable help drawer, `(help ...)` commands, richer hover
+  docs, contextual error help, recipe browser, and stable docs anchors
+- Copyable, manually tested examples across drums, bass, melody, arrangement,
+  effects, samples, MIDI, and live performance workflows
+- Complete built-in reference with signatures and examples, cross-checked against
+  evaluator built-ins, app built-ins, completions, hover docs, and grammar names
+- `README.md` and legacy `docs/USAGE.md` updated so new users land on the right
+  reading path instead of a single oversized manual
+
+See full spec: [PROMPTS/PHASE-DOC1.md](PROMPTS/PHASE-DOC1.md)
 
 ---
 
