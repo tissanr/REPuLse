@@ -388,8 +388,10 @@
                "/plugins/phaser.js"
                "/plugins/tremolo.js"
                "/plugins/overdrive.js"
+               "/plugins/overdrive.js"
                "/plugins/bitcrusher.js"
-               "/plugins/sidechain.js"]]
+               "/plugins/sidechain.js"
+               "/plugins/distort.js"]]
     (-> (plugin-loading/dynamic-import! url)
         (.then (fn [m]
                  (let [plug (.-default m)]

@@ -227,7 +227,7 @@ preview tools.
 | S3    | Community snippets — submit, star, rank, usage tracking        | ✓ delivered  |
 | S4    | Snippet audio preview — sandboxed eval, waveforms, indicators  | planned      |
 | R2    | Refactor — decompose eval.cljs builtin map into domain namespaces | planned      |
-| DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | planned      |
+| DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | ✓ delivered  |
 | DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | planned      |
 | DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | planned      |
 | DST4  | Distortion — oversampling wrapper (:oversample 1/2/4)          | planned      |

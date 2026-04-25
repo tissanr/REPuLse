@@ -297,7 +297,7 @@ These patterns are **wrong** in REPuLse. If you see AI-generated code that looks
 ;; WRONG — these functions do not exist in REPuLse
 (osc-wt :table "heavy-growl")    ; no wavetable oscillator function
 (filter-lp :cutoff 800)          ; no filter-lp — use (fx :filter 800)
-(distort :drive 2.0)             ; no distort — use (fx :overdrive 0.7)
+(distort :drive 2.0)             ; no inline distort fn — use (fx :distort :drive 8)
 (adsr :a 0.01 :d 0.3 :s 0.1)    ; no adsr — use (attack 0.01) (decay 0.3) (release 0.1)
 (lfo :rate 0.25)                 ; no lfo function
 (mod source amount)              ; no mod routing
@@ -306,7 +306,7 @@ These patterns are **wrong** in REPuLse. If you see AI-generated code that looks
 ;; RIGHT equivalents
 (synth :saw)                              ; voice selection
 (fx :filter 800)                          ; filtering
-(fx :overdrive 0.7)                       ; distortion
+(fx :distort :drive 8)                    ; distortion
 (->> pat (attack 0.01) (decay 0.3))       ; envelope params
 ;; LFO-like variation: use (every), (sometimes), patterned params
 (amp (seq 0.9 0.4 0.9 0.4) pat)          ; patterned amplitude
@@ -1650,7 +1650,7 @@ Route a track through its own private effect chain by placing `fx` inside the `-
 (track :bass
   (->> (seq :c2 :_ :eb2 :_)
        (fx :filter 600)
-       (fx :overdrive 0.6)))
+       (fx :distort :drive 6 :tone 1800)))
 
 ;; Named params work the same as global fx
 (track :snare
@@ -1813,6 +1813,25 @@ Waveshaper saturation with a tone control.
 (fx :overdrive :drive 0.8 :tone 4000)
 ```
 
+#### `distort` — soft clipping waveshaper
+
+Musical soft clipping with selectable curves, gain compensation, post-filter tone
+control, and a full dry/wet blend.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Drive     | `drive` / positional | `4.0` | 1–100 |
+| Tone      | `tone` | `3000` Hz | 200–20000 Hz |
+| Mix       | `mix` | `1.0` | 0–1 |
+| Algorithm | `algo` | `:tanh` | `:tanh` `:sigmoid` `:atan` |
+
+```lisp
+(fx :distort)
+(fx :distort :drive 8)
+(fx :distort :drive 6 :tone 1800 :algo :atan)
+(fx :distort :drive 2 :tone 1500 :mix 0.6 :algo :sigmoid)
+```
+
 #### `bitcrusher` — lo-fi bit/sample-rate reduction
 
 Reduces bit depth and sample rate for crunchy, glitchy textures. Uses an AudioWorklet.
@@ -1868,7 +1887,7 @@ so the duck is perfectly in time regardless of BPM, with zero look-ahead latency
 The default signal chain is:
 ```
 synthesis → reverb → delay → filter → compressor → dattorro-reverb
-         → chorus → phaser → tremolo → overdrive → bitcrusher → sidechain → output
+         → chorus → phaser → tremolo → overdrive → distort → bitcrusher → sidechain → output
 ```
 
 `sidechain` sits at the end of the chain so it ducks the fully-processed signal.

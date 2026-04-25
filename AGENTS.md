@@ -222,7 +222,7 @@ Last known clean test baseline:
 | D2    | Full session persistence — all state in localStorage + reset!  | ✓ delivered  |
 | N1    | MIDI CC mapping — bind controller knobs to any parameter      | planned      |
 | O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
-| O1    | Embeddable component — `<repulse-editor>` custom element, snippet attr | planned |
+| O1    | Embeddable component — <repulse-editor> custom element, snippet attr | ✓ delivered  |
 | T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | ✓ delivered  |
 | P     | Modular routing — busses, control rate, general envelopes      | ✓ delivered  |
 | J2    | Contextual insertion buttons — hover `+` on parens for wrap/chain | ✓ delivered   |
@@ -233,7 +233,7 @@ Last known clean test baseline:
 | S3    | Community snippets — submit, star, rank, usage tracking        | planned      |
 | S4    | Snippet audio preview — sandboxed eval, waveforms, indicators  | planned      |
 | R2    | Refactor — decompose eval.cljs builtin map into domain namespaces | planned    |
-| DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | planned      |
+| DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | ✓ delivered  |
 | DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | planned      |
 | DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | planned      |
 | DST4  | Distortion — oversampling wrapper (:oversample 1/2/4)          | planned      |
