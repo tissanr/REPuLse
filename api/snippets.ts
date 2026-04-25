@@ -41,16 +41,15 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
     .from("snippets")
     .select(
       "id, author_id, title, description, code, tags, bpm, star_count, usage_count, created_at, profiles(display_name, avatar_url)"
-    )
-    .limit(sort === "trending" ? Math.min(limit * 3, 200) : limit); // fetch more for in-process trending sort
+    );
 
   // Ordering (skip for trending — sort after fetch)
-  if (sort === "newest")      query = query.order("created_at",  { ascending: false });
+  if (sort === "newest")         query = query.order("created_at",  { ascending: false });
   else if (sort === "most-used") query = query.order("usage_count", { ascending: false });
   else if (sort !== "trending")  query = query.order("star_count",  { ascending: false });
 
-  if (tag)    query = query.contains("tags", [tag]);
-  if (q)      query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
+  if (tag) query = query.contains("tags", [tag]);
+  if (q)   query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
 
   // Author filter: find profile IDs matching display_name
   if (author) {
@@ -65,6 +64,10 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
     }
     query = query.in("author_id", ids);
   }
+
+  // limit must be applied last — Supabase JS v2 query builder requirement
+  const effectiveLimit = sort === "trending" ? Math.min(limit * 3, 200) : limit;
+  query = query.limit(effectiveLimit);
 
   const { data, error } = await query;
   if (error) {
