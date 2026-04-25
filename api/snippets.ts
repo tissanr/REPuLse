@@ -1,16 +1,18 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
+// Strip any accidental path suffix (e.g. /rest/v1) — createClient needs the bare origin.
+function supabaseOrigin() {
+  return new URL(process.env.SUPABASE_URL!).origin;
+}
+
 function serviceClient() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  return createClient(supabaseOrigin(), process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 function userClient(jwt: string) {
   return createClient(
-    process.env.SUPABASE_URL!,
+    supabaseOrigin(),
     process.env.SUPABASE_ANON_KEY!,
     { global: { headers: { Authorization: `Bearer ${jwt}` } } }
   );

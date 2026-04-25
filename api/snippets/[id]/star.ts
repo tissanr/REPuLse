@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 function userClient(jwt: string) {
   return createClient(
-    process.env.SUPABASE_URL!,
+    new URL(process.env.SUPABASE_URL!).origin,
     process.env.SUPABASE_ANON_KEY!,
     { global: { headers: { Authorization: `Bearer ${jwt}` } } }
   );
