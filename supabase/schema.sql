@@ -10,6 +10,16 @@ create table if not exists public.profiles (
   created_at   timestamptz default now()
 );
 
+alter table public.profiles enable row level security;
+
+create policy "profiles readable by anyone"
+  on public.profiles for select using (true);
+
+create policy "profiles updatable by owner"
+  on public.profiles for update
+  using (auth.uid() = id)
+  with check (auth.uid() = id);
+
 -- Auto-create a profile row when a new auth user is created
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer as $$
