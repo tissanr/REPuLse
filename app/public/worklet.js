@@ -25,11 +25,13 @@ class RepulseProcessor extends AudioWorkletProcessor {
     super();
     this.engine = null;
     this.port.onmessage = (e) => this._onMessage(e.data);
+    console.log("[REPuLse Worklet] Processor created");
   }
 
   _onMessage(msg) {
     if (msg.type === 'init') {
       try {
+        console.log("[REPuLse Worklet] Received WASM bytes, initializing...");
         // initSync({ module: ArrayBuffer }) does:
         //   1. new WebAssembly.Module(bytes)    — synchronous compile from bytes
         //   2. new WebAssembly.Instance(module) — synchronous instantiate
@@ -38,6 +40,7 @@ class RepulseProcessor extends AudioWorkletProcessor {
         this.engine = new AudioEngine(sampleRate);
         this.port.postMessage({ type: 'ready' });
       } catch (err) {
+        console.error("[REPuLse Worklet] Init failed:", err);
         this.port.postMessage({ type: 'error', message: String(err) });
       }
     } else if (msg.type === 'trigger') {
@@ -67,7 +70,10 @@ class RepulseProcessor extends AudioWorkletProcessor {
   process(_inputs, outputs) {
     if (!this.engine) return true;
     const out = outputs[0];
-    if (!out || out.length === 0) return true;
+    if (!out || out.length === 0) {
+      console.warn("[REPuLse Worklet] No output channels available");
+      return true;
+    }
 
     const n = out[0].length;
     // process_block returns interleaved stereo: [L0, R0, L1, R1, …]
