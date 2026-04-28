@@ -72,11 +72,11 @@ export default {
       if (this._shaper) this._shaper.curve = makeCurve(this._drive, this._algo, this._asym);
     }
     if (name === "tone") {
-      this._tone = Math.max(200, Math.min(20000, value));
+      this._tone = Math.max(200, Math.min(20000, Number(value)));
       this._toneLP.frequency.linearRampToValueAtTime(this._tone, now + 0.02);
     }
     if (name === "mix") {
-      this._mix = Math.max(0, Math.min(1, value));
+      this._mix = Math.max(0, Math.min(1, Number(value)));
       this._dryGain.gain.linearRampToValueAtTime(1 - this._mix, now + 0.02);
       this._wetGain.gain.linearRampToValueAtTime(this._mix,     now + 0.02);
     }
