@@ -28,13 +28,21 @@ class RepulseProcessor extends AudioWorkletProcessor {
     super();
     this.engine = null;
     this.port.onmessage = (e) => this._onMessage(e.data);
+<<<<<<< HEAD
     if (DEBUG) console.log("[REPuLse Worklet] Processor created");
+=======
+    console.log("[REPuLse Worklet] Processor created");
+>>>>>>> 430e5e1 (fix: resolve sound regression and update dev process)
   }
 
   _onMessage(msg) {
     if (msg.type === 'init') {
       try {
+<<<<<<< HEAD
         if (DEBUG) console.log("[REPuLse Worklet] Received WASM bytes, initializing...");
+=======
+        console.log("[REPuLse Worklet] Received WASM bytes, initializing...");
+>>>>>>> 430e5e1 (fix: resolve sound regression and update dev process)
         // initSync({ module: ArrayBuffer }) does:
         //   1. new WebAssembly.Module(bytes)    — synchronous compile from bytes
         //   2. new WebAssembly.Instance(module) — synchronous instantiate
@@ -74,7 +82,11 @@ class RepulseProcessor extends AudioWorkletProcessor {
     if (!this.engine) return true;
     const out = outputs[0];
     if (!out || out.length === 0) {
+<<<<<<< HEAD
       if (DEBUG) console.warn("[REPuLse Worklet] No output channels available");
+=======
+      console.warn("[REPuLse Worklet] No output channels available");
+>>>>>>> 430e5e1 (fix: resolve sound regression and update dev process)
       return true;
     }
 
