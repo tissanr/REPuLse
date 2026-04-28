@@ -22,6 +22,8 @@ function makeCurve(drive, algo) {
 export default {
   type: "effect", name: "distort", version: "1.0.0",
 
+  init(_host) {},   // no host API needed
+
   // State
   _drive: 4.0,
   _tone: 3000,
