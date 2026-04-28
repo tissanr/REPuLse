@@ -36,15 +36,25 @@
 (defn by-id [id]
   (first (filter #(= (:id %) (str id)) (all-snippets))))
 
-(defn- top-rated-key [snippet]
-  [(or (:avg_rating snippet) 0)
-   (or (:star_count snippet) 0)
-   (or (:weighted_rating snippet) 0)
-   (or (:created_at snippet) "")])
+(defn- compare-desc [a b]
+  (compare (or b 0) (or a 0)))
+
+(defn- compare-created-desc [a b]
+  (compare (or b "") (or a "")))
+
+(defn- top-rated-compare [a b]
+  (let [avg-c      (compare-desc (:avg_rating a) (:avg_rating b))
+        count-c    (compare-desc (:star_count a) (:star_count b))
+        weighted-c (compare-desc (:weighted_rating a) (:weighted_rating b))]
+    (cond
+      (not= 0 avg-c) avg-c
+      (not= 0 count-c) count-c
+      (not= 0 weighted-c) weighted-c
+      :else (compare-created-desc (:created_at a) (:created_at b)))))
 
 (defn- apply-client-sort [snippets]
   (case @sort-order
-    "top-rated" (sort #(compare (top-rated-key %2) (top-rated-key %1)) snippets)
+    "top-rated" (sort top-rated-compare snippets)
     snippets))
 
 (defn filter-snippets
