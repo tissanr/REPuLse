@@ -1624,7 +1624,7 @@ Route a track through its own private effect chain by placing `fx` inside the `-
 (track :bass
   (->> (seq :c2 :_ :eb2 :_)
        (fx :filter 600)
-       (fx :distort :drive 6 :tone 1800)))
+       (fx :distort :drive 6 :asym 0.4 :tone 1800)))
 
 ;; Named params work the same as global fx
 (track :snare
@@ -1789,19 +1789,22 @@ Waveshaper saturation with a tone control.
 
 #### `distort` — soft clipping waveshaper
 
-Musical soft clipping with selectable curves, gain compensation, post-filter tone
-control, and a full dry/wet blend.
+Musical soft clipping with selectable curves, gain compensation, half-wave asymmetry,
+a DC blocker, post-filter tone control, and a full dry/wet blend.
 
 | Parameter | Key | Default | Range |
 |-----------|-----|---------|-------|
 | Drive     | `drive` / positional | `4.0` | 1–100 |
 | Tone      | `tone` | `3000` Hz | 200–20000 Hz |
 | Mix       | `mix` | `1.0` | 0–1 |
+| Asymmetry | `asym` | `0.0` | -1–1 |
 | Algorithm | `algo` | `:tanh` | `:tanh` `:sigmoid` `:atan` |
 
 ```lisp
 (fx :distort)
 (fx :distort :drive 8)
+(fx :distort :drive 6 :asym 0.4 :tone 2500)
+(fx :distort :drive 20 :asym 0.8 :algo :atan)
 (fx :distort :drive 6 :tone 1800 :algo :atan)
 (fx :distort :drive 2 :tone 1500 :mix 0.6 :algo :sigmoid)
 ```

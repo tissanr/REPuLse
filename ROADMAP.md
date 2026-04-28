@@ -692,7 +692,7 @@ See full spec: [PROMPTS/phase-p-modular-routing.md](PROMPTS/phase-p-modular-rout
 
 ---
 
-## Phase DST1 — Soft Clipping Distortion ✓ *delivered*
+## Phase DST1 — Soft Clipping Distortion ✅ *delivered*
 
 Add `:distort` to the `(fx ...)` effect chain — a musical soft-clip waveshaper with
 drive, tone, dry/wet, and three clipping algorithms (`:tanh`, `:sigmoid`, `:atan`).
@@ -707,7 +707,7 @@ See full spec: [PROMPTS/PHASE-DST1.md](PROMPTS/PHASE-DST1.md)
 
 ---
 
-## Phase DST2 — Asymmetric Soft Clipping 📋 *planned*
+## Phase DST2 — Asymmetric Soft Clipping ✅ *delivered*
 
 Extends Phase DST1. Adds `:asym` parameter to `:distort` for even-harmonic "warm tube"
 coloration, plus a DC blocker to remove the offset asymmetric clipping introduces.
@@ -715,6 +715,14 @@ coloration, plus a DC blocker to remove the offset asymmetric clipping introduce
 **Key additions:**
 - `:asym` (-1.0–1.0) — positive values produce harder clipping on the positive half-wave
 - DC blocker (`IIRFilterNode`, ~5 Hz highpass) always in path to enable click-free live changes
+
+**Delivered:**
+- `app/public/plugins/distort.js` — `:asym` param, asymmetric `makeCurve`, DC blocker IIR filter, full `destroy()` cleanup
+- `app/src/repulse/lisp-lang/hover.js` — hover docs for `:asym`
+- `app/src/repulse/lisp-lang/completions.js` — `:asym` completion entry
+- `app/src/repulse/lisp-lang/insert-categories.js` — `:asym` in insert categories
+- `app/src/repulse/ui/context_panel.cljs` — `:asym` slider in session panel
+- `docs/USAGE.md` — `:asym` documented in distortion effect table
 
 See full spec: [PROMPTS/PHASE-DST2.md](PROMPTS/PHASE-DST2.md)
 
