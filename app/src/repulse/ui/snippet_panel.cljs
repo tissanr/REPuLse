@@ -103,6 +103,12 @@
 (defn- logged-in? []
   (some? (auth/session)))
 
+(def ^:private uuid-re
+  (js/RegExp. "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" "i"))
+
+(defn- uuid-id? [id]
+  (boolean (and id (.test uuid-re id))))
+
 (defn- render-card [snippet]
   (let [id         (:id snippet)
         title      (:title snippet)
@@ -113,7 +119,8 @@
         code       (or (:code snippet) "")
         star-count (or (:star_count snippet) 0)
         starred    (snippets/starred? id)
-        can-star   (logged-in?)]
+        ;; Star/report only available for community snippets (UUID ids from the API)
+        can-star   (and (logged-in?) (uuid-id? id))]
     (str "<div class=\"snippet-card\">"
          "<div class=\"snippet-card-top\">"
          "<span class=\"snippet-title\">" (escape-html title) "</span>"
@@ -134,7 +141,7 @@
          (when-not can-star " disabled title=\"Log in to star\"")
          ">&#9733; " star-count "</button>"
          "<button class=\"snippet-report-btn\" data-id=\"" id "\""
-         (when-not (logged-in?) " disabled title=\"Log in to report\"")
+         (when-not can-star " disabled title=\"Log in or use a community snippet to report\"")
          ">&#9872; report</button>"
          "</div>"
          "<details class=\"snippet-code-details\">"

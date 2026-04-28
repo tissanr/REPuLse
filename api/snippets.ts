@@ -42,7 +42,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
   let query = sb
     .from("snippets")
     .select(
-      "id, author_id, title, description, code, tags, bpm, star_count, usage_count, created_at, profiles(display_name, avatar_url)"
+      "id, author_id, title, description, code, tags, bpm, star_count, usage_count, created_at, profiles!author_id(display_name, avatar_url)"
     );
 
   // Ordering (skip for trending — sort after fetch)
