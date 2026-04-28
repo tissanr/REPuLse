@@ -19,13 +19,16 @@
                              (str "HTTP " (.-status resp)))})))))
 
 (defn fetch-snippets
-  "GET /api/snippets — returns Promise<{:data [...] | :error str}>."
+  "GET /api/snippets — returns Promise<{:data [...] | :error str}>.
+   Options: :tag :q :sort :author :limit"
   ([] (fetch-snippets {}))
-  ([{:keys [tag q limit]}]
+  ([{:keys [tag q sort author limit]}]
    (let [params (cond-> {}
-                  tag   (assoc :tag tag)
-                  q     (assoc :q q)
-                  limit (assoc :limit limit))
+                  tag    (assoc :tag tag)
+                  q      (assoc :q q)
+                  sort   (assoc :sort sort)
+                  author (assoc :author author)
+                  limit  (assoc :limit limit))
          qs     (when (seq params)
                   (str "?" (str/join "&"
                              (map (fn [[k v]] (str (name k) "=" (js/encodeURIComponent v)))
@@ -44,11 +47,40 @@
       (.then parse-response)
       (.catch (fn [e] {:error (.-message e)}))))
 
-(defn toggle-star!
-  "POST /api/snippets/:id/star — returns Promise<{:data {:starred bool} | :error str}>."
-  [snippet-id]
+(defn set-rating!
+  "POST /api/snippets/:id/star with {rating: 0-5} — 0 removes the rating.
+   Returns Promise<{:data {:rating int} | :error str}>."
+  [snippet-id rating]
   (-> (js/fetch (str "/api/snippets/" snippet-id "/star")
                 #js {:method  "POST"
+                     :headers (auth-headers)
+                     :body    (js/JSON.stringify #js {:rating rating})})
+      (.then parse-response)
+      (.catch (fn [e] {:error (.-message e)}))))
+
+(defn track-usage!
+  "POST /api/snippets/:id/use — silently increments usage counter."
+  [snippet-id]
+  (-> (js/fetch (str "/api/snippets/" snippet-id "/use")
+                #js {:method  "POST"
                      :headers (auth-headers)})
+      (.then parse-response)
+      (.catch (fn [e] {:error (.-message e)}))))
+
+(defn report-snippet!
+  "POST /api/snippets/:id/report — returns Promise<{:data {:ok true} | :error str}>."
+  [snippet-id reason]
+  (-> (js/fetch (str "/api/snippets/" snippet-id "/report")
+                #js {:method  "POST"
+                     :headers (auth-headers)
+                     :body    (js/JSON.stringify #js {:reason reason})})
+      (.then parse-response)
+      (.catch (fn [e] {:error (.-message e)}))))
+
+(defn fetch-my-ratings!
+  "GET /api/my-stars — returns Promise<{:data [{:snippet_id str :rating int}] | :error str}>.
+   Requires authentication."
+  []
+  (-> (js/fetch "/api/my-stars" #js {:headers (auth-headers)})
       (.then parse-response)
       (.catch (fn [e] {:error (.-message e)}))))

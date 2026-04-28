@@ -13,7 +13,8 @@
     "dev": "npx shadow-cljs watch app",
     "dev:full": "npm run build:wasm && npx shadow-cljs watch app",
     "test": "npx shadow-cljs compile test && node out/test.js",
-    "gen:grammar": "lezer-generator app/src/repulse/lisp-lang/repulse-lisp.grammar -o app/src/repulse/lisp-lang/parser.js"
+    "gen:grammar": "lezer-generator app/src/repulse/lisp-lang/repulse-lisp.grammar -o app/src/repulse/lisp-lang/parser.js",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@lezer/generator": "^1.8.0",

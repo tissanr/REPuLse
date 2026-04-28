@@ -8,6 +8,7 @@ app/public/cljs-runtime/
 app/public/manifest.edn
 out/
 .shadow-cljs/
+.tsc-out/
 
 # Clojure/LSP tooling caches
 .clj-kondo/.cache/

@@ -1,11 +1,14 @@
 (ns repulse.ui.snippet-panel
   "Snippet library browser panel — renders, filters, previews, and inserts
-   snippets from the curated library.
+   snippets from the community library.
    Exports: init!, show-panel!, hide-panel!, toggle-panel!, visible?"
   (:require [repulse.snippets :as snippets]
             [repulse.audio :as audio]
             [repulse.ui.editor :as editor]
+            [repulse.ui.snippet-submit-modal :as submit-modal]
             [repulse.eval-orchestrator :as eo]
+            [repulse.auth :as auth]
+            [repulse.api :as api]
             [clojure.string :as cstr]
             [clojure.set :as cset]))
 
@@ -62,7 +65,7 @@
     (eo/evaluate! (:code snippet))))
 
 (defn insert-snippet!
-  "Append snippet code to editor and trigger (upd)."
+  "Append snippet code to editor, trigger (upd), and track usage."
   [snippet]
   (when-let [view @editor/editor-view]
     (let [conflicts (conflict-tracks snippet)]
@@ -78,15 +81,15 @@
                      #js {:changes #js {:from doc-len
                                         :to   doc-len
                                         :insert (str "\n\n" code)}})
-          (js/setTimeout #(eo/evaluate! "(upd)") 50))))))
+          (js/setTimeout #(eo/evaluate! "(upd)") 50)
+          ;; Silently track usage
+          (when-let [id (:id snippet)]
+            (api/track-usage! id)))))))
 
 ;;; Forward declaration (hide-panel! used by wire-panel! and show-panel!)
 (declare hide-panel!)
 
 ;;; Rendering
-
-(defn- tag-pill [t]
-  (str "<span class=\"snippet-tag\">" t "</span>"))
 
 (defn- escape-html [s]
   (-> s
@@ -94,26 +97,71 @@
       (cstr/replace "<" "&lt;")
       (cstr/replace ">" "&gt;")))
 
+(defn- tag-pill [t]
+  (str "<span class=\"snippet-tag\">" (escape-html t) "</span>"))
+
+(defn- logged-in? []
+  (some? (auth/session)))
+
+(def ^:private uuid-re
+  (js/RegExp. "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" "i"))
+
+(defn- uuid-id? [id]
+  (boolean (and id (.test uuid-re id))))
+
+(defn- render-stars
+  "Render a row of 5 clickable star buttons plus avg-rating display."
+  [id my-rating can-star avg-rating star-count]
+  (str "<div class=\"snippet-stars\""
+       (when-not can-star " data-disabled=\"true\"")
+       ">"
+       (apply str
+         (for [n (range 1 6)]
+           (str "<button class=\"snippet-star"
+                (when (<= n my-rating) " snippet-star--filled")
+                "\""
+                " data-id=\"" id "\""
+                " data-rating=\"" n "\""
+                (when-not can-star " disabled title=\"Log in to rate\"")
+                ">&#9733;</button>")))
+       (if (pos? star-count)
+         (str "<span class=\"snippet-avg-rating\">"
+              (.toFixed avg-rating 1) " avg (" star-count ")</span>")
+         "<span class=\"snippet-avg-rating\">no ratings yet</span>")
+       "</div>"))
+
 (defn- render-card [snippet]
-  (let [id    (:id snippet)
-        title (:title snippet)
-        auth  (or (:author snippet) "repulse")
-        tags  (or (:tags snippet) [])
-        desc  (or (:description snippet) "")
-        code  (or (:code snippet) "")]
+  (let [id         (:id snippet)
+        title      (:title snippet)
+        auth-info  (get-in snippet [:profiles :display_name])
+        auth-str   (or auth-info (:author snippet) "repulse")
+        tags       (or (:tags snippet) [])
+        desc       (or (:description snippet) "")
+        code       (or (:code snippet) "")
+        star-count (or (:star_count snippet) 0)
+        avg-rating (or (:avg_rating snippet) 0)
+        my-rating  (snippets/get-rating id)
+        ;; Star/report only available for community snippets (UUID ids from the API)
+        can-star   (and (logged-in?) (uuid-id? id))]
     (str "<div class=\"snippet-card\">"
          "<div class=\"snippet-card-top\">"
-         "<span class=\"snippet-title\">" title "</span>"
-         "<span class=\"snippet-author\">" auth "</span>"
+         "<span class=\"snippet-title\">" (escape-html title) "</span>"
+         "<span class=\"snippet-author\">" (escape-html auth-str) "</span>"
          "</div>"
          "<div class=\"snippet-tags\">"
          (cstr/join "" (map tag-pill tags))
          "</div>"
-         "<div class=\"snippet-desc\">" desc "</div>"
+         "<div class=\"snippet-desc\">" (escape-html desc) "</div>"
          "<div class=\"snippet-actions\">"
          "<button class=\"snippet-btn snippet-preview-btn\" data-id=\"" id "\">&#9654; solo</button>"
          "<button class=\"snippet-btn snippet-mix-btn\" data-id=\"" id "\">&oplus; mix</button>"
          "<button class=\"snippet-btn snippet-insert-btn\" data-id=\"" id "\">&#8595; insert</button>"
+         "</div>"
+         "<div class=\"snippet-meta-row\">"
+         (render-stars id my-rating can-star avg-rating star-count)
+         "<button class=\"snippet-report-btn\" data-id=\"" id "\""
+         (when-not can-star " disabled title=\"Log in or use a community snippet to report\"")
+         ">&#9872; report</button>"
          "</div>"
          "<details class=\"snippet-code-details\">"
          "<summary class=\"snippet-code-summary\">{ } code</summary>"
@@ -132,11 +180,13 @@
               (cstr/join "" (map render-card snips)))))))
 
 (defn- render-toolbar!
-  "Re-render the toolbar (tag dropdown must reflect loaded tags)."
+  "Re-render the toolbar (tag dropdown + sort must reflect loaded tags)."
   []
   (when-let [toolbar (el "snippet-toolbar")]
-    (let [all-tags (snippets/all-tags)
-          cur-tag  @tag-filter]
+    (let [all-tags  (snippets/all-tags)
+          cur-tag   @tag-filter
+          cur-sort  @snippets/sort-order
+          cur-auth  (or @snippets/author-filter "")]
       (set! (.-innerHTML toolbar)
             (str "<span class=\"snippet-panel-title\">Snippets</span>"
                  "<input id=\"snippet-search\" class=\"snippet-search\" type=\"text\""
@@ -145,11 +195,21 @@
                  "<option value=\"\">all tags</option>"
                  (cstr/join ""
                             (map (fn [t]
-                                   (str "<option value=\"" t "\""
+                                   (str "<option value=\"" (escape-html t) "\""
                                         (when (= t cur-tag) " selected")
-                                        ">" t "</option>"))
+                                        ">" (escape-html t) "</option>"))
                                  all-tags))
                  "</select>"
+                 "<select id=\"snippet-sort\" class=\"snippet-sort-filter\">"
+                 "<option value=\"top-rated\""   (when (= cur-sort "top-rated")   " selected") ">&#9733; top rated</option>"
+                 "<option value=\"newest\""      (when (= cur-sort "newest")      " selected") ">&#128337; newest</option>"
+                 "<option value=\"most-used\""   (when (= cur-sort "most-used")   " selected") ">&#128200; uses</option>"
+                 "<option value=\"trending\""    (when (= cur-sort "trending")    " selected") ">&#128293; trending</option>"
+                 "</select>"
+                 "<input id=\"snippet-author-filter\" class=\"snippet-author-filter\" type=\"text\""
+                 " placeholder=\"author\u2026\" value=\"" (escape-html cur-auth) "\" />"
+                 (when (logged-in?)
+                   "<button id=\"snippet-share-btn\" class=\"snippet-share-btn\" title=\"Share current code as a snippet\">+ share</button>")
                  "<button class=\"snippet-close-btn\" id=\"snippet-close-btn\">&times;</button>"))
       ;; Re-wire toolbar input events after re-render
       (when-let [search-input (el "snippet-search")]
@@ -163,8 +223,63 @@
             (let [v (.-value (.-target e))]
               (reset! tag-filter (when (seq v) v)))
             (render-cards!))))
+      (when-let [sort-sel (el "snippet-sort")]
+        (.addEventListener sort-sel "change"
+          (fn [^js e]
+            (reset! snippets/sort-order (.-value (.-target e)))
+            (when-let [cards (el "snippet-cards")]
+              (set! (.-innerHTML cards)
+                    "<div class=\"snippet-empty\">loading\u2026</div>"))
+            (snippets/reload!))))
+      (when-let [author-input (el "snippet-author-filter")]
+        ;; Debounce: reload 400ms after user stops typing
+        (let [timer (atom nil)]
+          (.addEventListener author-input "input"
+            (fn [^js e]
+              (when @timer (js/clearTimeout @timer))
+              (reset! timer
+                (js/setTimeout
+                  (fn []
+                    (reset! snippets/author-filter
+                            (let [v (cstr/trim (.-value (.-target e)))]
+                              (when (seq v) v)))
+                    (when-let [cards (el "snippet-cards")]
+                      (set! (.-innerHTML cards)
+                            "<div class=\"snippet-empty\">loading\u2026</div>"))
+                    (snippets/reload!))
+                  400))))))
+      (when-let [share-btn (el "snippet-share-btn")]
+        (.addEventListener share-btn "click" submit-modal/open!))
       (when-let [close-btn (el "snippet-close-btn")]
         (.addEventListener close-btn "click" hide-panel!)))))
+
+;;; Rating handler
+
+(defn- handle-rate!
+  "Click on star N: if already rated N → remove (0), else set to N."
+  [snippet-id n]
+  (when (and (logged-in?) (uuid-id? snippet-id))
+    (let [prev     (snippets/get-rating snippet-id)
+          new-r    (if (= prev n) 0 n)]
+      (snippets/set-rating! snippet-id new-r)
+      (render-cards!)
+      (-> (api/set-rating! snippet-id new-r)
+          (.then (fn [result]
+                   (when (:error result)
+                     ;; Revert optimistic update on error
+                     (snippets/set-rating! snippet-id prev)
+                     (render-cards!))))))))
+
+;;; Report handler
+
+(defn- handle-report! [snippet-id]
+  (when (logged-in?)
+    (when-let [reason (js/prompt "Why are you reporting this snippet? (optional)")]
+      (-> (api/report-snippet! snippet-id reason)
+          (.then (fn [result]
+                   (if (:error result)
+                     (js/alert (str "Report failed: " (:error result)))
+                     (js/alert "Thank you — the snippet has been flagged for review."))))))))
 
 ;;; Show / hide
 
@@ -174,12 +289,10 @@
     (.remove (.-classList panel) "hidden")
     (.add    (.-classList (el "snippet-toggle-btn")) "active")
     (when (empty? (snippets/all-snippets))
-      ;; Show loading state immediately, then re-render when data arrives
       (when-let [container (el "snippet-cards")]
         (set! (.-innerHTML container)
               "<div class=\"snippet-empty\">loading\u2026</div>")))
     (snippets/load!)
-    ;; If already loaded, render immediately
     (when @snippets/loaded?
       (render-toolbar!)
       (render-cards!))))
@@ -215,7 +328,14 @@
           (when-let [s (snippets/by-id id)] (preview-mix! s))
 
           (and id (.contains cl "snippet-insert-btn"))
-          (when-let [s (snippets/by-id id)] (insert-snippet! s))))))
+          (when-let [s (snippets/by-id id)] (insert-snippet! s))
+
+          (and id (.contains cl "snippet-star"))
+          (let [n (js/parseInt (.. target -dataset -rating))]
+            (when-not (js/isNaN n) (handle-rate! id n)))
+
+          (and id (.contains cl "snippet-report-btn"))
+          (handle-report! id)))))
 
   ;; Keyboard: Escape closes panel
   (.addEventListener js/document "keydown"
@@ -230,7 +350,6 @@
    Must be called after the panel element exists in the DOM."
   []
   (when-let [panel (el "snippet-panel")]
-    ;; Build static structure (toolbar + cards container)
     (set! (.-innerHTML panel)
           (str "<div id=\"snippet-toolbar\" class=\"snippet-panel-bar\">"
                "<span class=\"snippet-panel-title\">Snippets</span>"
@@ -239,6 +358,14 @@
                "<select id=\"snippet-tag-filter\" class=\"snippet-tag-filter\">"
                "<option value=\"\">all tags</option>"
                "</select>"
+               "<select id=\"snippet-sort\" class=\"snippet-sort-filter\">"
+               "<option value=\"top-rated\">&#9733; top rated</option>"
+               "<option value=\"newest\">&#128337; newest</option>"
+               "<option value=\"most-used\">&#128200; uses</option>"
+               "<option value=\"trending\">&#128293; trending</option>"
+               "</select>"
+               "<input id=\"snippet-author-filter\" class=\"snippet-author-filter\" type=\"text\""
+               " placeholder=\"author\u2026\" />"
                "<button id=\"snippet-close-btn\" class=\"snippet-close-btn\">&times;</button>"
                "</div>"
                "<div id=\"snippet-cards\" class=\"snippet-cards\"></div>"))
@@ -263,4 +390,11 @@
       (fn [_ _ _ _]
         (when @visible?
           (render-toolbar!)
+          (render-cards!))))
+
+    ;; Watch ratings-atom: re-render cards when load-ratings! completes
+    ;; (ratings load async, often after the first render)
+    (add-watch snippets/ratings ::ratings-update
+      (fn [_ _ _ _]
+        (when @visible?
           (render-cards!))))))

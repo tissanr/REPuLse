@@ -880,19 +880,31 @@ See full spec: [PROMPTS/PHASE-S2.md](PROMPTS/PHASE-S2.md)
 
 ---
 
-## Phase S3 — Community Snippets 📋 *planned*
+## Phase S3 — Community Snippets ✅ *delivered*
 
 User-submitted snippets with ranking, usage tracking, and community browsing.
 Depends on S2.
 
 **Key additions:**
-- **Share as snippet** button in editor header — opens submit modal with title, description, tags, BPM
-- Star toggle per card, with optimistic UI updates
-- Usage counter incremented silently on insert
-- Sort options: newest, most starred, most used, trending
-- Filter by tag, author, or free-text search
-- Report button + `reports` table for minimal moderation
-- Anonymous users: browse + preview + insert; logged-in users: submit + star + report
+- **Share as snippet** button in snippet panel toolbar (logged-in only) — opens submit modal with title, description, tags, BPM pre-filled from current session; submits via `POST /api/snippets`
+- **Star toggle** on each card with optimistic UI update; reverts on API error; disabled for anonymous users
+- **Usage counter** incremented silently via `POST /api/snippets/:id/use` when Insert is clicked; uses `increment_snippet_usage` stored function for atomicity
+- **Sort dropdown**: top rated, newest, most used, trending (server-side; trending uses time-decay formula in TypeScript)
+- **Author filter**: debounced input → server-side filter by profile `display_name`; free-text search remains client-side
+- **Report button** on each card → prompt for reason → `POST /api/snippets/:id/report` → row in `reports` table for manual review
+- **`reports` table** added to Supabase schema with RLS (insert by auth user only)
+- **Toast notifications** for successful snippet submission; error messages shown inline in modal
+- Anonymous users: browse, preview, insert (all unchanged); authenticated users gain submit, star, report
+
+**Delivered:**
+- `api/snippets.ts` — extended GET with `sort`, `author` query params
+- `api/snippets/[id]/use.ts` — new endpoint for usage tracking
+- `api/snippets/[id]/report.ts` — new endpoint for moderation reports
+- `supabase/schema.sql` — `reports` table + `increment_snippet_usage` function
+- `app/src/repulse/api.cljs` — `track-usage!`, `report-snippet!`, updated `fetch-snippets`
+- `app/src/repulse/snippets.cljs` — `sort-order`, `author-filter`, `ratings` atoms; `reload!` function
+- `app/src/repulse/ui/snippet_submit_modal.cljs` — new submit modal with validation, Escape/click-outside close
+- `app/src/repulse/ui/snippet_panel.cljs` — sort dropdown, author filter, star/report buttons, share button
 
 See full spec: [PROMPTS/PHASE-S3.md](PROMPTS/PHASE-S3.md)
 
