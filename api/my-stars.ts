@@ -5,6 +5,21 @@ function supabaseOrigin() {
   return new URL(process.env.SUPABASE_URL!).origin;
 }
 
+/** Extract the `sub` (user UUID) from a JWT payload without verifying the
+ *  signature.  Security: the JWT is forwarded to PostgREST in the Authorization
+ *  header and Supabase validates the signature there before executing the query,
+ *  so a forged token would be rejected at the DB layer.  We only need the sub
+ *  here to build the .eq() filter; we never trust it for write operations. */
+function subFromJwt(token: string): string | null {
+  try {
+    const b64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(b64));
+    return typeof payload.sub === "string" ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+
 function userClient(jwt: string) {
   return createClient(
     supabaseOrigin(),
@@ -23,24 +38,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const auth = req.headers["authorization"];
-  if (!auth?.startsWith("Bearer ")) {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader?.startsWith("Bearer ")) {
     res.status(401).json({ error: "Authentication required" });
     return;
   }
-  const jwt = auth.slice(7);
+  const jwt = authHeader.slice(7);
 
-  const sb = userClient(jwt);
-  const { data: { user }, error: authErr } = await sb.auth.getUser();
-  if (authErr || !user) {
+  const userId = subFromJwt(jwt);
+  if (!userId) {
     res.status(401).json({ error: "Invalid token" });
     return;
   }
 
+  // Use the user client so PostgREST validates the JWT signature via RLS.
+  // No extra HTTP round-trip to auth.getUser() — avoids Warp timeout.
+  const sb = userClient(jwt);
   const { data, error } = await sb
     .from("stars")
     .select("snippet_id, rating")
-    .eq("user_id", user.id);
+    .eq("user_id", userId);
 
   if (error) {
     res.status(500).json({ error: error.message });

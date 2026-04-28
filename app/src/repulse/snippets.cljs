@@ -90,12 +90,15 @@
   (when (auth/session)
     (-> (api/fetch-my-ratings!)
         (.then (fn [result]
-                 (when-let [stars (:data result)]
-                   (reset! ratings
-                     (into {} (map (fn [s]
-                                    [(or (:snippet_id s) (.-snippet_id s))
-                                     (or (:rating s)     (.-rating s))])
-                                   stars)))))))))
+                 (if-let [err (:error result)]
+                   (js/console.warn "[REPuLse] load-ratings! failed:" err)
+                   (when-let [stars (:data result)]
+                     (reset! ratings
+                       (into {} (map (fn [s]
+                                      [(or (:snippet_id s) (.-snippet_id s))
+                                       (or (:rating s)     (.-rating s))])
+                                     stars)))))))
+        (.catch (fn [e] (js/console.warn "[REPuLse] load-ratings! error:" (.-message e)))))))
 
 ;;; Loading
 

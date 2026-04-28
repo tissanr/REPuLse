@@ -390,4 +390,11 @@
       (fn [_ _ _ _]
         (when @visible?
           (render-toolbar!)
+          (render-cards!))))
+
+    ;; Watch ratings-atom: re-render cards when load-ratings! completes
+    ;; (ratings load async, often after the first render)
+    (add-watch snippets/ratings ::ratings-update
+      (fn [_ _ _ _]
+        (when @visible?
           (render-cards!))))))
