@@ -47,12 +47,14 @@
       (.then parse-response)
       (.catch (fn [e] {:error (.-message e)}))))
 
-(defn toggle-star!
-  "POST /api/snippets/:id/star — returns Promise<{:data {:starred bool} | :error str}>."
-  [snippet-id]
+(defn set-rating!
+  "POST /api/snippets/:id/star with {rating: 0-5} — 0 removes the rating.
+   Returns Promise<{:data {:rating int} | :error str}>."
+  [snippet-id rating]
   (-> (js/fetch (str "/api/snippets/" snippet-id "/star")
                 #js {:method  "POST"
-                     :headers (auth-headers)})
+                     :headers (auth-headers)
+                     :body    (js/JSON.stringify #js {:rating rating})})
       (.then parse-response)
       (.catch (fn [e] {:error (.-message e)}))))
 

@@ -39,7 +39,8 @@ create table if not exists public.snippets (
   code        text not null,
   tags        text[] not null default '{}',
   bpm         integer,
-  star_count  integer not null default 0,
+  star_count  integer not null default 0,       -- number of ratings
+  avg_rating  numeric(4,2) not null default 0,  -- average of 1-5 ratings
   usage_count integer not null default 0,
   created_at  timestamptz default now(),
   updated_at  timestamptz default now()
@@ -82,6 +83,7 @@ create policy "snippets deletable by author"
 create table if not exists public.stars (
   user_id    uuid references public.profiles(id) on delete cascade,
   snippet_id uuid references public.snippets(id) on delete cascade,
+  rating     integer not null default 1 check (rating between 1 and 5),
   created_at timestamptz default now(),
   primary key (user_id, snippet_id)
 );
@@ -95,19 +97,27 @@ create policy "stars insertable by owner"
   on public.stars for insert
   with check (auth.uid() = user_id);
 
+create policy "stars updatable by owner"
+  on public.stars for update
+  using (auth.uid() = user_id);
+
 create policy "stars deletable by owner"
   on public.stars for delete
   using (auth.uid() = user_id);
 
--- Maintain star_count on snippets via trigger
+-- Maintain star_count (number of raters) and avg_rating on snippets
 create or replace function public.update_star_count()
 returns trigger language plpgsql security definer as $$
+declare
+  v_snippet_id uuid;
 begin
-  if (tg_op = 'INSERT') then
-    update public.snippets set star_count = star_count + 1 where id = new.snippet_id;
-  elsif (tg_op = 'DELETE') then
-    update public.snippets set star_count = greatest(0, star_count - 1) where id = old.snippet_id;
-  end if;
+  v_snippet_id := coalesce(new.snippet_id, old.snippet_id);
+  update public.snippets
+  set star_count = (select count(*) from public.stars where snippet_id = v_snippet_id),
+      avg_rating = coalesce(
+        (select avg(rating) from public.stars where snippet_id = v_snippet_id),
+        0)
+  where id = v_snippet_id;
   return null;
 end;
 $$;
@@ -115,6 +125,11 @@ $$;
 drop trigger if exists stars_count_insert on public.stars;
 create trigger stars_count_insert
   after insert on public.stars
+  for each row execute function public.update_star_count();
+
+drop trigger if exists stars_count_update on public.stars;
+create trigger stars_count_update
+  after update on public.stars
   for each row execute function public.update_star_count();
 
 drop trigger if exists stars_count_delete on public.stars;

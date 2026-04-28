@@ -109,6 +109,27 @@
 (defn- uuid-id? [id]
   (boolean (and id (.test uuid-re id))))
 
+(defn- render-stars
+  "Render a row of 5 clickable star buttons plus avg-rating display."
+  [id my-rating can-star avg-rating star-count]
+  (str "<div class=\"snippet-stars\""
+       (when-not can-star " data-disabled=\"true\"")
+       ">"
+       (apply str
+         (for [n (range 1 6)]
+           (str "<button class=\"snippet-star"
+                (when (<= n my-rating) " snippet-star--filled")
+                "\""
+                " data-id=\"" id "\""
+                " data-rating=\"" n "\""
+                (when-not can-star " disabled title=\"Log in to rate\"")
+                ">&#9733;</button>")))
+       (if (pos? star-count)
+         (str "<span class=\"snippet-avg-rating\">"
+              (.toFixed avg-rating 1) " avg (" star-count ")</span>")
+         "<span class=\"snippet-avg-rating\">no ratings yet</span>")
+       "</div>"))
+
 (defn- render-card [snippet]
   (let [id         (:id snippet)
         title      (:title snippet)
@@ -118,7 +139,8 @@
         desc       (or (:description snippet) "")
         code       (or (:code snippet) "")
         star-count (or (:star_count snippet) 0)
-        starred    (snippets/starred? id)
+        avg-rating (or (:avg_rating snippet) 0)
+        my-rating  (snippets/get-rating id)
         ;; Star/report only available for community snippets (UUID ids from the API)
         can-star   (and (logged-in?) (uuid-id? id))]
     (str "<div class=\"snippet-card\">"
@@ -136,10 +158,7 @@
          "<button class=\"snippet-btn snippet-insert-btn\" data-id=\"" id "\">&#8595; insert</button>"
          "</div>"
          "<div class=\"snippet-meta-row\">"
-         "<button class=\"snippet-star-btn" (when starred " snippet-star-btn--on") "\""
-         " data-id=\"" id "\""
-         (when-not can-star " disabled title=\"Log in to star\"")
-         ">&#9733; " star-count "</button>"
+         (render-stars id my-rating can-star avg-rating star-count)
          "<button class=\"snippet-report-btn\" data-id=\"" id "\""
          (when-not can-star " disabled title=\"Log in or use a community snippet to report\"")
          ">&#9872; report</button>"
@@ -234,18 +253,22 @@
       (when-let [close-btn (el "snippet-close-btn")]
         (.addEventListener close-btn "click" hide-panel!)))))
 
-;;; Star toggle handler
+;;; Rating handler
 
-(defn- handle-star! [snippet-id]
-  (when (logged-in?)
-    (snippets/toggle-starred! snippet-id)
-    (render-cards!)
-    (-> (api/toggle-star! snippet-id)
-        (.then (fn [result]
-                 (when (:error result)
-                   ;; Revert optimistic update on error
-                   (snippets/toggle-starred! snippet-id)
-                   (render-cards!)))))))
+(defn- handle-rate!
+  "Click on star N: if already rated N → remove (0), else set to N."
+  [snippet-id n]
+  (when (and (logged-in?) (uuid-id? snippet-id))
+    (let [prev     (snippets/get-rating snippet-id)
+          new-r    (if (= prev n) 0 n)]
+      (snippets/set-rating! snippet-id new-r)
+      (render-cards!)
+      (-> (api/set-rating! snippet-id new-r)
+          (.then (fn [result]
+                   (when (:error result)
+                     ;; Revert optimistic update on error
+                     (snippets/set-rating! snippet-id prev)
+                     (render-cards!))))))))
 
 ;;; Report handler
 
@@ -307,8 +330,9 @@
           (and id (.contains cl "snippet-insert-btn"))
           (when-let [s (snippets/by-id id)] (insert-snippet! s))
 
-          (and id (.contains cl "snippet-star-btn"))
-          (handle-star! id)
+          (and id (.contains cl "snippet-star"))
+          (let [n (js/parseInt (.. target -dataset -rating))]
+            (when-not (js/isNaN n) (handle-rate! id n)))
 
           (and id (.contains cl "snippet-report-btn"))
           (handle-report! id)))))

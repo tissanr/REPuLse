@@ -3,7 +3,7 @@
    search/filter, and exports the `snippet` Lisp built-in factory.
    Exports: library-atom, loaded?, load!, reload!, all-snippets, all-tags,
             filter-snippets, by-id, snippet-builtin,
-            sort-order, author-filter, starred-ids, toggle-starred!"
+            sort-order, author-filter, ratings, get-rating, set-rating!"
   (:require [repulse.lisp.eval :as leval]
             [repulse.auth :as auth]
             [repulse.api :as api]
@@ -19,8 +19,8 @@
 (defonce sort-order    (atom "most-starred"))  ; "newest" | "most-starred" | "most-used" | "trending"
 (defonce author-filter (atom nil))             ; string or nil
 
-;; Starred-snippet IDs — optimistic set, populated/updated as user stars/unstars
-(defonce starred-ids   (atom #{}))
+;; Per-snippet ratings — optimistic map of snippet-id (string) → 1–5 (absent = no rating)
+(defonce ratings       (atom {}))
 
 ;;; Data access
 
@@ -49,28 +49,36 @@
                         (cstr/includes? (cstr/lower-case (or (:description s) "")) q)
                         (cstr/includes? (cstr/lower-case (or (:code s) "")) q)))))))
 
-;;; Starred helpers
+;;; Rating helpers
 
-(defn starred? [snippet-id]
-  (contains? @starred-ids (str snippet-id)))
-
-(defn toggle-starred!
-  "Toggle local starred state and update the star count in library-atom.
-   Returns :starred or :unstarred."
+(defn get-rating
+  "Return the user's current rating (1–5) for snippet-id, or 0 if not rated."
   [snippet-id]
-  (let [id    (str snippet-id)
-        delta (if (starred? id)
-                (do (swap! starred-ids disj id) -1)
-                (do (swap! starred-ids conj id)  1))]
-    ;; Update star_count in library-atom optimistically
-    (swap! library-atom update :snippets
-           (fn [snips]
-             (mapv (fn [s]
-                     (if (= (:id s) id)
-                       (update s :star_count + delta)
-                       s))
-                   snips)))
-    (if (pos? delta) :starred :unstarred)))
+  (get @ratings (str snippet-id) 0))
+
+(defn set-rating!
+  "Optimistically update ratings atom and star_count in library-atom.
+   new-rating is 1–5 to rate, 0 to remove the rating."
+  [snippet-id new-rating]
+  (let [id      (str snippet-id)
+        old-r   (get-rating id)]
+    ;; Update ratings map
+    (if (zero? new-rating)
+      (swap! ratings dissoc id)
+      (swap! ratings assoc id new-rating))
+    ;; Update star_count (number of raters) optimistically
+    (let [delta (cond
+                  (and (zero? old-r) (pos? new-rating))  1   ; new rating added
+                  (and (pos? old-r)  (zero? new-rating)) -1  ; rating removed
+                  :else 0)]                                   ; rating value changed
+      (when-not (zero? delta)
+        (swap! library-atom update :snippets
+               (fn [snips]
+                 (mapv (fn [s]
+                         (if (= (:id s) id)
+                           (update s :star_count + delta)
+                           s))
+                       snips)))))))
 
 ;;; Loading
 

@@ -26,7 +26,7 @@ function extractBearer(req: VercelRequest): string | null {
 
 type SortOrder = "newest" | "most-starred" | "most-used" | "trending";
 
-function trendingScore(row: { star_count: number; usage_count: number; created_at: string }): number {
+function trendingScore(row: { star_count: number; avg_rating: number; usage_count: number; created_at: string }): number {
   const ageDays = (Date.now() - new Date(row.created_at).getTime()) / 86_400_000;
   return row.star_count * Math.exp(-ageDays / 7) + row.usage_count * Math.exp(-ageDays / 14);
 }
@@ -42,7 +42,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
   let query = sb
     .from("snippets")
     .select(
-      "id, author_id, title, description, code, tags, bpm, star_count, usage_count, created_at, profiles!author_id(display_name, avatar_url)"
+      "id, author_id, title, description, code, tags, bpm, star_count, avg_rating, usage_count, created_at, profiles!author_id(display_name, avatar_url)"
     );
 
   // Ordering (skip for trending — sort after fetch)
