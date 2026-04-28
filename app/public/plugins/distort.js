@@ -33,6 +33,8 @@ export default {
   _algo: "tanh",
   _asym: 0.0,
 
+  init(host) {},
+
   createNodes(ctx) {
     this._input = ctx.createGain();
     this._shaper = ctx.createWaveShaper();
