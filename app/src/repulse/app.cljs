@@ -156,6 +156,8 @@
 
 ;;; App bootstrap
 
+(defonce ^:private loaded-plugins (atom #{}))
+
 (defn on-play-btn-click []
   (if (audio/playing?)
     (do (audio/stop!)
@@ -363,36 +365,42 @@
     true) ;; true = capture phase
 
   ;; Auto-load built-in visual plugins
-  (-> (plugin-loading/dynamic-import! "/plugins/spectrum.js")
-      (.then (fn [m]
-               (let [plug (.-default m)]
-                 (plugins/register! plug (make-host))
-                 (mount-visual! plug))))
-      (.catch (fn [e]
-                (js/console.warn "[REPuLse] spectrum load failed:" e))))
-
-  ;; Auto-load built-in effect plugins
-  (plugins/register! compressor-plugin/plugin (make-host))
-  (fx/add-effect!    compressor-plugin/plugin)
-  (doseq [url ["/plugins/reverb.js"
-               "/plugins/delay.js"
-               "/plugins/filter.js"
-               "/plugins/dattorro-reverb.js"
-               "/plugins/chorus.js"
-               "/plugins/phaser.js"
-               "/plugins/tremolo.js"
-               "/plugins/overdrive.js"
-               "/plugins/overdrive.js"
-               "/plugins/bitcrusher.js"
-               "/plugins/sidechain.js"
-               "/plugins/distort.js"]]
-    (-> (plugin-loading/dynamic-import! url)
+  (when-not (contains? @loaded-plugins "spectrum")
+    (-> (plugin-loading/dynamic-import! "plugins/spectrum.js")
         (.then (fn [m]
                  (let [plug (.-default m)]
                    (plugins/register! plug (make-host))
-                   (fx/add-effect! plug))))
+                   (mount-visual! plug)
+                   (swap! loaded-plugins conj "spectrum"))))
         (.catch (fn [e]
-                  (js/console.warn "[REPuLse] Effect load failed:" url e)))))
+                  (js/console.warn "[REPuLse] spectrum load failed:" e)))))
+
+  ;; Auto-load built-in effect plugins
+  (when-not (contains? @loaded-plugins "compressor")
+    (plugins/register! compressor-plugin/plugin (make-host))
+    (fx/add-effect!    compressor-plugin/plugin)
+    (swap! loaded-plugins conj "compressor"))
+
+  (doseq [url ["plugins/reverb.js"
+               "plugins/delay.js"
+               "plugins/filter.js"
+               "plugins/dattorro-reverb.js"
+               "plugins/chorus.js"
+               "plugins/phaser.js"
+               "plugins/tremolo.js"
+               "plugins/overdrive.js"
+               "plugins/bitcrusher.js"
+               "plugins/sidechain.js"
+               "plugins/distort.js"]]
+    (when-not (contains? @loaded-plugins url)
+      (-> (plugin-loading/dynamic-import! url)
+          (.then (fn [m]
+                   (let [plug (.-default m)]
+                     (plugins/register! plug (make-host))
+                     (fx/add-effect! plug)
+                     (swap! loaded-plugins conj url))))
+          (.catch (fn [e]
+                    (js/console.warn "[REPuLse] Effect load failed:" url e)))))
 
   ;; Reactive context panel + track panel
   (add-watch builtins/env-atom               ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))
