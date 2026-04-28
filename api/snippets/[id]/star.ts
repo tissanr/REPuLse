@@ -1,6 +1,28 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
+// ── CORS ──────────────────────────────────────────────────────────────────────
+
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function setCors(req: VercelRequest, res: VercelResponse) {
+  const origin = req.headers.origin ?? "";
+  const allowed =
+    ALLOWED_ORIGINS.includes(origin) ||
+    /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
+    /^https:\/\/[a-z0-9-]+-tissanr\.vercel\.app$/.test(origin);
+
+  res.setHeader("Access-Control-Allow-Origin", allowed ? origin : "null");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  res.setHeader("Vary", "Origin");
+}
+
+// ── Handler ───────────────────────────────────────────────────────────────────
+
 function userClient(jwt: string) {
   return createClient(
     process.env.SUPABASE_URL!,
@@ -10,9 +32,7 @@ function userClient(jwt: string) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  setCors(req, res);
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
