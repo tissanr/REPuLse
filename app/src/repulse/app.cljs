@@ -410,7 +410,7 @@
                      (fx/add-effect! plug)
                      (swap! loaded-plugins conj url))))
           (.catch (fn [e]
-                    (js/console.warn "[REPuLse] Effect load failed:" url e)))))
+                    (js/console.warn "[REPuLse] Effect load failed:" url e))))))
 
   ;; Reactive context panel + track panel
   (add-watch builtins/env-atom               ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))
