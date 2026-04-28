@@ -92,7 +92,8 @@
         (.then (fn [result]
                  (if-let [err (:error result)]
                    (js/console.warn "[REPuLse] load-ratings! failed:" err)
-                   (when-let [stars (:data result)]
+                   (when-let [stars (let [data (:data result)]
+                                      (if (map? data) (:data data) data))]
                      (reset! ratings
                        (into {} (map (fn [s]
                                       [(or (:snippet_id s) (.-snippet_id s))
