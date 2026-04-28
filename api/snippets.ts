@@ -24,11 +24,12 @@ function extractBearer(req: VercelRequest): string | null {
   return auth.slice(7);
 }
 
-type SortOrder = "newest" | "most-starred" | "most-used" | "trending";
+type SortOrder = "newest" | "top-rated" | "most-used" | "trending";
 
-function trendingScore(row: { star_count: number; avg_rating: number; usage_count: number; created_at: string }): number {
+function trendingScore(row: { weighted_rating: number; usage_count: number; created_at: string }): number {
   const ageDays = (Date.now() - new Date(row.created_at).getTime()) / 86_400_000;
-  return row.star_count * Math.exp(-ageDays / 7) + row.usage_count * Math.exp(-ageDays / 14);
+  // Weight quality (Bayesian avg) + recency-decayed usage
+  return row.weighted_rating * Math.exp(-ageDays / 7) + row.usage_count * 0.1 * Math.exp(-ageDays / 14);
 }
 
 async function handleGet(req: VercelRequest, res: VercelResponse) {
@@ -36,19 +37,19 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
   const tag    = typeof req.query.tag    === "string" ? req.query.tag    : undefined;
   const q      = typeof req.query.q      === "string" ? req.query.q      : undefined;
   const author = typeof req.query.author === "string" ? req.query.author : undefined;
-  const sort: SortOrder = (typeof req.query.sort === "string" ? req.query.sort : "most-starred") as SortOrder;
+  const sort: SortOrder = (typeof req.query.sort === "string" ? req.query.sort : "top-rated") as SortOrder;
   const limit  = Math.min(Number(req.query.limit) || 100, 200);
 
   let query = sb
     .from("snippets")
     .select(
-      "id, author_id, title, description, code, tags, bpm, star_count, avg_rating, usage_count, created_at, profiles!author_id(display_name, avatar_url)"
+      "id, author_id, title, description, code, tags, bpm, star_count, avg_rating, weighted_rating, usage_count, created_at, profiles!author_id(display_name, avatar_url)"
     );
 
-  // Ordering (skip for trending — sort after fetch)
-  if (sort === "newest")         query = query.order("created_at",  { ascending: false });
-  else if (sort === "most-used") query = query.order("usage_count", { ascending: false });
-  else if (sort !== "trending")  query = query.order("star_count",  { ascending: false });
+  // Ordering (skip for trending — sorted after fetch)
+  if (sort === "newest")         query = query.order("created_at",       { ascending: false });
+  else if (sort === "most-used") query = query.order("usage_count",      { ascending: false });
+  else if (sort !== "trending")  query = query.order("weighted_rating",  { ascending: false });
 
   if (tag) query = query.contains("tags", [tag]);
   if (q)   query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);

@@ -16,7 +16,7 @@
 (defonce ^:private loading? (atom false))
 
 ;; Sort / filter state (server-side params)
-(defonce sort-order    (atom "most-starred"))  ; "newest" | "most-starred" | "most-used" | "trending"
+(defonce sort-order    (atom "top-rated"))  ; "newest" | "top-rated" | "most-used" | "trending"
 (defonce author-filter (atom nil))             ; string or nil
 
 ;; Per-snippet ratings — optimistic map of snippet-id (string) → 1–5 (absent = no rating)

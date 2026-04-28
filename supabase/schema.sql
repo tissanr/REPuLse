@@ -39,8 +39,9 @@ create table if not exists public.snippets (
   code        text not null,
   tags        text[] not null default '{}',
   bpm         integer,
-  star_count  integer not null default 0,       -- number of ratings
-  avg_rating  numeric(4,2) not null default 0,  -- average of 1-5 ratings
+  star_count       integer not null default 0,       -- number of ratings
+  avg_rating       numeric(4,2) not null default 0,  -- average of 1-5 ratings
+  weighted_rating  numeric(6,4) not null default 3,  -- Bayesian avg: (n*avg + k*3) / (n+k), k=5
   usage_count integer not null default 0,
   created_at  timestamptz default now(),
   updated_at  timestamptz default now()
@@ -113,10 +114,17 @@ declare
 begin
   v_snippet_id := coalesce(new.snippet_id, old.snippet_id);
   update public.snippets
-  set star_count = (select count(*) from public.stars where snippet_id = v_snippet_id),
-      avg_rating = coalesce(
-        (select avg(rating) from public.stars where snippet_id = v_snippet_id),
-        0)
+  set star_count      = (select count(*)    from public.stars where snippet_id = v_snippet_id),
+      avg_rating      = coalesce(
+        (select avg(rating) from public.stars where snippet_id = v_snippet_id), 0),
+      -- Bayesian average: (n * avg + k * prior) / (n + k), k=5, prior=3.0
+      weighted_rating = (
+        (select coalesce(avg(rating), 0) from public.stars where snippet_id = v_snippet_id)
+          * (select count(*) from public.stars where snippet_id = v_snippet_id)
+          + 3.0 * 5
+      ) / (
+        (select count(*) from public.stars where snippet_id = v_snippet_id) + 5
+      )
   where id = v_snippet_id;
   return null;
 end;
@@ -142,6 +150,7 @@ create trigger stars_count_delete
 create index if not exists snippets_author_idx   on public.snippets (author_id);
 create index if not exists snippets_tags_idx     on public.snippets using gin (tags);
 create index if not exists snippets_stars_idx    on public.snippets (star_count desc);
+create index if not exists snippets_weighted_idx on public.snippets (weighted_rating desc);
 create index if not exists snippets_usage_idx    on public.snippets (usage_count desc);
 create index if not exists snippets_created_idx  on public.snippets (created_at desc);
 create index if not exists stars_snippet_idx     on public.stars (snippet_id);
