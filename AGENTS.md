@@ -240,6 +240,7 @@ Last known clean test baseline:
 | DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | planned   |
 | DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | planned      |
 | CI1   | CI pipeline — GitHub Actions: tests, lint, Rust, grammar drift | ✓ delivered  |
+| DOC1  | User docs — split manual, tutorials, cookbook, reference       | planned      |
 
 See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full delivery notes.
 
