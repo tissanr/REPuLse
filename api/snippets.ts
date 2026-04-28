@@ -113,7 +113,9 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       title,
       description: description ?? null,
       code,
-      tags:        Array.isArray(tags) ? tags : [],
+      tags:        (Array.isArray(tags) ? tags : [])
+                     .map((t: string) => String(t).toLowerCase().trim())
+                     .filter(Boolean),
       bpm:         bpm ? Number(bpm) : null,
     })
     .select()

@@ -3,7 +3,8 @@
    search/filter, and exports the `snippet` Lisp built-in factory.
    Exports: library-atom, loaded?, load!, reload!, all-snippets, all-tags,
             filter-snippets, by-id, snippet-builtin,
-            sort-order, author-filter, ratings, get-rating, set-rating!"
+            sort-order, author-filter, ratings, get-rating, set-rating!,
+            load-ratings!"
   (:require [repulse.lisp.eval :as leval]
             [repulse.auth :as auth]
             [repulse.api :as api]
@@ -79,6 +80,22 @@
                            (update s :star_count + delta)
                            s))
                        snips)))))))
+
+;;; Rating persistence
+
+(defn load-ratings!
+  "Fetch the logged-in user's star ratings from the API and populate `ratings`.
+   No-ops when not authenticated."
+  []
+  (when (auth/session)
+    (-> (api/fetch-my-ratings!)
+        (.then (fn [result]
+                 (when-let [stars (:data result)]
+                   (reset! ratings
+                     (into {} (map (fn [s]
+                                    [(or (:snippet_id s) (.-snippet_id s))
+                                     (or (:rating s)     (.-rating s))])
+                                   stars)))))))))
 
 ;;; Loading
 

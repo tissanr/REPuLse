@@ -17,6 +17,7 @@
             [repulse.eval-orchestrator :as eo]
             [repulse.plugin-loading :as plugin-loading]
             [repulse.content.first-visit :as first-visit]
+            [repulse.snippets :as snippets]
             [clojure.string :as str]
             ["./lisp-lang/providers.js" :refer [setBankNamesProvider setFxNamesProvider]]
             ["@codemirror/commands" :refer [selectAll]]))
@@ -256,11 +257,14 @@
   (reset! builtins/evaluate-ref eo/evaluate!)
 
   (build-dom!)
-  (auth/init-auth! :on-change-fn (fn [_]
+  (auth/init-auth! :on-change-fn (fn [session]
                                     (auth-button/render-auth-btn!)
                                     ;; Re-render snippet panel toolbar so "share" btn appears/disappears
                                     (when @snippet-panel/visible?
-                                      (snippet-panel/show-panel!))))
+                                      (snippet-panel/show-panel!))
+                                    ;; Hydrate ratings atom so stars persist across reloads
+                                    (when session
+                                      (snippets/load-ratings!))))
   (auth-button/init!)
   (snippet-panel/init!)
   (snippet-submit-modal/init!)

@@ -76,3 +76,11 @@
                      :body    (js/JSON.stringify #js {:reason reason})})
       (.then parse-response)
       (.catch (fn [e] {:error (.-message e)}))))
+
+(defn fetch-my-ratings!
+  "GET /api/my-stars — returns Promise<{:data [{:snippet_id str :rating int}] | :error str}>.
+   Requires authentication."
+  []
+  (-> (js/fetch "/api/my-stars" #js {:headers (auth-headers)})
+      (.then parse-response)
+      (.catch (fn [e] {:error (.-message e)}))))
