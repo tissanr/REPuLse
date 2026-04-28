@@ -36,6 +36,17 @@
 (defn by-id [id]
   (first (filter #(= (:id %) (str id)) (all-snippets))))
 
+(defn- top-rated-key [snippet]
+  [(or (:avg_rating snippet) 0)
+   (or (:star_count snippet) 0)
+   (or (:weighted_rating snippet) 0)
+   (or (:created_at snippet) "")])
+
+(defn- apply-client-sort [snippets]
+  (case @sort-order
+    "top-rated" (sort #(compare (top-rated-key %2) (top-rated-key %1)) snippets)
+    snippets))
+
 (defn filter-snippets
   "Return snippets matching query (searches title, description, code) and tag.
    Sort and author filtering happen server-side."
@@ -43,12 +54,14 @@
   (let [q       (when (and query (seq (cstr/trim query)))
                   (cstr/lower-case (cstr/trim query)))
         snippets (all-snippets)]
-    (cond->> snippets
-      tag (filter #(some #{tag} (:tags %)))
-      q   (filter (fn [s]
-                    (or (cstr/includes? (cstr/lower-case (or (:title s) "")) q)
-                        (cstr/includes? (cstr/lower-case (or (:description s) "")) q)
-                        (cstr/includes? (cstr/lower-case (or (:code s) "")) q)))))))
+    (->> snippets
+         (cond->>
+           tag (filter #(some #{tag} (:tags %)))
+           q   (filter (fn [s]
+                         (or (cstr/includes? (cstr/lower-case (or (:title s) "")) q)
+                             (cstr/includes? (cstr/lower-case (or (:description s) "")) q)
+                             (cstr/includes? (cstr/lower-case (or (:code s) "")) q)))))
+         (apply-client-sort))))
 
 ;;; Rating helpers
 
@@ -56,6 +69,29 @@
   "Return the user's current rating (1–5) for snippet-id, or 0 if not rated."
   [snippet-id]
   (get @ratings (str snippet-id) 0))
+
+(defn- weighted-rating [avg-rating star-count]
+  (/ (+ (* star-count avg-rating) (* 5 3.0))
+     (+ star-count 5)))
+
+(defn- apply-rating-summary [snippet old-rating new-rating]
+  (let [old-count  (or (:star_count snippet) 0)
+        old-avg    (or (:avg_rating snippet) 0)
+        old-total  (* old-avg old-count)
+        new-count  (cond
+                     (and (zero? old-rating) (pos? new-rating))  (inc old-count)
+                     (and (pos? old-rating)  (zero? new-rating)) (max 0 (dec old-count))
+                     :else old-count)
+        new-total  (cond
+                     (and (zero? old-rating) (pos? new-rating))  (+ old-total new-rating)
+                     (and (pos? old-rating)  (zero? new-rating)) (- old-total old-rating)
+                     (and (pos? old-rating)  (pos? new-rating))  (+ (- old-total old-rating) new-rating)
+                     :else old-total)
+        new-avg    (if (pos? new-count) (/ new-total new-count) 0)]
+    (assoc snippet
+           :star_count new-count
+           :avg_rating new-avg
+           :weighted_rating (weighted-rating new-avg new-count))))
 
 (defn set-rating!
   "Optimistically update ratings atom and star_count in library-atom.
@@ -67,19 +103,14 @@
     (if (zero? new-rating)
       (swap! ratings dissoc id)
       (swap! ratings assoc id new-rating))
-    ;; Update star_count (number of raters) optimistically
-    (let [delta (cond
-                  (and (zero? old-r) (pos? new-rating))  1   ; new rating added
-                  (and (pos? old-r)  (zero? new-rating)) -1  ; rating removed
-                  :else 0)]                                   ; rating value changed
-      (when-not (zero? delta)
-        (swap! library-atom update :snippets
-               (fn [snips]
-                 (mapv (fn [s]
-                         (if (= (:id s) id)
-                           (update s :star_count + delta)
-                           s))
-                       snips)))))))
+    ;; Update rating summary optimistically so top-rated ordering changes immediately.
+    (swap! library-atom update :snippets
+           (fn [snips]
+             (mapv (fn [s]
+                     (if (= (:id s) id)
+                       (apply-rating-summary s old-r new-rating)
+                       s))
+                   snips)))))
 
 ;;; Rating persistence
 
@@ -96,8 +127,7 @@
                                       (if (map? data) (:data data) data))]
                      (reset! ratings
                        (into {} (map (fn [s]
-                                      [(or (:snippet_id s) (.-snippet_id s))
-                                       (or (:rating s)     (.-rating s))])
+                                      [(:snippet_id s) (:rating s)])
                                      stars)))))))
         (.catch (fn [e] (js/console.warn "[REPuLse] load-ratings! error:" (.-message e)))))))
 

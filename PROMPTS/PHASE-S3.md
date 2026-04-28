@@ -18,7 +18,7 @@ Depends on **S2** (backend, auth, API) being complete.
   code as a new snippet with metadata
 - 5-star rating row on each card (1–5; clicking the same star removes the rating)
 - Average rating + count shown next to the stars; default sort is **top rated**
-  (Bayesian weighted average that dampens snippets with few ratings)
+  (highest average rating first, with rating count as the tie-breaker)
 - Sort options: top rated, newest, most used, trending
 - Filter by author, by tag, by free-text search
 - Anonymous users can browse but can't submit or rate/report
@@ -77,8 +77,8 @@ effects — the more users, the more valuable the library becomes.
 - **5-star rating** — per user, per snippet (1–5 stars); clicking the active
   star removes the rating (sets to 0). Disabled when not logged in or for local
   snippets (slug IDs). Optimistic UI update + API call; revert on error.
-  Schema: `stars.rating integer 1–5`; `snippets.avg_rating` and
-  `snippets.weighted_rating` (Bayesian) maintained by trigger.
+  Schema: `stars.rating integer 1–5`; `snippets.avg_rating`,
+  `snippets.star_count`, and `snippets.weighted_rating` maintained by trigger.
 - **Usage counter** — incremented silently when user clicks **Insert** on a
   snippet. Anonymous usage still counts.
 - **Report** — small flag icon on card → prompt for reason → `POST /api/snippets/:id/report`.
@@ -89,13 +89,15 @@ effects — the more users, the more valuable the library becomes.
 
 | Sort | Implementation |
 |---|---|
-| Top rated *(default)* | `order by weighted_rating desc` — Bayesian avg: `(n·avg + 5·3) / (n+5)` |
+| Top rated *(default)* | `order by avg_rating desc, star_count desc, weighted_rating desc, created_at desc` |
 | Newest | `order by created_at desc` |
 | Most used | `order by usage_count desc` |
 | Trending | in-memory after fetch: `weighted_rating · e^(-age/7d) + 0.1·uses · e^(-age/14d)` |
 
-The Bayesian formula (`k=5, prior=3.0`) ensures snippets with few ratings stay near
-3.0 rather than dominating the top of the list with a single 5-star rating.
+The default ranking puts the highest-rated snippets first. Rating count breaks
+ties so a snippet with broader agreement outranks a snippet with the same average
+from fewer users. `weighted_rating` remains available as a secondary tie-breaker
+and for the trending score.
 
 Filters: by tag (array contains), by author (display_name ilike), by free text (title/description ILIKE).
 
@@ -108,7 +110,7 @@ Filters: by tag (array contains), by author (display_name ilike), by free text (
 - [ ] Submit modal opens, validates, and submits successfully
 - [ ] Submitted snippet appears in the browser after a refresh
 - [ ] 5-star rating row on each card; clicking active star removes rating; avg + count shown
-- [ ] Ratings sorted by Bayesian weighted average (`weighted_rating`) by default
+- [ ] Ratings sorted by average rating, then rating count by default
 - [ ] Usage counter increments when user clicks Insert
 - [ ] Report button creates a report row in Supabase
 - [ ] Sort dropdown: Top rated, Newest, Most used, Trending

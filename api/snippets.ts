@@ -49,7 +49,11 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
   // Ordering (skip for trending — sorted after fetch)
   if (sort === "newest")         query = query.order("created_at",       { ascending: false });
   else if (sort === "most-used") query = query.order("usage_count",      { ascending: false });
-  else if (sort !== "trending")  query = query.order("weighted_rating",  { ascending: false });
+  else if (sort !== "trending")  query = query
+    .order("avg_rating",      { ascending: false })
+    .order("star_count",      { ascending: false })
+    .order("weighted_rating", { ascending: false })
+    .order("created_at",      { ascending: false });
 
   if (tag) query = query.contains("tags", [tag]);
   if (q)   query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);

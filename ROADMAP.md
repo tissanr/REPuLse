@@ -889,7 +889,7 @@ Depends on S2.
 - **Share as snippet** button in snippet panel toolbar (logged-in only) — opens submit modal with title, description, tags, BPM pre-filled from current session; submits via `POST /api/snippets`
 - **Star toggle** on each card with optimistic UI update; reverts on API error; disabled for anonymous users
 - **Usage counter** incremented silently via `POST /api/snippets/:id/use` when Insert is clicked; uses `increment_snippet_usage` stored function for atomicity
-- **Sort dropdown**: newest, most starred, most used, trending (server-side; trending uses time-decay formula in TypeScript)
+- **Sort dropdown**: top rated, newest, most used, trending (server-side; trending uses time-decay formula in TypeScript)
 - **Author filter**: debounced input → server-side filter by profile `display_name`; free-text search remains client-side
 - **Report button** on each card → prompt for reason → `POST /api/snippets/:id/report` → row in `reports` table for manual review
 - **`reports` table** added to Supabase schema with RLS (insert by auth user only)
@@ -902,7 +902,7 @@ Depends on S2.
 - `api/snippets/[id]/report.ts` — new endpoint for moderation reports
 - `supabase/schema.sql` — `reports` table + `increment_snippet_usage` function
 - `app/src/repulse/api.cljs` — `track-usage!`, `report-snippet!`, updated `fetch-snippets`
-- `app/src/repulse/snippets.cljs` — `sort-order`, `author-filter`, `starred-ids` atoms; `reload!` function
+- `app/src/repulse/snippets.cljs` — `sort-order`, `author-filter`, `ratings` atoms; `reload!` function
 - `app/src/repulse/ui/snippet_submit_modal.cljs` — new submit modal with validation, Escape/click-outside close
 - `app/src/repulse/ui/snippet_panel.cljs` — sort dropdown, author filter, star/report buttons, share button
 

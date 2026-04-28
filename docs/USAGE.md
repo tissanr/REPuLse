@@ -85,10 +85,11 @@ The toolbar provides multiple ways to narrow the list:
 |---------|-------------|
 | **Search box** | Client-side filter by title, description, or code content |
 | **Tag dropdown** | Filter by genre/role tag |
-| **Sort dropdown** | `★ stars` (default) · `🕐 newest` · `📈 uses` · `🔥 trending` |
+| **Sort dropdown** | `★ top rated` (default) · `🕐 newest` · `📈 uses` · `🔥 trending` |
 | **Author input** | Server-side filter by author display name (debounced, 400 ms) |
 
-Trending score uses a time-decay formula: `stars × e^(-age/7d) + uses × e^(-age/14d)`.
+Top rated sorts by average rating first, then rating count. Trending score uses
+a time-decay formula based on weighted rating and usage.
 
 ### Preview and insert
 
@@ -2245,11 +2246,11 @@ The app exposes a serverless REST API on Vercel:
 | `/api/env` | GET | None | Returns public Supabase credentials |
 | `/api/snippets` | GET | None | List snippets (`?tag=`, `?q=`, `?sort=`, `?author=`, `?limit=`) |
 | `/api/snippets` | POST | Required | Create a new snippet |
-| `/api/snippets/:id/star` | POST | Required | Toggle star on a snippet |
+| `/api/snippets/:id/star` | POST | Required | Set or remove a 1-5 rating |
 | `/api/snippets/:id/use` | POST | None | Increment usage counter |
 | `/api/snippets/:id/report` | POST | Required | Flag snippet for moderation |
 
-**Sort values:** `most-starred` (default) · `newest` · `most-used` · `trending`
+**Sort values:** `top-rated` (default) · `newest` · `most-used` · `trending`
 
 ### Snippet loading
 
