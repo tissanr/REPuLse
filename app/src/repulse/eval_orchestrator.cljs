@@ -83,11 +83,7 @@
               (audio/stop!)
               (editor/clear-highlights!)
               (audio/play-track! :_ val on-beat editor/highlight-range!)
-              (fx/clear-track-effects! :_)
-              (doseq [{:keys [name params]} (:track-fx val)]
-                (fx/add-track-effect! :_ name)
-                (doseq [[k v] params]
-                  (fx/set-track-param! :_ name k v)))
+              (fx/apply-track-effects! :_ (:track-fx val))
               (set-playing! true)
               (set-output! "playing pattern — Alt+Enter to re-evaluate, (stop) to stop" :success))
 
@@ -123,7 +119,9 @@
             (let [defs-vals (vals @(:*defs* env))
                   pats      (filter core/pattern? defs-vals)]
               (when (= 1 (count pats))
-                (audio/play-track! :_ (first pats) on-beat editor/highlight-range!))))
+                (let [pat (first pats)]
+                  (audio/play-track! :_ pat on-beat editor/highlight-range!)
+                  (fx/apply-track-effects! :_ (:track-fx pat))))))
 
           ;; ── Apply restored mutes after first eval ─────────────────────────
           ;; pending-mutes is populated during session restore; applied once tracks exist.
