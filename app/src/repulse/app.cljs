@@ -376,7 +376,7 @@
 
   ;; Auto-load built-in visual plugins
   (when-not (contains? @loaded-plugins "spectrum")
-    (-> (plugin-loading/dynamic-import! "plugins/spectrum.js")
+    (-> (plugin-loading/dynamic-import! "/plugins/spectrum.js")
         (.then (fn [m]
                  (let [plug (.-default m)]
                    (plugins/register! plug (make-host))
@@ -391,17 +391,17 @@
     (fx/add-effect!    compressor-plugin/plugin)
     (swap! loaded-plugins conj "compressor"))
 
-  (doseq [url ["plugins/reverb.js"
-               "plugins/delay.js"
-               "plugins/filter.js"
-               "plugins/dattorro-reverb.js"
-               "plugins/chorus.js"
-               "plugins/phaser.js"
-               "plugins/tremolo.js"
-               "plugins/overdrive.js"
-               "plugins/bitcrusher.js"
-               "plugins/sidechain.js"
-               "plugins/distort.js"]]
+  (doseq [url ["/plugins/reverb.js"
+               "/plugins/delay.js"
+               "/plugins/filter.js"
+               "/plugins/dattorro-reverb.js"
+               "/plugins/chorus.js"
+               "/plugins/phaser.js"
+               "/plugins/tremolo.js"
+               "/plugins/overdrive.js"
+               "/plugins/bitcrusher.js"
+               "/plugins/sidechain.js"
+               "/plugins/distort.js"]]
     (when-not (contains? @loaded-plugins url)
       (-> (plugin-loading/dynamic-import! url)
           (.then (fn [m]
