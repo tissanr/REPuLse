@@ -73,12 +73,17 @@
             (when-let [view @editor/editor-view]
               (set-diagnostics! view nil nil nil)))
           (cond
-            ;; Pattern — start playing (legacy single-pattern mode)
+            ;; Pattern — start playing (legacy single-pattern mode).
+            ;; Uses play-track! on the anonymous :_ track so that :track-fx
+            ;; metadata (from per-track fx calls in ->>) is applied correctly.
+            ;; audio/start! did not create a track node, so output-for-track
+            ;; always fell back to master-gain and FX were silently skipped.
             (core/pattern? val)
             (do
               (audio/stop!)
               (editor/clear-highlights!)
-              (audio/start! val on-beat editor/highlight-range!)
+              (audio/play-track! :_ val on-beat editor/highlight-range!)
+              (fx/apply-track-effects! :_ (:track-fx val))
               (set-playing! true)
               (set-output! "playing pattern — Alt+Enter to re-evaluate, (stop) to stop" :success))
 
@@ -88,7 +93,7 @@
             (do
               (audio/stop!)
               (editor/clear-highlights!)
-              (audio/start! (core/pure val) on-beat editor/highlight-range!)
+              (audio/play-track! :_ (core/pure val) on-beat editor/highlight-range!)
               (set-playing! true)
               (set-output! "playing — Alt+Enter to re-evaluate, (stop) to stop" :success))
 
@@ -114,7 +119,9 @@
             (let [defs-vals (vals @(:*defs* env))
                   pats      (filter core/pattern? defs-vals)]
               (when (= 1 (count pats))
-                (audio/play-track! :_ (first pats) on-beat editor/highlight-range!))))
+                (let [pat (first pats)]
+                  (audio/play-track! :_ pat on-beat editor/highlight-range!)
+                  (fx/apply-track-effects! :_ (:track-fx pat))))))
 
           ;; ── Apply restored mutes after first eval ─────────────────────────
           ;; pending-mutes is populated during session restore; applied once tracks exist.

@@ -119,7 +119,7 @@ and calls into Rust/WASM for synthesis:
 | Lisp interpreter     | ClojureScript                     |
 | Audio synthesis      | Rust → WASM (via wasm-pack)       |
 | Audio scheduling     | Web Audio API + setInterval (JS)  |
-| Browser app          | ClojureScript + vanilla DOM       |
+| Browser app          | ClojureScript + CodeMirror 6 + vanilla DOM |
 | Build tool (CLJS)    | shadow-cljs                       |
 | Build tool (Rust)    | wasm-pack (`--target web`)        |
 | Package management   | npm workspaces                    |
@@ -133,8 +133,9 @@ and calls into Rust/WASM for synthesis:
   Never `(/ 1.0 4.0)` for time values.
 - **No external CLJS libraries** in `core` or `lisp`. Only `cljs.core` and `cljs.test`.
 - **No external Rust audio libraries** in `audio`. Only `web-sys` Web Audio API bindings.
-- **Errors are data.** Return `{:error "message"}` maps, not thrown exceptions, from
-  the Lisp evaluator.
+- **Errors surface as typed values at the boundary.** Reader/evaluator internals may throw
+  `ex-info`, but `repulse.lisp.core/eval-string` converts failures into a typed
+  eval-error result for the app layer.
 - **Fuzzy-match typos** in the evaluator. If a symbol is undefined, suggest the closest
   known name.
 - **Tests for core.** Every function in `packages/core` has a unit test in `cljs.test`.
@@ -153,7 +154,7 @@ npm run dev              # shadow-cljs watch app only (no WASM build)
 npm run dev:full         # build:wasm + shadow-cljs watch app
 
 # Tests
-npm run test             # cljs.test for packages/core
+npm run test             # shared cljs.test runner for core + lisp + app session tests
 
 # Lezer grammar (syntax highlighting) — run after editing repulse-lisp.grammar
 npm run gen:grammar      # regenerates parser.js + parser.terms.js
@@ -243,6 +244,8 @@ See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full deliv
 ## Phase lifecycle rules (IMPORTANT — follow these every time)
 
 These rules apply in every Claude Code session. They are not optional.
+
+**Branch protection:** `main` is protected. All changes go via Pull Request — never commit directly to `main`.
 
 ### Rule 1 — Creating a new phase prompt
 

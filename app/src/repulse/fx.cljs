@@ -119,6 +119,15 @@
     (when-let [entry (some #(when (= effect-name (:name %)) %) (:fx-chain tn))]
       (.setParam ^js (:plugin entry) param-name value))))
 
+(defn apply-track-effects!
+  "Replace a track's FX chain from pattern metadata."
+  [track-name track-fx]
+  (clear-track-effects! track-name)
+  (doseq [{:keys [name params]} track-fx]
+    (add-track-effect! track-name name)
+    (doseq [[k v] params]
+      (set-track-param! track-name name k v))))
+
 (defn bypass-track-effect!
   "Bypass or un-bypass an effect on a specific track."
   [track-name effect-name enabled]

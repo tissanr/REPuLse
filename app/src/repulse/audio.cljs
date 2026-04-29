@@ -9,6 +9,9 @@
 ;; Web Audio API scheduler
 ;; Based on Chris Wilson's "A Tale of Two Clocks"
 
+;; Set js/globalThis.__REPULSE_DEBUG__ = true (before page load) to enable verbose logging.
+(def ^:private debug? (boolean (.-__REPULSE_DEBUG__ js/globalThis)))
+
 (def ctx (atom nil))
 
 ;; AudioWorklet node — nil until loaded
@@ -40,7 +43,7 @@
    Falls back to JS synthesis if AudioWorklet is unavailable."
   [ac]
   (if-let [worklet (.-audioWorklet ac)]
-    (-> (.addModule worklet "/worklet.js")
+    (-> (.addModule worklet "worklet.js")
         (.then (fn []
                  (let [node (js/AudioWorkletNode. ac "repulse-processor"
                                                   #js {:outputChannelCount #js [2]})]
@@ -58,9 +61,10 @@
                    ;; ArrayBuffer to the worklet.  The worklet uses initSync()
                    ;; (new WebAssembly.Module + new WebAssembly.Instance) which
                    ;; avoids every browser-specific limitation we hit before.
-                   (-> (js/fetch "/repulse_audio_bg.wasm")
+                   (-> (js/fetch "repulse_audio_bg.wasm")
                        (.then (fn [resp] (.arrayBuffer resp)))
                        (.then (fn [buf]
+                                (when debug? (js/console.log "[REPuLse] WASM fetched, initializing worklet..."))
                                 (.. node -port
                                     (postMessage #js {:type "init" :wasmBytes buf}
                                                  #js [buf]))
@@ -322,6 +326,7 @@
    dest must be master-gain — worklet always outputs there and cannot be redirected."
   [value t amp attack decay pan dest]
   (when (and @worklet-ready? @worklet-node (= dest @master-gain))
+    (when debug? (js/console.log "[REPuLse] triggering WASM:" value "at t=" t "amp=" amp))
     (.. @worklet-node -port
         (postMessage #js {:type "trigger_v2" :value value :time t
                           :amp amp :attack attack :decay decay :pan pan}))
@@ -642,11 +647,14 @@
    Starts the scheduler if not already running."
   [track-name pattern on-beat-fn on-event-fn]
   (let [ac (get-ctx)]
-    (.resume ac)
+    ;; ensure-track-node!, arm-transitions!, and the state swap do not require a
+    ;; running context — they just create/connect nodes and update atoms.  Only
+    ;; ensure-running! must wait for .resume() so the scheduler clock is live.
     (ensure-track-node! ac track-name)
     (arm-transitions! track-name pattern ac)
     (swap! scheduler-state update :tracks assoc track-name pattern)
-    (ensure-running! ac on-beat-fn on-event-fn)))
+    (-> (.resume ac)
+        (.then (fn [] (ensure-running! ac on-beat-fn on-event-fn))))))
 
 (defn mute-track! [track-name]
   (swap! scheduler-state update :muted conj track-name))
