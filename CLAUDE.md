@@ -225,11 +225,11 @@ preview tools.
 | S1    | Local snippet library — curated JSON, browse/preview/insert    | ✓ delivered  |
 | R1    | Refactor — split app.cljs into focused modules                 | ✓ delivered  |
 | S2    | Backend & auth — Vercel + Supabase, GitHub OAuth, REST API     | ✓ delivered  |
-| S3    | Community snippets — submit, star, rank, usage tracking        | planned      |
+| S3    | Community snippets — submit, star, rank, usage tracking        | ✓ delivered  |
 | S4    | Snippet audio preview — sandboxed eval, waveforms, indicators  | planned      |
 | R2    | Refactor — decompose eval.cljs builtin map into domain namespaces | planned      |
 | DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | ✓ delivered  |
-| DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | planned      |
+| DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | ✓ delivered  |
 | DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | planned      |
 | DST4  | Distortion — oversampling wrapper (:oversample 1/2/4)          | planned      |
 | DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | planned   |

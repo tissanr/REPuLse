@@ -1,13 +1,15 @@
 (ns repulse.auth
   "GitHub OAuth via Supabase. Exports: auth-atom, supabase-client,
    init-auth!, login!, logout!, session, user-display-name."
-  (:require ["@supabase/supabase-js" :refer [createClient]]))
+  (:require ["@supabase/supabase-js" :refer [createClient]]
+            [goog.object :as gobj]))
 
 ;;; State
 
 (defonce auth-atom (atom nil))
 
 (defonce ^:private client-atom (atom nil))
+(defonce ^:private site-url-atom (atom nil))  ; set from /api/env on init
 
 ;;; Helpers
 
@@ -29,10 +31,14 @@
 
 (defn login! []
   (when-let [sb @client-atom]
-    (-> (js-invoke (.-auth sb) "signInWithOAuth"
-                   #js {:provider "github"
-                        :options  #js {:redirectTo (.-href js/location)}})
-        (.catch (fn [e] (js/console.error "[REPuLse/auth] login failed:" e))))))
+    ;; Use the deployment-specific siteUrl when available (covers Vercel preview
+    ;; deployments where location.origin may not be in Supabase's redirect allow-list).
+    ;; Falls back to current page URL when running locally or if siteUrl wasn't set.
+    (let [redirect-to (or @site-url-atom (.-href js/location))]
+      (-> (js-invoke (.-auth sb) "signInWithOAuth"
+                     #js {:provider "github"
+                          :options  #js {:redirectTo redirect-to}})
+          (.catch (fn [e] (js/console.error "[REPuLse/auth] login failed:" e)))))))
 
 (defn logout! []
   (when-let [sb @client-atom]
@@ -45,7 +51,7 @@
 (defn- apply-session! [session]
   (if session
     (reset! auth-atom {:session session
-                       :user (js->clj (.-user session) :keywordize-keys true)})
+                       :user (js->clj (gobj/get session "user") :keywordize-keys true)})
     (reset! auth-atom nil)))
 
 (defn init-auth!
@@ -58,16 +64,20 @@
                (if (.-ok r)
                  (.json r)
                  (throw (js/Error. (str "env fetch failed: " (.-status r)))))))
-      (.then (fn [env]
-               (let [url (.-url env)
-                     key (.-key env)]
+      (.then (fn [^js env]
+               (let [url      (gobj/get env "url")
+                     key      (gobj/get env "key")
+                     site-url (gobj/get env "siteUrl")]
+                 (when site-url (reset! site-url-atom site-url))
                  (when (and url key)
                    (let [sb (createClient url key)]
                      (reset! client-atom sb)
                      ;; Restore existing session
                      (-> (js-invoke (.-auth sb) "getSession")
                          (.then (fn [result]
-                                  (apply-session! (.. result -data -session))
+                                  (apply-session! (some-> result
+                                                          (gobj/get "data")
+                                                          (gobj/get "session")))
                                   (when on-change-fn (on-change-fn @auth-atom)))))
                      ;; Subscribe to future changes
                      (js-invoke (.-auth sb) "onAuthStateChange"
