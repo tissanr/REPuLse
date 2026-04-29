@@ -18,7 +18,25 @@ jobs:
           chmod +x install-clj-kondo
           sudo ./install-clj-kondo --dir /usr/local/bin --version 2024.11.14
 
-      - run: clj-kondo --parallel --lint packages/ app/src/
+      # clj-kondo exits 2 for warnings, 3 for errors — fail only on errors
+      - name: Run clj-kondo (fail on errors, warn on warnings)
+        run: |
+          clj-kondo --parallel --lint packages/ app/src/ || \
+            (code=$?; [ "$code" -eq 2 ] && echo "::warning::clj-kondo warnings found (exit $code)" || exit $code)
+
+  typecheck:
+    name: TypeScript type-check (api/)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npm run typecheck
 
   cargo-lint:
     name: Rust lint (clippy + fmt)

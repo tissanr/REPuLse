@@ -25,7 +25,7 @@ function setCors(req: VercelRequest, res: VercelResponse) {
 
 function userClient(jwt: string) {
   return createClient(
-    process.env.SUPABASE_URL!,
+    new URL(process.env.SUPABASE_URL!).origin,
     process.env.SUPABASE_ANON_KEY!,
     { global: { headers: { Authorization: `Bearer ${jwt}` } } }
   );
@@ -47,8 +47,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const jwt = auth.slice(7);
 
   const snippetId = req.query.id as string;
-  if (!snippetId) {
-    res.status(400).json({ error: "Missing snippet id" });
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!snippetId || !UUID_RE.test(snippetId)) {
+    res.status(400).json({ error: "Invalid snippet id (must be a UUID)" });
+    return;
+  }
+
+  // rating: 1–5 sets/updates; 0 removes the rating
+  const rating = Number(req.body?.rating ?? 0);
+  if (!Number.isInteger(rating) || rating < 0 || rating > 5) {
+    res.status(400).json({ error: "rating must be an integer 0–5 (0 = remove)" });
     return;
   }
 
@@ -59,25 +67,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // Toggle: try insert; if it exists, delete instead
-  const { error: insertErr } = await sb
-    .from("stars")
-    .insert({ user_id: user.id, snippet_id: snippetId });
-
-  if (insertErr) {
-    if (insertErr.code === "23505") {
-      // Already starred — remove the star
-      const { error: delErr } = await sb
-        .from("stars")
-        .delete()
-        .match({ user_id: user.id, snippet_id: snippetId });
-      if (delErr) { res.status(500).json({ error: delErr.message }); return; }
-      res.status(200).json({ starred: false });
-    } else {
-      res.status(500).json({ error: insertErr.message });
-    }
-    return;
+  if (rating === 0) {
+    const { error } = await sb
+      .from("stars")
+      .delete()
+      .match({ user_id: user.id, snippet_id: snippetId });
+    if (error) { res.status(500).json({ error: error.message }); return; }
+    res.status(200).json({ rating: 0 });
+  } else {
+    // Upsert — insert or update the rating for this user+snippet
+    const { error } = await sb
+      .from("stars")
+      .upsert(
+        { user_id: user.id, snippet_id: snippetId, rating },
+        { onConflict: "user_id,snippet_id" }
+      );
+    if (error) { res.status(500).json({ error: error.message }); return; }
+    res.status(200).json({ rating });
   }
-
-  res.status(200).json({ starred: true });
 }

@@ -10,12 +10,14 @@
             [repulse.ui.timeline :as timeline]
             [repulse.ui.context-panel :as ctx-panel]
             [repulse.ui.snippet-panel :as snippet-panel]
+            [repulse.ui.snippet-submit-modal :as snippet-submit-modal]
             [repulse.ui.auth-button :as auth-button]
             [repulse.auth :as auth]
             [repulse.env.builtins :as builtins]
             [repulse.eval-orchestrator :as eo]
             [repulse.plugin-loading :as plugin-loading]
             [repulse.content.first-visit :as first-visit]
+            [repulse.snippets :as snippets]
             [clojure.string :as str]
             ["./lisp-lang/providers.js" :refer [setBankNamesProvider setFxNamesProvider]]
             ["@codemirror/commands" :refer [selectAll]]))
@@ -156,6 +158,8 @@
 
 ;;; App bootstrap
 
+(defonce ^:private loaded-plugins (atom #{}))
+
 (defn on-play-btn-click []
   (if (audio/playing?)
     (do (audio/stop!)
@@ -170,7 +174,7 @@
   (let [app (el "app")]
     (set! (.-innerHTML app)
           (str "<header>"
-               (str "  <h1>" header-icon-svg " REPuLse</h1>")
+               "  <h1>" header-icon-svg " REPuLse</h1>"
                "  <div class=\"header-controls\">"
                "    <button id=\"tap-btn\" class=\"tap-btn\">tap</button>"
                "    <button id=\"share-btn\" class=\"share-btn\">share</button>"
@@ -255,9 +259,17 @@
   (reset! builtins/evaluate-ref eo/evaluate!)
 
   (build-dom!)
-  (auth/init-auth! :on-change-fn (fn [_] (auth-button/render-auth-btn!)))
+  (auth/init-auth! :on-change-fn (fn [session]
+                                    (auth-button/render-auth-btn!)
+                                    ;; Re-render snippet panel toolbar so "share" btn appears/disappears
+                                    (when @snippet-panel/visible?
+                                      (snippet-panel/show-panel!))
+                                    ;; Hydrate ratings atom so stars persist across reloads
+                                    (when session
+                                      (snippets/load-ratings!))))
   (auth-button/init!)
   (snippet-panel/init!)
+  (snippet-submit-modal/init!)
   (attach-slider-listener!)
   (builtins/ensure-env!)
   (setBankNamesProvider (fn [] (clj->js (samples/bank-names))))
@@ -363,17 +375,22 @@
     true) ;; true = capture phase
 
   ;; Auto-load built-in visual plugins
-  (-> (plugin-loading/dynamic-import! "/plugins/spectrum.js")
-      (.then (fn [m]
-               (let [plug (.-default m)]
-                 (plugins/register! plug (make-host))
-                 (mount-visual! plug))))
-      (.catch (fn [e]
-                (js/console.warn "[REPuLse] spectrum load failed:" e))))
+  (when-not (contains? @loaded-plugins "spectrum")
+    (-> (plugin-loading/dynamic-import! "/plugins/spectrum.js")
+        (.then (fn [m]
+                 (let [plug (.-default m)]
+                   (plugins/register! plug (make-host))
+                   (mount-visual! plug)
+                   (swap! loaded-plugins conj "spectrum"))))
+        (.catch (fn [e]
+                  (js/console.warn "[REPuLse] spectrum load failed:" e)))))
 
   ;; Auto-load built-in effect plugins
-  (plugins/register! compressor-plugin/plugin (make-host))
-  (fx/add-effect!    compressor-plugin/plugin)
+  (when-not (contains? @loaded-plugins "compressor")
+    (plugins/register! compressor-plugin/plugin (make-host))
+    (fx/add-effect!    compressor-plugin/plugin)
+    (swap! loaded-plugins conj "compressor"))
+
   (doseq [url ["/plugins/reverb.js"
                "/plugins/delay.js"
                "/plugins/filter.js"
@@ -383,14 +400,17 @@
                "/plugins/tremolo.js"
                "/plugins/overdrive.js"
                "/plugins/bitcrusher.js"
-               "/plugins/sidechain.js"]]
-    (-> (plugin-loading/dynamic-import! url)
-        (.then (fn [m]
-                 (let [plug (.-default m)]
-                   (plugins/register! plug (make-host))
-                   (fx/add-effect! plug))))
-        (.catch (fn [e]
-                  (js/console.warn "[REPuLse] Effect load failed:" url e)))))
+               "/plugins/sidechain.js"
+               "/plugins/distort.js"]]
+    (when-not (contains? @loaded-plugins url)
+      (-> (plugin-loading/dynamic-import! url)
+          (.then (fn [m]
+                   (let [plug (.-default m)]
+                     (plugins/register! plug (make-host))
+                     (fx/add-effect! plug)
+                     (swap! loaded-plugins conj url))))
+          (.catch (fn [e]
+                    (js/console.warn "[REPuLse] Effect load failed:" url e))))))
 
   ;; Reactive context panel + track panel
   (add-watch builtins/env-atom               ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))

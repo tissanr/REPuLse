@@ -32,16 +32,18 @@ const MAX_SEARCH_LEN  = 200;
 
 // ── Supabase clients ──────────────────────────────────────────────────────────
 
+// Strip any accidental path suffix (e.g. /rest/v1) — createClient needs the bare origin.
+function supabaseOrigin() {
+  return new URL(process.env.SUPABASE_URL!).origin;
+}
+
 function serviceClient() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  return createClient(supabaseOrigin(), process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 function userClient(jwt: string) {
   return createClient(
-    process.env.SUPABASE_URL!,
+    supabaseOrigin(),
     process.env.SUPABASE_ANON_KEY!,
     { global: { headers: { Authorization: `Bearer ${jwt}` } } }
   );
@@ -55,42 +57,70 @@ function extractBearer(req: VercelRequest): string | null {
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
+type SortOrder = "newest" | "top-rated" | "most-used" | "trending";
+
+function trendingScore(row: { weighted_rating: number; usage_count: number; created_at: string }): number {
+  const ageDays = (Date.now() - new Date(row.created_at).getTime()) / 86_400_000;
+  // Weight quality (Bayesian avg) + recency-decayed usage
+  return row.weighted_rating * Math.exp(-ageDays / 7) + row.usage_count * 0.1 * Math.exp(-ageDays / 14);
+}
+
 async function handleGet(req: VercelRequest, res: VercelResponse) {
   const sb = serviceClient();
-  const rawTag = typeof req.query.tag === "string" ? req.query.tag : undefined;
-  const rawQ   = typeof req.query.q   === "string" ? req.query.q   : undefined;
+  const rawTag = typeof req.query.tag    === "string" ? req.query.tag    : undefined;
+  const rawQ   = typeof req.query.q      === "string" ? req.query.q      : undefined;
+  const author = typeof req.query.author === "string" ? req.query.author : undefined;
+  const sort: SortOrder = (typeof req.query.sort === "string" ? req.query.sort : "top-rated") as SortOrder;
+  const limit  = Math.min(Number(req.query.limit) || 100, 200);
 
-  const tag = rawTag && rawTag.length <= MAX_TAG_LEN ? rawTag : undefined;
+  const tag = rawTag && rawTag.length <= MAX_TAG_LEN    ? rawTag : undefined;
   const q   = rawQ   && rawQ.length   <= MAX_SEARCH_LEN ? rawQ   : undefined;
 
-  if (rawTag && !tag) {
-    res.status(400).json({ error: "tag parameter too long" });
-    return;
-  }
-  if (rawQ && !q) {
-    res.status(400).json({ error: "q parameter too long" });
-    return;
-  }
-
-  const limit = Math.min(Number(req.query.limit) || 100, 200);
+  if (rawTag && !tag) { res.status(400).json({ error: "tag parameter too long" }); return; }
+  if (rawQ   && !q)   { res.status(400).json({ error: "q parameter too long" });   return; }
 
   let query = sb
     .from("snippets")
     .select(
-      "id, author_id, title, description, code, tags, bpm, star_count, usage_count, created_at, profiles(display_name, avatar_url)"
-    )
-    .order("star_count", { ascending: false })
-    .limit(limit);
+      "id, author_id, title, description, code, tags, bpm, star_count, avg_rating, weighted_rating, usage_count, created_at, profiles!author_id(display_name, avatar_url)"
+    );
+
+  // Ordering (skip for trending — sorted after fetch)
+  if (sort === "newest")         query = query.order("created_at",       { ascending: false });
+  else if (sort === "most-used") query = query.order("usage_count",      { ascending: false });
+  else if (sort !== "trending")  query = query
+    .order("avg_rating",      { ascending: false })
+    .order("star_count",      { ascending: false })
+    .order("weighted_rating", { ascending: false })
+    .order("created_at",      { ascending: false });
 
   if (tag) query = query.contains("tags", [tag]);
   if (q)   query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
 
-  const { data, error } = await query;
-  if (error) {
-    res.status(500).json({ error: error.message });
-    return;
+  // Author filter: find profile IDs matching display_name
+  if (author) {
+    const { data: profiles } = await sb
+      .from("profiles")
+      .select("id")
+      .ilike("display_name", `%${author}%`);
+    const ids = (profiles ?? []).map((p: { id: string }) => p.id);
+    if (ids.length === 0) { res.status(200).json([]); return; }
+    query = query.in("author_id", ids);
   }
-  res.status(200).json(data);
+
+  // limit must be applied last — Supabase JS v2 query builder requirement
+  const effectiveLimit = sort === "trending" ? Math.min(limit * 3, 200) : limit;
+  query = query.limit(effectiveLimit);
+
+  const { data, error } = await query;
+  if (error) { res.status(500).json({ error: error.message }); return; }
+
+  let result = data ?? [];
+  if (sort === "trending") {
+    result = [...result].sort((a, b) => trendingScore(b) - trendingScore(a)).slice(0, limit);
+  }
+
+  res.status(200).json(result);
 }
 
 async function handlePost(req: VercelRequest, res: VercelResponse) {
@@ -157,10 +187,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     .select()
     .single();
 
-  if (error) {
-    res.status(500).json({ error: error.message });
-    return;
-  }
+  if (error) { res.status(500).json({ error: error.message }); return; }
   res.status(201).json(data);
 }
 

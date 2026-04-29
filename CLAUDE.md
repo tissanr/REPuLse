@@ -119,7 +119,7 @@ and calls into Rust/WASM for synthesis:
 | Lisp interpreter     | ClojureScript                     |
 | Audio synthesis      | Rust → WASM (via wasm-pack)       |
 | Audio scheduling     | Web Audio API + setInterval (JS)  |
-| Browser app          | ClojureScript + vanilla DOM       |
+| Browser app          | ClojureScript + CodeMirror 6 + vanilla DOM |
 | Build tool (CLJS)    | shadow-cljs                       |
 | Build tool (Rust)    | wasm-pack (`--target web`)        |
 | Package management   | npm workspaces                    |
@@ -133,8 +133,9 @@ and calls into Rust/WASM for synthesis:
   Never `(/ 1.0 4.0)` for time values.
 - **No external CLJS libraries** in `core` or `lisp`. Only `cljs.core` and `cljs.test`.
 - **No external Rust audio libraries** in `audio`. Only `web-sys` Web Audio API bindings.
-- **Errors are data.** Return `{:error "message"}` maps, not thrown exceptions, from
-  the Lisp evaluator.
+- **Errors surface as typed values at the boundary.** Reader/evaluator internals may throw
+  `ex-info`, but `repulse.lisp.core/eval-string` converts failures into a typed
+  eval-error result for the app layer.
 - **Fuzzy-match typos** in the evaluator. If a symbol is undefined, suggest the closest
   known name.
 - **Tests for core.** Every function in `packages/core` has a unit test in `cljs.test`.
@@ -153,7 +154,7 @@ npm run dev              # shadow-cljs watch app only (no WASM build)
 npm run dev:full         # build:wasm + shadow-cljs watch app
 
 # Tests
-npm run test             # cljs.test for packages/core
+npm run test             # shared cljs.test runner for core + lisp + app session tests
 
 # Lezer grammar (syntax highlighting) — run after editing repulse-lisp.grammar
 npm run gen:grammar      # regenerates parser.js + parser.terms.js
@@ -224,16 +225,17 @@ preview tools.
 | S1    | Local snippet library — curated JSON, browse/preview/insert    | ✓ delivered  |
 | R1    | Refactor — split app.cljs into focused modules                 | ✓ delivered  |
 | S2    | Backend & auth — Vercel + Supabase, GitHub OAuth, REST API     | ✓ delivered  |
-| S3    | Community snippets — submit, star, rank, usage tracking        | planned      |
+| S3    | Community snippets — submit, star, rank, usage tracking        | ✓ delivered  |
 | S4    | Snippet audio preview — sandboxed eval, waveforms, indicators  | planned      |
 | R2    | Refactor — decompose eval.cljs builtin map into domain namespaces | planned      |
-| DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | planned      |
-| DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | planned      |
+| DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | ✓ delivered  |
+| DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | ✓ delivered  |
 | DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | planned      |
 | DST4  | Distortion — oversampling wrapper (:oversample 1/2/4)          | planned      |
 | DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | planned   |
 | DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | planned      |
 | CI1   | CI pipeline — GitHub Actions: tests, lint, Rust, grammar drift | ✓ delivered  |
+| DOC1  | User docs — split manual, tutorials, cookbook, reference       | planned      |
 
 See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full delivery notes.
 
@@ -242,6 +244,8 @@ See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full deliv
 ## Phase lifecycle rules (IMPORTANT — follow these every time)
 
 These rules apply in every Claude Code session. They are not optional.
+
+**Branch protection:** `main` is protected. All changes go via Pull Request — never commit directly to `main`.
 
 ### Rule 1 — Creating a new phase prompt
 

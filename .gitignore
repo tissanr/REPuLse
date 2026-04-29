@@ -8,6 +8,7 @@ app/public/cljs-runtime/
 app/public/manifest.edn
 out/
 .shadow-cljs/
+.tsc-out/
 
 # Clojure/LSP tooling caches
 .clj-kondo/.cache/
@@ -34,3 +35,6 @@ app/public/repulse_audio.js
 
 # aider
 .aider*
+
+.gemini/
+gha-creds-*.json

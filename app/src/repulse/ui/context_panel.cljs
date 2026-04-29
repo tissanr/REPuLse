@@ -70,6 +70,10 @@
    "tremolo"         {"depth"    {:min 0   :max 1    :step 0.01}
                       "rate"     {:min 0.1 :max 20   :step 0.1}}
    "overdrive"       {"drive"    {:min 0   :max 1    :step 0.01}}
+   "distort"         {"drive"    {:min 1   :max 100   :step 0.1}
+                      "tone"     {:min 200 :max 20000 :step 1}
+                      "mix"      {:min 0   :max 1     :step 0.01}
+                      "asym"     {:min -1  :max 1     :step 0.01}}
    "bitcrusher"      {"wet"       {:min 0    :max 1   :step 0.01}}
    "sidechain"       {"amount"    {:min 0    :max 1   :step 0.01}}
    "compressor"      {"wet"       {:min 0    :max 1   :step 0.01}
@@ -89,6 +93,7 @@
    "phaser"          "wet"
    "tremolo"         "depth"
    "overdrive"       "drive"
+   "distort"         "drive"
    "bitcrusher"      "wet"
    "sidechain"       "amount"
    "compressor"      "wet"})

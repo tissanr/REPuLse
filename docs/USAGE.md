@@ -71,28 +71,55 @@ To stop: type `(stop)` and evaluate it, or click **■ stop**.
 
 ## Snippet library
 
-The snippet library gives you 24 ready-to-play patterns — rhythms, basslines, melodies, chords, and FX demos — that you can audition and insert into your session.
+The snippet library lets you browse community-submitted patterns — rhythms, basslines, melodies, chords, and FX demos — that you can audition and insert into your session.
 
 ### Opening the panel
 
 Click the **lib** button in the header to open or close the snippet browser. You can also press **Escape** to close it.
 
-### Browsing and filtering
+### Browsing, sorting, and filtering
 
-- **Search box** — type any word to filter by title, description, or code content
-- **Tag dropdown** — filter by role: `rhythm`, `bassline`, `melody`, `chord-progression`, `fx-demo`, `house`, `techno`, `dnb`, `jazz`, `euclidean`, `polyrhythm`, `ambient`, `breakbeat`, `minimal`, `percussive`
+The toolbar provides multiple ways to narrow the list:
+
+| Control | Description |
+|---------|-------------|
+| **Search box** | Client-side filter by title, description, or code content |
+| **Tag dropdown** | Filter by genre/role tag |
+| **Sort dropdown** | `★ top rated` (default) · `🕐 newest` · `📈 uses` · `🔥 trending` |
+| **Author input** | Server-side filter by author display name (debounced, 400 ms) |
+
+Top rated sorts by average rating first, then rating count. Trending score uses
+a time-decay formula based on weighted rating and usage.
 
 ### Preview and insert
 
-Each card has three buttons:
+Each card has three action buttons:
 
 | Button | Action |
 |---|---|
 | `▶ solo` | Stops the current session and plays the snippet in isolation |
 | `⊕ mix` | Adds the snippet track alongside your running session |
-| `↓ insert` | Appends the snippet code to the editor and triggers `(upd)` |
+| `↓ insert` | Appends the snippet code to the editor and triggers `(upd)`; increments usage counter |
 
 Insert warns you if the snippet's track name already exists in your session.
+
+### Star and report
+
+Each card also has:
+
+| Element | Description |
+|---------|-------------|
+| **★ N** button | Toggle star (requires sign-in); optimistic update, reverts on error |
+| **⚑ report** button | Flag the snippet for review (requires sign-in); prompts for optional reason |
+
+### Share as snippet (sign-in required)
+
+Click **+ share** in the snippet panel toolbar to open the submit modal:
+
+1. Fill in **Title** (required), Description, Tags (comma-separated), and BPM (pre-filled from current session)
+2. The **Code preview** shows what will be submitted (current editor content)
+3. Click **submit** — on success the panel refreshes and a toast confirms the submission
+4. Close at any time with **cancel**, **Escape**, or clicking outside the modal
 
 ### Lisp built-in
 
@@ -271,7 +298,7 @@ These patterns are **wrong** in REPuLse. If you see AI-generated code that looks
 ;; WRONG — these functions do not exist in REPuLse
 (osc-wt :table "heavy-growl")    ; no wavetable oscillator function
 (filter-lp :cutoff 800)          ; no filter-lp — use (fx :filter 800)
-(distort :drive 2.0)             ; no distort — use (fx :overdrive 0.7)
+(distort :drive 2.0)             ; no inline distort fn — use (fx :distort :drive 8)
 (adsr :a 0.01 :d 0.3 :s 0.1)    ; no adsr — use (attack 0.01) (decay 0.3) (release 0.1)
 (lfo :rate 0.25)                 ; no lfo function
 (mod source amount)              ; no mod routing
@@ -280,7 +307,7 @@ These patterns are **wrong** in REPuLse. If you see AI-generated code that looks
 ;; RIGHT equivalents
 (synth :saw)                              ; voice selection
 (fx :filter 800)                          ; filtering
-(fx :overdrive 0.7)                       ; distortion
+(fx :distort :drive 8)                    ; distortion
 (->> pat (attack 0.01) (decay 0.3))       ; envelope params
 ;; LFO-like variation: use (every), (sometimes), patterned params
 (amp (seq 0.9 0.4 0.9 0.4) pat)          ; patterned amplitude
@@ -1624,7 +1651,7 @@ Route a track through its own private effect chain by placing `fx` inside the `-
 (track :bass
   (->> (seq :c2 :_ :eb2 :_)
        (fx :filter 600)
-       (fx :overdrive 0.6)))
+       (fx :distort :drive 6 :asym 0.4 :tone 1800)))
 
 ;; Named params work the same as global fx
 (track :snare
@@ -1787,6 +1814,28 @@ Waveshaper saturation with a tone control.
 (fx :overdrive :drive 0.8 :tone 4000)
 ```
 
+#### `distort` — soft clipping waveshaper
+
+Musical soft clipping with selectable curves, gain compensation, half-wave asymmetry,
+a DC blocker, post-filter tone control, and a full dry/wet blend.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Drive     | `drive` / positional | `4.0` | 1–100 |
+| Tone      | `tone` | `3000` Hz | 200–20000 Hz |
+| Mix       | `mix` | `1.0` | 0–1 |
+| Asymmetry | `asym` | `0.0` | -1–1 |
+| Algorithm | `algo` | `:tanh` | `:tanh` `:sigmoid` `:atan` |
+
+```lisp
+(fx :distort)
+(fx :distort :drive 8)
+(fx :distort :drive 6 :asym 0.4 :tone 2500)
+(fx :distort :drive 20 :asym 0.8 :algo :atan)
+(fx :distort :drive 6 :tone 1800 :algo :atan)
+(fx :distort :drive 2 :tone 1500 :mix 0.6 :algo :sigmoid)
+```
+
 #### `bitcrusher` — lo-fi bit/sample-rate reduction
 
 Reduces bit depth and sample rate for crunchy, glitchy textures. Uses an AudioWorklet.
@@ -1842,7 +1891,7 @@ so the duck is perfectly in time regardless of BPM, with zero look-ahead latency
 The default signal chain is:
 ```
 synthesis → reverb → delay → filter → compressor → dattorro-reverb
-         → chorus → phaser → tremolo → overdrive → bitcrusher → sidechain → output
+         → chorus → phaser → tremolo → overdrive → distort → bitcrusher → sidechain → output
 ```
 
 `sidechain` sits at the end of the chain so it ducks the fully-processed signal.
@@ -2179,7 +2228,7 @@ do-expr    = "(do" expr+ ")"
 
 ---
 
-## User accounts & community (Phase S2)
+## User accounts & community
 
 ### Sign in
 
@@ -2188,8 +2237,8 @@ Supabase OAuth. After sign-in your avatar and username appear in the button.
 
 Click the button again while signed in to sign out.
 
-Anonymous users can still browse and play all built-in snippets — sign-in is only
-required to submit snippets (Phase S3) or star them.
+Anonymous users can browse, preview, and insert any snippet — sign-in is required
+to submit, star, or report snippets.
 
 ### REST API
 
@@ -2198,13 +2247,17 @@ The app exposes a serverless REST API on Vercel:
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
 | `/api/env` | GET | None | Returns public Supabase credentials |
-| `/api/snippets` | GET | None | List snippets (supports `?tag=`, `?q=`, `?limit=`) |
+| `/api/snippets` | GET | None | List snippets (`?tag=`, `?q=`, `?sort=`, `?author=`, `?limit=`) |
 | `/api/snippets` | POST | Required | Create a new snippet |
-| `/api/snippets/:id/star` | POST | Required | Toggle star on a snippet |
+| `/api/snippets/:id/star` | POST | Required | Set or remove a 1-5 rating |
+| `/api/snippets/:id/use` | POST | None | Increment usage counter |
+| `/api/snippets/:id/report` | POST | Required | Flag snippet for moderation |
+
+**Sort values:** `top-rated` (default) · `newest` · `most-used` · `trending`
 
 ### Snippet loading
 
-- **Anonymous:** the snippet browser loads `app/public/snippets/library.json` (the 24 built-in patterns)
+- **Anonymous:** the snippet browser loads `app/public/snippets/library.json` (the curated built-in patterns)
 - **Authenticated:** the snippet browser loads snippets from `/api/snippets` (Supabase DB), falling back to static JSON on error
 
 ---
