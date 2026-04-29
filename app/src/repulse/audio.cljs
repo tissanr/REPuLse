@@ -647,12 +647,14 @@
    Starts the scheduler if not already running."
   [track-name pattern on-beat-fn on-event-fn]
   (let [ac (get-ctx)]
+    ;; ensure-track-node!, arm-transitions!, and the state swap do not require a
+    ;; running context — they just create/connect nodes and update atoms.  Only
+    ;; ensure-running! must wait for .resume() so the scheduler clock is live.
+    (ensure-track-node! ac track-name)
+    (arm-transitions! track-name pattern ac)
+    (swap! scheduler-state update :tracks assoc track-name pattern)
     (-> (.resume ac)
-        (.then (fn []
-                 (ensure-track-node! ac track-name)
-                 (arm-transitions! track-name pattern ac)
-                 (swap! scheduler-state update :tracks assoc track-name pattern)
-                 (ensure-running! ac on-beat-fn on-event-fn))))))
+        (.then (fn [] (ensure-running! ac on-beat-fn on-event-fn))))))
 
 (defn mute-track! [track-name]
   (swap! scheduler-state update :muted conj track-name))
