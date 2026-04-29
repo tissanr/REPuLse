@@ -9,6 +9,9 @@
 ;; Web Audio API scheduler
 ;; Based on Chris Wilson's "A Tale of Two Clocks"
 
+;; Set js/globalThis.__REPULSE_DEBUG__ = true (before page load) to enable verbose logging.
+(def ^:private debug? (boolean (.-__REPULSE_DEBUG__ js/globalThis)))
+
 (def ctx (atom nil))
 
 ;; AudioWorklet node — nil until loaded
@@ -61,7 +64,7 @@
                    (-> (js/fetch "repulse_audio_bg.wasm")
                        (.then (fn [resp] (.arrayBuffer resp)))
                        (.then (fn [buf]
-                                (js/console.log "[REPuLse] WASM fetched, initializing worklet...")
+                                (when debug? (js/console.log "[REPuLse] WASM fetched, initializing worklet..."))
                                 (.. node -port
                                     (postMessage #js {:type "init" :wasmBytes buf}
                                                  #js [buf]))
@@ -323,7 +326,7 @@
    dest must be master-gain — worklet always outputs there and cannot be redirected."
   [value t amp attack decay pan dest]
   (when (and @worklet-ready? @worklet-node (= dest @master-gain))
-    (js/console.log "[REPuLse] triggering WASM:" value "at t=" t "amp=" amp)
+    (when debug? (js/console.log "[REPuLse] triggering WASM:" value "at t=" t "amp=" amp))
     (.. @worklet-node -port
         (postMessage #js {:type "trigger_v2" :value value :time t
                           :amp amp :attack attack :decay decay :pan pan}))
