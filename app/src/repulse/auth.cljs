@@ -1,7 +1,8 @@
 (ns repulse.auth
   "GitHub OAuth via Supabase. Exports: auth-atom, supabase-client,
    init-auth!, login!, logout!, session, user-display-name."
-  (:require ["@supabase/supabase-js" :refer [createClient]]))
+  (:require ["@supabase/supabase-js" :refer [createClient]]
+            [goog.object :as gobj]))
 
 ;;; State
 
@@ -50,7 +51,7 @@
 (defn- apply-session! [session]
   (if session
     (reset! auth-atom {:session session
-                       :user (js->clj (.-user session) :keywordize-keys true)})
+                       :user (js->clj (gobj/get session "user") :keywordize-keys true)})
     (reset! auth-atom nil)))
 
 (defn init-auth!
@@ -64,9 +65,9 @@
                  (.json r)
                  (throw (js/Error. (str "env fetch failed: " (.-status r)))))))
       (.then (fn [^js env]
-               (let [url      (.-url env)
-                     key      (.-key env)
-                     site-url (.-siteUrl env)]
+               (let [url      (gobj/get env "url")
+                     key      (gobj/get env "key")
+                     site-url (gobj/get env "siteUrl")]
                  (when site-url (reset! site-url-atom site-url))
                  (when (and url key)
                    (let [sb (createClient url key)]
@@ -74,7 +75,9 @@
                      ;; Restore existing session
                      (-> (js-invoke (.-auth sb) "getSession")
                          (.then (fn [result]
-                                  (apply-session! (.. result -data -session))
+                                  (apply-session! (some-> result
+                                                          (gobj/get "data")
+                                                          (gobj/get "session")))
                                   (when on-change-fn (on-change-fn @auth-atom)))))
                      ;; Subscribe to future changes
                      (js-invoke (.-auth sb) "onAuthStateChange"

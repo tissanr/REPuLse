@@ -25,11 +25,11 @@
 
 ;;; Data access
 
-(defn all-snippets [] (:snippets @library-atom))
+(defn all-snippets [] (or (:snippets @library-atom) []))
 
 (defn all-tags []
   (->> (all-snippets)
-       (mapcat :tags)
+       (mapcat #(or (:tags %) []))
        distinct
        sort))
 
@@ -64,14 +64,13 @@
   (let [q       (when (and query (seq (cstr/trim query)))
                   (cstr/lower-case (cstr/trim query)))
         snippets (all-snippets)]
-    (->> snippets
-         (cond->>
-           tag (filter #(some #{tag} (:tags %)))
-           q   (filter (fn [s]
-                         (or (cstr/includes? (cstr/lower-case (or (:title s) "")) q)
-                             (cstr/includes? (cstr/lower-case (or (:description s) "")) q)
-                             (cstr/includes? (cstr/lower-case (or (:code s) "")) q)))))
-         (apply-client-sort))))
+    (apply-client-sort
+      (cond->> snippets
+        tag (filter #(some #{tag} (or (:tags %) [])))
+        q   (filter (fn [s]
+                      (or (cstr/includes? (cstr/lower-case (or (:title s) "")) q)
+                          (cstr/includes? (cstr/lower-case (or (:description s) "")) q)
+                          (cstr/includes? (cstr/lower-case (or (:code s) "")) q))))))))
 
 ;;; Rating helpers
 
@@ -124,6 +123,14 @@
 
 ;;; Rating persistence
 
+(defn- error-message [e]
+  (or (some-> e .-message) (str e)))
+
+(defn- api-result [result fallback-msg]
+  (if (map? result)
+    result
+    {:error fallback-msg}))
+
 (defn load-ratings!
   "Fetch the logged-in user's star ratings from the API and populate `ratings`.
    No-ops when not authenticated."
@@ -131,15 +138,19 @@
   (when (auth/session)
     (-> (api/fetch-my-ratings!)
         (.then (fn [result]
-                 (if-let [err (:error result)]
-                   (js/console.warn "[REPuLse] load-ratings! failed:" err)
-                   (when-let [stars (let [data (:data result)]
-                                      (if (map? data) (:data data) data))]
-                     (reset! ratings
-                       (into {} (map (fn [s]
-                                      [(:snippet_id s) (:rating s)])
-                                     stars)))))))
-        (.catch (fn [e] (js/console.warn "[REPuLse] load-ratings! error:" (.-message e)))))))
+                 (let [result (api-result result "Malformed ratings response")]
+                   (if-let [err (:error result)]
+                     (js/console.warn "[REPuLse] load-ratings! failed:" err)
+                     (let [data  (:data result)
+                           stars (if (map? data) (:data data) data)]
+                       (when (sequential? stars)
+                         (reset! ratings
+                                 (into {}
+                                       (keep (fn [s]
+                                               (when (map? s)
+                                                 [(:snippet_id s) (:rating s)])))
+                                       stars))))))))
+        (.catch (fn [e] (js/console.warn "[REPuLse] load-ratings! error:" (error-message e)))))))
 
 ;;; Loading
 
@@ -167,12 +178,17 @@
                                    :author @author-filter}
                                   opts))
        (.then (fn [result]
-                (if-let [snippets (:data result)]
-                  (apply-api-result! snippets)
-                  (do (js/console.warn "[REPuLse] API snippet load failed:" (:error result))
-                      (load-from-static!)))))
+                (let [result (api-result result "Malformed snippet API response")]
+                  (if-let [snippets (:data result)]
+                    (if (sequential? snippets)
+                      (apply-api-result! snippets)
+                      (do (js/console.warn "[REPuLse] API snippet load failed:"
+                                            "Malformed snippet API response")
+                          (load-from-static!)))
+                    (do (js/console.warn "[REPuLse] API snippet load failed:" (:error result))
+                        (load-from-static!))))))
        (.catch (fn [e]
-                 (js/console.warn "[REPuLse] API snippet fetch error:" e)
+                 (js/console.warn "[REPuLse] API snippet fetch error:" (error-message e))
                  (load-from-static!))))))
 
 (defn load!

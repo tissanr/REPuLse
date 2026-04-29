@@ -2,13 +2,15 @@
   "Thin fetch wrapper for the REPuLse REST API.
    All calls return a JS Promise that resolves to {:data ...} or {:error ...}."
   (:require [clojure.string :as str]
+            [goog.object :as gobj]
             [repulse.auth :as auth]))
 
 (defn- auth-headers []
-  (if-let [sess (auth/session)]
-    #js {"Authorization" (str "Bearer " (.-access_token sess))
-         "Content-Type"  "application/json"}
-    #js {"Content-Type" "application/json"}))
+  (let [token (some-> (auth/session) (gobj/get "access_token"))]
+    (if token
+      #js {"Authorization" (str "Bearer " token)
+           "Content-Type"  "application/json"}
+      #js {"Content-Type" "application/json"})))
 
 (defn- parse-response [resp]
   (-> (.json resp)
