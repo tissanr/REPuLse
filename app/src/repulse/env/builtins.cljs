@@ -88,11 +88,7 @@
                            (do
                              (audio/play-track! name' pat' on-beat editor/highlight-range!)
                              ;; Apply per-track FX from pattern metadata (clear old chain first)
-                             (fx/clear-track-effects! name')
-                             (doseq [{:keys [name params]} (:track-fx pat')]
-                               (fx/add-track-effect! name' name)
-                               (doseq [[k v] params]
-                                 (fx/set-track-param! name' name k v)))
+                             (fx/apply-track-effects! name' (:track-fx pat'))
                              (set-playing! true)
                              (str "=> track :" (cljs.core/name name') " playing"))
                            "Error: second argument to track must be a pattern")))
@@ -153,6 +149,7 @@
                                  (cond
                                    (core/pattern? val)
                                    (do (audio/play-track! :_ val on-beat editor/highlight-range!)
+                                       (fx/apply-track-effects! :_ (:track-fx val))
                                        (set-playing! true)
                                        (set-output! "updated" :success))
                                    (nil? val) nil

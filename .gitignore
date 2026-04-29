@@ -34,3 +34,6 @@ app/public/repulse_audio.js
 
 # aider
 .aider*
+
+.gemini/
+gha-creds-*.json
