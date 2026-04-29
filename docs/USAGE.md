@@ -71,28 +71,55 @@ To stop: type `(stop)` and evaluate it, or click **■ stop**.
 
 ## Snippet library
 
-The snippet library gives you 24 ready-to-play patterns — rhythms, basslines, melodies, chords, and FX demos — that you can audition and insert into your session.
+The snippet library lets you browse community-submitted patterns — rhythms, basslines, melodies, chords, and FX demos — that you can audition and insert into your session.
 
 ### Opening the panel
 
 Click the **lib** button in the header to open or close the snippet browser. You can also press **Escape** to close it.
 
-### Browsing and filtering
+### Browsing, sorting, and filtering
 
-- **Search box** — type any word to filter by title, description, or code content
-- **Tag dropdown** — filter by role: `rhythm`, `bassline`, `melody`, `chord-progression`, `fx-demo`, `house`, `techno`, `dnb`, `jazz`, `euclidean`, `polyrhythm`, `ambient`, `breakbeat`, `minimal`, `percussive`
+The toolbar provides multiple ways to narrow the list:
+
+| Control | Description |
+|---------|-------------|
+| **Search box** | Client-side filter by title, description, or code content |
+| **Tag dropdown** | Filter by genre/role tag |
+| **Sort dropdown** | `★ top rated` (default) · `🕐 newest` · `📈 uses` · `🔥 trending` |
+| **Author input** | Server-side filter by author display name (debounced, 400 ms) |
+
+Top rated sorts by average rating first, then rating count. Trending score uses
+a time-decay formula based on weighted rating and usage.
 
 ### Preview and insert
 
-Each card has three buttons:
+Each card has three action buttons:
 
 | Button | Action |
 |---|---|
 | `▶ solo` | Stops the current session and plays the snippet in isolation |
 | `⊕ mix` | Adds the snippet track alongside your running session |
-| `↓ insert` | Appends the snippet code to the editor and triggers `(upd)` |
+| `↓ insert` | Appends the snippet code to the editor and triggers `(upd)`; increments usage counter |
 
 Insert warns you if the snippet's track name already exists in your session.
+
+### Star and report
+
+Each card also has:
+
+| Element | Description |
+|---------|-------------|
+| **★ N** button | Toggle star (requires sign-in); optimistic update, reverts on error |
+| **⚑ report** button | Flag the snippet for review (requires sign-in); prompts for optional reason |
+
+### Share as snippet (sign-in required)
+
+Click **+ share** in the snippet panel toolbar to open the submit modal:
+
+1. Fill in **Title** (required), Description, Tags (comma-separated), and BPM (pre-filled from current session)
+2. The **Code preview** shows what will be submitted (current editor content)
+3. Click **submit** — on success the panel refreshes and a toast confirms the submission
+4. Close at any time with **cancel**, **Escape**, or clicking outside the modal
 
 ### Lisp built-in
 
@@ -2201,7 +2228,7 @@ do-expr    = "(do" expr+ ")"
 
 ---
 
-## User accounts & community (Phase S2)
+## User accounts & community
 
 ### Sign in
 
@@ -2210,8 +2237,8 @@ Supabase OAuth. After sign-in your avatar and username appear in the button.
 
 Click the button again while signed in to sign out.
 
-Anonymous users can still browse and play all built-in snippets — sign-in is only
-required to submit snippets (Phase S3) or star them.
+Anonymous users can browse, preview, and insert any snippet — sign-in is required
+to submit, star, or report snippets.
 
 ### REST API
 
@@ -2220,13 +2247,17 @@ The app exposes a serverless REST API on Vercel:
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
 | `/api/env` | GET | None | Returns public Supabase credentials |
-| `/api/snippets` | GET | None | List snippets (supports `?tag=`, `?q=`, `?limit=`) |
+| `/api/snippets` | GET | None | List snippets (`?tag=`, `?q=`, `?sort=`, `?author=`, `?limit=`) |
 | `/api/snippets` | POST | Required | Create a new snippet |
-| `/api/snippets/:id/star` | POST | Required | Toggle star on a snippet |
+| `/api/snippets/:id/star` | POST | Required | Set or remove a 1-5 rating |
+| `/api/snippets/:id/use` | POST | None | Increment usage counter |
+| `/api/snippets/:id/report` | POST | Required | Flag snippet for moderation |
+
+**Sort values:** `top-rated` (default) · `newest` · `most-used` · `trending`
 
 ### Snippet loading
 
-- **Anonymous:** the snippet browser loads `app/public/snippets/library.json` (the 24 built-in patterns)
+- **Anonymous:** the snippet browser loads `app/public/snippets/library.json` (the curated built-in patterns)
 - **Authenticated:** the snippet browser loads snippets from `/api/snippets` (Supabase DB), falling back to static JSON on error
 
 ---

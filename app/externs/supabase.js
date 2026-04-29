@@ -9,3 +9,16 @@ SupabaseAuthClient.onAuthStateChange = function() {};
 
 var SupabaseClient = {};
 SupabaseClient.auth = SupabaseAuthClient;
+
+var SupabaseAuthResult = {};
+SupabaseAuthResult.data = {};
+SupabaseAuthResult.session = {};
+
+var SupabaseSession = {};
+SupabaseSession.access_token = "";
+SupabaseSession.user = {};
+
+var RepulseEnvResponse = {};
+RepulseEnvResponse.url = "";
+RepulseEnvResponse.key = "";
+RepulseEnvResponse.siteUrl = "";

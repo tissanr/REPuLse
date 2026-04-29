@@ -33,13 +33,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // rating: 1–5 sets/updates; 0 removes the rating
-  const rating = Number(req.body?.rating ?? 0);
-  if (!Number.isInteger(rating) || rating < 0 || rating > 5) {
-    res.status(400).json({ error: "rating must be an integer 0–5 (0 = remove)" });
-    return;
-  }
-
   const sb = userClient(jwt);
   const { data: { user }, error: authErr } = await sb.auth.getUser();
   if (authErr || !user) {
@@ -47,22 +40,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  if (rating === 0) {
-    const { error } = await sb
-      .from("stars")
-      .delete()
-      .match({ user_id: user.id, snippet_id: snippetId });
-    if (error) { res.status(500).json({ error: error.message }); return; }
-    res.status(200).json({ rating: 0 });
-  } else {
-    // Upsert — insert or update the rating for this user+snippet
-    const { error } = await sb
-      .from("stars")
-      .upsert(
-        { user_id: user.id, snippet_id: snippetId, rating },
-        { onConflict: "user_id,snippet_id" }
-      );
-    if (error) { res.status(500).json({ error: error.message }); return; }
-    res.status(200).json({ rating });
+  const { reason } = req.body ?? {};
+
+  const { error } = await sb
+    .from("reports")
+    .insert({ user_id: user.id, snippet_id: snippetId, reason: reason ?? null });
+
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
   }
+  res.status(201).json({ ok: true });
 }

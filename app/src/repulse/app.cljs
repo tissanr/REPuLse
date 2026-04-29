@@ -10,12 +10,14 @@
             [repulse.ui.timeline :as timeline]
             [repulse.ui.context-panel :as ctx-panel]
             [repulse.ui.snippet-panel :as snippet-panel]
+            [repulse.ui.snippet-submit-modal :as snippet-submit-modal]
             [repulse.ui.auth-button :as auth-button]
             [repulse.auth :as auth]
             [repulse.env.builtins :as builtins]
             [repulse.eval-orchestrator :as eo]
             [repulse.plugin-loading :as plugin-loading]
             [repulse.content.first-visit :as first-visit]
+            [repulse.snippets :as snippets]
             [clojure.string :as str]
             ["./lisp-lang/providers.js" :refer [setBankNamesProvider setFxNamesProvider]]
             ["@codemirror/commands" :refer [selectAll]]))
@@ -172,7 +174,7 @@
   (let [app (el "app")]
     (set! (.-innerHTML app)
           (str "<header>"
-               (str "  <h1>" header-icon-svg " REPuLse</h1>")
+               "  <h1>" header-icon-svg " REPuLse</h1>"
                "  <div class=\"header-controls\">"
                "    <button id=\"tap-btn\" class=\"tap-btn\">tap</button>"
                "    <button id=\"share-btn\" class=\"share-btn\">share</button>"
@@ -257,9 +259,17 @@
   (reset! builtins/evaluate-ref eo/evaluate!)
 
   (build-dom!)
-  (auth/init-auth! :on-change-fn (fn [_] (auth-button/render-auth-btn!)))
+  (auth/init-auth! :on-change-fn (fn [session]
+                                    (auth-button/render-auth-btn!)
+                                    ;; Re-render snippet panel toolbar so "share" btn appears/disappears
+                                    (when @snippet-panel/visible?
+                                      (snippet-panel/show-panel!))
+                                    ;; Hydrate ratings atom so stars persist across reloads
+                                    (when session
+                                      (snippets/load-ratings!))))
   (auth-button/init!)
   (snippet-panel/init!)
+  (snippet-submit-modal/init!)
   (attach-slider-listener!)
   (builtins/ensure-env!)
   (setBankNamesProvider (fn [] (clj->js (samples/bank-names))))
