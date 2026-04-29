@@ -20,18 +20,21 @@
 import '/worklet-polyfills.js';
 import { initSync, AudioEngine } from '/repulse_audio.js';
 
+// Set globalThis.__REPULSE_DEBUG__ = true (before page load) to enable verbose logging.
+const DEBUG = !!globalThis.__REPULSE_DEBUG__;
+
 class RepulseProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.engine = null;
     this.port.onmessage = (e) => this._onMessage(e.data);
-    console.log("[REPuLse Worklet] Processor created");
+    if (DEBUG) console.log("[REPuLse Worklet] Processor created");
   }
 
   _onMessage(msg) {
     if (msg.type === 'init') {
       try {
-        console.log("[REPuLse Worklet] Received WASM bytes, initializing...");
+        if (DEBUG) console.log("[REPuLse Worklet] Received WASM bytes, initializing...");
         // initSync({ module: ArrayBuffer }) does:
         //   1. new WebAssembly.Module(bytes)    — synchronous compile from bytes
         //   2. new WebAssembly.Instance(module) — synchronous instantiate
@@ -71,7 +74,7 @@ class RepulseProcessor extends AudioWorkletProcessor {
     if (!this.engine) return true;
     const out = outputs[0];
     if (!out || out.length === 0) {
-      console.warn("[REPuLse Worklet] No output channels available");
+      if (DEBUG) console.warn("[REPuLse Worklet] No output channels available");
       return true;
     }
 
