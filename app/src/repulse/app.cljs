@@ -401,7 +401,8 @@
                "/plugins/overdrive.js"
                "/plugins/bitcrusher.js"
                "/plugins/sidechain.js"
-               "/plugins/distort.js"]]
+               "/plugins/distort.js"
+               "/plugins/amp-sim.js"]]
     (when-not (contains? @loaded-plugins url)
       (-> (plugin-loading/dynamic-import! url)
           (.then (fn [m]

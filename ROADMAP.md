@@ -728,10 +728,18 @@ See full spec: [PROMPTS/PHASE-DST2.md](PROMPTS/PHASE-DST2.md)
 
 ---
 
-## Phase DST3 — Multi-Stage Amp Simulation 📋 *planned*
+## Phase DST3 — Multi-Stage Amp Simulation ✅ *delivered*
 
 New `(fx :amp-sim ...)` effect — cascaded tube preamp stages with inter-stage filters,
 a 3-band tone stack with presets, and power supply sag simulation.
+
+**Delivered:**
+- `app/public/plugins/amp-sim.js` — multi-stage (1–4) cascaded waveshapers with asymmetric `STAGE_ASYM 0.2`
+- 3-band tone stack (EQ) with 5 presets: `:neutral`, `:bright`, `:dark`, `:mid-scoop`, `:mid-hump`
+- Power supply sag simulation via `DynamicsCompressorNode` approximation
+- Inter-stage HPF/LPF filtering and DC blocker
+- Interactive sliders in session dashboard for gain, stages, tone, sag, and mix
+- Syntax highlighting and hover docs updated
 
 **Key additions:**
 - `:gain` (1–100), `:stages` (1–4), `:tone`, `:mix`

@@ -230,7 +230,7 @@ preview tools.
 | R2    | Refactor — decompose eval.cljs builtin map into domain namespaces | planned      |
 | DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | ✓ delivered  |
 | DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | ✓ delivered  |
-| DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | planned      |
+| DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | ✓ delivered  |
 | DST4  | Distortion — oversampling wrapper (:oversample 1/2/4)          | planned      |
 | DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | planned   |
 | DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | planned      |
