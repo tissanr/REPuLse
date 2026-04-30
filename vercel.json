@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "rustup default stable && rustup target add wasm32-unknown-unknown && export PATH=\"$HOME/.cargo/bin:$PATH\" && curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh && npm run build:wasm && npx shadow-cljs release app",
+  "buildCommand": "cargo install --locked wasm-pack@0.14.0 && npm run build:wasm && npx shadow-cljs release app",
   "outputDirectory": "app/public",
   "installCommand": "npm install",
   "framework": null,
@@ -14,7 +14,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https:; connect-src 'self' https: wss:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob:; worker-src 'self' blob:; font-src 'self' data:; frame-src https://vercel.live https://vercel.com;"
+          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-vtGjSZnPTEtEG7Opy74GD4lgrYNUG6pJG6MNKMhp4M0=' https:; connect-src 'self' https: wss:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob:; worker-src 'self' blob:; font-src 'self' data:; frame-src https://vercel.live https://vercel.com;"
         },
         {
           "key": "X-Frame-Options",

@@ -1,7 +1,0 @@
-[build]
-  command = "rustup default stable && curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh && npm run build:wasm && npx shadow-cljs release app"
-  publish = "app/public"
-
-[build.environment]
-  NODE_VERSION = "20"
-  JAVA_VERSION = "21"
