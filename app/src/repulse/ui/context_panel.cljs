@@ -73,12 +73,14 @@
    "distort"         {"drive"    {:min 1   :max 100   :step 0.1}
                       "tone"     {:min 200 :max 20000 :step 1}
                       "mix"      {:min 0   :max 1     :step 0.01}
-                      "asym"     {:min -1  :max 1     :step 0.01}}
+                      "asym"     {:min -1  :max 1     :step 0.01}
+                      "oversample" {:min 1 :max 4     :step 1}}
    "amp-sim"         {"gain"     {:min 1   :max 100   :step 0.1}
                       "stages"   {:min 1   :max 4     :step 1}
                       "tone"     {:min 200 :max 20000 :step 1}
                       "sag"      {:min 0   :max 1     :step 0.01}
-                      "mix"      {:min 0   :max 1     :step 0.01}}
+                      "mix"      {:min 0   :max 1     :step 0.01}
+                      "oversample" {:min 1 :max 4     :step 1}}
    "bitcrusher"      {"wet"       {:min 0    :max 1   :step 0.01}}
    "sidechain"       {"amount"    {:min 0    :max 1   :step 0.01}}
    "compressor"      {"wet"       {:min 0    :max 1   :step 0.01}

@@ -23,6 +23,12 @@ function makeCurve(drive, algo, asym) {
   return curve;
 }
 
+function oversampleStr(n) {
+  if (n >= 4) return "4x";
+  if (n >= 2) return "2x";
+  return "none";
+}
+
 export default {
   type: "effect", name: "distort", version: "1.0.0",
 
@@ -34,6 +40,7 @@ export default {
   _mix: 1.0,
   _algo: "tanh",
   _asym: 0.0,
+  _oversample: 1,
 
   init(host) {},
 
@@ -47,7 +54,7 @@ export default {
     this._out = ctx.createGain();
 
     this._shaper.curve = makeCurve(this._drive, this._algo, this._asym);
-    this._shaper.oversample = "2x";
+    this._shaper.oversample = oversampleStr(this._oversample);
     this._toneLP.type = "lowpass";
     this._toneLP.frequency.value = this._tone;
     this._toneLP.Q.value       = 0.7;
@@ -99,6 +106,22 @@ export default {
       this._asym = Math.max(-1.0, Math.min(1.0, Number(value)));
       if (this._shaper) this._shaper.curve = makeCurve(this._drive, this._algo, this._asym);
     }
+
+    if (name === "oversample") {
+      const n = Number(value);
+      if (![1, 2, 4].includes(n)) {
+        console.warn(`[distort] :oversample must be 1, 2, or 4; got ${n}, using 1`);
+        this._oversample = 1;
+      } else {
+        this._oversample = n;
+      }
+      // NOTE: :oversample 4 increases the WaveShaperNode's internal processing cost by
+      // approximately 4x. For typical 1-2 voice patches this is negligible. With many
+      // simultaneous voices at high oversample, audio dropouts may occur. The user is
+      // responsible for the trade-off; no automatic warning is emitted since we cannot
+      // measure audio thread CPU from JavaScript.
+      if (this._shaper) this._shaper.oversample = oversampleStr(this._oversample);
+    }
   },
 
   bypass(on) {
@@ -115,6 +138,7 @@ export default {
       mix: this._mix,
       algo: this._algo,
       asym: this._asym,
+      oversample: this._oversample,
     };
   },
 
