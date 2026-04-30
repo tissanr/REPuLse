@@ -940,6 +940,8 @@ footer {
 .snippet-preview-btn:hover { border-color: #98c379; color: #98c379; }
 .snippet-mix-btn:hover     { border-color: #e5c07b; color: #e5c07b; }
 .snippet-insert-btn:hover  { border-color: #c678dd; color: #c678dd; }
+.snippet-preview-btn.snippet-btn--active { border-color: #98c379; color: #98c379; }
+.snippet-mix-btn.snippet-btn--active     { border-color: #e5c07b; color: #e5c07b; }
 
 .snippet-empty {
   color: var(--dim);

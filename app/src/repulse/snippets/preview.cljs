@@ -19,7 +19,10 @@
          :raf-id nil}))
 
 (defn active-id [] (:active-id @state))
+(defn active-mode [] (:mode @state))
 (defn previewing? [id] (= (str id) (:active-id @state)))
+(defn previewing-mode? [id mode]
+  (and (previewing? id) (= mode (:mode @state))))
 (defn error-for [id] (get-in @state [:errors (str id)]))
 
 (defn- remember-track! [track-name]

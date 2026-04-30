@@ -50,13 +50,17 @@
 (defn preview-solo!
   "Stop current session, play snippet in isolation as temporary track(s)."
   [snippet]
-  (preview/start! :solo snippet)
+  (if (preview/previewing-mode? (:id snippet) :solo)
+    (preview/stop!)
+    (preview/start! :solo snippet))
   (render-cards!))
 
 (defn preview-mix!
   "Add snippet track(s) alongside the current running session."
   [snippet]
-  (preview/start! :mix snippet)
+  (if (preview/previewing-mode? (:id snippet) :mix)
+    (preview/stop!)
+    (preview/start! :mix snippet))
   (render-cards!))
 
 (defn insert-snippet!
@@ -128,6 +132,8 @@
   (let [id         (:id snippet)
         safe-id    (escape-html (str id))
         playing?   (preview/previewing? id)
+        soloing?    (preview/previewing-mode? id :solo)
+        mixing?     (preview/previewing-mode? id :mix)
         err        (preview/error-for id)
         title      (:title snippet)
         auth-info  (get-in snippet [:profiles :display_name])
@@ -161,8 +167,12 @@
          "</div>"
          "<div class=\"snippet-desc\">" (escape-html desc) "</div>"
          "<div class=\"snippet-actions\">"
-         "<button class=\"snippet-btn snippet-preview-btn\" data-id=\"" safe-id "\">&#9654; solo</button>"
-         "<button class=\"snippet-btn snippet-mix-btn\" data-id=\"" safe-id "\">&oplus; mix</button>"
+         "<button class=\"snippet-btn snippet-preview-btn"
+         (when soloing? " snippet-btn--active")
+         "\" data-id=\"" safe-id "\">" (if soloing? "&#9632; stop" "&#9654; solo") "</button>"
+         "<button class=\"snippet-btn snippet-mix-btn"
+         (when mixing? " snippet-btn--active")
+         "\" data-id=\"" safe-id "\">" (if mixing? "&#9632; stop" "&oplus; mix") "</button>"
          "<button class=\"snippet-btn snippet-insert-btn\" data-id=\"" safe-id "\">&#8595; insert</button>"
          "</div>"
          "<div class=\"snippet-meta-row\">"
