@@ -220,6 +220,7 @@ preview tools.
 | O1    | Embeddable component — `<repulse-editor>` custom element, snippet attr | ✓ delivered  |
 | T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | ✓ delivered  |
 | P     | Modular routing — busses, control rate, general envelopes      | ✓ delivered  |
+| P2    | Modular effect routing — reorderable chains, parallel FX, sends | planned      |
 | J2    | Contextual insertion buttons — hover `+` on parens for wrap/chain | ✓ delivered      |
 | R0    | Correctness & safety — and/or short-circuit, BPM clamp, plugin consent | ✓ delivered  |
 | S1    | Local snippet library — curated JSON, browse/preview/insert    | ✓ delivered  |

@@ -692,6 +692,21 @@ See full spec: [PROMPTS/phase-p-modular-routing.md](PROMPTS/phase-p-modular-rout
 
 ---
 
+## Phase P2 — Modular Effect Routing 📋 *planned*
+
+Advanced routing for the global and per-track effect chains: reorderable master
+bus, parallel effect paths, and "Aux Sends" that route audio to named busses.
+
+**Key additions:**
+- `(fx-chain :name1 :name2 ...)` — reorder the master FX chain dynamically
+- Parallel per-track FX via `(stack (fx :a) (fx :b))` syntax
+- `(fx :send :bus-name amount)` — route track audio to a named audio bus
+- Integration with the Phase P bus system for advanced "outboard" style processing
+
+See full spec: [PROMPTS/PHASE-P2-MODULAR-FX.md](PROMPTS/PHASE-P2-MODULAR-FX.md)
+
+---
+
 ## Phase DST1 — Soft Clipping Distortion ✅ *delivered*
 
 Add `:distort` to the `(fx ...)` effect chain — a musical soft-clip waveshaper with
