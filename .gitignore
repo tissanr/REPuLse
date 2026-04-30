@@ -38,3 +38,9 @@ app/public/repulse_audio.js
 
 .gemini/
 gha-creds-*.json
+
+# Vercel
+.env*.local
+
+# Design 
+REPuLse-handoff-*
