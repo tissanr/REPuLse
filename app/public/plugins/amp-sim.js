@@ -25,10 +25,6 @@ const TONESTACKS = {
   "mid-hump":  { low: -2, mid: 4,  high: -2 },
 };
 
-function dbToGain(db) {
-  return Math.pow(10, db / 20);
-}
-
 export default {
   type: "effect", name: "amp-sim", version: "1.0.0",
 
@@ -168,15 +164,15 @@ export default {
     const now = this._ctx?.currentTime || 0;
     const t = time !== undefined ? time : now + 0.02;
 
-    this._lowShelf.gain.linearRampToValueAtTime(dbToGain(ts.low), t);
-    this._midPeak.gain.linearRampToValueAtTime(dbToGain(ts.mid), t);
-    this._highShelf.gain.linearRampToValueAtTime(dbToGain(ts.high), t);
+    this._lowShelf.gain.linearRampToValueAtTime(ts.low, t);
+    this._midPeak.gain.linearRampToValueAtTime(ts.mid, t);
+    this._highShelf.gain.linearRampToValueAtTime(ts.high, t);
   },
 
   setParam(name, value) {
     const now = this._ctx?.currentTime || 0;
 
-    if (name === "gain") {
+    if (name === "gain" || name === "value") {
       this._gain = Math.max(1.0, Math.min(100.0, Number(value)));
       if (this._ctx) {
         this._buildStages(this._ctx);
