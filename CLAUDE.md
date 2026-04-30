@@ -181,6 +181,24 @@ Use `npm run dev:full` on the first run of a session to build WASM first, then s
 the watcher. After code edits, follow the standard `<verification_workflow>` using the
 preview tools.
 
+### Worktrees and Vercel
+
+This repo uses git worktrees. Each worktree needs its own one-time setup:
+
+```bash
+npm install                  # node_modules are not shared across worktrees
+vercel link                  # writes .vercel/project.json (gitignored)
+vercel env pull .env.local   # pulls Vercel env vars (gitignored)
+```
+
+`vercel link` can be run in as many worktrees as needed — they all point at the
+same Vercel project. `.vercel/` and `.env.local` are gitignored so each worktree
+holds its own copy independently.
+
+**Are the env vars required for local dev?**
+Only if you're working on auth or community features (Phase S2/S3). Core audio,
+pattern engine, and editor work entirely client-side with no env vars needed.
+
 ---
 
 ## Phase status
