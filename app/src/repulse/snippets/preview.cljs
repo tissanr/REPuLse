@@ -42,11 +42,13 @@
   "Stop the active preview and restore the session snapshot captured at start."
   []
   (stop-waveform-loop!)
-  (let [snap (:snapshot @state)]
-    (clear-preview-tracks!)
+  (let [snap           (:snapshot @state)
+        preview-tracks (:tracks @state)]
     (when snap
       (sandbox/restore! snap)
-      (sandbox/restore-audio! snap)))
+      (sandbox/restore-audio! snap preview-tracks))
+    (when-not snap
+      (clear-preview-tracks!)))
   (swap! state assoc
          :active-id nil
          :mode nil

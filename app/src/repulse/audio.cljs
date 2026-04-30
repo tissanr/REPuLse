@@ -4,7 +4,8 @@
             [repulse.samples :as samples]
             [repulse.synth :as synth]
             [repulse.bus :as bus]
-            [repulse.midi :as midi]))
+            [repulse.midi :as midi]
+            [repulse.preview-track :as preview-track]))
 
 ;; Web Audio API scheduler
 ;; Based on Chris Wilson's "A Tale of Two Clocks"
@@ -524,12 +525,6 @@
 (defn get-bpm []
   (/ 240.0 (:cycle-dur @scheduler-state)))
 
-(defn- preview-track? [track-name]
-  (and (keyword? track-name)
-       (let [n (name track-name)]
-         (or (= "__preview__" n)
-             (.startsWith n "__preview__-")))))
-
 (defn schedule-cycle! [ac state cycle]
   (let [{:keys [tracks muted cycle-dur on-beat on-event on-fx-event]} state
         sp {:start [cycle 1] :end [(inc cycle) 1]}]
@@ -577,7 +572,7 @@
                       (midi/send-note-off! midi-ch note-num ts-off))))
                 (when on-fx-event
                   (on-fx-event (:value ev) t))
-                (when (and on-event (:source ev) (not (preview-track? track-name)))
+                (when (and on-event (:source ev) (not (preview-track/preview-track? track-name)))
                   (let [delay-ms (max 0 (* 1000 (- t (.-currentTime ac))))]
                     (js/setTimeout #(on-event (:source ev)) delay-ms)))
                 (when on-beat

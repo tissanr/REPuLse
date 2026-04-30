@@ -31,13 +31,6 @@ function userClient(jwt: string) {
   );
 }
 
-function serviceClient() {
-  return createClient(
-    new URL(process.env.SUPABASE_URL!).origin,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res);
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
@@ -74,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const sb = serviceClient();
+  const sb = authClient;
   if (rating === 0) {
     const { error } = await sb
       .from("stars")

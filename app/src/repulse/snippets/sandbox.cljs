@@ -8,18 +8,9 @@
             [repulse.fx :as fx]
             [repulse.lisp.core :as lisp]
             [repulse.lisp.eval :as leval]
+            [repulse.preview-track :as preview-track]
             [repulse.samples :as samples]
-            [repulse.synth :as synth]
-            [clojure.string :as cstr]))
-
-(def preview-track-prefix "__preview__")
-
-(defn preview-track-name [track-name]
-  (keyword (str preview-track-prefix "-" (name track-name))))
-
-(defn preview-track? [track-name]
-  (and (keyword? track-name)
-       (cstr/starts-with? (name track-name) preview-track-prefix)))
+            [repulse.synth :as synth]))
 
 (defn- ->num [x]
   (let [v (leval/unwrap x)]
@@ -61,17 +52,23 @@
                        entry))
                    chain)))))
 
-(defn restore-audio! [snap]
+(defn restore-audio! [snap expected-preview-tracks]
   (let [{:keys [playing? tracks muted on-beat on-event]} (:scheduler snap)]
-    (doseq [track-name (keys (:tracks @audio/scheduler-state))]
-      (when (preview-track? track-name)
-        (audio/clear-track! track-name)))
-    (swap! audio/scheduler-state assoc :muted (or muted #{}))
-    (when (and playing? (seq tracks))
-      (doseq [[track-name pattern] tracks]
-        (audio/play-track! track-name pattern on-beat on-event)
-        (fx/apply-track-effects! track-name (:track-fx pattern)))
-      (swap! audio/scheduler-state assoc :muted (or muted #{})))))
+    ;; If another stop path already cleared the preview tracks, do not resurrect
+    ;; the session from the stale snapshot. Normal preview stops still have at
+    ;; least one reserved preview track present at this point.
+    (let [current-tracks         (set (keys (:tracks @audio/scheduler-state)))
+          preview-still-present? (or (empty? expected-preview-tracks)
+                                     (boolean (some current-tracks expected-preview-tracks)))]
+      (doseq [track-name current-tracks]
+        (when (preview-track/preview-track? track-name)
+          (audio/clear-track! track-name)))
+      (swap! audio/scheduler-state assoc :muted (or muted #{}))
+      (when (and preview-still-present? playing? (seq tracks))
+        (doseq [[track-name pattern] tracks]
+          (audio/play-track! track-name pattern on-beat on-event)
+          (fx/apply-track-effects! track-name (:track-fx pattern)))
+        (swap! audio/scheduler-state assoc :muted (or muted #{}))))))
 
 (defn- fork-env [env]
   (assoc env
@@ -108,7 +105,7 @@
            (fn [track-name pat]
              (let [name'         (leval/unwrap track-name)
                    pat'          (leval/unwrap pat)
-                   preview-name  (preview-track-name name')]
+                   preview-name  (preview-track/preview-track-name name')]
                (if (core/pattern? pat')
                  (do
                    (on-track preview-name)
