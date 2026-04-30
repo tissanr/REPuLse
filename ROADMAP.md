@@ -918,7 +918,7 @@ See full spec: [PROMPTS/PHASE-S3.md](PROMPTS/PHASE-S3.md)
 
 ---
 
-## Phase S4 — Snippet Audio Preview 📋 *planned*
+## Phase S4 — Snippet Audio Preview ✅ *delivered*
 
 Production-quality audition for community snippets: sandboxed eval, state
 isolation, visual playing indicators, and per-card mini waveforms. Upgrades
