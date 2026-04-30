@@ -4,7 +4,8 @@
    Responsibility: build and refresh the sidebar context panel DOM.
    Exports: render-context-panel!, schedule-render!, slider-active?,
             FX-SLIDER-PARAMS, FX-PRIMARY-PARAM, SLIDER-PARAMS."
-  (:require [repulse.core :as core]
+  (:require [clojure.string :as str]
+            [repulse.core :as core]
             [repulse.audio :as audio]
             [repulse.fx :as fx]
             [repulse.midi :as midi]
@@ -29,6 +30,13 @@
   (if (number? v)
     (if (== v (Math/round v)) (str (int v)) (.toFixed v 2))
     (str v)))
+
+(defn- escape-html [s]
+  (-> (str s)
+      (str/replace "&" "&amp;")
+      (str/replace "<" "&lt;")
+      (str/replace ">" "&gt;")
+      (str/replace "\"" "&quot;")))
 
 ;;; Slider configuration constants
 
@@ -111,8 +119,8 @@
 
 (defn- render-track-slider [track-name param-key value]
   (when-let [{:keys [min max step]} (get SLIDER-PARAMS param-key)]
-    (let [tn  (name track-name)
-          pn  (name param-key)]
+    (let [tn  (escape-html (name track-name))
+          pn  (escape-html (name param-key))]
       (str "<div class=\"ctx-slider-row\">"
            "<label class=\"ctx-param-key\">" pn "</label>"
            "<input type=\"range\" class=\"ctx-slider\""
@@ -120,33 +128,38 @@
            " data-param=\"" pn "\""
            " min=\"" min "\" max=\"" max "\" step=\"" step "\""
            " value=\"" value "\">"
-           "<span class=\"ctx-param-val\">" (fmt-pv value) "</span>"
+           "<span class=\"ctx-param-val\">" (escape-html (fmt-pv value)) "</span>"
            "</div>"))))
 
 (defn- render-fx-slider [effect-name param-name value]
   (when-let [{:keys [min max step]} (get-in FX-SLIDER-PARAMS [effect-name param-name])]
-    (str "<div class=\"ctx-slider-row\">"
-         "<label class=\"ctx-param-key\">" param-name "</label>"
-         "<input type=\"range\" class=\"ctx-slider\""
-         " data-fx=\"" effect-name "\""
-         " data-param=\"" param-name "\""
-         " min=\"" min "\" max=\"" max "\" step=\"" step "\""
-         " value=\"" value "\">"
-         "<span class=\"ctx-param-val\">" (fmt-pv value) "</span>"
-         "</div>")))
+    (let [fen (escape-html effect-name)
+          pn  (escape-html param-name)]
+      (str "<div class=\"ctx-slider-row\">"
+           "<label class=\"ctx-param-key\">" pn "</label>"
+           "<input type=\"range\" class=\"ctx-slider\""
+           " data-fx=\"" fen "\""
+           " data-param=\"" pn "\""
+           " min=\"" min "\" max=\"" max "\" step=\"" step "\""
+           " value=\"" value "\">"
+           "<span class=\"ctx-param-val\">" (escape-html (fmt-pv value)) "</span>"
+           "</div>"))))
 
 (defn- render-track-fx-slider [track-name effect-name param-name value]
   (when-let [{:keys [min max step]} (get-in FX-SLIDER-PARAMS [effect-name param-name])]
-    (str "<div class=\"ctx-slider-row\">"
-         "<label class=\"ctx-param-key\">" param-name "</label>"
-         "<input type=\"range\" class=\"ctx-slider\""
-         " data-track=\"" (cljs.core/name track-name) "\""
-         " data-fx=\"" effect-name "\""
-         " data-param=\"" param-name "\""
-         " min=\"" min "\" max=\"" max "\" step=\"" step "\""
-         " value=\"" value "\">"
-         "<span class=\"ctx-param-val\">" (fmt-pv value) "</span>"
-         "</div>")))
+    (let [tn  (escape-html (cljs.core/name track-name))
+          fen (escape-html effect-name)
+          pn  (escape-html param-name)]
+      (str "<div class=\"ctx-slider-row\">"
+           "<label class=\"ctx-param-key\">" pn "</label>"
+           "<input type=\"range\" class=\"ctx-slider\""
+           " data-track=\"" tn "\""
+           " data-fx=\"" fen "\""
+           " data-param=\"" pn "\""
+           " min=\"" min "\" max=\"" max "\" step=\"" step "\""
+           " value=\"" value "\">"
+           "<span class=\"ctx-param-val\">" (escape-html (fmt-pv value)) "</span>"
+           "</div>"))))
 
 (defn- render-track-fx-subsection [track-name]
   (when-let [tn (get @audio/track-nodes track-name)]
@@ -166,7 +179,7 @@
                                                      (render-track-fx-slider track-name name pname v)))
                                                  fx-sliders)))]
                         (str "<div class=\"ctx-fx-row\">"
-                             "<span class=\"ctx-fx-name\">" name "</span>"
+                             "<span class=\"ctx-fx-name\">" (escape-html name) "</span>"
                              "</div>"
                              (or sliders ""))))
                     active-fx))
@@ -182,7 +195,7 @@
     (str "<div class=\"ctx-status\">"
          "<span class=\"ctx-bpm\">" bpm " BPM</span>"
          "<span class=\"ctx-backend\">" backend "</span>"
-         (when pfx (str "<span class=\"ctx-bank\">" pfx "</span>"))
+         (when pfx (str "<span class=\"ctx-bank\">" (escape-html pfx) "</span>"))
          "<span class=\"" (if playing? "ctx-playing" "ctx-stopped") "\">"
          (if playing? "&#9679; playing" "&#9675; stopped")
          "</span>"
@@ -216,7 +229,7 @@
                                                  TRACK-PARAM-KEYS)]
                         (str "<div class=\"ctx-track" (when muted? " ctx-track-muted") "\">"
                              "<span class=\"ctx-track-icon\">" icon "</span>"
-                             "<span class=\"ctx-track-name\">:" (name track-name) "</span>"
+                             "<span class=\"ctx-track-name\">:" (escape-html (name track-name)) "</span>"
                              (cond
                                muted? "<span class=\"ctx-track-status\">(muted)</span>"
                                solo?  "<span class=\"ctx-track-status ctx-track-solo\">(solo)</span>"
@@ -224,8 +237,8 @@
                                (str "<span class=\"ctx-track-params\">"
                                     (apply str
                                       (map (fn [k]
-                                             (str "<span class=\"ctx-param-key\">" (name k) " </span>"
-                                                  "<span class=\"ctx-param-val\">" (fmt-pv (get params k)) "</span>"
+                                             (str "<span class=\"ctx-param-key\">" (escape-html (name k)) " </span>"
+                                                  "<span class=\"ctx-param-val\">" (escape-html (fmt-pv (get params k))) "</span>"
                                                   " "))
                                            text-pkeys))
                                     "</span>")
@@ -260,10 +273,10 @@
                                                 fx-sliders)))
                           first-kv    (first (seq (apply dissoc params (keys fx-sliders))))
                           pstr        (when (and first-kv (not (seq slider-html)))
-                                        (str (first first-kv) " "
-                                             (fmt-pv (second first-kv))))]
+                                        (str (escape-html (first first-kv)) " "
+                                             (escape-html (fmt-pv (second first-kv)))))]
                       (str "<div class=\"ctx-row\">"
-                           "<span class=\"ctx-name\">" name "</span>"
+                           "<span class=\"ctx-name\">" (escape-html name) "</span>"
                            (cond
                              bypassed? "<span class=\"ctx-bypass\">off</span>"
                              pstr      (str "<span class=\"ctx-param\">" pstr "</span>")
@@ -283,7 +296,7 @@
                     (str "<div class=\"ctx-row\">"
                          "<span class=\"ctx-name\">CC #" cc-num "</span>"
                          "<span class=\"ctx-type\">"
-                         (when target (str "&#8594; " (name target)))
+                         (when target (str "&#8594; " (escape-html (name target))))
                          "</span>"
                          "</div>"))
                   (sort-by key mappings)))
@@ -298,12 +311,12 @@
              (map (fn [{:keys [type id banks query count]}]
                     (str "<div class=\"ctx-source\">&#9835; "
                          (case type
-                           :github    (str "github:" id
+                           :github    (str "github:" (escape-html id)
                                           (when (pos? (or banks 0))
                                             (str " (" banks " banks)")))
-                           :freesound (str "freesound: " query
+                           :freesound (str "freesound: " (escape-html query)
                                           (when count (str " (" count ")")))
-                           (str id))
+                           (escape-html (str id)))
                          "</div>"))
                   sources))
            "</div>"))))
@@ -316,8 +329,8 @@
            (apply str
              (map (fn [[bus-name {:keys [type]}]]
                     (str "<div class=\"ctx-row\">"
-                         "<span class=\"ctx-name\">" bus-name "</span>"
-                         "<span class=\"ctx-type\">" (name type) "</span>"
+                         "<span class=\"ctx-name\">" (escape-html bus-name) "</span>"
+                         "<span class=\"ctx-type\">" (escape-html (name type)) "</span>"
                          "</div>"))
                   (sort-by (comp name key) buses)))
            "</div>"))))
@@ -332,7 +345,7 @@
            (apply str
              (map (fn [k]
                     (str "<div class=\"ctx-row\">"
-                         "<span class=\"ctx-name\">" k "</span>"
+                         "<span class=\"ctx-name\">" (escape-html k) "</span>"
                          "<span class=\"ctx-type\">" (infer-type (get env k)) "</span>"
                          "</div>"))
                   user-defs))
