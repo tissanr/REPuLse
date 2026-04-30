@@ -9,10 +9,10 @@
             [repulse.plugins :as plugins]
             [repulse.fx :as fx]))
 
-;; Closure Compiler rewrites bare import() to require() under :advanced, so
-;; we hide the syntax inside js/Function and let the browser execute it natively.
-(def dynamic-import!
-  (js/Function. "url" "return import(url)"))
+;; Closure Compiler rewrites bare import() to require() under :advanced.
+;; index.html exposes window.__import__ from a plain <script> tag so Closure
+;; never sees the import() syntax — no new Function() / unsafe-eval needed.
+(def dynamic-import! js/window.__import__)
 
 ;; Session-scoped plugin consent: origin string -> :granted | :denied
 (defonce plugin-consent (atom {}))
