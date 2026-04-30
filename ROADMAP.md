@@ -1024,6 +1024,38 @@ See full spec: [PROMPTS/PHASE-DOC1.md](PROMPTS/PHASE-DOC1.md)
 
 ---
 
+## Phase HRD1 — Hardening ✅ *delivered*
+
+AST-aware editor patching, remote fetch validation, and reproducible Rust builds.
+No new features or language changes — pure correctness and infrastructure hardening.
+
+**Delivered:**
+- `app/src/repulse/lisp_patcher.cljs` (new): minimal Lisp tokenizer that skips
+  comments and string literals, with four public paren-aware scanners
+  (`find-param-num`, `find-fx-named-param-num`, `find-fx-pos-param-num`,
+  `find-fx-form-close`). Replaces three regex-based patching functions in
+  `eval_orchestrator.cljs` that silently misfired on nested forms, comments, and
+  duplicate parameter names across tracks.
+- `eval_orchestrator.cljs`: rewritten `patch-param-in-editor!`,
+  `patch-fx-param-in-editor!`, and `patch-per-track-fx-param-in-editor!` to use
+  the new scanner; extracted shared `fmt-num` and `dispatch-replace!` helpers.
+- `samples.cljs`: added `fetch-ok!` helper that rejects with a descriptive error
+  on non-2xx responses; applied to all four fetch chains (JSON manifest, Lisp
+  manifest, GitHub tree API, audio buffer fetch).
+- `rust-toolchain.toml` (new): pins `channel = "stable"` with
+  `targets = ["wasm32-unknown-unknown"]` and `components = ["clippy", "rustfmt"]`,
+  ensuring reproducible Rust builds and correct CI lint toolchain setup.
+- `netlify.toml`: deleted (Netlify no longer used).
+- `plugin_loading.cljs`: replaced `js/Function.` eval workaround with
+  `js/window.__import__`; `index.html` exposes the global from a plain `<script>`
+  tag so Closure never processes the `import()` syntax.
+- `vercel.json`: removed `'unsafe-eval'` from CSP; cleaned build command to use
+  `cargo install --locked wasm-pack@0.14.0` instead of curl-pipe-sh.
+
+See full spec: [PROMPTS/PHASE-HRD1.md](PROMPTS/PHASE-HRD1.md)
+
+---
+
 ## Phase R3 — JavaScript Purification 📋 *planned*
 
 Move maintainable hand-written app logic from JavaScript into ClojureScript
