@@ -236,6 +236,7 @@ preview tools.
 | DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | planned      |
 | CI1   | CI pipeline — GitHub Actions: tests, lint, Rust, grammar drift | ✓ delivered  |
 | HRD1  | Hardening — AST editor patching, fetch validation, reproducible Rust builds | ✓ delivered  |
+| HRD2  | Security hardening — XSS, RLS, CORS, input validation, CSP    | ✓ delivered  |
 | DOC1  | User docs — split manual, tutorials, cookbook, reference       | planned      |
 
 See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full delivery notes.

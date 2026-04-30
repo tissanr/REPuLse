@@ -976,6 +976,31 @@ See full spec: [PROMPTS/PHASE-CI1.md](PROMPTS/PHASE-CI1.md)
 
 ---
 
+## Phase HRD2 — Security Hardening ✅ *delivered*
+
+Security audit follow-up covering five vulnerability classes identified before
+public launch of the community snippet library.
+
+**Delivered:**
+- `context_panel.cljs` — added `escape-html` and applied it to every user-controlled
+  string site in all eight section renderers and three slider renderers, closing XSS
+  via track names, binding names, FX names, bus names, source IDs, and param values
+- `supabase/schema.sql` — enabled RLS on `profiles` table (was missing while `snippets`
+  and `stars` already had it); added select-for-anyone and update-own-row policies
+- `api/snippets.ts` — replaced `Access-Control-Allow-Origin: *` with a `setCors`
+  helper that reflects origin only for `ALLOWED_ORIGINS` env var entries, `localhost:*`,
+  and `*.vercel.app` previews; added field length limits (title 120, description 500,
+  code 32 k, tags 40 chars × 20 items) and BPM range validation (1–999)
+- `api/snippets/[id]/star.ts` — same CORS fix
+- `vercel.json` — added `Content-Security-Policy` (blocks inline scripts; `'unsafe-eval'`
+  required for shadow-cljs `new Function()` dispatch; `https:` in `script-src` for
+  the plugin system), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`, and `frame-src` for Vercel toolbar
+
+See full spec: [PROMPTS/PHASE-HRD2.md](PROMPTS/PHASE-HRD2.md)
+
+---
+
 ## Phase DOC1 — User Documentation Overhaul 📋 *planned*
 
 Split the current monolithic user documentation into a friendly manual that works

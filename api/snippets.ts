@@ -67,24 +67,17 @@ function trendingScore(row: { weighted_rating: number; usage_count: number; crea
 
 async function handleGet(req: VercelRequest, res: VercelResponse) {
   const sb = serviceClient();
-  const rawTag = typeof req.query.tag === "string" ? req.query.tag : undefined;
-  const rawQ   = typeof req.query.q   === "string" ? req.query.q   : undefined;
-
-  const tag = rawTag && rawTag.length <= MAX_TAG_LEN ? rawTag : undefined;
-  const q   = rawQ   && rawQ.length   <= MAX_SEARCH_LEN ? rawQ   : undefined;
-
-  if (rawTag && !tag) {
-    res.status(400).json({ error: "tag parameter too long" });
-    return;
-  }
-  if (rawQ && !q) {
-    res.status(400).json({ error: "q parameter too long" });
-    return;
-  }
-
+  const rawTag = typeof req.query.tag    === "string" ? req.query.tag    : undefined;
+  const rawQ   = typeof req.query.q      === "string" ? req.query.q      : undefined;
   const author = typeof req.query.author === "string" ? req.query.author : undefined;
   const sort: SortOrder = (typeof req.query.sort === "string" ? req.query.sort : "top-rated") as SortOrder;
   const limit  = Math.min(Number(req.query.limit) || 100, 200);
+
+  const tag = rawTag && rawTag.length <= MAX_TAG_LEN    ? rawTag : undefined;
+  const q   = rawQ   && rawQ.length   <= MAX_SEARCH_LEN ? rawQ   : undefined;
+
+  if (rawTag && !tag) { res.status(400).json({ error: "tag parameter too long" }); return; }
+  if (rawQ   && !q)   { res.status(400).json({ error: "q parameter too long" });   return; }
 
   let query = sb
     .from("snippets")
@@ -101,8 +94,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
     .order("weighted_rating", { ascending: false })
     .order("created_at",      { ascending: false });
 
-  if (tag)    query = query.contains("tags", [tag]);
-  if (q)      query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
+  if (tag) query = query.contains("tags", [tag]);
+  if (q)   query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
 
   // Author filter: find profile IDs matching display_name
   if (author) {
@@ -111,10 +104,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
       .select("id")
       .ilike("display_name", `%${author}%`);
     const ids = (profiles ?? []).map((p: { id: string }) => p.id);
-    if (ids.length === 0) {
-      res.status(200).json([]);
-      return;
-    }
+    if (ids.length === 0) { res.status(200).json([]); return; }
     query = query.in("author_id", ids);
   }
 
@@ -123,10 +113,7 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
   query = query.limit(effectiveLimit);
 
   const { data, error } = await query;
-  if (error) {
-    res.status(500).json({ error: error.message });
-    return;
-  }
+  if (error) { res.status(500).json({ error: error.message }); return; }
 
   let result = data ?? [];
   if (sort === "trending") {
@@ -200,10 +187,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     .select()
     .single();
 
-  if (error) {
-    res.status(500).json({ error: error.message });
-    return;
-  }
+  if (error) { res.status(500).json({ error: error.message }); return; }
   res.status(201).json(data);
 }
 
