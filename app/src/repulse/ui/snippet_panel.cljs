@@ -4,6 +4,7 @@
    Exports: init!, show-panel!, hide-panel!, toggle-panel!, visible?"
   (:require [repulse.snippets :as snippets]
             [repulse.audio :as audio]
+            [repulse.snippets.preview :as preview]
             [repulse.ui.editor :as editor]
             [repulse.ui.snippet-submit-modal :as submit-modal]
             [repulse.eval-orchestrator :as eo]
@@ -17,7 +18,9 @@
 (defonce visible?       (atom false))
 (defonce search-query   (atom ""))
 (defonce tag-filter     (atom nil))
-(defonce preview-tracks (atom #{}))   ; keyword set of tracks added by preview
+
+;;; Forward declarations
+(declare hide-panel! render-cards!)
 
 ;;; DOM helpers
 
@@ -34,35 +37,27 @@
 ;;; Preview / insert
 
 (defn- clear-preview! []
-  (doseq [k @preview-tracks]
-    (audio/clear-track! k))
-  (reset! preview-tracks #{}))
+  (preview/stop!)
+  (preview/render-waveforms!))
 
 (defn- conflict-tracks
-  "Returns set of track names in the snippet that already exist in the session,
-   excluding any currently previewing tracks."
+  "Returns set of track names in the snippet that already exist in the session."
   [snippet]
   (let [snippet-tracks (extract-track-names (:code snippet))
         active-tracks  (set (keys (:tracks @audio/scheduler-state)))]
-    (cset/difference (cset/intersection snippet-tracks active-tracks)
-                     @preview-tracks)))
+    (cset/intersection snippet-tracks active-tracks)))
 
 (defn preview-solo!
   "Stop current session, play snippet in isolation as temporary track(s)."
   [snippet]
-  (clear-preview!)
-  (audio/stop!)
-  (let [names (extract-track-names (:code snippet))]
-    (reset! preview-tracks names)
-    (eo/evaluate! (:code snippet))))
+  (preview/start! :solo snippet)
+  (render-cards!))
 
 (defn preview-mix!
   "Add snippet track(s) alongside the current running session."
   [snippet]
-  (clear-preview!)
-  (let [names (extract-track-names (:code snippet))]
-    (reset! preview-tracks names)
-    (eo/evaluate! (:code snippet))))
+  (preview/start! :mix snippet)
+  (render-cards!))
 
 (defn insert-snippet!
   "Append snippet code to editor, trigger (upd), and track usage."
@@ -86,16 +81,14 @@
           (when-let [id (:id snippet)]
             (api/track-usage! id)))))))
 
-;;; Forward declaration (hide-panel! used by wire-panel! and show-panel!)
-(declare hide-panel!)
-
 ;;; Rendering
 
 (defn- escape-html [s]
   (-> s
       (cstr/replace "&" "&amp;")
       (cstr/replace "<" "&lt;")
-      (cstr/replace ">" "&gt;")))
+      (cstr/replace ">" "&gt;")
+      (cstr/replace "\"" "&quot;")))
 
 (defn- tag-pill [t]
   (str "<span class=\"snippet-tag\">" (escape-html t) "</span>"))
@@ -112,7 +105,8 @@
 (defn- render-stars
   "Render a row of 5 clickable star buttons plus avg-rating display."
   [id my-rating can-star avg-rating star-count]
-  (str "<div class=\"snippet-stars\""
+  (let [safe-id (escape-html (str id))]
+    (str "<div class=\"snippet-stars\""
        (when-not can-star " data-disabled=\"true\"")
        ">"
        (apply str
@@ -120,7 +114,7 @@
            (str "<button class=\"snippet-star"
                 (when (<= n my-rating) " snippet-star--filled")
                 "\""
-                " data-id=\"" id "\""
+                " data-id=\"" safe-id "\""
                 " data-rating=\"" n "\""
                 (when-not can-star " disabled title=\"Log in to rate\"")
                 ">&#9733;</button>")))
@@ -128,10 +122,13 @@
          (str "<span class=\"snippet-avg-rating\">"
               (.toFixed avg-rating 1) " avg (" star-count ")</span>")
          "<span class=\"snippet-avg-rating\">no ratings yet</span>")
-       "</div>"))
+       "</div>")))
 
 (defn- render-card [snippet]
   (let [id         (:id snippet)
+        safe-id    (escape-html (str id))
+        playing?   (preview/previewing? id)
+        err        (preview/error-for id)
         title      (:title snippet)
         auth-info  (get-in snippet [:profiles :display_name])
         auth-str   (or auth-info (:author snippet) "repulse")
@@ -143,23 +140,34 @@
         my-rating  (snippets/get-rating id)
         ;; Star/report only available for community snippets (UUID ids from the API)
         can-star   (and (logged-in?) (uuid-id? id))]
-    (str "<div class=\"snippet-card\">"
+    (str "<div class=\"snippet-card"
+         (when playing? " snippet-card--playing")
+         (when err " snippet-card--error")
+         "\""
+         (when err (str " title=\"" (escape-html err) "\""))
+         ">"
          "<div class=\"snippet-card-top\">"
+         "<span class=\"snippet-title-wrap\">"
+         "<span class=\"snippet-playing-dot\" aria-hidden=\"true\"></span>"
          "<span class=\"snippet-title\">" (escape-html title) "</span>"
+         "</span>"
          "<span class=\"snippet-author\">" (escape-html auth-str) "</span>"
          "</div>"
+         "<canvas class=\"snippet-waveform\" data-id=\"" safe-id "\" aria-hidden=\"true\"></canvas>"
+         (when err
+           (str "<div class=\"snippet-preview-error\">" (escape-html err) "</div>"))
          "<div class=\"snippet-tags\">"
          (cstr/join "" (map tag-pill tags))
          "</div>"
          "<div class=\"snippet-desc\">" (escape-html desc) "</div>"
          "<div class=\"snippet-actions\">"
-         "<button class=\"snippet-btn snippet-preview-btn\" data-id=\"" id "\">&#9654; solo</button>"
-         "<button class=\"snippet-btn snippet-mix-btn\" data-id=\"" id "\">&oplus; mix</button>"
-         "<button class=\"snippet-btn snippet-insert-btn\" data-id=\"" id "\">&#8595; insert</button>"
+         "<button class=\"snippet-btn snippet-preview-btn\" data-id=\"" safe-id "\">&#9654; solo</button>"
+         "<button class=\"snippet-btn snippet-mix-btn\" data-id=\"" safe-id "\">&oplus; mix</button>"
+         "<button class=\"snippet-btn snippet-insert-btn\" data-id=\"" safe-id "\">&#8595; insert</button>"
          "</div>"
          "<div class=\"snippet-meta-row\">"
          (render-stars id my-rating can-star avg-rating star-count)
-         "<button class=\"snippet-report-btn\" data-id=\"" id "\""
+         "<button class=\"snippet-report-btn\" data-id=\"" safe-id "\""
          (when-not can-star " disabled title=\"Log in or use a community snippet to report\"")
          ">&#9872; report</button>"
          "</div>"
@@ -177,7 +185,8 @@
       (set! (.-innerHTML container)
             (if (empty? snips)
               "<div class=\"snippet-empty\">no snippets match</div>"
-              (cstr/join "" (map render-card snips)))))))
+              (cstr/join "" (map render-card snips))))
+      (preview/render-waveforms!))))
 
 (defn- render-toolbar!
   "Re-render the toolbar (tag dropdown + sort must reflect loaded tags)."
@@ -349,6 +358,7 @@
   "Build the panel DOM skeleton and wire events.
    Must be called after the panel element exists in the DOM."
   []
+  (preview/init!)
   (when-let [panel (el "snippet-panel")]
     (set! (.-innerHTML panel)
           (str "<div id=\"snippet-toolbar\" class=\"snippet-panel-bar\">"

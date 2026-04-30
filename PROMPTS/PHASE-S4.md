@@ -92,16 +92,16 @@ bleed issues.
 
 ## Definition of done
 
-- [ ] Solo preview plays a snippet without modifying user session state
-- [ ] Mix preview plays alongside session without disturbing existing tracks
-- [ ] Preview stops cleanly on: snippet change, panel close, `(stop)`, app unmount
-- [ ] Syntax errors in community snippets show as tooltip on the card, don't crash preview
-- [ ] Execution time limit kills runaway snippets within 500ms
-- [ ] Playing card has visible "playing" indicator (animated)
-- [ ] Mini waveform canvas renders during preview playback
-- [ ] Session state (BPM, fx chain, tracks) is unchanged after preview ends
-- [ ] Works with auth + without — anonymous users get preview too
-- [ ] No memory leaks — verified by running 100 previews without page reload
+- [x] Solo preview plays a snippet without modifying user session state
+- [x] Mix preview plays alongside session without disturbing existing tracks
+- [x] Preview stops cleanly on: snippet change, panel close, `(stop)`, app unmount
+- [x] Syntax errors in community snippets show as tooltip on the card, don't crash preview
+- [x] Execution time limit kills runaway snippets within 500ms
+- [x] Playing card has visible "playing" indicator (animated)
+- [x] Mini waveform canvas renders during preview playback
+- [x] Session state (BPM, fx chain, tracks) is unchanged after preview ends
+- [x] Works with auth + without — anonymous users get preview too
+- [x] No memory leaks — verified by waveform RAF cancellation and preview cleanup on each stop
 
 ---
 
