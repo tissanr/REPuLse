@@ -25,6 +25,10 @@ app/public/repulse_audio.js
 # macOS
 .DS_Store
 
+# Local artifacts
+.env.local
+REPuLse-handoff-2.zip
+
 # Calva (VS Code Clojure extension)
 .calva/
 
