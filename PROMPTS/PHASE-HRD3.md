@@ -43,9 +43,9 @@ Add specs and validation helpers for the public plugin surface:
 |---|---|
 | Plugin identity | `name` non-empty string, `type` one of `"visual"` / `"effect"`, optional `version` string |
 | Visual plugin | required `mount`, `unmount`; optional `init`, `destroy` normalized to defaults |
-| Effect plugin | required `createNodes`, `setParam`, `destroy`; optional `init`, `bypass`, `getParams` normalized to defaults |
+| Effect plugin | required `createNodes`, `setParam`, `destroy`; optional `init`, `bypass`, `getParams`, `clone` — all normalized to safe defaults; absence of `clone` causes per-track instances to share state via `Object.create/assign`, which silently breaks CLJS closure-based plugins — those **must** implement `clone` |
 | Host API | `audioCtx`, `analyser`, `masterGain`, `sampleRate`, `version`, `registerLisp` |
-| Effect nodes | `createNodes(ctx)` returns `{inputNode, outputNode}` with connectable/disconnectable audio nodes |
+| Effect nodes | `createNodes(ctx)` returns a **JS object** `#js {:inputNode node :outputNode node}` — both properties must be connectable/disconnectable Web Audio nodes; validate with JS property access, not CLJS map destructuring |
 
 Implementation expectations:
 
@@ -59,7 +59,7 @@ Implementation expectations:
 
 Add low-level specs for the pure pattern engine:
 
-- Rational time: `[integer integer]`, denominator non-zero and positive after normalization
+- Rational time: a `cljs.core.Ratio` or integer — spec predicate `(s/or :ratio ratio? :int integer?)`; `Ratio` values carry an implicitly positive denominator and must never be constructed with zero denominator; do **not** spec as `[integer integer]` — that is not how CLJS rationals are represented at runtime
 - Time span: `{:start rat :end rat}` with `start < end`
 - Event: `{:value any? :whole span :part span}` plus optional `:source`
 - Pattern: tagged map created by `repulse.core/pattern`
@@ -88,7 +88,7 @@ Add specs for mutable/external maps that are currently trusted after parsing:
 
 | Area | Boundary |
 |---|---|
-| Session | `repulse.session/build-session-snapshot`, `load-session`, URL hash decode |
+| Session | `repulse.session/build-session-snapshot`, `load-session`, URL hash decode — validation must run **after** `migrate-legacy!` so legacy v1 sessions are upgraded to v2 shape first; the spec boundary is the v2 map, not the raw localStorage string |
 | FX | global `fx/chain` entries and per-track `:fx-chain` entries |
 | Samples | sample registry, manifest parse output, `loaded-sources` entries |
 | MIDI | CC mappings, MIDI file export note events |
@@ -126,16 +126,29 @@ better. Keep `packages/core` independent from app, DOM, audio, and JS plugin cod
 
 ### Specs vs predicates
 
-Use `cljs.spec.alpha` for stable data shapes and explainable failures. For JavaScript
-interop objects, specs may call small predicates such as:
+Use `cljs.spec.alpha` **only for CLJS data**: session snapshots, FX chain entries,
+events, time spans, MIDI maps, sample manifest records. `s/explain` produces useful
+output for CLJS maps; it produces opaque failures for JS objects.
+
+For **JS plugin objects** use explicit named predicate functions with hand-written
+error construction:
 
 ```clojure
-(defn js-fn? [obj method]
+(defn has-method? [^js obj method]
   (fn? (aget obj method)))
+
+(defn validate-effect-plugin! [^js plugin]
+  (let [pname (or (.-name plugin) "<unnamed>")
+        missing (filterv #(not (has-method? plugin %))
+                         ["createNodes" "setParam" "destroy"])]
+    (when (seq missing)
+      (throw (js/Error. (str "[REPuLse] Plugin \"" pname
+                             "\" missing: " (str/join ", " missing)))))))
 ```
 
-Keep those predicates named and tested. Specs should improve readability, not hide
-JS interop complexity behind opaque anonymous functions.
+Do not wrap `aget` checks inside `s/and` specs — `s/explain` on such specs gives
+useless output and hides the JS interop boundary rather than clarifying it. Keep
+plugin validation predicates named and tested independently.
 
 ### Optional plugin methods
 
