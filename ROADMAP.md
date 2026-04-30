@@ -1131,6 +1131,73 @@ See full spec: [PROMPTS/PHASE-AI1.md](PROMPTS/PHASE-AI1.md)
 
 ---
 
+## Phase AI2 — Assistant Panel & Providers 📋 *planned*
+
+In-app AI chat panel with bring-your-own-key support for OpenAI, Anthropic, Google, and
+Groq — streaming responses, message persistence, and session context injection. Opt-in
+feature gate; no tool calling yet.
+
+**Key additions:**
+- `app/src/repulse/ai/settings.cljs` — localStorage-backed atoms: `enabled?`, `provider`,
+  `api-key`, `model-override`, `include-code?`; settings modal accessible from the header
+- `app/src/repulse/ai/client.cljs` — provider abstraction with `stream!` fn; `parse-delta`
+  handles SSE format differences across OpenAI / Anthropic / Google / Groq
+- `app/src/repulse/ai/system_prompt.cljs` — assembles context from `/docs/ai/builtins.json`
+  summary + current `(help-export)` snapshot (track names, BPM, FX — no editor code)
+- `app/src/repulse/ui/assistant_panel.cljs` — collapsible right-side panel; streaming
+  render; code-block "↓ insert" and "↺ replace selection" buttons; cost/token indicator
+- `(ai)` / `(ai "prompt")` Lisp built-ins — open panel or send a one-shot prompt
+- `repulse:ai:*` localStorage namespace — keys, history (last 50 turns), feature flag
+
+See full spec: [PROMPTS/PHASE-AI2.md](PROMPTS/PHASE-AI2.md)
+
+---
+
+## Phase AI3 — Tool-Using Agent 📋 *planned*
+
+Promote the assistant from chat to agent: it can read the editor buffer, query session
+state, browse snippets, propose unified-diff edits, and silently preview evaluated code
+— all with explicit user confirmation before any change is applied.
+
+**Key additions:**
+- `app/src/repulse/ai/tools.cljs` — typed tool registry: `read_buffer`, `propose_edit`
+  (unified diff), `eval_preview` (silent off-graph audio context), `query_session`,
+  `query_track`, `find_snippet`, `insert_snippet`, `set_bpm_proposal`
+- `app/src/repulse/ai/agent_loop.cljs` — bounded agent loop (max N tool calls per turn)
+  with cancel button; function-calling adapters for OpenAI and Anthropic tool-use schemas
+- Edit-proposal diff overlay in the editor with "Apply / Reject" buttons; rejections fed
+  back as model feedback
+- `eval_preview` runs against an off-graph silent gain node — assistant "listens" without
+  touching the user's session; returns scheduled-event count + duration-bars summary
+- Snippet integration: `find_snippet` searches community library, `insert_snippet` uses
+  the same path as manual insert with usage tracking
+
+See full spec: [PROMPTS/PHASE-AI3.md](PROMPTS/PHASE-AI3.md)
+
+---
+
+## Phase AI4 — Assistant Safety & Limits 📋 *planned*
+
+The trust and economics layer: hard token + tool-call budgets, prompt-injection guards
+for untrusted content the assistant reads, auto-apply toggle with full undo, and an
+optional Supabase server-relay for users who want encrypted key storage.
+
+**Key additions:**
+- Hard token + tool-call budget per session; soft warning at 50%, hard stop at 100%
+  with one-click raise; budget persisted per provider
+- Prompt-injection guards — snippet text, sample manifest text, and any external content
+  the assistant reads wrapped in `<untrusted>` tags in the system prompt
+- Auto-apply toggle (default off) — when on, every `propose_edit` lands immediately and
+  records to an undo stack with a "revert assistant turn" button
+- Per-provider rate limiting + retry-with-backoff; provider errors surfaced inline
+- Optional server-relay — keys stored in Supabase encrypted user settings (S2 backend)
+  instead of localStorage; toggled in settings modal
+- Activity log panel — last 50 tool calls with payloads, exportable as JSON for debugging
+
+See full spec: [PROMPTS/PHASE-AI4.md](PROMPTS/PHASE-AI4.md)
+
+---
+
 ## Future ideas (unscheduled)
 
 See [docs/FUTURE-FEATURES.md](docs/FUTURE-FEATURES.md) for the full prioritised feature
