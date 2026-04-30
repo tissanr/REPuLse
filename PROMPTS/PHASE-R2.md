@@ -58,7 +58,8 @@ app/src/repulse/env/builtins/
 ├── content.cljs       snippet/demo/tutorial/gist builtins
 ├── export.cljs        WAV export
 ├── session.cljs       share/reset/session side effects
-└── routing.cljs       bus/routing app builtins
+├── routing.cljs       bus/routing app builtins
+└── plugins.cljs       load/unload plugin builtins
 ```
 
 ---
@@ -71,8 +72,9 @@ now a second large registration table. R2 should therefore document and execute
 the split as a two-track refactor instead of pretending the Lisp evaluator is the
 only builtin environment.
 
-R0, R1, S1, and S4 are already delivered or otherwise independent of this prompt.
-No prerequisite phase work is required before starting R2.
+R0, R1, S1, S2, and S3 are already delivered or otherwise independent of this prompt.
+No prerequisite phase work is required before starting R2. S4 (Snippet Audio
+Preview) is planned and should follow this refactor.
 
 Track A should be implemented first because `packages/lisp` has the stronger
 unit-test safety net (`eval_test.cljs`, `mini_test.cljs`). Track B should follow
@@ -150,6 +152,7 @@ would change semantics.
 | `app/src/repulse/env/builtins/export.cljs` | **New** — `export` WAV rendering |
 | `app/src/repulse/env/builtins/session.cljs` | **New** — `share!`, `reset!` |
 | `app/src/repulse/env/builtins/routing.cljs` | **New** — `bus` app builtin |
+| `app/src/repulse/env/builtins/plugins.cljs` | **New** — `load-plugin`, `unload-plugin` |
 
 Each app builtin namespace exports one map or factory function. Use factory
 functions whenever the builtin needs callbacks, editor refs, `evaluate-ref`, or
