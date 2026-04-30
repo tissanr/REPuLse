@@ -145,7 +145,8 @@
         avg-rating (or (:avg_rating snippet) 0)
         my-rating  (snippets/get-rating id)
         ;; Star/report only available for community snippets (UUID ids from the API)
-        can-star   (and (logged-in?) (uuid-id? id))]
+        can-star   (and (logged-in?) (uuid-id? id))
+        can-delete (and can-star (= (:author_id snippet) (auth/user-id)))]
     (str "<div class=\"snippet-card"
          (when playing? " snippet-card--playing")
          (when err " snippet-card--error")
@@ -180,6 +181,9 @@
          "<button class=\"snippet-report-btn\" data-id=\"" safe-id "\""
          (when-not can-star " disabled title=\"Log in or use a community snippet to report\"")
          ">&#9872; report</button>"
+         (when can-delete
+           (str "<button class=\"snippet-delete-btn\" data-id=\"" safe-id "\""
+                " title=\"Delete your snippet\">delete</button>"))
          "</div>"
          "<details class=\"snippet-code-details\">"
          "<summary class=\"snippet-code-summary\">{ } code</summary>"
@@ -300,6 +304,20 @@
                      (js/alert (str "Report failed: " (:error result)))
                      (js/alert "Thank you — the snippet has been flagged for review."))))))))
 
+(defn- handle-delete! [snippet-id]
+  (when (and (logged-in?) (uuid-id? snippet-id))
+    (when (js/confirm "Delete this snippet? This cannot be undone.")
+      (clear-preview!)
+      (-> (api/delete-snippet! snippet-id)
+          (.then (fn [result]
+                   (if (:error result)
+                     (js/alert (str "Delete failed: " (:error result)))
+                     (do
+                       (when-let [cards (el "snippet-cards")]
+                         (set! (.-innerHTML cards)
+                               "<div class=\"snippet-empty\">loading\u2026</div>"))
+                       (snippets/reload!)))))))))
+
 ;;; Show / hide
 
 (defn show-panel! []
@@ -354,7 +372,10 @@
             (when-not (js/isNaN n) (handle-rate! id n)))
 
           (and id (.contains cl "snippet-report-btn"))
-          (handle-report! id)))))
+          (handle-report! id)
+
+          (and id (.contains cl "snippet-delete-btn"))
+          (handle-delete! id)))))
 
   ;; Keyboard: Escape closes panel
   (.addEventListener js/document "keydown"

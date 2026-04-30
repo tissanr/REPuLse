@@ -41,6 +41,7 @@ S4 fixes all three and adds a mini-waveform visualisation per card.
 | `app/src/repulse/snippets/sandbox.cljs` | **New** — sandboxed eval env snapshot/restore |
 | `app/src/repulse/ui/snippet_panel.cljs` | Update cards to show playing state + waveform |
 | `app/public/css/main.css` | Styles for playing indicator + waveform canvas |
+| `api/snippets/[id].ts` | **New** — owner-only snippet delete endpoint |
 | `api/snippets/[id]/waveform.ts` | **New** — optional pre-computed waveform endpoint (server-side render) |
 
 ---
@@ -99,6 +100,7 @@ bleed issues.
 - [x] Runaway `loop/recur` snippets are stopped by the evaluator iteration budget; evals over 500ms are surfaced as preview errors after returning
 - [x] Playing card has visible "playing" indicator (animated)
 - [x] Mini waveform canvas renders during preview playback
+- [x] Authors can delete their own community snippets from the card UI
 - [x] Session state (BPM, fx chain, tracks) is unchanged after preview ends
 - [x] Works with auth + without — anonymous users get preview too
 - [x] Preview cleanup cancels waveform RAF handles and clears reserved preview tracks on each stop
