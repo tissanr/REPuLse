@@ -1024,6 +1024,41 @@ See full spec: [PROMPTS/PHASE-DOC1.md](PROMPTS/PHASE-DOC1.md)
 
 ---
 
+## Phase R3 — JavaScript Purification 📋 *planned*
+
+Move maintainable hand-written app logic from JavaScript into ClojureScript
+without disturbing generated files, worklet boundaries, or the public plugin
+authoring surface.
+
+**Key additions:**
+- Port CodeMirror language-support helpers from `app/src/repulse/lisp-lang/*.js`
+  to CLJS equivalents
+- Keep generated Lezer parser output, wasm-pack glue, externs, AudioWorklets,
+  and public plugin examples as intentional JavaScript boundaries
+- Update editor/app imports to consume CLJS language support directly
+- Document the remaining JS boundary rationale in `docs/ARCHITECTURE.md`
+
+See full spec: [PROMPTS/PHASE-R3.md](PROMPTS/PHASE-R3.md)
+
+---
+
+## Phase PLUG1 — Drop-In Plugin Packages 📋 *planned*
+
+Let users install trusted third-party plugins by dragging local `.js` files or
+`.repulse-plugin.zip` packages onto the app.
+
+**Key additions:**
+- Plugin package manifest format with `id`, `name`, `version`, `apiVersion`,
+  `type`, `entry`, permissions, and assets
+- Drag/drop install flow with explicit trust dialog before executing code
+- IndexedDB persistence plus enable, disable, reload, and remove controls
+- Host APIs for packaged assets and AudioWorklet modules while preserving the
+  existing effect/visual plugin protocols
+
+See full spec: [PROMPTS/PHASE-PLUG1.md](PROMPTS/PHASE-PLUG1.md)
+
+---
+
 ## Future ideas (unscheduled)
 
 See [docs/FUTURE-FEATURES.md](docs/FUTURE-FEATURES.md) for the full prioritised feature
