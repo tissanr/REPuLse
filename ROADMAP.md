@@ -1001,6 +1001,25 @@ See full spec: [PROMPTS/PHASE-HRD2.md](PROMPTS/PHASE-HRD2.md)
 
 ---
 
+## Phase HRD3 — Interface Specs 📋 *planned*
+
+Harden REPuLse's runtime boundaries with explicit `cljs.spec` contracts, starting
+with the public plugin API and extending to the data maps that cross persistence,
+network, audio-routing, MIDI, and pattern-engine boundaries.
+
+**Key additions:**
+- Plugin interface specs for identity, visual/effect methods, host API, optional
+  method normalization, and `createNodes` audio-node return contracts
+- Core pattern specs for rational time, spans, events, and tagged Pattern maps
+- Boundary specs for session snapshots, FX chain entries, sample manifests/loaded
+  sources, event payload parameter maps, tween descriptors, and MIDI mappings
+- Tests that invalid plugins, malformed sessions, bad effect nodes, and invalid
+  core data fail early with clear diagnostics
+
+See full spec: [PROMPTS/PHASE-HRD3.md](PROMPTS/PHASE-HRD3.md)
+
+---
+
 ## Phase DOC1 — User Documentation Overhaul 📋 *planned*
 
 Split the current monolithic user documentation into a friendly manual that works
