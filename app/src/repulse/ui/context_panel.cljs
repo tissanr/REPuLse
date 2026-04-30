@@ -1,9 +1,9 @@
 (ns repulse.ui.context-panel
   "Context panel rendering — status, tracks, FX, MIDI, buses, sources, bindings.
-   Also owns slider configuration constants and the schedule-render! debounce.
+   Also owns context control configuration constants and the schedule-render! debounce.
    Responsibility: build and refresh the sidebar context panel DOM.
    Exports: render-context-panel!, schedule-render!, slider-active?,
-            FX-SLIDER-PARAMS, FX-PRIMARY-PARAM, SLIDER-PARAMS."
+            FX-SLIDER-PARAMS, FX-SELECT-PARAMS, FX-PRIMARY-PARAM, SLIDER-PARAMS."
   (:require [clojure.string :as str]
             [repulse.core :as core]
             [repulse.audio :as audio]
@@ -88,6 +88,10 @@
                       "release"   {:min 0    :max 1   :step 0.01}
                       "knee"      {:min 0    :max 40  :step 0.5}}})
 
+;; FX select config: {effect-name {param-name [option-name ...]}}
+(def FX-SELECT-PARAMS
+  {"amp-sim" {"tonestack" ["neutral" "bright" "dark" "mid-scoop" "mid-hump"]}})
+
 ;; Which getParams key corresponds to the positional (fx :name NUMBER) form
 (def FX-PRIMARY-PARAM
   {"reverb"          "wet"
@@ -151,6 +155,46 @@
            "<span class=\"ctx-param-val\">" (escape-html (fmt-pv value)) "</span>"
            "</div>"))))
 
+(defn- render-fx-select [effect-name param-name value]
+  (when-let [opts (get-in FX-SELECT-PARAMS [effect-name param-name])]
+    (let [fen (escape-html effect-name)
+          pn  (escape-html param-name)
+          cur (str/replace (str value) #"^:" "")]
+      (str "<div class=\"ctx-slider-row ctx-select-row\">"
+           "<label class=\"ctx-param-key\">" pn "</label>"
+           "<select class=\"ctx-select\""
+           " data-fx=\"" fen "\""
+           " data-param=\"" pn "\">"
+           (apply str
+             (map (fn [opt]
+                    (str "<option value=\"" (escape-html opt) "\""
+                         (when (= opt cur) " selected")
+                         ">" (escape-html opt) "</option>"))
+                  opts))
+           "</select>"
+           "</div>"))))
+
+(defn- render-track-fx-select [track-name effect-name param-name value]
+  (when-let [opts (get-in FX-SELECT-PARAMS [effect-name param-name])]
+    (let [tn  (escape-html (cljs.core/name track-name))
+          fen (escape-html effect-name)
+          pn  (escape-html param-name)
+          cur (str/replace (str value) #"^:" "")]
+      (str "<div class=\"ctx-slider-row ctx-select-row\">"
+           "<label class=\"ctx-param-key\">" pn "</label>"
+           "<select class=\"ctx-select\""
+           " data-track=\"" tn "\""
+           " data-fx=\"" fen "\""
+           " data-param=\"" pn "\">"
+           (apply str
+             (map (fn [opt]
+                    (str "<option value=\"" (escape-html opt) "\""
+                         (when (= opt cur) " selected")
+                         ">" (escape-html opt) "</option>"))
+                  opts))
+           "</select>"
+           "</div>"))))
+
 (defn- render-track-fx-slider [track-name effect-name param-name value]
   (when-let [{:keys [min max step]} (get-in FX-SLIDER-PARAMS [effect-name param-name])]
     (let [tn  (escape-html (cljs.core/name track-name))
@@ -178,16 +222,24 @@
                       (let [params     (try (js->clj (.getParams ^js plugin))
                                            (catch :default _ {}))
                             fx-sliders (get FX-SLIDER-PARAMS name)
+                            fx-selects (get FX-SELECT-PARAMS name)
                             sliders    (when fx-sliders
                                          (apply str
                                            (keep (fn [[pname _]]
                                                    (when-let [v (get params pname)]
                                                      (render-track-fx-slider track-name name pname v)))
-                                                 fx-sliders)))]
+                                                 fx-sliders)))
+                            selects    (when fx-selects
+                                         (apply str
+                                           (keep (fn [[pname _]]
+                                                   (when-let [v (get params pname)]
+                                                     (render-track-fx-select track-name name pname v)))
+                                                 fx-selects)))]
                         (str "<div class=\"ctx-fx-row\">"
                              "<span class=\"ctx-fx-name\">" (escape-html name) "</span>"
                              "</div>"
-                             (or sliders ""))))
+                             (or sliders "")
+                             (or selects ""))))
                     active-fx))
              "</details>")))))
 
@@ -271,14 +323,23 @@
                                         (try (js->clj (.getParams ^js plugin))
                                              (catch :default _ {})))
                           fx-sliders  (get FX-SLIDER-PARAMS name)
+                          fx-selects  (get FX-SELECT-PARAMS name)
                           slider-html (when (and (not bypassed?) fx-sliders)
                                         (apply str
                                           (keep (fn [[pname _]]
                                                   (when-let [v (get params pname)]
                                                     (render-fx-slider name pname v)))
                                                 fx-sliders)))
-                          first-kv    (first (seq (apply dissoc params (keys fx-sliders))))
-                          pstr        (when (and first-kv (not (seq slider-html)))
+                          select-html (when (and (not bypassed?) fx-selects)
+                                        (apply str
+                                          (keep (fn [[pname _]]
+                                                  (when-let [v (get params pname)]
+                                                    (render-fx-select name pname v)))
+                                                fx-selects)))
+                          control-html (str (or slider-html "") (or select-html ""))
+                          first-kv    (first (seq (apply dissoc params (concat (keys fx-sliders)
+                                                                                (keys fx-selects)))))
+                          pstr        (when (and first-kv (not (seq control-html)))
                                         (str (escape-html (first first-kv)) " "
                                              (escape-html (fmt-pv (second first-kv)))))]
                       (str "<div class=\"ctx-row\">"
@@ -288,7 +349,7 @@
                              pstr      (str "<span class=\"ctx-param\">" pstr "</span>")
                              :else     "")
                            "</div>"
-                           (or slider-html ""))))
+                           control-html)))
                   active))
            "</div>"))))
 

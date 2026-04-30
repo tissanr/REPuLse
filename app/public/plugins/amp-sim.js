@@ -34,6 +34,7 @@ export default {
   _tonestack: "neutral",
   _sag: 0.0,
   _mix: 1.0,
+  _stageGain: 0,
 
   init(_host) {},
 
@@ -50,7 +51,7 @@ export default {
     // DC blocker
     this._dcBlock = ctx.createIIRFilter([1, -1], [1, -0.9995]);
 
-    // Final tone lowpass
+    // Final lowpass trims amp harshness after the tone stack.
     this._toneLP = ctx.createBiquadFilter();
     this._toneLP.type = "lowpass";
     this._toneLP.frequency.value = this._tone;
@@ -97,19 +98,24 @@ export default {
 
     try { this._input.disconnect(this._sagComp); } catch (_) {}
     try { this._sagComp.disconnect(); } catch (_) {}
-    
+    try { this._dcBlock.disconnect(); } catch (_) {}
+    try { this._lowShelf.disconnect(); } catch (_) {}
+    try { this._midPeak.disconnect(); } catch (_) {}
+    try { this._highShelf.disconnect(); } catch (_) {}
+    try { this._toneLP.disconnect(); } catch (_) {}
+
     this._input.connect(this._sagComp);
     this._sagComp.connect(this._stageChain[0].inputGain);
 
     const lastStage = this._stageChain[this._stageChain.length - 1];
     try { lastStage.outputGain.disconnect(); } catch (_) {}
-    
+
     lastStage.outputGain.connect(this._dcBlock);
-    this._dcBlock.connect(this._toneLP);
-    this._toneLP.connect(this._lowShelf);
+    this._dcBlock.connect(this._lowShelf);
     this._lowShelf.connect(this._midPeak);
     this._midPeak.connect(this._highShelf);
-    this._highShelf.connect(this._wetGain);
+    this._highShelf.connect(this._toneLP);
+    this._toneLP.connect(this._wetGain);
     this._wetGain.connect(this._out);
   },
 
@@ -125,6 +131,7 @@ export default {
 
     const N = Math.max(1, Math.min(4, Math.round(this._stages)));
     const perStageGain = Math.pow(this._gain, 1 / N);
+    this._stageGain = perStageGain;
     const stageLPFreqs = [12000, 8000, 5000, 4000];
 
     for (let i = 0; i < N; i++) {
@@ -159,6 +166,16 @@ export default {
     }
   },
 
+  _updateStageGain() {
+    const N = Math.max(1, Math.min(4, Math.round(this._stages)));
+    const perStageGain = Math.pow(this._gain, 1 / N);
+    this._stageGain = perStageGain;
+    for (const s of this._stageChain) {
+      s.inputGain.gain.value = perStageGain;
+      s.shaper.curve = makeStageCurve(perStageGain);
+    }
+  },
+
   _applyTonestack(name, time) {
     const ts = TONESTACKS[name] || TONESTACKS.neutral;
     const now = this._ctx?.currentTime || 0;
@@ -174,16 +191,16 @@ export default {
 
     if (name === "gain" || name === "value") {
       this._gain = Math.max(1.0, Math.min(100.0, Number(value)));
-      if (this._ctx) {
-        this._buildStages(this._ctx);
-        this._connectWetPath();
-      }
+      if (this._ctx) this._updateStageGain();
     }
     if (name === "stages") {
-      this._stages = Math.max(1, Math.min(4, Math.round(Number(value))));
-      if (this._ctx) {
+      const nextStages = Math.max(1, Math.min(4, Math.round(Number(value))));
+      if (nextStages !== this._stages && this._ctx) {
+        this._stages = nextStages;
         this._buildStages(this._ctx);
         this._connectWetPath();
+      } else {
+        this._stages = nextStages;
       }
     }
     if (name === "tone") {

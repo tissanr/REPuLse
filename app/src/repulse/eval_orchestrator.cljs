@@ -4,7 +4,8 @@
    editor code-patching logic for slider updates.
    Exports: evaluate!, set-diagnostics!, pending-mutes,
             slider-patch-and-eval!, fx-slider-patch-and-eval!,
-            per-track-fx-slider-patch-and-eval!"
+            fx-select-patch-and-eval!, per-track-fx-slider-patch-and-eval!,
+            per-track-fx-select-patch-and-eval!"
   (:require [repulse.lisp.core :as lisp]
             [repulse.core :as core]
             [repulse.audio :as audio]
@@ -195,6 +196,31 @@
           (evaluate! (.. view -state -doc (toString)))))
       150)))
 
+(defn- patch-fx-keyword-param-in-editor!
+  "Update or insert a keyword param in a (fx :effect-name ...) call."
+  [effect-name param-name new-val]
+  (when-let [view @editor/editor-view]
+    (let [doc      (.. view -state -doc (toString))
+          doc-len  (.-length doc)
+          fmtd     (str ":" new-val)
+          result   (patcher/find-fx-named-param-keyword doc 0 doc-len effect-name param-name)]
+      (if result
+        (dispatch-replace! view (:from result) (:to result) fmtd)
+        (when-let [close (patcher/find-fx-form-close doc 0 doc-len effect-name)]
+          (dispatch-replace! view close close (str " :" param-name " " fmtd)))))))
+
+(defn fx-select-patch-and-eval! [effect-name param-name new-val]
+  (fx/set-param! effect-name param-name new-val)
+  (patch-fx-keyword-param-in-editor! effect-name param-name new-val)
+  (when @slider-timeout (js/clearTimeout @slider-timeout))
+  (reset! slider-timeout
+    (js/setTimeout
+      (fn []
+        (reset! slider-timeout nil)
+        (when-let [view @editor/editor-view]
+          (evaluate! (.. view -state -doc (toString)))))
+      150)))
+
 (defn- patch-per-track-fx-param-in-editor!
   "Update or insert a param in (fx :effect-name ...) scoped to (track :track-name ...)."
   [track-name effect-name param-name new-val]
@@ -218,6 +244,35 @@
 (defn per-track-fx-slider-patch-and-eval! [track-name effect-name param-name new-val]
   (fx/set-track-param! (keyword track-name) effect-name param-name new-val)
   (patch-per-track-fx-param-in-editor! track-name effect-name param-name new-val)
+  (when @slider-timeout (js/clearTimeout @slider-timeout))
+  (reset! slider-timeout
+    (js/setTimeout
+      (fn []
+        (reset! slider-timeout nil)
+        (when-let [view @editor/editor-view]
+          (evaluate! (.. view -state -doc (toString)))))
+      150)))
+
+(defn- patch-per-track-fx-keyword-param-in-editor!
+  "Update or insert a keyword param in (fx :effect-name ...) scoped to (track :track-name ...)."
+  [track-name effect-name param-name new-val]
+  (when-let [view @editor/editor-view]
+    (let [doc         (.. view -state -doc (toString))
+          track-kw    (str "(track :" track-name)
+          track-start (.indexOf doc track-kw)]
+      (when (>= track-start 0)
+        (let [scope-end (let [p (.indexOf doc "(track :" (inc track-start))]
+                          (if (>= p 0) p (.-length doc)))
+              fmtd      (str ":" new-val)
+              result    (patcher/find-fx-named-param-keyword doc track-start scope-end effect-name param-name)]
+          (if result
+            (dispatch-replace! view (:from result) (:to result) fmtd)
+            (when-let [close (patcher/find-fx-form-close doc track-start scope-end effect-name)]
+              (dispatch-replace! view close close (str " :" param-name " " fmtd)))))))))
+
+(defn per-track-fx-select-patch-and-eval! [track-name effect-name param-name new-val]
+  (fx/set-track-param! (keyword track-name) effect-name param-name new-val)
+  (patch-per-track-fx-keyword-param-in-editor! track-name effect-name param-name new-val)
   (when @slider-timeout (js/clearTimeout @slider-timeout))
   (reset! slider-timeout
     (js/setTimeout
