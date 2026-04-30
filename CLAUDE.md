@@ -237,9 +237,14 @@ preview tools.
 | CI1   | CI pipeline — GitHub Actions: tests, lint, Rust, grammar drift | ✓ delivered  |
 | HRD1  | Hardening — AST editor patching, fetch validation, reproducible Rust builds | ✓ delivered  |
 | HRD2  | Security hardening — XSS, RLS, CORS, input validation, CSP    | ✓ delivered  |
+| HRD3  | Interface specs — plugins, pattern data, sessions, FX, MIDI   | planned      |
 | DOC1  | User docs — split manual, tutorials, cookbook, reference       | planned      |
 | R3    | Refactor — purify hand-written JS into CLJS where appropriate  | planned      |
 | PLUG1 | Drop-in plugins — drag local JS/package plugins into the app   | planned      |
+| AI1   | AI knowledge base — /docs/ai/*.json, gen:ai-docs, help-export  | planned      |
+| AI2   | AI assistant panel — BYO key, streaming chat, opt-in feature   | planned      |
+| AI3   | Tool-using agent — read_buffer, propose_edit, eval_preview     | planned      |
+| AI4   | AI safety & limits — budgets, injection guards, auto-apply     | planned      |
 
 See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full delivery notes.
 
@@ -284,6 +289,22 @@ When the code for a phase is complete and working, **always also**:
 A phase is **not complete** until Rules 2.1–2.5 are satisfied. "The code works" is
 necessary but not sufficient. If you finish implementing a phase and realise the docs
 haven't been updated, do not mark the task done — update the docs first.
+
+### Rule 4 — AI docs are part of done
+
+When adding a new built-in name that should be highlighted and autocompleted in the editor:
+
+1. Add the name to `BuiltinName` in `app/src/repulse/lisp-lang/repulse-lisp.grammar`
+2. **Run `npm run gen:grammar`** — overwrites the committed `parser.js`
+3. Add a `{ label, type, detail }` entry in `app/src/repulse/lisp-lang/completions.js`
+4. **Add an entry to `app/src/repulse/content/builtin_meta.edn`** with `category`,
+   `returns`, `side-effects`, `examples` (≥1), and `see-also`
+5. **Run `npm run gen:ai-docs`** — overwrites `docs/ai/builtins.json`
+6. Commit grammar, `parser.js`, `completions.js`, `builtin_meta.edn`, and
+   `builtins.json` together
+
+Skipping steps 4–5 means the AI knowledge base drifts from the real surface and CI
+will fail on the `ai-docs` drift check.
 
 ---
 
