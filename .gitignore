@@ -25,10 +25,6 @@ app/public/repulse_audio.js
 # macOS
 .DS_Store
 
-# Local artifacts
-.env.local
-REPuLse-handoff-2.zip
-
 # Calva (VS Code Clojure extension)
 .calva/
 
@@ -42,3 +38,9 @@ REPuLse-handoff-2.zip
 
 .gemini/
 gha-creds-*.json
+
+# Vercel
+.env*.local
+
+# Design 
+REPuLse-handoff-*
