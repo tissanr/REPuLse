@@ -918,7 +918,7 @@ See full spec: [PROMPTS/PHASE-S3.md](PROMPTS/PHASE-S3.md)
 
 ---
 
-## Phase S4 — Snippet Audio Preview 📋 *planned*
+## Phase S4 — Snippet Audio Preview ✅ *delivered*
 
 Production-quality audition for community snippets: sandboxed eval, state
 isolation, visual playing indicators, and per-card mini waveforms. Upgrades
@@ -948,7 +948,7 @@ built-ins, no public API change.
 - Track A: `packages/lisp/src/repulse/lisp/builtins/*` — pattern, math, music,
   params, collection, types, synth, and arrangement builtin maps
 - Track B: `app/src/repulse/env/builtins/*` — track, fx, samples, MIDI, content,
-  export, session, and routing builtin factories
+  export, session, routing, and plugin builtin factories
 - `eval.cljs` keeps evaluator helpers and special forms only
 - `env/builtins.cljs` keeps env ownership, callback wiring, `ensure-env!`, and
   public facade exports
