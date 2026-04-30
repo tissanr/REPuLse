@@ -918,7 +918,7 @@ See full spec: [PROMPTS/PHASE-S3.md](PROMPTS/PHASE-S3.md)
 
 ---
 
-## Phase S4 — Snippet Audio Preview 📋 *planned*
+## Phase S4 — Snippet Audio Preview ✅ *delivered*
 
 Production-quality audition for community snippets: sandboxed eval, state
 isolation, visual playing indicators, and per-card mini waveforms. Upgrades
@@ -932,6 +932,7 @@ S1's minimal preview.
 - Mini waveform canvas per card, client-rendered via AnalyserNode during preview
 - Syntax errors show as tooltip on the card, never crash the app
 - Solo + mix preview both routed through the sandbox
+- Owner-only snippet delete endpoint and card action for submitted snippets
 
 See full spec: [PROMPTS/PHASE-S4.md](PROMPTS/PHASE-S4.md)
 
