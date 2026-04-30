@@ -235,6 +235,7 @@ preview tools.
 | DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | planned   |
 | DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | planned      |
 | CI1   | CI pipeline — GitHub Actions: tests, lint, Rust, grammar drift | ✓ delivered  |
+| HRD2  | Security hardening — XSS, RLS, CORS, input validation, CSP    | ✓ delivered  |
 | DOC1  | User docs — split manual, tutorials, cookbook, reference       | planned      |
 | R3    | Refactor — purify hand-written JS into CLJS where appropriate  | planned      |
 | PLUG1 | Drop-in plugins — drag local JS/package plugins into the app   | planned      |
