@@ -51,4 +51,4 @@
                    (doseq [[k v] (partition 2 rest-args)]
                      (fx/set-param! effect-name (cljs.core/name k) v))
                    (fx/set-param! effect-name "value" (first rest-args))))))
-           nil)))})
+           nil))))})
