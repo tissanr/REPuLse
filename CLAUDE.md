@@ -236,7 +236,8 @@ preview tools.
 | DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | planned   |
 | DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | planned      |
 | CI1   | CI pipeline — GitHub Actions: tests, lint, Rust, grammar drift | ✓ delivered  |
-| TEST1 | Automated E2E testing — eval → events → audio render → PCM | planned      |
+| TEST1 | Automated audio verification — CLJS, Rust DSP, offline PCM tests | planned      |
+| TEST2 | Production browser audio capture — AudioWorklet/WASM PCM verification | planned      |
 | HRD1  | Hardening — AST editor patching, fetch validation, reproducible Rust builds | ✓ delivered  |
 | HRD2  | Security hardening — XSS, RLS, CORS, input validation, CSP    | ✓ delivered  |
 | HRD3  | Interface specs — plugins, pattern data, sessions, FX, MIDI   | planned      |

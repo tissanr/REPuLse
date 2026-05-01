@@ -1000,21 +1000,45 @@ See full spec: [PROMPTS/PHASE-CI1.md](PROMPTS/PHASE-CI1.md)
 
 ---
 
-## Phase TEST1 — Automated End-to-End Testing 📋 *planned*
+## Phase TEST1 — Automated Audio Verification 📋 *planned*
 
-Full-pipeline test suite: Lisp eval → pattern events → audio render → PCM analysis.
-Claude Code can run `scripts/test-all.sh` after any dev session for automated verification.
+Layered audio verification suite: Lisp eval → pattern events, Rust AudioEngine
+DSP tests, and browser OfflineAudioContext render → PCM analysis. Claude Code can
+run `./scripts/test-all.sh` or `npm run test:all` after any dev session for
+automated verification.
 
 **Key additions:**
 - CLJS integration tests: eval-to-events pipeline (`lisp/integration_test.cljs`)
 - Rust engine unit tests: `process_block_raw` extraction, voice/pan/envelope tests
-- Browser audio tests: Playwright + OfflineAudioContext render → PCM analysis
+- Browser offline audio tests: Playwright + OfflineAudioContext render → PCM analysis
 - Test harness API: `window.__REPULSE_TEST__` namespace (`repulse.test-api`)
-- Audio analysis helpers: RMS power, frequency peaks, onset count, stereo balance, leak detection
-- Unified runner: `scripts/test-all.sh` (CLJS + Rust + Playwright)
+- Dedicated `:test-harness` shadow-cljs build
+- Audio analysis helpers: RMS power, onset count, stereo balance, leak detection
+- Unified runners: `scripts/test-all.sh` and `npm run test:all`
 - CI: add `cargo test` job, Playwright job with headless browser
 
+**Boundary:** TEST1 browser tests verify the offline/export-style JS render path.
+Production browser AudioWorklet + WASM PCM capture is deferred to TEST2.
+
 See full spec: [PROMPTS/PHASE-TEST1.md](PROMPTS/PHASE-TEST1.md)
+
+---
+
+## Phase TEST2 — Production Browser Audio Capture 📋 *planned*
+
+True production-path browser audio verification:
+`AudioContext → AudioWorkletNode → Rust/WASM AudioEngine → captured PCM`.
+
+**Key additions:**
+- Playwright harness that starts a real `AudioContext`
+- Proof that the app is using AudioWorklet + WASM, not JS fallback
+- PCM capture from the production worklet output
+- Live-path checks for `trigger`, `trigger_v2`, amp, pan, decay, and voice cleanup
+- Targeted PCM snapshots/golden fixtures where stable and valuable
+- Live-path FX verification for browser graph routing
+- Browser support decision: Chromium-only gate or broader suite
+
+See full spec stub: [PROMPTS/PHASE-TEST2.md](PROMPTS/PHASE-TEST2.md)
 
 ---
 
