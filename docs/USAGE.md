@@ -2270,6 +2270,7 @@ The app exposes a serverless REST API on Vercel:
 | `/api/env` | GET | None | Returns public Supabase credentials |
 | `/api/snippets` | GET | None | List snippets (`?tag=`, `?q=`, `?sort=`, `?author=`, `?limit=`) |
 | `/api/snippets` | POST | Required | Create a new snippet |
+| `/api/snippets/:id` | DELETE | Required | Delete your own snippet |
 | `/api/snippets/:id/star` | POST | Required | Set or remove a 1-5 rating |
 | `/api/snippets/:id/use` | POST | None | Increment usage counter |
 | `/api/snippets/:id/report` | POST | Required | Flag snippet for moderation |

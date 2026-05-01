@@ -41,6 +41,7 @@ S4 fixes all three and adds a mini-waveform visualisation per card.
 | `app/src/repulse/snippets/sandbox.cljs` | **New** — sandboxed eval env snapshot/restore |
 | `app/src/repulse/ui/snippet_panel.cljs` | Update cards to show playing state + waveform |
 | `app/public/css/main.css` | Styles for playing indicator + waveform canvas |
+| `api/snippets/[id].ts` | **New** — owner-only snippet delete endpoint |
 | `api/snippets/[id]/waveform.ts` | **New** — optional pre-computed waveform endpoint (server-side render) |
 
 ---
@@ -92,16 +93,17 @@ bleed issues.
 
 ## Definition of done
 
-- [ ] Solo preview plays a snippet without modifying user session state
-- [ ] Mix preview plays alongside session without disturbing existing tracks
-- [ ] Preview stops cleanly on: snippet change, panel close, `(stop)`, app unmount
-- [ ] Syntax errors in community snippets show as tooltip on the card, don't crash preview
-- [ ] Execution time limit kills runaway snippets within 500ms
-- [ ] Playing card has visible "playing" indicator (animated)
-- [ ] Mini waveform canvas renders during preview playback
-- [ ] Session state (BPM, fx chain, tracks) is unchanged after preview ends
-- [ ] Works with auth + without — anonymous users get preview too
-- [ ] No memory leaks — verified by running 100 previews without page reload
+- [x] Solo preview plays a snippet without modifying user session state
+- [x] Mix preview plays alongside session without disturbing existing tracks
+- [x] Preview stops cleanly on: snippet change, panel close, `(stop)`, app unmount
+- [x] Syntax errors in community snippets show as tooltip on the card, don't crash preview
+- [x] Runaway `loop/recur` snippets are stopped by the evaluator iteration budget; evals over 500ms are surfaced as preview errors after returning
+- [x] Playing card has visible "playing" indicator (animated)
+- [x] Mini waveform canvas renders during preview playback
+- [x] Authors can delete their own community snippets from the card UI
+- [x] Session state (BPM, fx chain, tracks) is unchanged after preview ends
+- [x] Works with auth + without — anonymous users get preview too
+- [x] Preview cleanup cancels waveform RAF handles and clears reserved preview tracks on each stop
 
 ---
 

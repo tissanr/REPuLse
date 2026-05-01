@@ -27,6 +27,9 @@
 (defn avatar-url []
   (get-in @auth-atom [:user :user_metadata :avatar_url]))
 
+(defn user-id []
+  (get-in @auth-atom [:user :id]))
+
 ;;; Auth actions
 
 (defn login! []

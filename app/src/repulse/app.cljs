@@ -11,6 +11,7 @@
             [repulse.ui.context-panel :as ctx-panel]
             [repulse.ui.snippet-panel :as snippet-panel]
             [repulse.ui.snippet-submit-modal :as snippet-submit-modal]
+            [repulse.snippets.preview :as snippet-preview]
             [repulse.ui.auth-button :as auth-button]
             [repulse.auth :as auth]
             [repulse.env.builtins :as builtins]
@@ -83,6 +84,7 @@
 
 (defn make-stop-fn []
   (fn []
+    (snippet-preview/stop!)
     (audio/stop!)
     (editor/clear-highlights!)
     (set-playing! false)
@@ -162,7 +164,8 @@
 
 (defn on-play-btn-click []
   (if (audio/playing?)
-    (do (audio/stop!)
+    (do (snippet-preview/stop!)
+        (audio/stop!)
         (editor/clear-highlights!)
         (set-playing! false)
         (set-output! "stopped" :idle))
