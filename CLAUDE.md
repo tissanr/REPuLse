@@ -126,6 +126,27 @@ and calls into Rust/WASM for synthesis:
 
 ---
 
+## Pre-push verification (MANDATORY)
+
+Before committing and pushing any ClojureScript changes, **always** run both checks:
+
+```bash
+npm run test                        # unit tests (core + lisp + session)
+npx shadow-cljs compile app         # full app compile — catches bracket errors,
+                                    # missing requires, and type errors in app/ files
+                                    # that the :test target does not compile
+```
+
+The `:test` shadow-cljs target compiles only `packages/core`, `packages/lisp`, and the
+session-test namespace. It does **not** compile `app/src/repulse/env/builtins/` or any
+other app-layer namespace. Bracket mismatches, unresolved namespaces, and unused
+requires in those files are only caught by compiling the `:app` target.
+
+**Never push without running both commands.** CI runs `shadow-cljs release app` and
+`clj-kondo` on the full source tree and will catch errors that the test runner misses.
+
+---
+
 ## Coding conventions
 
 - **Pure functions by default.** Side effects only at the edges: audio output, DOM.
