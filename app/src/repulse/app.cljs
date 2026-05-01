@@ -11,6 +11,7 @@
             [repulse.ui.context-panel :as ctx-panel]
             [repulse.ui.snippet-panel :as snippet-panel]
             [repulse.ui.snippet-submit-modal :as snippet-submit-modal]
+            [repulse.snippets.preview :as snippet-preview]
             [repulse.ui.auth-button :as auth-button]
             [repulse.auth :as auth]
             [repulse.env.builtins :as builtins]
@@ -83,6 +84,7 @@
 
 (defn make-stop-fn []
   (fn []
+    (snippet-preview/stop!)
     (audio/stop!)
     (editor/clear-highlights!)
     (set-playing! false)
@@ -162,7 +164,8 @@
 
 (defn on-play-btn-click []
   (if (audio/playing?)
-    (do (audio/stop!)
+    (do (snippet-preview/stop!)
+        (audio/stop!)
         (editor/clear-highlights!)
         (set-playing! false)
         (set-output! "stopped" :idle))
@@ -239,7 +242,22 @@
                 (eo/fx-slider-patch-and-eval! fx-name param-name new-val)
                 ;; Track param slider: has data-track only
                 :else
-                (eo/slider-patch-and-eval! track-name param-name new-val)))))))))
+                (eo/slider-patch-and-eval! track-name param-name new-val)))))))
+    (.addEventListener panel "change"
+      (fn [^js e]
+        (let [target (.-target e)]
+          (when (and (= "SELECT" (.-tagName target))
+                     (.contains (.-classList target) "ctx-select"))
+            (let [fx-name    (.. target -dataset -fx)
+                  track-name (.. target -dataset -track)
+                  param-name (.. target -dataset -param)
+                  new-val    (.-value target)]
+              (cond
+                (and (seq fx-name) (seq track-name))
+                (eo/per-track-fx-select-patch-and-eval! track-name fx-name param-name new-val)
+
+                (seq fx-name)
+                (eo/fx-select-patch-and-eval! fx-name param-name new-val)))))))))
 
 (defn init []
   ;; Wire module-level callbacks before anything else runs
@@ -401,7 +419,8 @@
                "/plugins/overdrive.js"
                "/plugins/bitcrusher.js"
                "/plugins/sidechain.js"
-               "/plugins/distort.js"]]
+               "/plugins/distort.js"
+               "/plugins/amp-sim.js"]]
     (when-not (contains? @loaded-plugins url)
       (-> (plugin-loading/dynamic-import! url)
           (.then (fn [m]

@@ -692,6 +692,21 @@ See full spec: [PROMPTS/phase-p-modular-routing.md](PROMPTS/phase-p-modular-rout
 
 ---
 
+## Phase P2 — Modular Effect Routing 📋 *planned*
+
+Advanced routing for the global and per-track effect chains: reorderable master
+bus, parallel effect paths, and "Aux Sends" that route audio to named busses.
+
+**Key additions:**
+- `(fx-chain :name1 :name2 ...)` — reorder the master FX chain dynamically
+- Parallel per-track FX via `(stack (fx :a) (fx :b))` syntax
+- `(fx :send :bus-name amount)` — route track audio to a named audio bus
+- Integration with the Phase P bus system for advanced "outboard" style processing
+
+See full spec: [PROMPTS/PHASE-P2-MODULAR-FX.md](PROMPTS/PHASE-P2-MODULAR-FX.md)
+
+---
+
 ## Phase DST1 — Soft Clipping Distortion ✅ *delivered*
 
 Add `:distort` to the `(fx ...)` effect chain — a musical soft-clip waveshaper with
@@ -728,10 +743,18 @@ See full spec: [PROMPTS/PHASE-DST2.md](PROMPTS/PHASE-DST2.md)
 
 ---
 
-## Phase DST3 — Multi-Stage Amp Simulation 📋 *planned*
+## Phase DST3 — Multi-Stage Amp Simulation ✅ *delivered*
 
 New `(fx :amp-sim ...)` effect — cascaded tube preamp stages with inter-stage filters,
 a 3-band tone stack with presets, and power supply sag simulation.
+
+**Delivered:**
+- `app/public/plugins/amp-sim.js` — multi-stage (1–4) cascaded waveshapers with asymmetric `STAGE_ASYM 0.2`
+- 3-band tone stack (EQ) with 5 presets: `:neutral`, `:bright`, `:dark`, `:mid-scoop`, `:mid-hump`
+- Power supply sag simulation via `DynamicsCompressorNode` approximation
+- Inter-stage HPF/LPF filtering and DC blocker
+- Interactive sliders in session dashboard for gain, stages, tone, sag, and mix
+- Syntax highlighting and hover docs updated
 
 **Key additions:**
 - `:gain` (1–100), `:stages` (1–4), `:tone`, `:mix`
@@ -932,6 +955,7 @@ S1's minimal preview.
 - Mini waveform canvas per card, client-rendered via AnalyserNode during preview
 - Syntax errors show as tooltip on the card, never crash the app
 - Solo + mix preview both routed through the sandbox
+- Owner-only snippet delete endpoint and card action for submitted snippets
 
 See full spec: [PROMPTS/PHASE-S4.md](PROMPTS/PHASE-S4.md)
 
@@ -976,6 +1000,34 @@ See full spec: [PROMPTS/PHASE-CI1.md](PROMPTS/PHASE-CI1.md)
 
 ---
 
+## Phase HRD1 — Hardening ✅ *delivered*
+
+AST-aware editor patching, remote fetch validation, and reproducible Rust builds.
+No new features or language changes — pure correctness and infrastructure hardening.
+
+**Delivered:**
+- `app/src/repulse/lisp_patcher.cljs` (new): minimal Lisp tokenizer that skips
+  comments and string literals, with four public paren-aware scanners
+  (`find-param-num`, `find-fx-named-param-num`, `find-fx-pos-param-num`,
+  `find-fx-form-close`). Replaces three regex-based patching functions in
+  `eval_orchestrator.cljs` that silently misfired on nested forms, comments, and
+  duplicate parameter names across tracks.
+- `eval_orchestrator.cljs`: rewritten `patch-param-in-editor!`,
+  `patch-fx-param-in-editor!`, and `patch-per-track-fx-param-in-editor!` to use
+  the new scanner; extracted shared `fmt-num` and `dispatch-replace!` helpers.
+- `samples.cljs`: added `fetch-ok!` helper that rejects with a descriptive error
+  on non-2xx responses; applied to all four fetch chains (JSON manifest, Lisp
+  manifest, GitHub tree API, audio buffer fetch).
+- `rust-toolchain.toml` (new): pins `channel = "stable"` with
+  `targets = ["wasm32-unknown-unknown"]` and `components = ["clippy", "rustfmt"]`,
+  ensuring reproducible Rust builds and correct CI lint toolchain setup.
+- `netlify.toml`: removed `rustup default stable && curl | sh` installer from the
+  build command; deploys now run only project build steps.
+
+See full spec: [PROMPTS/PHASE-HRD1.md](PROMPTS/PHASE-HRD1.md)
+
+---
+
 ## Phase HRD2 — Security Hardening ✅ *delivered*
 
 Security audit follow-up covering five vulnerability classes identified before
@@ -1001,6 +1053,25 @@ See full spec: [PROMPTS/PHASE-HRD2.md](PROMPTS/PHASE-HRD2.md)
 
 ---
 
+## Phase HRD3 — Interface Specs 📋 *planned*
+
+Harden REPuLse's runtime boundaries with explicit `cljs.spec` contracts, starting
+with the public plugin API and extending to the data maps that cross persistence,
+network, audio-routing, MIDI, and pattern-engine boundaries.
+
+**Key additions:**
+- Plugin interface specs for identity, visual/effect methods, host API, optional
+  method normalization, and `createNodes` audio-node return contracts
+- Core pattern specs for rational time, spans, events, and tagged Pattern maps
+- Boundary specs for session snapshots, FX chain entries, sample manifests/loaded
+  sources, event payload parameter maps, tween descriptors, and MIDI mappings
+- Tests that invalid plugins, malformed sessions, bad effect nodes, and invalid
+  core data fail early with clear diagnostics
+
+See full spec: [PROMPTS/PHASE-HRD3.md](PROMPTS/PHASE-HRD3.md)
+
+---
+
 ## Phase DOC1 — User Documentation Overhaul 📋 *planned*
 
 Split the current monolithic user documentation into a friendly manual that works
@@ -1021,6 +1092,166 @@ changes — documentation-only.
   reading path instead of a single oversized manual
 
 See full spec: [PROMPTS/PHASE-DOC1.md](PROMPTS/PHASE-DOC1.md)
+
+---
+
+## Phase HRD1 — Hardening ✅ *delivered*
+
+AST-aware editor patching, remote fetch validation, and reproducible Rust builds.
+No new features or language changes — pure correctness and infrastructure hardening.
+
+**Delivered:**
+- `app/src/repulse/lisp_patcher.cljs` (new): minimal Lisp tokenizer that skips
+  comments and string literals, with four public paren-aware scanners
+  (`find-param-num`, `find-fx-named-param-num`, `find-fx-pos-param-num`,
+  `find-fx-form-close`). Replaces three regex-based patching functions in
+  `eval_orchestrator.cljs` that silently misfired on nested forms, comments, and
+  duplicate parameter names across tracks.
+- `eval_orchestrator.cljs`: rewritten `patch-param-in-editor!`,
+  `patch-fx-param-in-editor!`, and `patch-per-track-fx-param-in-editor!` to use
+  the new scanner; extracted shared `fmt-num` and `dispatch-replace!` helpers.
+- `samples.cljs`: added `fetch-ok!` helper that rejects with a descriptive error
+  on non-2xx responses; applied to all four fetch chains (JSON manifest, Lisp
+  manifest, GitHub tree API, audio buffer fetch).
+- `rust-toolchain.toml` (new): pins `channel = "stable"` with
+  `targets = ["wasm32-unknown-unknown"]` and `components = ["clippy", "rustfmt"]`,
+  ensuring reproducible Rust builds and correct CI lint toolchain setup.
+- `netlify.toml`: deleted (Netlify no longer used).
+- `plugin_loading.cljs`: replaced `js/Function.` eval workaround with
+  `js/window.__import__`; `index.html` exposes the global from a plain `<script>`
+  tag so Closure never processes the `import()` syntax.
+- `vercel.json`: removed `'unsafe-eval'` from CSP; cleaned build command to use
+  `cargo install --locked wasm-pack@0.14.0` instead of curl-pipe-sh.
+
+See full spec: [PROMPTS/PHASE-HRD1.md](PROMPTS/PHASE-HRD1.md)
+
+---
+
+## Phase R3 — JavaScript Purification 📋 *planned*
+
+Move maintainable hand-written app logic from JavaScript into ClojureScript
+without disturbing generated files, worklet boundaries, or the public plugin
+authoring surface.
+
+**Key additions:**
+- Port CodeMirror language-support helpers from `app/src/repulse/lisp-lang/*.js`
+  to CLJS equivalents
+- Keep generated Lezer parser output, wasm-pack glue, externs, AudioWorklets,
+  and public plugin examples as intentional JavaScript boundaries
+- Update editor/app imports to consume CLJS language support directly
+- Document the remaining JS boundary rationale in `docs/ARCHITECTURE.md`
+
+See full spec: [PROMPTS/PHASE-R3.md](PROMPTS/PHASE-R3.md)
+
+---
+
+## Phase PLUG1 — Drop-In Plugin Packages 📋 *planned*
+
+Let users install trusted third-party plugins by dragging local `.js` files or
+`.repulse-plugin.zip` packages onto the app.
+
+**Key additions:**
+- Plugin package manifest format with `id`, `name`, `version`, `apiVersion`,
+  `type`, `entry`, permissions, and assets
+- Drag/drop install flow with explicit trust dialog before executing code
+- IndexedDB persistence plus enable, disable, reload, and remove controls
+- Host APIs for packaged assets and AudioWorklet modules while preserving the
+  existing effect/visual plugin protocols
+
+See full spec: [PROMPTS/PHASE-PLUG1.md](PROMPTS/PHASE-PLUG1.md)
+
+
+---
+
+## Phase AI1 — AI-Ready Knowledge Base 📋 *planned*
+
+Machine-readable documentation of REPuLse's language, vocabulary, and live session state —
+the foundation any AI assistant needs to write correct REPuLse-Lisp. Ships standalone;
+serves both the future in-app co-pilot (AI2+) and external agents using this repo today.
+
+**Key additions:**
+- `docs/ai/builtins.json` — one entry per built-in with `category`, `signature`,
+  `returns`, `side-effects`, `examples`, and `see-also`; generated by `scripts/gen_ai_docs.mjs`
+  from `completions.js` + `builtin_meta.edn` + the Lezer grammar
+- `docs/ai/concepts.json` — hand-authored: pattern model, rational time, transformer vs.
+  pattern, `->>` semantics, mini-notation EBNF, all value types
+- `docs/ai/session-schema.json` — JSON Schema for the AI session snapshot (track names,
+  BPM, FX names, bank, sources — no editor code)
+- `docs/ai/cookbook.json` — structured cookbook recipes tagged by musical goal
+- `app/src/repulse/content/builtin_meta.edn` — enriched metadata companion to `completions.js`
+- `(help-export)` Lisp built-in — emits the current session as the AI session snapshot;
+  omits editor code by default
+- `npm run gen:ai-docs` + `check:ai-docs` scripts; CI `ai-docs` drift-check job
+- `CLAUDE.md` Rule 4 — AI docs maintenance step alongside `gen:grammar`
+
+See full spec: [PROMPTS/PHASE-AI1.md](PROMPTS/PHASE-AI1.md)
+
+---
+
+## Phase AI2 — Assistant Panel & Providers 📋 *planned*
+
+In-app AI chat panel with bring-your-own-key support for OpenAI, Anthropic, Google, and
+Groq — streaming responses, message persistence, and session context injection. Opt-in
+feature gate; no tool calling yet.
+
+**Key additions:**
+- `app/src/repulse/ai/settings.cljs` — localStorage-backed atoms: `enabled?`, `provider`,
+  `api-key`, `model-override`, `include-code?`; settings modal accessible from the header
+- `app/src/repulse/ai/client.cljs` — provider abstraction with `stream!` fn; `parse-delta`
+  handles SSE format differences across OpenAI / Anthropic / Google / Groq
+- `app/src/repulse/ai/system_prompt.cljs` — assembles context from `/docs/ai/builtins.json`
+  summary + current `(help-export)` snapshot (track names, BPM, FX — no editor code)
+- `app/src/repulse/ui/assistant_panel.cljs` — collapsible right-side panel; streaming
+  render; code-block "↓ insert" and "↺ replace selection" buttons; cost/token indicator
+- `(ai)` / `(ai "prompt")` Lisp built-ins — open panel or send a one-shot prompt
+- `repulse:ai:*` localStorage namespace — keys, history (last 50 turns), feature flag
+
+See full spec: [PROMPTS/PHASE-AI2.md](PROMPTS/PHASE-AI2.md)
+
+---
+
+## Phase AI3 — Tool-Using Agent 📋 *planned*
+
+Promote the assistant from chat to agent: it can read the editor buffer, query session
+state, browse snippets, propose unified-diff edits, and silently preview evaluated code
+— all with explicit user confirmation before any change is applied.
+
+**Key additions:**
+- `app/src/repulse/ai/tools.cljs` — typed tool registry: `read_buffer`, `propose_edit`
+  (unified diff), `eval_preview` (silent off-graph audio context), `query_session`,
+  `query_track`, `find_snippet`, `insert_snippet`, `set_bpm_proposal`
+- `app/src/repulse/ai/agent_loop.cljs` — bounded agent loop (max N tool calls per turn)
+  with cancel button; function-calling adapters for OpenAI and Anthropic tool-use schemas
+- Edit-proposal diff overlay in the editor with "Apply / Reject" buttons; rejections fed
+  back as model feedback
+- `eval_preview` runs against an off-graph silent gain node — assistant "listens" without
+  touching the user's session; returns scheduled-event count + duration-bars summary
+- Snippet integration: `find_snippet` searches community library, `insert_snippet` uses
+  the same path as manual insert with usage tracking
+
+See full spec: [PROMPTS/PHASE-AI3.md](PROMPTS/PHASE-AI3.md)
+
+---
+
+## Phase AI4 — Assistant Safety & Limits 📋 *planned*
+
+The trust and economics layer: hard token + tool-call budgets, prompt-injection guards
+for untrusted content the assistant reads, auto-apply toggle with full undo, and an
+optional Supabase server-relay for users who want encrypted key storage.
+
+**Key additions:**
+- Hard token + tool-call budget per session; soft warning at 50%, hard stop at 100%
+  with one-click raise; budget persisted per provider
+- Prompt-injection guards — snippet text, sample manifest text, and any external content
+  the assistant reads wrapped in `<untrusted>` tags in the system prompt
+- Auto-apply toggle (default off) — when on, every `propose_edit` lands immediately and
+  records to an undo stack with a "revert assistant turn" button
+- Per-provider rate limiting + retry-with-backoff; provider errors surfaced inline
+- Optional server-relay — keys stored in Supabase encrypted user settings (S2 backend)
+  instead of localStorage; toggled in settings modal
+- Activity log panel — last 50 tool calls with payloads, exportable as JSON for debugging
+
+See full spec: [PROMPTS/PHASE-AI4.md](PROMPTS/PHASE-AI4.md)
 
 ---
 

@@ -69,6 +69,15 @@
       (.then parse-response)
       (.catch (fn [e] {:error (.-message e)}))))
 
+(defn delete-snippet!
+  "DELETE /api/snippets/:id — owner-only removal of a submitted snippet."
+  [snippet-id]
+  (-> (js/fetch (str "/api/snippets/" snippet-id)
+                #js {:method  "DELETE"
+                     :headers (auth-headers)})
+      (.then parse-response)
+      (.catch (fn [e] {:error (.-message e)}))))
+
 (defn report-snippet!
   "POST /api/snippets/:id/report — returns Promise<{:data {:ok true} | :error str}>."
   [snippet-id reason]
