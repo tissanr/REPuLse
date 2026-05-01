@@ -692,6 +692,21 @@ See full spec: [PROMPTS/phase-p-modular-routing.md](PROMPTS/phase-p-modular-rout
 
 ---
 
+## Phase P2 — Modular Effect Routing 📋 *planned*
+
+Advanced routing for the global and per-track effect chains: reorderable master
+bus, parallel effect paths, and "Aux Sends" that route audio to named busses.
+
+**Key additions:**
+- `(fx-chain :name1 :name2 ...)` — reorder the master FX chain dynamically
+- Parallel per-track FX via `(stack (fx :a) (fx :b))` syntax
+- `(fx :send :bus-name amount)` — route track audio to a named audio bus
+- Integration with the Phase P bus system for advanced "outboard" style processing
+
+See full spec: [PROMPTS/PHASE-P2-MODULAR-FX.md](PROMPTS/PHASE-P2-MODULAR-FX.md)
+
+---
+
 ## Phase DST1 — Soft Clipping Distortion ✅ *delivered*
 
 Add `:distort` to the `(fx ...)` effect chain — a musical soft-clip waveshaper with
@@ -728,10 +743,18 @@ See full spec: [PROMPTS/PHASE-DST2.md](PROMPTS/PHASE-DST2.md)
 
 ---
 
-## Phase DST3 — Multi-Stage Amp Simulation 📋 *planned*
+## Phase DST3 — Multi-Stage Amp Simulation ✅ *delivered*
 
 New `(fx :amp-sim ...)` effect — cascaded tube preamp stages with inter-stage filters,
 a 3-band tone stack with presets, and power supply sag simulation.
+
+**Delivered:**
+- `app/public/plugins/amp-sim.js` — multi-stage (1–4) cascaded waveshapers with asymmetric `STAGE_ASYM 0.2`
+- 3-band tone stack (EQ) with 5 presets: `:neutral`, `:bright`, `:dark`, `:mid-scoop`, `:mid-hump`
+- Power supply sag simulation via `DynamicsCompressorNode` approximation
+- Inter-stage HPF/LPF filtering and DC blocker
+- Interactive sliders in session dashboard for gain, stages, tone, sag, and mix
+- Syntax highlighting and hover docs updated
 
 **Key additions:**
 - `:gain` (1–100), `:stages` (1–4), `:tone`, `:mix`
@@ -938,22 +961,22 @@ See full spec: [PROMPTS/PHASE-S4.md](PROMPTS/PHASE-S4.md)
 
 ---
 
-## Phase R2 — Builtin Table Decomposition 📋 *planned*
+## Phase R2 — Builtin Environment Decomposition 📋 *planned*
 
-Pure refactor of the Lisp evaluator: split the monolithic built-in map in
-`packages/lisp/src/repulse/lisp/eval.cljs` (~250 lines starting at line 306)
-into domain-grouped namespaces. No behaviour change, no new built-ins. Lower
-urgency than R1 — covered by existing test suite, not blocking any feature.
+Pure refactor of the two builtin registration monoliths: split pure language
+builtins out of `packages/lisp/src/repulse/lisp/eval.cljs`, and split app/audio/UI
+builtins out of `app/src/repulse/env/builtins.cljs`. No behaviour change, no new
+built-ins, no public API change.
 
 **Key additions:**
-- `packages/lisp/src/repulse/lisp/builtins/pattern.cljs` — pattern constructors and transforms
-- `packages/lisp/src/repulse/lisp/builtins/math.cljs` — arithmetic and number ops
-- `packages/lisp/src/repulse/lisp/builtins/music.cljs` — scale, chord, transpose
-- `packages/lisp/src/repulse/lisp/builtins/params.cljs` — amp, pan, envelope params
-- `packages/lisp/src/repulse/lisp/builtins/collection.cljs` — map, filter, reduce, conj, get
-- `packages/lisp/src/repulse/lisp/builtins/control.cljs` — not, comparison, truthy helpers
-- `make-env` shrinks to <30 lines: imports + merges
-- `eval.cljs` shrinks from ~557 lines to ~300 lines (evaluator + special forms only)
+- Track A: `packages/lisp/src/repulse/lisp/builtins/*` — pattern, math, music,
+  params, collection, types, synth, and arrangement builtin maps
+- Track B: `app/src/repulse/env/builtins/*` — track, fx, samples, MIDI, content,
+  export, session, routing, and plugin builtin factories
+- `eval.cljs` keeps evaluator helpers and special forms only
+- `env/builtins.cljs` keeps env ownership, callback wiring, `ensure-env!`, and
+  public facade exports
+- Before/after builtin key-set parity checks for both tracks
 
 See full spec: [PROMPTS/PHASE-R2.md](PROMPTS/PHASE-R2.md)
 
@@ -1136,6 +1159,7 @@ Let users install trusted third-party plugins by dragging local `.js` files or
   existing effect/visual plugin protocols
 
 See full spec: [PROMPTS/PHASE-PLUG1.md](PROMPTS/PHASE-PLUG1.md)
+
 
 ---
 

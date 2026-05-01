@@ -434,6 +434,24 @@ footer {
   color: #d19a66;
 }
 
+.ctx-select {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 1px 20px 1px 6px;
+  color: var(--fg);
+  background: #21252b;
+  border: 1px solid #3e4451;
+  border-radius: 3px;
+  font-size: 10px;
+  outline: none;
+  cursor: pointer;
+}
+
+.ctx-select:focus {
+  border-color: #61afef;
+}
+
 /* Per-track FX subsection */
 .ctx-track-fx {
   border: none;

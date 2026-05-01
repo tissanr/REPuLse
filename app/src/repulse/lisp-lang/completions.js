@@ -68,6 +68,7 @@ export const BUILTINS = [
   // --- Effects ---
   { label: "fx",          type: "function", detail: "(fx :name param) — global effect; inside ->>: (fx :name param pat) — per-track effect on this track only" },
   { label: "distort",     type: "keyword",  detail: "effect — soft/asymmetric clipping distortion" },
+  { label: "amp-sim",      type: "keyword",  detail: "effect — multi-stage amp simulation" },
   { label: "load-plugin",   type: "function", detail: "(load-plugin url) — load a REPuLse plugin from URL" },
   { label: "unload-plugin", type: "function", detail: "(unload-plugin name) — unload and remove a plugin by name" },
   // --- Tracks (multi-pattern) ---

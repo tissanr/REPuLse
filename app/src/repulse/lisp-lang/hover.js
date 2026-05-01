@@ -316,6 +316,11 @@ const DOCS = {
     description: "Soft-clipping waveshaper distortion. :drive sets pre-clip gain from 1.0–100.0 (default 4.0). :tone sets the post-clip lowpass from 200–20000 Hz (default 3000). :mix blends dry/wet from 0.0–1.0 (default 1.0). :asym sets half-wave asymmetry from -1.0–1.0 for even-harmonic warmth (default 0.0). :algo chooses :tanh, :sigmoid, or :atan clipping curves.",
     example: "(->> (seq :c2 :g2 :c3 :g2) (synth :saw) (fx :distort :drive 8 :asym 0.4 :tone 2200))",
   },
+  "amp-sim": {
+    signature: "(fx :amp-sim [:gain N] [:stages N] [:tone Hz] [:tonestack kw] [:sag N] [:mix N])",
+    description: "Multi-stage tube preamp simulation. :gain sets total preamp gain from 1.0–100.0 (default 8.0). :stages sets number of gain stages from 1–4 (default 3). :tone sets post-amp lowpass Hz (default 4000). :tonestack chooses :neutral, :bright, :dark, :mid-scoop, or :mid-hump presets. :sag adds power supply sag / transient compression from 0.0–1.0 (default 0.0).",
+    example: "(->> (seq :e2 :_ :e2 :g2) (synth :saw) (fx :amp-sim :gain 6 :stages 2 :tonestack :bright))",
+  },
   "load-plugin": {
     signature: '(load-plugin "url")',
     description: "Load a REPuLse plugin from a URL (visual or effect).",

@@ -238,6 +238,7 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | O1    | Embeddable component — `<repulse-editor>` custom element, snippet attr | ✓ delivered  |
 | T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | ✓ delivered  |
 | P     | Modular routing — busses, control rate, general envelopes      | ✓ delivered  |
+| P2    | Modular effect routing — reorderable chains, parallel FX, sends | planned      |
 | J2    | Contextual insertion buttons — hover `+` on parens for wrap/chain | ✓ delivered      |
 | R0    | Correctness & safety — and/or short-circuit, BPM clamp, plugin consent | ✓ delivered  |
 | S1    | Local snippet library — curated JSON, browse/preview/insert    | ✓ delivered  |
@@ -245,10 +246,10 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | S2    | Backend & auth — Vercel + Supabase, GitHub OAuth, REST API     | ✓ delivered  |
 | S3    | Community snippets — submit, star, rank, usage tracking        | ✓ delivered  |
 | S4    | Snippet audio preview — sandboxed eval, waveforms, indicators  | ✓ delivered  |
-| R2    | Refactor — decompose eval.cljs builtin map into domain namespaces | planned      |
+| R2    | Refactor — decompose Lisp and app builtin environments          | planned      |
 | DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | ✓ delivered  |
 | DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | ✓ delivered  |
-| DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | planned      |
+| DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | ✓ delivered  |
 | DST4  | Distortion — oversampling wrapper (:oversample 1/2/4)          | planned      |
 | DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | planned   |
 | DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | planned      |
