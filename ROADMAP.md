@@ -1000,6 +1000,24 @@ See full spec: [PROMPTS/PHASE-CI1.md](PROMPTS/PHASE-CI1.md)
 
 ---
 
+## Phase TEST1 — Automated End-to-End Testing 📋 *planned*
+
+Full-pipeline test suite: Lisp eval → pattern events → audio render → PCM analysis.
+Claude Code can run `scripts/test-all.sh` after any dev session for automated verification.
+
+**Key additions:**
+- CLJS integration tests: eval-to-events pipeline (`lisp/integration_test.cljs`)
+- Rust engine unit tests: `process_block_raw` extraction, voice/pan/envelope tests
+- Browser audio tests: Playwright + OfflineAudioContext render → PCM analysis
+- Test harness API: `window.__REPULSE_TEST__` namespace (`repulse.test-api`)
+- Audio analysis helpers: RMS power, frequency peaks, onset count, stereo balance, leak detection
+- Unified runner: `scripts/test-all.sh` (CLJS + Rust + Playwright)
+- CI: add `cargo test` job, Playwright job with headless browser
+
+See full spec: [PROMPTS/PHASE-TEST1.md](PROMPTS/PHASE-TEST1.md)
+
+---
+
 ## Phase HRD1 — Hardening ✅ *delivered*
 
 AST-aware editor patching, remote fetch validation, and reproducible Rust builds.
