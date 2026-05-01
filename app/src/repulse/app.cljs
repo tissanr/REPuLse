@@ -242,7 +242,22 @@
                 (eo/fx-slider-patch-and-eval! fx-name param-name new-val)
                 ;; Track param slider: has data-track only
                 :else
-                (eo/slider-patch-and-eval! track-name param-name new-val)))))))))
+                (eo/slider-patch-and-eval! track-name param-name new-val)))))))
+    (.addEventListener panel "change"
+      (fn [^js e]
+        (let [target (.-target e)]
+          (when (and (= "SELECT" (.-tagName target))
+                     (.contains (.-classList target) "ctx-select"))
+            (let [fx-name    (.. target -dataset -fx)
+                  track-name (.. target -dataset -track)
+                  param-name (.. target -dataset -param)
+                  new-val    (.-value target)]
+              (cond
+                (and (seq fx-name) (seq track-name))
+                (eo/per-track-fx-select-patch-and-eval! track-name fx-name param-name new-val)
+
+                (seq fx-name)
+                (eo/fx-select-patch-and-eval! fx-name param-name new-val)))))))))
 
 (defn init []
   ;; Wire module-level callbacks before anything else runs
@@ -404,7 +419,8 @@
                "/plugins/overdrive.js"
                "/plugins/bitcrusher.js"
                "/plugins/sidechain.js"
-               "/plugins/distort.js"]]
+               "/plugins/distort.js"
+               "/plugins/amp-sim.js"]]
     (when-not (contains? @loaded-plugins url)
       (-> (plugin-loading/dynamic-import! url)
           (.then (fn [m]

@@ -59,6 +59,10 @@
   (when-let [txt (atom-text doc tok)]
     (.test #"^-?[0-9]" txt)))
 
+(defn- keyword-atom? [doc tok]
+  (when-let [txt (atom-text doc tok)]
+    (.startsWith txt ":")))
+
 (defn- scan-for-named-param
   "Within toks[start-j..] at depth=1 relative to an enclosing form, find
    :param-name NUMBER. Returns {:from N :to N} or nil when the form ends."
@@ -78,6 +82,30 @@
                (= (str ":" param-name) (atom-text doc tj))
                tj+1
                (num-atom? doc tj+1))
+          (select-keys tj+1 [:from :to])
+
+          :else
+          (recur (inc j) depth))))))
+
+(defn- scan-for-named-keyword-param
+  "Within toks[start-j..] at depth=1 relative to an enclosing form, find
+   :param-name :keyword. Returns {:from N :to N} or nil when the form ends."
+  [doc toks start-j n param-name]
+  (loop [j start-j depth 1]
+    (when (and (< j n) (pos? depth))
+      (let [tj   (nth toks j)
+            tj+1 (when (< (inc j) n) (nth toks (inc j)))]
+        (cond
+          (= :lp (:t tj))
+          (recur (inc j) (inc depth))
+
+          (= :rp (:t tj))
+          (recur (inc j) (dec depth))
+
+          (and (= :atom (:t tj))
+               (= (str ":" param-name) (atom-text doc tj))
+               tj+1
+               (keyword-atom? doc tj+1))
           (select-keys tj+1 [:from :to])
 
           :else
@@ -120,6 +148,28 @@
                    t2
                    (= (str ":" effect-name) (atom-text doc t2)))
             (let [result (scan-for-named-param doc toks (+ i 3) n param-name)]
+              (if result
+                result
+                (recur (inc i))))
+            (recur (inc i))))))))
+
+(defn find-fx-named-param-keyword
+  "Within doc[scope-start..scope-end], find :param-name :keyword inside the
+   first (fx :effect-name ...) form.
+   Returns {:from N :to N} of the keyword token, or nil."
+  [doc scope-start scope-end effect-name param-name]
+  (let [toks (tokenize doc scope-start scope-end)
+        n    (count toks)]
+    (loop [i 0]
+      (when (< i (- n 2))
+        (let [t0 (nth toks i)
+              t1 (nth toks (inc i))
+              t2 (when (< (+ i 2) n) (nth toks (+ i 2)))]
+          (if (and (= :lp (:t t0))
+                   (= "fx" (atom-text doc t1))
+                   t2
+                   (= (str ":" effect-name) (atom-text doc t2)))
+            (let [result (scan-for-named-keyword-param doc toks (+ i 3) n param-name)]
               (if result
                 result
                 (recur (inc i))))
