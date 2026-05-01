@@ -1,6 +1,5 @@
 (ns repulse.lisp.eval
-  (:require [repulse.lisp.reader :as reader]
-            [repulse.lisp.util :as util]
+  (:require [repulse.lisp.util :as util]
             [repulse.lisp.builtins.pattern :as b-pattern]
             [repulse.lisp.builtins.math :as b-math]
             [repulse.lisp.builtins.music :as b-music]

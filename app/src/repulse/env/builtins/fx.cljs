@@ -2,7 +2,6 @@
   "FX builtin — context-aware: per-track transformer when called from ->>, global otherwise."
   (:require [repulse.core :as core]
             [repulse.fx :as fx]
-            [repulse.audio :as audio]
             [repulse.lisp.eval :as leval]))
 
 (defn make-builtins

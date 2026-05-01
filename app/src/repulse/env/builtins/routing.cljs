@@ -4,7 +4,8 @@
             [repulse.bus :as bus]
             [repulse.samples :as samples]
             [repulse.plugin-loading :as plugin-loading]
-            [repulse.lisp.eval :as leval]))
+            [repulse.lisp.eval :as leval]
+            [clojure.string :as cstr]))
 
 ;;; Private state — Freesound API key, owned by this namespace.
 (defonce ^:private freesound-api-key (atom nil))
@@ -54,7 +55,7 @@
                                  {:type :freesound :query q :count (count results)})
                           (set-output!
                             (str "loaded " (count results) " sounds: "
-                                 (clojure.string/join ", "
+                                 (cstr/join ", "
                                    (map #(str ":freesound-" (:id %)) results)))
                             :success))))
                (.catch (fn [e]

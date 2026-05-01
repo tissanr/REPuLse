@@ -6,12 +6,13 @@
             [repulse.lisp.core :as lisp]
             [repulse.lisp.eval :as leval]
             [repulse.ui.editor :as editor]
+            [clojure.string :as cstr]
             ["@codemirror/lint" :refer [setDiagnostics]]))
 
 (defn make-builtins
   "ctx — {:on-beat f :set-playing! f :set-output! f :make-stop-fn f
-           :env-atom atom :evaluate-ref atom :seen-tracks atom}"
-  [{:keys [on-beat set-playing! set-output! make-stop-fn env-atom evaluate-ref seen-tracks]}]
+           :env-atom atom :seen-tracks atom}"
+  [{:keys [on-beat set-playing! set-output! make-stop-fn env-atom seen-tracks]}]
   {"track"
    (fn [track-name pat]
      (let [name' (leval/unwrap track-name)
@@ -71,7 +72,7 @@
    (fn []
      (let [ks (keys (:tracks @audio/scheduler-state))]
        (if (seq ks)
-         (str "=> (" (clojure.string/join " " (map #(str ":" (name %)) ks)) ")")
+         (str "=> (" (cstr/join " " (map #(str ":" (name %)) ks)) ")")
          "=> ()")))
 
    "upd"
