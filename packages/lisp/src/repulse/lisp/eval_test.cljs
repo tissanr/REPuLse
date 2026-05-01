@@ -133,6 +133,13 @@
           r   (:result (lisp/eval-string "(loop [i 0] (if (>= i 10000) i (recur (+ i 1))))" env))]
       (is (= 10000 r)))))
 
+(deftest loop-runaway-returns-eval-error
+  (testing "runaway loop/recur stops at the evaluator budget"
+    (let [env (make-test-env)
+          r   (lisp/eval-string "(loop [i 0] (recur (+ i 1)))" env)]
+      (is (lisp/eval-error? r))
+      (is (= "loop exceeded 10000 iterations" (:message r))))))
+
 ;;; ── Phase M: defn ────────────────────────────────────────────────────
 
 (defn- eval-seq

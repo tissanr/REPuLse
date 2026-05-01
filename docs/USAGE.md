@@ -1836,6 +1836,27 @@ a DC blocker, post-filter tone control, and a full dry/wet blend.
 (fx :distort :drive 2 :tone 1500 :mix 0.6 :algo :sigmoid)
 ```
 
+#### `amp-sim` — multi-stage amp simulation
+
+Cascaded tube preamp stages with inter-stage filtering, a 3-band tone stack with presets,
+and power supply sag simulation.
+
+| Parameter | Key | Default | Description |
+|-----------|-----|---------|-------------|
+| Gain      | `gain` / positional | `8.0` | Total preamp gain (1.0–100.0) |
+| Stages    | `stages` | `3` | Number of gain stages (1–4) |
+| Tone      | `tone` | `4000` Hz | Post-amp lowpass cutoff (200–20000 Hz) |
+| Tonestack | `tonestack` | `:neutral` | `:neutral` `:bright` `:dark` `:mid-scoop` `:mid-hump` |
+| Sag       | `sag` | `0.0` | Power supply sag / transient compression (0–1) |
+| Mix       | `mix` | `1.0` | Dry/wet blend (0–1) |
+
+```lisp
+(fx :amp-sim)
+(fx :amp-sim :gain 12 :stages 2)
+(fx :amp-sim :gain 60 :stages 4 :tonestack :mid-scoop :sag 0.3)
+(fx :amp-sim :gain 6 :stages 2 :tonestack :bright)
+```
+
 #### `bitcrusher` — lo-fi bit/sample-rate reduction
 
 Reduces bit depth and sample rate for crunchy, glitchy textures. Uses an AudioWorklet.
@@ -1891,7 +1912,7 @@ so the duck is perfectly in time regardless of BPM, with zero look-ahead latency
 The default signal chain is:
 ```
 synthesis → reverb → delay → filter → compressor → dattorro-reverb
-         → chorus → phaser → tremolo → overdrive → distort → bitcrusher → sidechain → output
+         → chorus → phaser → tremolo → overdrive → distort → amp-sim → bitcrusher → sidechain → output
 ```
 
 `sidechain` sits at the end of the chain so it ducks the fully-processed signal.
@@ -2249,6 +2270,7 @@ The app exposes a serverless REST API on Vercel:
 | `/api/env` | GET | None | Returns public Supabase credentials |
 | `/api/snippets` | GET | None | List snippets (`?tag=`, `?q=`, `?sort=`, `?author=`, `?limit=`) |
 | `/api/snippets` | POST | Required | Create a new snippet |
+| `/api/snippets/:id` | DELETE | Required | Delete your own snippet |
 | `/api/snippets/:id/star` | POST | Required | Set or remove a 1-5 rating |
 | `/api/snippets/:id/use` | POST | None | Increment usage counter |
 | `/api/snippets/:id/report` | POST | Required | Flag snippet for moderation |

@@ -51,6 +51,7 @@
 ;;; loop/recur sentinel — a plain map, caught by `loop` iteration
 
 (def ^:private recur-sentinel-type ::recur-sentinel)
+(def ^:private max-loop-iterations 10000)
 
 (defn- recur-sentinel [args]
   {::type recur-sentinel-type ::args args})
@@ -269,7 +270,12 @@
         (let [[bindings & body] tail
               pairs        (partition 2 bindings)
               binding-names (mapv (fn [[s _]] (str s)) pairs)]
-          (loop [current-vals (mapv (fn [[_ vf]] (eval-form vf env)) pairs)]
+          (loop [current-vals (mapv (fn [[_ vf]] (eval-form vf env)) pairs)
+                 iterations   0]
+            (when (> iterations max-loop-iterations)
+              (throw (ex-info (str "loop exceeded " max-loop-iterations
+                                   " iterations")
+                              {:type :eval-error})))
             (let [local (reduce (fn [e [n v]] (assoc e n v))
                                 env
                                 (map vector binding-names current-vals))
@@ -280,7 +286,7 @@
                                        r)))
                                  nil body)]
               (if (recur-sentinel? result)
-                (recur (::args result))
+                (recur (::args result) (inc iterations))
                 result))))
 
         "recur"

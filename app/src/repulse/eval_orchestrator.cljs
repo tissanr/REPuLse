@@ -4,7 +4,8 @@
    editor code-patching logic for slider updates.
    Exports: evaluate!, set-diagnostics!, pending-mutes,
             slider-patch-and-eval!, fx-slider-patch-and-eval!,
-            per-track-fx-slider-patch-and-eval!"
+            fx-select-patch-and-eval!, per-track-fx-slider-patch-and-eval!,
+            per-track-fx-select-patch-and-eval!"
   (:require [repulse.lisp.core :as lisp]
             [repulse.core :as core]
             [repulse.audio :as audio]
@@ -12,6 +13,7 @@
             [repulse.env.builtins :as builtins]
             [repulse.ui.editor :as editor]
             [repulse.ui.context-panel :as ctx-panel]
+            [repulse.lisp-patcher :as patcher]
             ["@codemirror/lint" :refer [setDiagnostics]]))
 
 ;;; Owned atoms
@@ -135,26 +137,22 @@
 
 ;;; Code patching for live slider updates
 
+(defn- fmt-num [v]
+  (if (== v (Math/round v)) (str (int v)) (.toFixed v 2)))
+
+(defn- dispatch-replace! [view from to text]
+  (.dispatch view #js {:changes #js {:from from :to to :insert text}}))
+
 (defn- patch-param-in-editor!
-  "Find the first `(param-name NUMBER` in editor text, starting from the position
-   of `:track-name`, and replace the number with new-val."
+  "Replace the number in the first (param-name NUMBER) form at or after
+   the position of :track-name in the editor, using a paren-aware scanner."
   [track-name param-name new-val]
   (when-let [view @editor/editor-view]
-    (let [doc        (.. view -state -doc (toString))
-          track-kw   (str ":" track-name)
-          track-pos  (let [p (.indexOf doc track-kw)] (if (>= p 0) p 0))
-          sub-doc    (.substring doc track-pos)
-          re         (js/RegExp. (str "\\(" param-name "\\s+(-?[0-9]*\\.?[0-9]+)"))
-          match      (.exec re sub-doc)]
-      (when match
-        (let [full  (aget match 0)
-              num   (aget match 1)
-              start (+ track-pos (.-index match) (- (.-length full) (.-length num)))
-              end   (+ start (.-length num))
-              fmtd  (if (== new-val (Math/round new-val))
-                      (str (int new-val))
-                      (.toFixed new-val 2))]
-          (.dispatch view #js {:changes #js {:from start :to end :insert fmtd}}))))))
+    (let [doc         (.. view -state -doc (toString))
+          track-kw    (str ":" track-name)
+          scope-start (let [p (.indexOf doc track-kw)] (if (>= p 0) p 0))]
+      (when-let [{:keys [from to]} (patcher/find-param-num doc scope-start (.-length doc) param-name)]
+        (dispatch-replace! view from to (fmt-num new-val))))))
 
 (defn slider-patch-and-eval! [track-name param-name new-val]
   (patch-param-in-editor! track-name param-name new-val)
@@ -175,34 +173,45 @@
   [effect-name param-name new-val]
   (when-let [view @editor/editor-view]
     (let [doc      (.. view -state -doc (toString))
+          doc-len  (.-length doc)
           primary? (= param-name (get ctx-panel/FX-PRIMARY-PARAM effect-name))
-          fmtd     (if (== new-val (Math/round new-val))
-                     (str (int new-val))
-                     (.toFixed new-val 2))
-          re-named (js/RegExp. (str "\\(fx\\s+:" effect-name "[^)]*:" param-name
-                                    "\\s+(-?[0-9]*\\.?[0-9]+)"))
-          match    (.exec re-named doc)
-          re-pos   (when (and (not match) primary?)
-                     (js/RegExp. (str "\\(fx\\s+:" effect-name "\\s+(-?[0-9]*\\.?[0-9]+)")))
-          match    (or match (when re-pos (.exec re-pos doc)))]
-      (if match
-        (let [full  (aget match 0)
-              num   (aget match 1)
-              start (+ (.-index match) (- (.-length full) (.-length num)))
-              end   (+ start (.-length num))]
-          (.dispatch view #js {:changes #js {:from start :to end :insert fmtd}}))
-        (let [re-fx    (js/RegExp. (str "\\(fx\\s+:" effect-name "[^)]*\\)"))
-              fx-match (.exec re-fx doc)]
-          (when fx-match
-            (let [close-pos (+ (.-index fx-match)
-                               (dec (.-length (aget fx-match 0))))]
-              (.dispatch view #js {:changes #js {:from close-pos
-                                                 :to   close-pos
-                                                 :insert (str " :" param-name " " fmtd)}}))))))))
+          fmtd     (fmt-num new-val)
+          result   (or (patcher/find-fx-named-param-num doc 0 doc-len effect-name param-name)
+                       (when primary?
+                         (patcher/find-fx-pos-param-num doc 0 doc-len effect-name)))]
+      (if result
+        (dispatch-replace! view (:from result) (:to result) fmtd)
+        (when-let [close (patcher/find-fx-form-close doc 0 doc-len effect-name)]
+          (dispatch-replace! view close close (str " :" param-name " " fmtd)))))))
 
 (defn fx-slider-patch-and-eval! [effect-name param-name new-val]
   (fx/set-param! effect-name param-name new-val)
   (patch-fx-param-in-editor! effect-name param-name new-val)
+  (when @slider-timeout (js/clearTimeout @slider-timeout))
+  (reset! slider-timeout
+    (js/setTimeout
+      (fn []
+        (reset! slider-timeout nil)
+        (when-let [view @editor/editor-view]
+          (evaluate! (.. view -state -doc (toString)))))
+      150)))
+
+(defn- patch-fx-keyword-param-in-editor!
+  "Update or insert a keyword param in a (fx :effect-name ...) call."
+  [effect-name param-name new-val]
+  (when-let [view @editor/editor-view]
+    (let [doc      (.. view -state -doc (toString))
+          doc-len  (.-length doc)
+          fmtd     (str ":" new-val)
+          result   (patcher/find-fx-named-param-keyword doc 0 doc-len effect-name param-name)]
+      (if result
+        (dispatch-replace! view (:from result) (:to result) fmtd)
+        (when-let [close (patcher/find-fx-form-close doc 0 doc-len effect-name)]
+          (dispatch-replace! view close close (str " :" param-name " " fmtd)))))))
+
+(defn fx-select-patch-and-eval! [effect-name param-name new-val]
+  (fx/set-param! effect-name param-name new-val)
+  (patch-fx-keyword-param-in-editor! effect-name param-name new-val)
   (when @slider-timeout (js/clearTimeout @slider-timeout))
   (reset! slider-timeout
     (js/setTimeout
@@ -218,40 +227,52 @@
   (when-let [view @editor/editor-view]
     (let [doc         (.. view -state -doc (toString))
           track-kw    (str "(track :" track-name)
-          track-start (.indexOf doc track-kw)
-          ;; Scope: from track-start to next (track : or end of doc
-          next-start  (let [p (.indexOf doc "(track :" (inc track-start))]
-                        (if (>= p 0) p (.-length doc)))
-          sub-doc     (when (>= track-start 0) (.substring doc track-start next-start))
-          primary?    (= param-name (get ctx-panel/FX-PRIMARY-PARAM effect-name))
-          fmtd        (if (== new-val (Math/round new-val))
-                        (str (int new-val))
-                        (.toFixed new-val 2))]
-      (when sub-doc
-        (let [re-named (js/RegExp. (str "\\(fx\\s+:" effect-name "[^)]*:" param-name
-                                         "\\s+(-?[0-9]*\\.?[0-9]+)"))
-              match    (.exec re-named sub-doc)
-              re-pos   (when (and (not match) primary?)
-                         (js/RegExp. (str "\\(fx\\s+:" effect-name "\\s+(-?[0-9]*\\.?[0-9]+)")))
-              match    (or match (when re-pos (.exec re-pos sub-doc)))]
-          (if match
-            (let [full  (aget match 0)
-                  num   (aget match 1)
-                  start (+ track-start (.-index match) (- (.-length full) (.-length num)))
-                  end   (+ start (.-length num))]
-              (.dispatch view #js {:changes #js {:from start :to end :insert fmtd}}))
-            (let [re-fx    (js/RegExp. (str "\\(fx\\s+:" effect-name "[^)]*\\)"))
-                  fx-match (.exec re-fx sub-doc)]
-              (when fx-match
-                (let [close-pos (+ track-start (.-index fx-match)
-                                   (dec (.-length (aget fx-match 0))))]
-                  (.dispatch view #js {:changes #js {:from close-pos
-                                                     :to   close-pos
-                                                     :insert (str " :" param-name " " fmtd)}}))))))))))
+          track-start (.indexOf doc track-kw)]
+      (when (>= track-start 0)
+        (let [scope-end (let [p (.indexOf doc "(track :" (inc track-start))]
+                          (if (>= p 0) p (.-length doc)))
+              primary?  (= param-name (get ctx-panel/FX-PRIMARY-PARAM effect-name))
+              fmtd      (fmt-num new-val)
+              result    (or (patcher/find-fx-named-param-num doc track-start scope-end effect-name param-name)
+                            (when primary?
+                              (patcher/find-fx-pos-param-num doc track-start scope-end effect-name)))]
+          (if result
+            (dispatch-replace! view (:from result) (:to result) fmtd)
+            (when-let [close (patcher/find-fx-form-close doc track-start scope-end effect-name)]
+              (dispatch-replace! view close close (str " :" param-name " " fmtd)))))))))
 
 (defn per-track-fx-slider-patch-and-eval! [track-name effect-name param-name new-val]
   (fx/set-track-param! (keyword track-name) effect-name param-name new-val)
   (patch-per-track-fx-param-in-editor! track-name effect-name param-name new-val)
+  (when @slider-timeout (js/clearTimeout @slider-timeout))
+  (reset! slider-timeout
+    (js/setTimeout
+      (fn []
+        (reset! slider-timeout nil)
+        (when-let [view @editor/editor-view]
+          (evaluate! (.. view -state -doc (toString)))))
+      150)))
+
+(defn- patch-per-track-fx-keyword-param-in-editor!
+  "Update or insert a keyword param in (fx :effect-name ...) scoped to (track :track-name ...)."
+  [track-name effect-name param-name new-val]
+  (when-let [view @editor/editor-view]
+    (let [doc         (.. view -state -doc (toString))
+          track-kw    (str "(track :" track-name)
+          track-start (.indexOf doc track-kw)]
+      (when (>= track-start 0)
+        (let [scope-end (let [p (.indexOf doc "(track :" (inc track-start))]
+                          (if (>= p 0) p (.-length doc)))
+              fmtd      (str ":" new-val)
+              result    (patcher/find-fx-named-param-keyword doc track-start scope-end effect-name param-name)]
+          (if result
+            (dispatch-replace! view (:from result) (:to result) fmtd)
+            (when-let [close (patcher/find-fx-form-close doc track-start scope-end effect-name)]
+              (dispatch-replace! view close close (str " :" param-name " " fmtd)))))))))
+
+(defn per-track-fx-select-patch-and-eval! [track-name effect-name param-name new-val]
+  (fx/set-track-param! (keyword track-name) effect-name param-name new-val)
+  (patch-per-track-fx-keyword-param-in-editor! track-name effect-name param-name new-val)
   (when @slider-timeout (js/clearTimeout @slider-timeout))
   (reset! slider-timeout
     (js/setTimeout
