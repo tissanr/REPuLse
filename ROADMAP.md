@@ -765,25 +765,40 @@ See full spec: [PROMPTS/PHASE-DST3.md](PROMPTS/PHASE-DST3.md)
 
 ---
 
-## Phase DST4 — Oversampling Wrapper 📋 *planned*
+## Phase DST4 — Oversampling Wrapper ✅ *delivered*
 
 Adds `:oversample 1/2/4` to both `:distort` and `:amp-sim` using the native
 `WaveShaperNode.oversample` property — zero-cost anti-aliasing at high drive.
+
+**Delivered:**
+- `:oversample` parameter added to `distort` and `amp-sim` plugins
+- Real-time switching between `"none"`, `"2x"`, and `"4x"` oversampling
+- Hover documentation and USAGE.md updated with new parameter
+- Interactive sliders in session dashboard context panel
 
 See full spec: [PROMPTS/PHASE-DST4.md](PROMPTS/PHASE-DST4.md)
 
 ---
 
-## Phase DST5 — Waveshaper Lookup Table 📋 *planned*
+## Phase DST5 — Waveshaper Lookup Table ✅ *delivered*
 
 New `(fx :waveshape :curve C ...)` effect for arbitrary transfer-function distortion,
 plus three Lisp built-in curve generators.
 
+**Delivered:**
+- `app/public/plugins/waveshape.js` — wrapper around Web Audio `WaveShaperNode`
+- `:curve` parameter supporting `Float32Array`, Lisp vectors, or JS arrays
+- `chebyshev` built-in generator for harmonic distortion (orders 1–8)
+- `fold` built-in generator for triangle-wave wavefolding
+- `bitcrush` built-in generator for quantization staircase curves (1–16 bits)
+- `:drive` (pre-gain), `:tone` (post-LPF), and `:mix` controls
+- Syntax highlighting and hover docs updated
+
 **Key additions:**
-- `(fx :waveshape :curve (chebyshev 3))` — specific harmonic distortion
-- `(fx :waveshape :curve (fold))` — wavefolding
-- `(fx :waveshape :curve (bitcrush 4))` — bit-reduction staircase
-- Custom float-array curves via CLJS vectors
+- `(fx :waveshape :curve (chebyshev 3) :drive 2)`
+- `(fx :waveshape :curve (fold) :drive 8)`
+- `(fx :waveshape :curve (bitcrush 4))`
+- `(fx :waveshape :curve [-1.0 -0.5 0 0.5 1.0])`
 
 See full spec: [PROMPTS/PHASE-DST5.md](PROMPTS/PHASE-DST5.md)
 

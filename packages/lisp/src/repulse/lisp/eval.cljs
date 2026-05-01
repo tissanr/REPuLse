@@ -463,6 +463,46 @@
                        base-offset (when src (inc (:from src)))]
                    (mini/parse (unwrap s) base-offset)))
      "alt"     (fn [& pats] (mini/alt* (mapv unwrap pats)))
+     ;; Curve generators for (fx :waveshape) — Phase DST5
+     "chebyshev"
+     (fn [n-arg]
+       (let [n (unwrap n-arg)
+             N 512
+             arr (js/Float32Array. N)]
+         (when (or (< n 1) (> n 8))
+           (throw (js/Error. (str "chebyshev: order must be 1–8, got " n))))
+         (dotimes [i N]
+           (let [x (- (* 2.0 (/ i (dec N))) 1.0)
+                 t (loop [t0 1.0 t1 x k 1]
+                     (if (>= k n) t1
+                       (recur t1 (- (* 2.0 x t1) t0) (inc k))))]
+             (aset arr i (js/Math.max -1.0 (js/Math.min 1.0 t)))))
+         arr))
+     "fold"
+     (fn []
+       (let [N 512
+             arr (js/Float32Array. N)]
+         (dotimes [i N]
+           (let [x (- (* 2.0 (/ i (dec N))) 1.0)
+                 folded (let [a (js/Math.abs x)
+                              t (mod a 1.0)
+                              v (if (< t 0.5) (* t 2.0) (- 2.0 (* t 2.0)))]
+                          (if (neg? x) (- v) v))]
+             (aset arr i (js/Math.max -1.0 (js/Math.min 1.0 folded)))))
+         arr))
+     "bitcrush"
+     (fn [bits-arg]
+       (let [bits (unwrap bits-arg)
+             N 512
+             arr (js/Float32Array. N)
+             steps (js/Math.pow 2 bits)]
+         (when (or (< bits 1) (> bits 16))
+           (throw (js/Error. (str "bitcrush: bits must be 1–16, got " bits))))
+         (dotimes [i N]
+           (let [x (- (* 2.0 (/ i (dec N))) 1.0)
+                 quantized (/ (js/Math.round (* x (/ steps 2.0))) (/ steps 2.0))]
+             (aset arr i (js/Math.max -1.0 (js/Math.min 1.0 quantized)))))
+         arr))
      ;; Sound helpers
      "sound"  (fn [bank n] {:bank (unwrap bank) :n (or (unwrap n) 0)})
      "bpm"    (fn [b] (bpm-fn (->num b)) nil)

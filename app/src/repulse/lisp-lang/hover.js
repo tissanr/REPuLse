@@ -321,6 +321,26 @@ const DOCS = {
     description: "Multi-stage tube preamp simulation. :gain sets total preamp gain from 1.0–100.0 (default 8.0). :stages sets number of gain stages from 1–4 (default 3). :tone sets post-amp lowpass Hz (default 4000). :tonestack chooses :neutral, :bright, :dark, :mid-scoop, or :mid-hump presets. :sag adds power supply sag / transient compression from 0.0–1.0 (default 0.0).",
     example: "(->> (seq :e2 :_ :e2 :g2) (synth :saw) (fx :amp-sim :gain 6 :stages 2 :tonestack :bright))",
   },
+  "waveshape": {
+    signature: "(fx :waveshape :curve C [:drive N] [:tone Hz] [:mix N])",
+    description: "Arbitrary waveshaper distortion via a user-defined transfer function. :curve accepts a Float32Array, a vector of floats, or a generator function. :drive sets pre-shaper gain from 1.0–20.0 (default 1.0). :tone sets the post-shaper lowpass cutoff (default 20000).",
+    example: "(fx :waveshape :curve (chebyshev 3) :drive 2)",
+  },
+  "chebyshev": {
+    signature: "(chebyshev N)",
+    description: "Generate a Chebyshev polynomial curve of order N (1–8) for use with (fx :waveshape). Order N adds primarily the Nth harmonic. Use as a :curve value.",
+    example: "(fx :waveshape :curve (chebyshev 2) :drive 4)",
+  },
+  "fold": {
+    signature: "(fold)",
+    description: "Generate a wavefolder transfer function for use with (fx :waveshape). Folds the waveform back on itself, producing rich harmonics.",
+    example: "(fx :waveshape :curve (fold) :drive 8)",
+  },
+  "bitcrush": {
+    signature: "(bitcrush N)",
+    description: "Generate a quantization staircase curve with 2^N steps for use with (fx :waveshape). N is bit depth (1–16). Low N = aggressive quantization = lo-fi grit.",
+    example: "(fx :waveshape :curve (bitcrush 4))",
+  },
   "load-plugin": {
     signature: '(load-plugin "url")',
     description: "Load a REPuLse plugin from a URL (visual or effect).",

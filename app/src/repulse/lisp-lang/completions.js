@@ -69,6 +69,10 @@ export const BUILTINS = [
   { label: "fx",          type: "function", detail: "(fx :name param) — global effect; inside ->>: (fx :name param pat) — per-track effect on this track only" },
   { label: "distort",     type: "keyword",  detail: "effect — soft/asymmetric clipping distortion" },
   { label: "amp-sim",      type: "keyword",  detail: "effect — multi-stage amp simulation" },
+  { label: "waveshape",    type: "keyword",  detail: "effect — arbitrary waveshaper LUT" },
+  { label: "chebyshev",    type: "function", detail: "curve — Chebyshev polynomial (order 1–8)" },
+  { label: "fold",         type: "function", detail: "curve — wavefolder transfer function" },
+  { label: "bitcrush",     type: "function", detail: "curve — bitcrusher staircase (bits 1–16)" },
   { label: "load-plugin",   type: "function", detail: "(load-plugin url) — load a REPuLse plugin from URL" },
   { label: "unload-plugin", type: "function", detail: "(unload-plugin name) — unload and remove a plugin by name" },
   // --- Tracks (multi-pattern) ---

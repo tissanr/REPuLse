@@ -1857,6 +1857,36 @@ and power supply sag simulation.
 (fx :amp-sim :gain 6 :stages 2 :tonestack :bright)
 ```
 
+#### `waveshape` — arbitrary waveshaper LUT
+
+Arbitrary transfer-function distortion via a user-defined curve or built-in generator.
+Uses the Web Audio `WaveShaperNode`.
+
+| Parameter | Key | Default | Description |
+|-----------|-----|---------|-------------|
+| Curve     | `curve` / positional | `identity` | `Float32Array` or list of floats |
+| Drive     | `drive` | `1.0` | Pre-shaper gain (1.0–20.0) |
+| Tone      | `tone` | `20000` Hz | Post-shaper lowpass cutoff |
+| Mix       | `mix` | `1.0` | Dry/wet blend (0–1) |
+
+```lisp
+;; Chebyshev 2nd harmonic (adds an octave above)
+(->> (seq :c3 :e3 :g3) (synth :sin)
+     (fx :waveshape :curve (chebyshev 2) :drive 3))
+
+;; Wavefolding
+(->> (seq :c2 :_ :g2 :_) (synth :sin)
+     (fx :waveshape :curve (fold) :drive 8))
+
+;; 4-bit quantization
+(->> (fast 2 (seq :c4 :e4 :g4 :c5)) (synth :saw)
+     (fx :waveshape :curve (bitcrush 4) :mix 0.7))
+
+;; Custom curve
+(->> (seq :c3 :g3) (synth :sin)
+     (fx :waveshape :curve [-1.0 -0.5 0 0.8 1.0] :drive 2))
+```
+
 #### `bitcrusher` — lo-fi bit/sample-rate reduction
 
 Reduces bit depth and sample rate for crunchy, glitchy textures. Uses an AudioWorklet.
@@ -1912,7 +1942,7 @@ so the duck is perfectly in time regardless of BPM, with zero look-ahead latency
 The default signal chain is:
 ```
 synthesis → reverb → delay → filter → compressor → dattorro-reverb
-         → chorus → phaser → tremolo → overdrive → distort → amp-sim → bitcrusher → sidechain → output
+         → chorus → phaser → tremolo → overdrive → distort → amp-sim → waveshape → bitcrusher → sidechain → output
 ```
 
 `sidechain` sits at the end of the chain so it ducks the fully-processed signal.
@@ -2238,6 +2268,11 @@ track-expr = "(track" keyword pattern ")"
 
 ;; Arrangement
 arrange    = "(arrange" "[[" pattern cycles "]" ["[" pattern cycles "]"]* "])"
+
+;; Curve generators (for fx :waveshape)
+generator  = "(chebyshev" order ")"              ;; order 1-8
+           | "(fold)"                            ;; wavefolder
+           | "(bitcrush" bits ")"                ;; bits 1-16
 
 ;; Definitions
 def-expr   = "(def" name expr ")"
