@@ -228,7 +228,7 @@ preview tools.
 | S2    | Backend & auth — Vercel + Supabase, GitHub OAuth, REST API     | ✓ delivered  |
 | S3    | Community snippets — submit, star, rank, usage tracking        | ✓ delivered  |
 | S4    | Snippet audio preview — sandboxed eval, waveforms, indicators  | ✓ delivered  |
-| R2    | Refactor — decompose eval.cljs builtin map into domain namespaces | planned      |
+| R2    | Refactor — decompose Lisp and app builtin environments          | planned      |
 | DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | ✓ delivered  |
 | DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | ✓ delivered  |
 | DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | ✓ delivered  |
