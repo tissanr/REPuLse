@@ -550,13 +550,21 @@ impl AudioEngine {
 
     #[cfg(test)]
     pub fn trigger_raw_v2(
-        &mut self, value: &str, time: f64,
-        amp: f32, attack: f32, decay: f32, pan: f32,
+        &mut self,
+        value: &str,
+        time: f64,
+        amp: f32,
+        attack: f32,
+        decay: f32,
+        pan: f32,
     ) {
         self.pending.push(Pending {
             time,
             value: value.to_string(),
-            amp, attack, decay, pan,
+            amp,
+            attack,
+            decay,
+            pan,
         });
     }
 
@@ -931,7 +939,8 @@ mod engine_tests {
         assert!(
             r > l * 5.0,
             "pan=1.0 should be right-heavy, got L={:.4} R={:.4}",
-            l, r
+            l,
+            r
         );
     }
 
@@ -944,7 +953,8 @@ mod engine_tests {
         assert!(
             l > r * 5.0,
             "pan=-1.0 should be left-heavy, got L={:.4} R={:.4}",
-            l, r
+            l,
+            r
         );
     }
 
@@ -958,7 +968,8 @@ mod engine_tests {
         assert!(
             ratio < 1.1,
             "pan=0 should be balanced, got L={:.4} R={:.4}",
-            l, r
+            l,
+            r
         );
     }
 
@@ -989,7 +1000,8 @@ mod engine_tests {
         assert!(
             rms2 < rms1 * 0.7,
             "amp=0.5 should produce lower RMS than amp=1.0, got {:.4} vs {:.4}",
-            rms2, rms1
+            rms2,
+            rms1
         );
     }
 
@@ -998,7 +1010,11 @@ mod engine_tests {
         let mut eng = AudioEngine::new_for_test(44100.0);
         eng.trigger_raw("bd", 0.0);
         let buf = eng.process_block_raw(128, 0.0);
-        assert_eq!(buf.len(), 256, "128 samples should produce 256 interleaved values");
+        assert_eq!(
+            buf.len(),
+            256,
+            "128 samples should produce 256 interleaved values"
+        );
     }
 
     #[test]
@@ -1019,7 +1035,10 @@ mod engine_tests {
         // Schedule at time 1.0 — should NOT activate in a short block at 0.0
         eng.trigger_raw("bd", 1.0);
         let _buf = eng.process_block_raw(128, 0.0);
-        assert!(eng.voices.is_empty(), "event at t=1.0 should not activate in block at t=0.0");
+        assert!(
+            eng.voices.is_empty(),
+            "event at t=1.0 should not activate in block at t=0.0"
+        );
         assert_eq!(eng.pending.len(), 1);
     }
 }
