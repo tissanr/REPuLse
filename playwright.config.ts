@@ -5,13 +5,14 @@ export default defineConfig({
   timeout: 60_000,
   retries: 0,
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://127.0.0.1:3000',
     headless: true,
   },
   webServer: {
-    command: 'npx shadow-cljs watch app',
-    url: 'http://localhost:3000',
-    reuseExistingServer: true,
+    command:
+      'npx shadow-cljs compile test-harness && node scripts/serve-static.mjs app/public 3000',
+    url: 'http://127.0.0.1:3000/test-harness.html',
+    reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
   projects: [

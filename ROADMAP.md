@@ -1000,14 +1000,14 @@ See full spec: [PROMPTS/PHASE-CI1.md](PROMPTS/PHASE-CI1.md)
 
 ---
 
-## Phase TEST1 — Automated Audio Verification 📋 *planned*
+## Phase TEST1 — Automated Audio Verification ✅ *delivered*
 
 Layered audio verification suite: Lisp eval → pattern events, Rust AudioEngine
 DSP tests, and browser OfflineAudioContext render → PCM analysis. Claude Code can
 run `./scripts/test-all.sh` or `npm run test:all` after any dev session for
 automated verification.
 
-**Key additions:**
+**Delivered:**
 - CLJS integration tests: eval-to-events pipeline (`lisp/integration_test.cljs`)
 - Rust engine unit tests: `process_block_raw` extraction, voice/pan/envelope tests
 - Browser offline audio tests: Playwright + OfflineAudioContext render → PCM analysis
