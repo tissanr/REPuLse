@@ -102,6 +102,8 @@ and report the `"offline-js"` backend. They verify the offline render/export-sty
 path. Production browser `AudioWorklet` + WASM PCM capture is tracked separately
 in Phase TEST2.
 
+See [docs/TESTPLAN.md](./docs/TESTPLAN.md) for the coverage map.
+
 ---
 
 ## The language

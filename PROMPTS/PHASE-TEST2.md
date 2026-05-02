@@ -2,15 +2,23 @@
 
 ## Goal
 
-Add true browser production-path audio verification for REPuLse:
+Build on TEST1 and close the remaining automated coverage gaps toward full
+product-level test coverage for REPuLse.
+
+TEST1 covers CLJS logic/integration tests, Rust `AudioEngine` DSP tests, and
+browser offline rendering through the `"offline-js"` harness. TEST2's goal is to
+complete the missing production-path coverage, especially true browser
+AudioWorklet + WASM output:
 
 ```text
 AudioContext -> AudioWorkletNode -> Rust/WASM AudioEngine -> captured PCM
 ```
 
-TEST1 verifies CLJS eval, Rust engine DSP, and browser offline rendering. TEST2
-closes the remaining gap: proving that the live browser Worklet/WASM path itself
-loads, receives events, renders audio, and produces expected PCM.
+By the end of TEST2, automated tests should cover the main functional product
+surfaces: Lisp evaluation, pattern timing, Rust DSP, offline browser rendering,
+live browser audio, production graph routing, representative FX output, and the
+core user-visible workflows that can reasonably be tested without external
+hardware or network services.
 
 ---
 
@@ -31,6 +39,8 @@ TEST2 should investigate and implement:
   browser graph routing.
 - Small, targeted PCM snapshots or golden fixtures where exact output stability
   is useful.
+- Coverage for the major gaps documented in `docs/TESTPLAN.md` where automation
+  is practical.
 - Browser support decision: Chromium-only gate or cross-browser suite.
 
 Possible capture approaches to evaluate:
@@ -51,6 +61,8 @@ Possible capture approaches to evaluate:
 - Are PCM snapshots stable across Chromium versions and CI machines?
 - Which FX should be considered mandatory production-path tests?
 - Should TEST2 run on every PR, or only on audio-related PRs if it becomes slow?
+- Which remaining gaps from `docs/TESTPLAN.md` are intentionally out of scope
+  because they require hardware, credentials, or unstable external services?
 
 ---
 
@@ -61,4 +73,6 @@ Possible capture approaches to evaluate:
 - [ ] `trigger_v2` amp/pan/decay behavior is verified through the live path.
 - [ ] At least one production-path FX chain is verified.
 - [ ] Targeted PCM snapshots are added only where stable and valuable.
+- [ ] `docs/TESTPLAN.md` is updated to show which remaining gaps TEST2 closed and
+      which gaps are still intentionally manual or external.
 - [ ] CI runs the suite according to the browser support decision.

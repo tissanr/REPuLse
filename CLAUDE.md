@@ -295,14 +295,30 @@ When the code for a phase is complete and working, **always also**:
    example.
 5. Commit all documentation changes in the same commit as (or immediately after) the
    implementation commit.
+6. Run `npm run test:all` before marking the phase delivered. For docs-only phases,
+   run at least `npm test` and explain why the full suite was not needed.
 
-### Rule 3 — Documentation is part of done
+### Rule 3 — Verification is part of done
+
+A phase implementation is **not complete** until the relevant verification command
+has passed:
+
+- Run `npm run test:all` for code phases. This covers CLJS tests, Rust AudioEngine
+  tests, and browser offline audio tests.
+- Run `npm test` at minimum for docs-only phases or prompt-only updates.
+- If `npm run test:all` cannot run because of environment limits, state the exact
+  blocker and run the strongest available subset.
+
+Do not mark a phase delivered in this file or `ROADMAP.md` until verification is
+complete or the exception is documented.
+
+### Rule 4 — Documentation is part of done
 
 A phase is **not complete** until Rules 2.1–2.5 are satisfied. "The code works" is
 necessary but not sufficient. If you finish implementing a phase and realise the docs
 haven't been updated, do not mark the task done — update the docs first.
 
-### Rule 4 — AI docs are part of done
+### Rule 5 — AI docs are part of done
 
 When adding a new built-in name that should be highlighted and autocompleted in the editor:
 
