@@ -84,6 +84,25 @@ each evaluation. `def` writes into a mutable `defs` atom attached to the environ
 as `:*defs*`; symbol lookup checks both the env map and `@(:*defs* env)` so that
 `def`-bound names are visible in subsequent evaluations.
 
+### Builtin sub-namespaces (`lisp/builtins/`)
+
+`make-env` is a thin assembler — it merges 8 focused builtin maps then adds the
+`bpm`/`stop` closures and metadata atoms:
+
+| Namespace | Builtins |
+|---|---|
+| `builtins/pattern` | `seq`, `stack`, `pure`, `fast`, `slow`, `rev`, `every`, `fmap`, `euclidean`, `cat`, `late`, `early`, `sometimes`, `often`, `rarely`, `sometimes-by`, `degrade`, `degrade-by`, `choose`, `wchoose`, `jux`, `jux-by`, `off`, `~`, `alt` |
+| `builtins/math` | `+`, `-`, `*`, `/`, `=`, `not=`, `<`, `>`, `<=`, `>=`, `not`, `mod`, `quot`, `abs`, `max`, `min` |
+| `builtins/music` | `scale`, `chord`, `transpose` |
+| `builtins/params` | `amp`, `attack`, `decay`, `release`, `pan`, `rate`, `begin`, `end`, `loop-sample`, `comp`, `tween`, `env` |
+| `builtins/collection` | `get`, `assoc`, `merge`, `keys`, `vals`, `conj`, `apply`, `list`, `count`, `nth`, `first`, `rest`, `empty?`, `cons`, `concat`, `vec`, `map`, `filter`, `reduce`, `range`, `str`, `symbol`, `keyword`, `name`, `identity` |
+| `builtins/types` | `number?`, `string?`, `keyword?`, `map?`, `seq?`, `vector?`, `nil?` |
+| `builtins/synth` | `saw`, `square`, `noise`, `fm`, `synth`, `sound` |
+| `builtins/arrangement` | `arrange`, `play-scenes` |
+
+Shared utilities (`sourced?`, `unwrap`, `source-of`, `->num`) live in `util.cljs`
+and are re-exported from `eval.cljs` for backward compatibility.
+
 ### Public API (`core.cljs`)
 
 ```clojure
@@ -311,7 +330,16 @@ app/src/repulse/
 ├── eval_orchestrator.cljs        evaluate!, set-diagnostics!, slider code-patching
 ├── plugin_loading.cljs           load-plugin consent dialog + load/unload builtins
 ├── env/
-│   └── builtins.cljs             ensure-env! — assembles the full Lisp environment
+│   ├── builtins.cljs             Facade: owns atoms, init!, ensure-env! assembler
+│   └── builtins/
+│       ├── tracks.cljs           track, mute!, unmute!, solo!, clear!, tracks, upd, tap!
+│       ├── fx.cljs               fx (context-aware per-track / global)
+│       ├── samples.cljs          samples!, sample-banks, bank
+│       ├── midi.cljs             midi-sync!, midi-map, midi-out, midi-clock-out!, midi-export
+│       ├── content.cljs          snippet, demo, tutorial, load-gist
+│       ├── export.cljs           export (WAV rendering)
+│       ├── session.cljs          share!, reset!
+│       └── routing.cljs          bus, load-plugin, unload-plugin, freesound-key!, freesound!
 ├── ui/
 │   ├── editor.cljs               CodeMirror editor, highlighting (highlight-range!)
 │   ├── timeline.cljs             SVG track timeline + RAF playhead loop
@@ -326,7 +354,7 @@ app/src/repulse/
 - `content/*` depend only on audio/samples/core/lisp — not on app, ui, or eval
 - `ui/*` depend only on audio/fx/midi/samples/bus/core — not on app or eval
 - `eval_orchestrator` depends on ui/editor and ui/context_panel — not on app
-- `env/builtins` depends on content/*, ui/editor, plugin_loading — not on eval-orchestrator
+- `env/builtins` and `env/builtins/*` depend on content/*, ui/editor, plugin_loading — not on eval-orchestrator
 - `app.cljs` is the only module that depends on everything
 - No circular dependencies
 

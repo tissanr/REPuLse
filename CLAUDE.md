@@ -126,6 +126,27 @@ and calls into Rust/WASM for synthesis:
 
 ---
 
+## Pre-push verification (MANDATORY)
+
+Before committing and pushing any ClojureScript changes, **always** run both checks:
+
+```bash
+npm run test                        # unit tests (core + lisp + session)
+npx shadow-cljs compile app         # full app compile — catches bracket errors,
+                                    # missing requires, and type errors in app/ files
+                                    # that the :test target does not compile
+```
+
+The `:test` shadow-cljs target compiles only `packages/core`, `packages/lisp`, and the
+session-test namespace. It does **not** compile `app/src/repulse/env/builtins/` or any
+other app-layer namespace. Bracket mismatches, unresolved namespaces, and unused
+requires in those files are only caught by compiling the `:app` target.
+
+**Never push without running both commands.** CI runs `shadow-cljs release app` and
+`clj-kondo` on the full source tree and will catch errors that the test runner misses.
+
+---
+
 ## Coding conventions
 
 - **Pure functions by default.** Side effects only at the edges: audio output, DOM.
@@ -181,6 +202,24 @@ Use `npm run dev:full` on the first run of a session to build WASM first, then s
 the watcher. After code edits, follow the standard `<verification_workflow>` using the
 preview tools.
 
+### Worktrees and Vercel
+
+This repo uses git worktrees. Each worktree needs its own one-time setup:
+
+```bash
+npm install                  # node_modules are not shared across worktrees
+vercel link                  # writes .vercel/project.json (gitignored)
+vercel env pull .env.local   # pulls Vercel env vars (gitignored)
+```
+
+`vercel link` can be run in as many worktrees as needed — they all point at the
+same Vercel project. `.vercel/` and `.env.local` are gitignored so each worktree
+holds its own copy independently.
+
+**Are the env vars required for local dev?**
+Only if you're working on auth or community features (Phase S2/S3). Core audio,
+pattern engine, and editor work entirely client-side with no env vars needed.
+
 ---
 
 ## Phase status
@@ -228,7 +267,7 @@ preview tools.
 | S2    | Backend & auth — Vercel + Supabase, GitHub OAuth, REST API     | ✓ delivered  |
 | S3    | Community snippets — submit, star, rank, usage tracking        | ✓ delivered  |
 | S4    | Snippet audio preview — sandboxed eval, waveforms, indicators  | ✓ delivered  |
-| R2    | Refactor — decompose Lisp and app builtin environments          | planned      |
+| R2    | Refactor — decompose Lisp and app builtin environments          | ✓ delivered  |
 | DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | ✓ delivered  |
 | DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | ✓ delivered  |
 | DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | ✓ delivered  |

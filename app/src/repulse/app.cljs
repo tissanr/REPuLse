@@ -336,19 +336,11 @@
         (doseq [{:keys [type id]} (or (:sources active-sess) [])]
           (when (and id (= "github" (str type)))
             (samples/load-external! (str "github:" id))))
-        ;; Restore effect params + bypass after plugins finish loading (~500ms)
+        ;; Store mutes for application after the user's first eval creates tracks.
+        ;; FX params are intentionally NOT restored from localStorage — the buffer's
+        ;; source code is the sole source of truth for which effects are active.
         (js/setTimeout
           (fn []
-            (doseq [{:keys [name params bypassed]} (or (:fx active-sess) [])]
-              (when name
-                (doseq [[k v] (or params {})]
-                  (fx/set-param! name (clojure.core/name k) v))
-                (when bypassed
-                  (fx/bypass! name true))))
-            ;; set-param! marks effects :active? true — reset so the context panel
-            ;; only shows effects that the user's code explicitly activates via (fx ...).
-            (swap! fx/chain (fn [c] (mapv #(assoc % :active? false) c)))
-            ;; Store mutes for application after the user's first eval creates tracks
             (reset! eo/pending-mutes (set (map keyword (or (:muted active-sess) [])))))
           500))
 

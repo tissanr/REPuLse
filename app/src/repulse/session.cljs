@@ -1,6 +1,5 @@
 (ns repulse.session
   (:require [repulse.audio :as audio]
-            [repulse.fx :as fx]
             [repulse.samples :as samples]
             [repulse.midi :as midi]))
 
@@ -29,11 +28,9 @@
   {:v       current-version
    :editor  (if-let [f @editor-text-fn] (f) "")
    :bpm     (or (audio/get-bpm) 120)
-   :fx      (mapv (fn [{:keys [name plugin bypassed?]}]
-                    {:name     name
-                     :params   (try (js->clj (.getParams ^js plugin)) (catch :default _ {}))
-                     :bypassed (boolean bypassed?)})
-                  @fx/chain)
+   ;; FX params are intentionally not persisted. The editor buffer is the
+   ;; source of truth; restored plugin state would make reloads non-reproducible.
+   :fx      []
    :bank    @samples/active-bank-prefix
    :sources (mapv (fn [{:keys [type id]}]
                     {:type (cljs.core/name type) :id id})
