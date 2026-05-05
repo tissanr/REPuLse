@@ -5,6 +5,14 @@ const ALGOS = {
   atan:    (x, k) => (2 / Math.PI) * Math.atan(x * k),
 };
 
+const DEFAULTS = {
+  drive: 4.0,
+  tone: 3000,
+  mix: 0.0,
+  algo: "tanh",
+  asym: 0.0,
+};
+
 function makeCurve(drive, algo, asym) {
   const size = 512;
   const curve = new Float32Array(size);
@@ -29,15 +37,16 @@ export default {
   init(_host) {},   // no host API needed
 
   // State — _mix starts at 0 so the effect is silent until explicitly activated via (fx :distort value)
-  _drive: 4.0,
-  _tone: 3000,
-  _mix: 0.0,
-  _algo: "tanh",
-  _asym: 0.0,
+  _drive: DEFAULTS.drive,
+  _tone: DEFAULTS.tone,
+  _mix: DEFAULTS.mix,
+  _algo: DEFAULTS.algo,
+  _asym: DEFAULTS.asym,
 
   init(host) {},
 
   createNodes(ctx) {
+    this.resetParams();
     this._input = ctx.createGain();
     this._shaper = ctx.createWaveShaper();
     this._dcBlock = ctx.createIIRFilter([1, -1], [1, -0.9995]);
@@ -68,14 +77,50 @@ export default {
     return { inputNode: this._input, outputNode: this._out };
   },
 
+  resetParams() {
+    this._drive = DEFAULTS.drive;
+    this._tone = DEFAULTS.tone;
+    this._mix = DEFAULTS.mix;
+    this._algo = DEFAULTS.algo;
+    this._asym = DEFAULTS.asym;
+
+    const now = this._input?.context?.currentTime ?? 0;
+    if (this._shaper) this._shaper.curve = makeCurve(this._drive, this._algo, this._asym);
+    if (this._toneLP) {
+      this._toneLP.frequency.cancelScheduledValues(now);
+      this._toneLP.frequency.setValueAtTime(this._tone, now);
+    }
+    if (this._dryGain) {
+      this._dryGain.gain.cancelScheduledValues(now);
+      this._dryGain.gain.setValueAtTime(1.0, now);
+    }
+    if (this._wetGain) {
+      this._wetGain.gain.cancelScheduledValues(now);
+      this._wetGain.gain.setValueAtTime(0.0, now);
+    }
+  },
+
+  clone() {
+    const clone = { ...this };
+    clone._input = null;
+    clone._shaper = null;
+    clone._dcBlock = null;
+    clone._toneLP = null;
+    clone._wetGain = null;
+    clone._dryGain = null;
+    clone._out = null;
+    clone.resetParams();
+    return clone;
+  },
+
   setParam(name, value) {
     const now = this._input?.context?.currentTime ?? 0;
 
     if (name === "drive" || name === "value") {
       this._drive = Math.max(1.0, Math.min(100.0, Number(value)));
       if (this._shaper) this._shaper.curve = makeCurve(this._drive, this._algo, this._asym);
-      // Positional "value" auto-activates the effect (sets mix=1) so (fx :distort 4) is a one-liner.
-      if (name === "value" && this._mix === 0.0) {
+      // Auto-activate on first drive/value call so both (fx :distort 4) and (fx :distort :drive 80) work.
+      if (this._mix === 0.0) {
         this._mix = 1.0;
         if (this._dryGain) this._dryGain.gain.linearRampToValueAtTime(0.0, now + 0.02);
         if (this._wetGain) this._wetGain.gain.linearRampToValueAtTime(1.0, now + 0.02);
