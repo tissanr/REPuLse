@@ -961,22 +961,26 @@ See full spec: [PROMPTS/PHASE-S4.md](PROMPTS/PHASE-S4.md)
 
 ---
 
-## Phase R2 — Builtin Environment Decomposition 📋 *planned*
+## Phase R2 — Builtin Environment Decomposition ✅ *delivered*
 
 Pure refactor of the two builtin registration monoliths: split pure language
 builtins out of `packages/lisp/src/repulse/lisp/eval.cljs`, and split app/audio/UI
 builtins out of `app/src/repulse/env/builtins.cljs`. No behaviour change, no new
 built-ins, no public API change.
 
-**Key additions:**
-- Track A: `packages/lisp/src/repulse/lisp/builtins/*` — pattern, math, music,
-  params, collection, types, synth, and arrangement builtin maps
-- Track B: `app/src/repulse/env/builtins/*` — track, fx, samples, MIDI, content,
-  export, session, routing, and plugin builtin factories
-- `eval.cljs` keeps evaluator helpers and special forms only
-- `env/builtins.cljs` keeps env ownership, callback wiring, `ensure-env!`, and
-  public facade exports
-- Before/after builtin key-set parity checks for both tracks
+**Delivered:**
+- `packages/lisp/src/repulse/lisp/util.cljs` — shared `sourced?`, `unwrap`,
+  `source-of`, `->num` helpers (re-exported from `eval.cljs` for backward compat)
+- Track A: 8 new `repulse.lisp.builtins.*` namespaces — `pattern`, `math`, `music`,
+  `params`, `collection`, `types`, `synth`, `arrangement`; each exports `make-builtins`
+- Track B: 8 new `repulse.env.builtins.*` namespaces — `tracks`, `fx`, `samples`,
+  `midi`, `content`, `export`, `session`, `routing`; each exports `make-builtins` taking
+  a context map of callbacks and atoms
+- `eval.cljs` reduced to evaluator core (special forms, `levenshtein`, `make-closure`,
+  `eval-form`) + thin `make-env` assembler
+- `env/builtins.cljs` reduced to owned atoms + `init!` + thin `ensure-env!` assembler;
+  all public exports (`env-atom`, `builtin-names`, `seen-tracks`, `evaluate-ref`) unchanged
+- 135 tests, 0 failures — full key-set parity confirmed
 
 See full spec: [PROMPTS/PHASE-R2.md](PROMPTS/PHASE-R2.md)
 

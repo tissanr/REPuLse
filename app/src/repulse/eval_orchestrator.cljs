@@ -53,8 +53,9 @@
 (defn evaluate! [code]
   (let [{:keys [on-beat make-stop-fn set-playing! set-output!]} @cbs]
     (builtins/ensure-env!)
-    ;; Reset active flags so removed (fx ...) calls disappear from the panel
-    (swap! fx/chain (fn [c] (mapv #(assoc % :active? false) c)))
+    ;; Reset global FX so removed or partial (fx ...) calls cannot inherit
+    ;; parameter values from an earlier evaluation.
+    (fx/reset-global-effects!)
     ;; Clear per-evaluation duplicate-track detector
     (reset! builtins/seen-tracks #{})
     ;; Keep stop fn up to date (in case env was reset)
