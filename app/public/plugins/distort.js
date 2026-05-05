@@ -28,10 +28,10 @@ export default {
 
   init(_host) {},   // no host API needed
 
-  // State
+  // State — _mix starts at 0 so the effect is silent until explicitly activated via (fx :distort value)
   _drive: 4.0,
   _tone: 3000,
-  _mix: 1.0,
+  _mix: 0.0,
   _algo: "tanh",
   _asym: 0.0,
 
@@ -51,8 +51,8 @@ export default {
     this._toneLP.type = "lowpass";
     this._toneLP.frequency.value = this._tone;
     this._toneLP.Q.value       = 0.7;
-    this._dryGain.gain.value   = 1 - this._mix;
-    this._wetGain.gain.value   = this._mix;
+    this._dryGain.gain.value   = 1.0;  // fully dry until activated
+    this._wetGain.gain.value   = 0.0;  // silent until (fx :distort value) is called
 
     // Routing:
     //   input → dry → out
@@ -74,6 +74,12 @@ export default {
     if (name === "drive" || name === "value") {
       this._drive = Math.max(1.0, Math.min(100.0, Number(value)));
       if (this._shaper) this._shaper.curve = makeCurve(this._drive, this._algo, this._asym);
+      // Positional "value" auto-activates the effect (sets mix=1) so (fx :distort 4) is a one-liner.
+      if (name === "value" && this._mix === 0.0) {
+        this._mix = 1.0;
+        if (this._dryGain) this._dryGain.gain.linearRampToValueAtTime(0.0, now + 0.02);
+        if (this._wetGain) this._wetGain.gain.linearRampToValueAtTime(1.0, now + 0.02);
+      }
     }
     if (name === "tone") {
       this._tone = Math.max(200, Math.min(20000, Number(value)));

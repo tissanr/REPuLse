@@ -33,7 +33,7 @@ export default {
   _tone: 4000,
   _tonestack: "neutral",
   _sag: 0.0,
-  _mix: 1.0,
+  _mix: 0.0,  // silent until explicitly activated via (fx :amp-sim value)
   _stageGain: 0,
 
   init(_host) {},
@@ -45,8 +45,8 @@ export default {
     this._dryGain = ctx.createGain();
     this._wetGain = ctx.createGain();
 
-    this._dryGain.gain.value = 1 - this._mix;
-    this._wetGain.gain.value = this._mix;
+    this._dryGain.gain.value = 1.0;  // fully dry until activated
+    this._wetGain.gain.value = 0.0;  // silent until (fx :amp-sim value) is called
 
     // DC blocker
     this._dcBlock = ctx.createIIRFilter([1, -1], [1, -0.9995]);
@@ -192,6 +192,12 @@ export default {
     if (name === "gain" || name === "value") {
       this._gain = Math.max(1.0, Math.min(100.0, Number(value)));
       if (this._ctx) this._updateStageGain();
+      // Positional "value" auto-activates the effect so (fx :amp-sim 8) is a one-liner.
+      if (name === "value" && this._mix === 0.0) {
+        this._mix = 1.0;
+        if (this._dryGain) this._dryGain.gain.linearRampToValueAtTime(0.0, now + 0.02);
+        if (this._wetGain) this._wetGain.gain.linearRampToValueAtTime(1.0, now + 0.02);
+      }
     }
     if (name === "stages") {
       const nextStages = Math.max(1, Math.min(4, Math.round(Number(value))));
