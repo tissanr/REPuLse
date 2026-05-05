@@ -11,6 +11,7 @@ const DEFAULTS = {
   mix: 0.0,
   algo: "tanh",
   asym: 0.0,
+  oversample: 1,
 };
 
 function makeCurve(drive, algo, asym) {
@@ -31,10 +32,14 @@ function makeCurve(drive, algo, asym) {
   return curve;
 }
 
+function oversampleStr(n) {
+  if (n >= 4) return "4x";
+  if (n >= 2) return "2x";
+  return "none";
+}
+
 export default {
   type: "effect", name: "distort", version: "1.0.0",
-
-  init(_host) {},   // no host API needed
 
   // State — _mix starts at 0 so the effect is silent until explicitly activated via (fx :distort value)
   _drive: DEFAULTS.drive,
@@ -42,8 +47,9 @@ export default {
   _mix: DEFAULTS.mix,
   _algo: DEFAULTS.algo,
   _asym: DEFAULTS.asym,
+  _oversample: DEFAULTS.oversample,
 
-  init(host) {},
+  init(_host) {},
 
   createNodes(ctx) {
     this.resetParams();
@@ -56,7 +62,7 @@ export default {
     this._out = ctx.createGain();
 
     this._shaper.curve = makeCurve(this._drive, this._algo, this._asym);
-    this._shaper.oversample = "2x";
+    this._shaper.oversample = oversampleStr(this._oversample);
     this._toneLP.type = "lowpass";
     this._toneLP.frequency.value = this._tone;
     this._toneLP.Q.value       = 0.7;
@@ -83,6 +89,7 @@ export default {
     this._mix = DEFAULTS.mix;
     this._algo = DEFAULTS.algo;
     this._asym = DEFAULTS.asym;
+    this._oversample = DEFAULTS.oversample;
 
     const now = this._input?.context?.currentTime ?? 0;
     if (this._shaper) this._shaper.curve = makeCurve(this._drive, this._algo, this._asym);
@@ -154,6 +161,22 @@ export default {
       this._asym = Math.max(-1.0, Math.min(1.0, Number(value)));
       if (this._shaper) this._shaper.curve = makeCurve(this._drive, this._algo, this._asym);
     }
+
+    if (name === "oversample") {
+      const n = Number(value);
+      if (![1, 2, 4].includes(n)) {
+        console.warn(`[distort] :oversample must be 1, 2, or 4; got ${n}, using 1`);
+        this._oversample = 1;
+      } else {
+        this._oversample = n;
+      }
+      // NOTE: :oversample 4 increases the WaveShaperNode's internal processing cost by
+      // approximately 4x. For typical 1-2 voice patches this is negligible. With many
+      // simultaneous voices at high oversample, audio dropouts may occur. The user is
+      // responsible for the trade-off; no automatic warning is emitted since we cannot
+      // measure audio thread CPU from JavaScript.
+      if (this._shaper) this._shaper.oversample = oversampleStr(this._oversample);
+    }
   },
 
   bypass(on) {
@@ -170,6 +193,7 @@ export default {
       mix: this._mix,
       algo: this._algo,
       asym: this._asym,
+      oversample: this._oversample,
     };
   },
 

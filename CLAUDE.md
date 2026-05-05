@@ -280,7 +280,7 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | ✓ delivered  |
 | DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | ✓ delivered  |
 | DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | ✓ delivered  |
-| DST4  | Distortion — oversampling wrapper (:oversample 1/2/4)          | planned      |
+| DST4  | Distortion — oversampling wrapper (:oversample 1/2/4)          | ✓ delivered  |
 | DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | planned   |
 | DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | planned      |
 | CI1   | CI pipeline — GitHub Actions: tests, lint, Rust, grammar drift | ✓ delivered  |

@@ -73,12 +73,14 @@
    "distort"         {"drive"    {:min 1   :max 100   :step 0.1}
                       "tone"     {:min 200 :max 20000 :step 1}
                       "mix"      {:min 0   :max 1     :step 0.01}
-                      "asym"     {:min -1  :max 1     :step 0.01}}
+                      "asym"     {:min -1  :max 1     :step 0.01}
+                      "oversample" {:values [1 2 4]}}
    "amp-sim"         {"gain"     {:min 1   :max 100   :step 0.1}
                       "stages"   {:min 1   :max 4     :step 1}
                       "tone"     {:min 200 :max 20000 :step 1}
                       "sag"      {:min 0   :max 1     :step 0.01}
-                      "mix"      {:min 0   :max 1     :step 0.01}}
+                      "mix"      {:min 0   :max 1     :step 0.01}
+                      "oversample" {:values [1 2 4]}}
    "bitcrusher"      {"wet"       {:min 0    :max 1   :step 0.01}}
    "sidechain"       {"amount"    {:min 0    :max 1   :step 0.01}}
    "compressor"      {"wet"       {:min 0    :max 1   :step 0.01}
@@ -141,17 +143,32 @@
            "<span class=\"ctx-param-val\">" (escape-html (fmt-pv value)) "</span>"
            "</div>"))))
 
+(defn- slider-attrs [cfg value]
+  (if-let [values (:values cfg)]
+    (let [idx (.indexOf (to-array values) value)
+          idx (if (neg? idx) 0 idx)]
+      {:min 0
+       :max (dec (count values))
+       :step 1
+       :value idx
+       :values (str/join "," values)})
+    (select-keys cfg [:min :max :step :value])))
+
 (defn- render-fx-slider [effect-name param-name value]
-  (when-let [{:keys [min max step]} (get-in FX-SLIDER-PARAMS [effect-name param-name])]
-    (let [fen (escape-html effect-name)
-          pn  (escape-html param-name)]
+  (when-let [cfg (get-in FX-SLIDER-PARAMS [effect-name param-name])]
+    (let [fen   (escape-html effect-name)
+          pn    (escape-html param-name)
+          attrs (slider-attrs cfg value)
+          {:keys [min max step values]} attrs
+          slider-value (or (:value attrs) value)]
       (str "<div class=\"ctx-slider-row\">"
            "<label class=\"ctx-param-key\">" pn "</label>"
            "<input type=\"range\" class=\"ctx-slider\""
            " data-fx=\"" fen "\""
            " data-param=\"" pn "\""
+           (when values (str " data-values=\"" values "\""))
            " min=\"" min "\" max=\"" max "\" step=\"" step "\""
-           " value=\"" value "\">"
+           " value=\"" slider-value "\">"
            "<span class=\"ctx-param-val\">" (escape-html (fmt-pv value)) "</span>"
            "</div>"))))
 
@@ -196,18 +213,22 @@
            "</div>"))))
 
 (defn- render-track-fx-slider [track-name effect-name param-name value]
-  (when-let [{:keys [min max step]} (get-in FX-SLIDER-PARAMS [effect-name param-name])]
-    (let [tn  (escape-html (cljs.core/name track-name))
-          fen (escape-html effect-name)
-          pn  (escape-html param-name)]
+  (when-let [cfg (get-in FX-SLIDER-PARAMS [effect-name param-name])]
+    (let [tn    (escape-html (cljs.core/name track-name))
+          fen   (escape-html effect-name)
+          pn    (escape-html param-name)
+          attrs (slider-attrs cfg value)
+          {:keys [min max step values]} attrs
+          slider-value (or (:value attrs) value)]
       (str "<div class=\"ctx-slider-row\">"
            "<label class=\"ctx-param-key\">" pn "</label>"
            "<input type=\"range\" class=\"ctx-slider\""
            " data-track=\"" tn "\""
            " data-fx=\"" fen "\""
            " data-param=\"" pn "\""
+           (when values (str " data-values=\"" values "\""))
            " min=\"" min "\" max=\"" max "\" step=\"" step "\""
-           " value=\"" value "\">"
+           " value=\"" slider-value "\">"
            "<span class=\"ctx-param-val\">" (escape-html (fmt-pv value)) "</span>"
            "</div>"))))
 

@@ -32,7 +32,14 @@ const DEFAULTS = {
   tonestack: "neutral",
   sag: 0.0,
   mix: 0.0,
+  oversample: 1,
 };
+
+function oversampleStr(n) {
+  if (n >= 4) return "4x";
+  if (n >= 2) return "2x";
+  return "none";
+}
 
 export default {
   type: "effect", name: "amp-sim", version: "1.0.0",
@@ -43,6 +50,7 @@ export default {
   _tonestack: DEFAULTS.tonestack,
   _sag: DEFAULTS.sag,
   _mix: DEFAULTS.mix,  // silent until explicitly activated via (fx :amp-sim value)
+  _oversample: DEFAULTS.oversample,
   _stageGain: 0,
 
   init(_host) {},
@@ -150,7 +158,7 @@ export default {
 
       const shaper = ctx.createWaveShaper();
       shaper.curve = makeStageCurve(perStageGain);
-      shaper.oversample = "2x";
+      shaper.oversample = oversampleStr(this._oversample);
 
       const hpFilter = ctx.createBiquadFilter();
       hpFilter.type = "highpass";
@@ -238,6 +246,19 @@ export default {
       if (this._dryGain) { this._dryGain.gain.cancelScheduledValues(now); this._dryGain.gain.linearRampToValueAtTime(1 - this._mix, now + 0.02); }
       if (this._wetGain) { this._wetGain.gain.cancelScheduledValues(now); this._wetGain.gain.linearRampToValueAtTime(this._mix, now + 0.02); }
     }
+    if (name === "oversample") {
+      const n = Number(value);
+      if (![1, 2, 4].includes(n)) {
+        console.warn(`[amp-sim] :oversample must be 1, 2, or 4; got ${n}, using 1`);
+        this._oversample = 1;
+      } else {
+        this._oversample = n;
+      }
+      // Update all stage shapers in place
+      for (const s of this._stageChain) {
+        s.shaper.oversample = oversampleStr(this._oversample);
+      }
+    }
   },
 
   resetParams() {
@@ -248,6 +269,7 @@ export default {
     this._tonestack = DEFAULTS.tonestack;
     this._sag = DEFAULTS.sag;
     this._mix = DEFAULTS.mix;
+    this._oversample = DEFAULTS.oversample;
 
     const now = this._ctx?.currentTime || 0;
     if (this._ctx && this._stageChain) {
@@ -310,6 +332,7 @@ export default {
       tonestack: this._tonestack,
       sag: this._sag,
       mix: this._mix,
+      oversample: this._oversample,
     };
   },
 
