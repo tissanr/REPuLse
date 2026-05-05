@@ -223,7 +223,11 @@
             (let [fx-name    (.. target -dataset -fx)
                   track-name (.. target -dataset -track)
                   param-name (.. target -dataset -param)
-                  new-val    (js/parseFloat (.-value target))
+                  raw-val    (js/parseFloat (.-value target))
+                  values     (some-> (.. target -dataset -values) (.split ","))
+                  new-val    (if values
+                               (js/parseFloat (aget values (int raw-val)))
+                               raw-val)
                   row        (.-parentNode target)
                   val-el     (when row (.querySelector row ".ctx-param-val"))
                   fmtd       (if (== new-val (Math/round new-val))

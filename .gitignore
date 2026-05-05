@@ -36,5 +36,8 @@ app/public/repulse_audio.js
 # aider
 .aider*
 
+# Local handoff archives
+REPuLse-handoff-*.zip
+
 .gemini/
 gha-creds-*.json
