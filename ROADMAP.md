@@ -332,7 +332,7 @@ See full spec: [PROMPTS/phase-e2-live-session-dashboard.md](PROMPTS/phase-e2-liv
 
 ---
 
-## Phase E2b — Parameter Sliders 📋 *planned*
+## Phase E2b — Parameter Sliders ✅ *delivered*
 
 Make numeric params in the session dashboard **interactive sliders** that update
 the editor code live and change the audio immediately, without re-evaluation.
@@ -803,7 +803,7 @@ See full spec: [PROMPTS/PHASE-DST6.md](PROMPTS/PHASE-DST6.md)
 
 ---
 
-## Phase J2 — Contextual Insertion Buttons 📋 *planned*
+## Phase J2 — Contextual Insertion Buttons ✅ *delivered*
 
 Point-and-click code scaffolding: `+` buttons appear on hover over parentheses and
 at empty line beginnings. Opening-paren `+` wraps the form (e.g., `fast`, `rev`,
@@ -1004,31 +1004,45 @@ See full spec: [PROMPTS/PHASE-CI1.md](PROMPTS/PHASE-CI1.md)
 
 ---
 
-## Phase HRD1 — Hardening ✅ *delivered*
+## Phase TEST1 — Automated Audio Verification ✅ *delivered*
 
-AST-aware editor patching, remote fetch validation, and reproducible Rust builds.
-No new features or language changes — pure correctness and infrastructure hardening.
+Layered audio verification suite: Lisp eval → pattern events, Rust AudioEngine
+DSP tests, and browser OfflineAudioContext render → PCM analysis. Claude Code can
+run `./scripts/test-all.sh` or `npm run test:all` after any dev session for
+automated verification.
 
 **Delivered:**
-- `app/src/repulse/lisp_patcher.cljs` (new): minimal Lisp tokenizer that skips
-  comments and string literals, with four public paren-aware scanners
-  (`find-param-num`, `find-fx-named-param-num`, `find-fx-pos-param-num`,
-  `find-fx-form-close`). Replaces three regex-based patching functions in
-  `eval_orchestrator.cljs` that silently misfired on nested forms, comments, and
-  duplicate parameter names across tracks.
-- `eval_orchestrator.cljs`: rewritten `patch-param-in-editor!`,
-  `patch-fx-param-in-editor!`, and `patch-per-track-fx-param-in-editor!` to use
-  the new scanner; extracted shared `fmt-num` and `dispatch-replace!` helpers.
-- `samples.cljs`: added `fetch-ok!` helper that rejects with a descriptive error
-  on non-2xx responses; applied to all four fetch chains (JSON manifest, Lisp
-  manifest, GitHub tree API, audio buffer fetch).
-- `rust-toolchain.toml` (new): pins `channel = "stable"` with
-  `targets = ["wasm32-unknown-unknown"]` and `components = ["clippy", "rustfmt"]`,
-  ensuring reproducible Rust builds and correct CI lint toolchain setup.
-- `netlify.toml`: removed `rustup default stable && curl | sh` installer from the
-  build command; deploys now run only project build steps.
+- CLJS integration tests: eval-to-events pipeline (`lisp/integration_test.cljs`)
+- Rust engine unit tests: `process_block_raw` extraction, voice/pan/envelope tests
+- Browser offline audio tests: Playwright + OfflineAudioContext render → PCM analysis
+- Test harness API: `window.__REPULSE_TEST__` namespace (`repulse.test-api`)
+- Dedicated `:test-harness` shadow-cljs build
+- Audio analysis helpers: RMS power, onset count, stereo balance, leak detection
+- Unified runners: `scripts/test-all.sh` and `npm run test:all`
+- CI: add `cargo test` job, Playwright job with headless browser
 
-See full spec: [PROMPTS/PHASE-HRD1.md](PROMPTS/PHASE-HRD1.md)
+**Boundary:** TEST1 browser tests verify the offline/export-style JS render path.
+Production browser AudioWorklet + WASM PCM capture is deferred to TEST2.
+
+See full spec: [PROMPTS/PHASE-TEST1.md](PROMPTS/PHASE-TEST1.md)
+
+---
+
+## Phase TEST2 — Production Browser Audio Capture 📋 *planned*
+
+True production-path browser audio verification:
+`AudioContext → AudioWorkletNode → Rust/WASM AudioEngine → captured PCM`.
+
+**Key additions:**
+- Playwright harness that starts a real `AudioContext`
+- Proof that the app is using AudioWorklet + WASM, not JS fallback
+- PCM capture from the production worklet output
+- Live-path checks for `trigger`, `trigger_v2`, amp, pan, decay, and voice cleanup
+- Targeted PCM snapshots/golden fixtures where stable and valuable
+- Live-path FX verification for browser graph routing
+- Browser support decision: Chromium-only gate or broader suite
+
+See full spec stub: [PROMPTS/PHASE-TEST2.md](PROMPTS/PHASE-TEST2.md)
 
 ---
 

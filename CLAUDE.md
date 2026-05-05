@@ -176,10 +176,19 @@ npm run dev:full         # build:wasm + shadow-cljs watch app
 
 # Tests
 npm run test             # shared cljs.test runner for core + lisp + app session tests
+npm run test:rust        # Rust AudioEngine unit tests
+npm run test:e2e         # Playwright browser offline audio tests
+npm run test:all         # CLJS + Rust + browser offline tests
+./scripts/test-all.sh    # same full TEST1 verification suite
 
 # Lezer grammar (syntax highlighting) — run after editing repulse-lisp.grammar
 npm run gen:grammar      # regenerates parser.js + parser.terms.js
 ```
+
+TEST1 browser audio tests use a dedicated `:test-harness` build with
+`OfflineAudioContext` and the `"offline-js"` backend. They verify the offline
+render/export-style path, not production browser AudioWorklet + WASM capture.
+That live production path is tracked separately in TEST2.
 
 ### Syntax highlighting + completions checklist
 
@@ -275,6 +284,8 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | planned   |
 | DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | planned      |
 | CI1   | CI pipeline — GitHub Actions: tests, lint, Rust, grammar drift | ✓ delivered  |
+| TEST1 | Automated audio verification — CLJS, Rust DSP, offline PCM tests | ✓ delivered  |
+| TEST2 | Production browser audio capture — AudioWorklet/WASM PCM verification | planned      |
 | HRD1  | Hardening — AST editor patching, fetch validation, reproducible Rust builds | ✓ delivered  |
 | HRD2  | Security hardening — XSS, RLS, CORS, input validation, CSP    | ✓ delivered  |
 | HRD3  | Interface specs — plugins, pattern data, sessions, FX, MIDI   | planned      |
@@ -323,14 +334,30 @@ When the code for a phase is complete and working, **always also**:
    example.
 5. Commit all documentation changes in the same commit as (or immediately after) the
    implementation commit.
+6. Run `npm run test:all` before marking the phase delivered. For docs-only phases,
+   run at least `npm test` and explain why the full suite was not needed.
 
-### Rule 3 — Documentation is part of done
+### Rule 3 — Verification is part of done
+
+A phase implementation is **not complete** until the relevant verification command
+has passed:
+
+- Run `npm run test:all` for code phases. This covers CLJS tests, Rust AudioEngine
+  tests, and browser offline audio tests.
+- Run `npm test` at minimum for docs-only phases or prompt-only updates.
+- If `npm run test:all` cannot run because of environment limits, state the exact
+  blocker and run the strongest available subset.
+
+Do not mark a phase delivered in this file or `ROADMAP.md` until verification is
+complete or the exception is documented.
+
+### Rule 4 — Documentation is part of done
 
 A phase is **not complete** until Rules 2.1–2.5 are satisfied. "The code works" is
 necessary but not sufficient. If you finish implementing a phase and realise the docs
 haven't been updated, do not mark the task done — update the docs first.
 
-### Rule 4 — AI docs are part of done
+### Rule 5 — AI docs are part of done
 
 When adding a new built-in name that should be highlighted and autocompleted in the editor:
 
