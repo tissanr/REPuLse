@@ -27,6 +27,48 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  cargo-test:
+    name: Rust audio tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/audio/target
+          key: cargo-${{ hashFiles('packages/audio/Cargo.lock') }}
+          restore-keys: cargo-
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - run: cargo test --manifest-path packages/audio/Cargo.toml
+
+  browser-audio:
+    name: Browser audio tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Cache shadow-cljs deps
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: m2-${{ hashFiles('shadow-cljs.edn') }}
+          restore-keys: m2-
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
   release-build:
     name: Release build (shadow-cljs release app)
     runs-on: ubuntu-latest

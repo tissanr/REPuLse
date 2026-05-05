@@ -1826,12 +1826,13 @@ a DC blocker, post-filter tone control, and a full dry/wet blend.
 | Mix       | `mix` | `1.0` | 0–1 |
 | Asymmetry | `asym` | `0.0` | -1–1 |
 | Algorithm | `algo` | `:tanh` | `:tanh` `:sigmoid` `:atan` |
+| Oversample | `oversample` | `1` | 1, 2, 4 |
 
 ```lisp
 (fx :distort)
 (fx :distort :drive 8)
 (fx :distort :drive 6 :asym 0.4 :tone 2500)
-(fx :distort :drive 20 :asym 0.8 :algo :atan)
+(fx :distort :drive 25 :asym 0.8 :oversample 4)
 (fx :distort :drive 6 :tone 1800 :algo :atan)
 (fx :distort :drive 2 :tone 1500 :mix 0.6 :algo :sigmoid)
 ```
@@ -1849,12 +1850,13 @@ and power supply sag simulation.
 | Tonestack | `tonestack` | `:neutral` | `:neutral` `:bright` `:dark` `:mid-scoop` `:mid-hump` |
 | Sag       | `sag` | `0.0` | Power supply sag / transient compression (0–1) |
 | Mix       | `mix` | `1.0` | Dry/wet blend (0–1) |
+| Oversample | `oversample` | `1` | 1, 2, 4 |
 
 ```lisp
 (fx :amp-sim)
 (fx :amp-sim :gain 12 :stages 2)
 (fx :amp-sim :gain 60 :stages 4 :tonestack :mid-scoop :sag 0.3)
-(fx :amp-sim :gain 6 :stages 2 :tonestack :bright)
+(fx :amp-sim :gain 6 :stages 2 :tonestack :bright :oversample 2)
 ```
 
 #### `waveshape` — arbitrary waveshaper LUT

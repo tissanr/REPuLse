@@ -73,6 +73,13 @@
     (is (= 132 (:bpm loaded)))
     (is (= session/current-version (:v loaded)))))
 
+(deftest session-snapshot-does-not-persist-fx-params
+  (reset! session/editor-text-fn (fn [] "(fx :distort 20)\n(seq :bd)"))
+  (reset! fx/chain [{:name "distort"
+                     :plugin #js {:getParams (fn [] #js {:drive 80 :mix 1})}
+                     :bypassed? false}])
+  (is (= [] (:fx (session/build-session-snapshot)))))
+
 (deftest corrupt-bpm-restore
   (.setItem js/localStorage session/storage-key
             (js/JSON.stringify

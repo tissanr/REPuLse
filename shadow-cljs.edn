@@ -27,6 +27,15 @@
    :output-to "out/test.js"
    :main repulse.test-runner/main}
 
+  :test-harness
+  {:target :browser
+   :output-dir "app/public/test-js"
+   :asset-path "/test-js"
+   :modules {:main {:init-fn repulse.test-api/init!}}
+   :compiler-options {:language-out :ecmascript-2020
+                      :externs ["app/externs/lezer-lr.js"
+                                "app/externs/supabase.js"]}}
+
   :embed
   {:target      :browser
    :output-dir  "app/public"
@@ -34,4 +43,3 @@
    :modules     {:embed {:init-fn repulse.embed/init!}}
    :compiler-options {:language-out :ecmascript-2020
                       :externs ["app/externs/lezer-lr.js"]}}}}
-

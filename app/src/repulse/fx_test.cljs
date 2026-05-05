@@ -22,3 +22,19 @@
               [:add :_ "distort"]
               [:set :_ "distort" "drive" 100]]
              @calls)))))
+
+(deftest reset-global-effects-resets-plugin-state-and-flags
+  (testing "global plugin params do not leak between evaluations"
+    (let [calls  (atom [])
+          plugin #js {:resetParams (fn [] (swap! calls conj :reset))}]
+      (reset! fx/chain [{:name "distort"
+                         :plugin plugin
+                         :active? true
+                         :bypassed? true}])
+      (fx/reset-global-effects!)
+      (is (= [:reset] @calls))
+      (is (= [{:name "distort"
+               :plugin plugin
+               :active? false
+               :bypassed? false}]
+             @fx/chain)))))

@@ -87,6 +87,23 @@ You'll hear a kick and snare alternating in a loop. To stop:
 > If you skip `npm run build:wasm`, the app still works — it falls back to a JS synthesis
 > engine automatically. You'll see `[REPuLse] audio backend: clojurescript synthesis` in the browser console.
 
+## Testing
+
+```bash
+npm test              # ClojureScript unit/integration tests
+npm run test:rust     # Rust AudioEngine tests
+npm run test:e2e      # Playwright browser offline audio tests
+npm run test:all      # full local verification suite
+./scripts/test-all.sh # same full suite
+```
+
+The browser audio tests use a dedicated test harness with `OfflineAudioContext`
+and report the `"offline-js"` backend. They verify the offline render/export-style
+path. Production browser `AudioWorklet` + WASM PCM capture is tracked separately
+in Phase TEST2.
+
+See [docs/TESTPLAN.md](./docs/TESTPLAN.md) for the coverage map.
+
 ---
 
 ## The language

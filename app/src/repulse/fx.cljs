@@ -45,6 +45,16 @@
     (when-let [entry (some #(when (= effect-name (:name %)) %) @chain)]
       (.setParam ^js (:plugin entry) param-name value))))
 
+(defn reset-global-effects!
+  "Return global effects to their plugin defaults before evaluating source code.
+   This keeps the editor buffer as the source of truth instead of carrying
+   parameter values from an earlier eval or hot-reload session."
+  []
+  (doseq [{:keys [plugin]} @chain]
+    (when (and plugin (fn? (.-resetParams ^js plugin)))
+      (.resetParams ^js plugin)))
+  (swap! chain (fn [c] (mapv #(assoc % :active? false :bypassed? false) c))))
+
 (defn bypass! [effect-name enabled]
   (when-let [entry (some #(when (= effect-name (:name %)) %) @chain)]
     (.bypass ^js (:plugin entry) enabled)
