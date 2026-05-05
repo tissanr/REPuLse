@@ -202,11 +202,11 @@ export default {
     if (name === "gain" || name === "value") {
       this._gain = Math.max(1.0, Math.min(100.0, Number(value)));
       if (this._ctx) this._updateStageGain();
-      // Auto-activate on first gain/value call so both (fx :amp-sim 8) and (fx :amp-sim :gain 50) work.
+      // Auto-activate: use setValueAtTime so a subsequent setParam("mix",x) can cancel cleanly.
       if (this._mix === 0.0) {
         this._mix = 1.0;
-        if (this._dryGain) this._dryGain.gain.linearRampToValueAtTime(0.0, now + 0.02);
-        if (this._wetGain) this._wetGain.gain.linearRampToValueAtTime(1.0, now + 0.02);
+        if (this._dryGain) { this._dryGain.gain.cancelScheduledValues(0); this._dryGain.gain.setValueAtTime(0.0, now); }
+        if (this._wetGain) { this._wetGain.gain.cancelScheduledValues(0); this._wetGain.gain.setValueAtTime(1.0, now); }
       }
     }
     if (name === "stages") {
@@ -234,8 +234,9 @@ export default {
     }
     if (name === "mix") {
       this._mix = Math.max(0, Math.min(1, Number(value)));
-      if (this._dryGain) this._dryGain.gain.linearRampToValueAtTime(1 - this._mix, now + 0.02);
-      if (this._wetGain) this._wetGain.gain.linearRampToValueAtTime(this._mix, now + 0.02);
+      // Cancel any pending events (e.g. from auto-activate) before scheduling the new ramp.
+      if (this._dryGain) { this._dryGain.gain.cancelScheduledValues(now); this._dryGain.gain.linearRampToValueAtTime(1 - this._mix, now + 0.02); }
+      if (this._wetGain) { this._wetGain.gain.cancelScheduledValues(now); this._wetGain.gain.linearRampToValueAtTime(this._mix, now + 0.02); }
     }
   },
 

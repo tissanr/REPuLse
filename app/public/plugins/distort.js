@@ -119,11 +119,12 @@ export default {
     if (name === "drive" || name === "value") {
       this._drive = Math.max(1.0, Math.min(100.0, Number(value)));
       if (this._shaper) this._shaper.curve = makeCurve(this._drive, this._algo, this._asym);
-      // Auto-activate on first drive/value call so both (fx :distort 4) and (fx :distort :drive 80) work.
+      // Auto-activate: use setValueAtTime (not a ramp) so a subsequent setParam("mix",x) call
+      // can cancel and override without competing ramps at the same timestamp.
       if (this._mix === 0.0) {
         this._mix = 1.0;
-        if (this._dryGain) this._dryGain.gain.linearRampToValueAtTime(0.0, now + 0.02);
-        if (this._wetGain) this._wetGain.gain.linearRampToValueAtTime(1.0, now + 0.02);
+        if (this._dryGain) { this._dryGain.gain.cancelScheduledValues(0); this._dryGain.gain.setValueAtTime(0.0, now); }
+        if (this._wetGain) { this._wetGain.gain.cancelScheduledValues(0); this._wetGain.gain.setValueAtTime(1.0, now); }
       }
     }
     if (name === "tone") {
@@ -132,8 +133,11 @@ export default {
     }
     if (name === "mix") {
       this._mix = Math.max(0, Math.min(1, Number(value)));
+      // Cancel any pending events (e.g. from auto-activate) before scheduling the new ramp.
+      this._dryGain.gain.cancelScheduledValues(now);
       this._dryGain.gain.linearRampToValueAtTime(1 - this._mix, now + 0.02);
-      this._wetGain.gain.linearRampToValueAtTime(this._mix,     now + 0.02);
+      this._wetGain.gain.cancelScheduledValues(now);
+      this._wetGain.gain.linearRampToValueAtTime(this._mix, now + 0.02);
     }
     if (name === "algo") {
       // value is a string: "tanh", "sigmoid", "atan"
