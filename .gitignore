@@ -4,11 +4,13 @@ node_modules
 
 # shadow-cljs build output
 app/public/js/
+app/public/test-js/
 app/public/cljs-runtime/
 app/public/manifest.edn
 out/
 .shadow-cljs/
 .tsc-out/
+test-results/
 
 # Clojure/LSP tooling caches
 .clj-kondo/.cache/
@@ -41,3 +43,9 @@ REPuLse-handoff-*.zip
 
 .gemini/
 gha-creds-*.json
+
+# Vercel
+.env*.local
+
+# Design 
+REPuLse-handoff-*

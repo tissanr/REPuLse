@@ -25,9 +25,15 @@ const TONESTACKS = {
   "mid-hump":  { low: -2, mid: 4,  high: -2 },
 };
 
-function dbToGain(db) {
-  return Math.pow(10, db / 20);
-}
+const DEFAULTS = {
+  gain: 8.0,
+  stages: 3,
+  tone: 4000,
+  tonestack: "neutral",
+  sag: 0.0,
+  mix: 0.0,
+  oversample: 1,
+};
 
 function oversampleStr(n) {
   if (n >= 4) return "4x";
@@ -38,30 +44,32 @@ function oversampleStr(n) {
 export default {
   type: "effect", name: "amp-sim", version: "1.0.0",
 
-  _gain: 8.0,
-  _stages: 3,
-  _tone: 4000,
-  _tonestack: "neutral",
-  _sag: 0.0,
-  _mix: 1.0,
-  _oversample: 1,
+  _gain: DEFAULTS.gain,
+  _stages: DEFAULTS.stages,
+  _tone: DEFAULTS.tone,
+  _tonestack: DEFAULTS.tonestack,
+  _sag: DEFAULTS.sag,
+  _mix: DEFAULTS.mix,  // silent until explicitly activated via (fx :amp-sim value)
+  _oversample: DEFAULTS.oversample,
+  _stageGain: 0,
 
   init(_host) {},
 
   createNodes(ctx) {
+    this.resetParams();
     this._ctx = ctx;
     this._input = ctx.createGain();
     this._out = ctx.createGain();
     this._dryGain = ctx.createGain();
     this._wetGain = ctx.createGain();
 
-    this._dryGain.gain.value = 1 - this._mix;
-    this._wetGain.gain.value = this._mix;
+    this._dryGain.gain.value = 1.0;  // fully dry until activated
+    this._wetGain.gain.value = 0.0;  // silent until (fx :amp-sim value) is called
 
     // DC blocker
     this._dcBlock = ctx.createIIRFilter([1, -1], [1, -0.9995]);
 
-    // Final tone lowpass
+    // Final lowpass trims amp harshness after the tone stack.
     this._toneLP = ctx.createBiquadFilter();
     this._toneLP.type = "lowpass";
     this._toneLP.frequency.value = this._tone;
@@ -108,19 +116,24 @@ export default {
 
     try { this._input.disconnect(this._sagComp); } catch (_) {}
     try { this._sagComp.disconnect(); } catch (_) {}
-    
+    try { this._dcBlock.disconnect(); } catch (_) {}
+    try { this._lowShelf.disconnect(); } catch (_) {}
+    try { this._midPeak.disconnect(); } catch (_) {}
+    try { this._highShelf.disconnect(); } catch (_) {}
+    try { this._toneLP.disconnect(); } catch (_) {}
+
     this._input.connect(this._sagComp);
     this._sagComp.connect(this._stageChain[0].inputGain);
 
     const lastStage = this._stageChain[this._stageChain.length - 1];
     try { lastStage.outputGain.disconnect(); } catch (_) {}
-    
+
     lastStage.outputGain.connect(this._dcBlock);
-    this._dcBlock.connect(this._toneLP);
-    this._toneLP.connect(this._lowShelf);
+    this._dcBlock.connect(this._lowShelf);
     this._lowShelf.connect(this._midPeak);
     this._midPeak.connect(this._highShelf);
-    this._highShelf.connect(this._wetGain);
+    this._highShelf.connect(this._toneLP);
+    this._toneLP.connect(this._wetGain);
     this._wetGain.connect(this._out);
   },
 
@@ -136,6 +149,7 @@ export default {
 
     const N = Math.max(1, Math.min(4, Math.round(this._stages)));
     const perStageGain = Math.pow(this._gain, 1 / N);
+    this._stageGain = perStageGain;
     const stageLPFreqs = [12000, 8000, 5000, 4000];
 
     for (let i = 0; i < N; i++) {
@@ -170,31 +184,47 @@ export default {
     }
   },
 
+  _updateStageGain() {
+    const N = Math.max(1, Math.min(4, Math.round(this._stages)));
+    const perStageGain = Math.pow(this._gain, 1 / N);
+    this._stageGain = perStageGain;
+    for (const s of this._stageChain) {
+      s.inputGain.gain.value = perStageGain;
+      s.shaper.curve = makeStageCurve(perStageGain);
+    }
+  },
+
   _applyTonestack(name, time) {
     const ts = TONESTACKS[name] || TONESTACKS.neutral;
     const now = this._ctx?.currentTime || 0;
     const t = time !== undefined ? time : now + 0.02;
 
-    this._lowShelf.gain.linearRampToValueAtTime(dbToGain(ts.low), t);
-    this._midPeak.gain.linearRampToValueAtTime(dbToGain(ts.mid), t);
-    this._highShelf.gain.linearRampToValueAtTime(dbToGain(ts.high), t);
+    this._lowShelf.gain.linearRampToValueAtTime(ts.low, t);
+    this._midPeak.gain.linearRampToValueAtTime(ts.mid, t);
+    this._highShelf.gain.linearRampToValueAtTime(ts.high, t);
   },
 
   setParam(name, value) {
     const now = this._ctx?.currentTime || 0;
 
-    if (name === "gain") {
+    if (name === "gain" || name === "value") {
       this._gain = Math.max(1.0, Math.min(100.0, Number(value)));
-      if (this._ctx) {
-        this._buildStages(this._ctx);
-        this._connectWetPath();
+      if (this._ctx) this._updateStageGain();
+      // Auto-activate: use setValueAtTime so a subsequent setParam("mix",x) can cancel cleanly.
+      if (this._mix === 0.0) {
+        this._mix = 1.0;
+        if (this._dryGain) { this._dryGain.gain.cancelScheduledValues(0); this._dryGain.gain.setValueAtTime(0.0, now); }
+        if (this._wetGain) { this._wetGain.gain.cancelScheduledValues(0); this._wetGain.gain.setValueAtTime(1.0, now); }
       }
     }
     if (name === "stages") {
-      this._stages = Math.max(1, Math.min(4, Math.round(Number(value))));
-      if (this._ctx) {
+      const nextStages = Math.max(1, Math.min(4, Math.round(Number(value))));
+      if (nextStages !== this._stages && this._ctx) {
+        this._stages = nextStages;
         this._buildStages(this._ctx);
         this._connectWetPath();
+      } else {
+        this._stages = nextStages;
       }
     }
     if (name === "tone") {
@@ -212,8 +242,9 @@ export default {
     }
     if (name === "mix") {
       this._mix = Math.max(0, Math.min(1, Number(value)));
-      if (this._dryGain) this._dryGain.gain.linearRampToValueAtTime(1 - this._mix, now + 0.02);
-      if (this._wetGain) this._wetGain.gain.linearRampToValueAtTime(this._mix, now + 0.02);
+      // Cancel any pending events (e.g. from auto-activate) before scheduling the new ramp.
+      if (this._dryGain) { this._dryGain.gain.cancelScheduledValues(now); this._dryGain.gain.linearRampToValueAtTime(1 - this._mix, now + 0.02); }
+      if (this._wetGain) { this._wetGain.gain.cancelScheduledValues(now); this._wetGain.gain.linearRampToValueAtTime(this._mix, now + 0.02); }
     }
     if (name === "oversample") {
       const n = Number(value);
@@ -228,6 +259,62 @@ export default {
         s.shaper.oversample = oversampleStr(this._oversample);
       }
     }
+  },
+
+  resetParams() {
+    const oldStages = this._stages;
+    this._gain = DEFAULTS.gain;
+    this._stages = DEFAULTS.stages;
+    this._tone = DEFAULTS.tone;
+    this._tonestack = DEFAULTS.tonestack;
+    this._sag = DEFAULTS.sag;
+    this._mix = DEFAULTS.mix;
+    this._oversample = DEFAULTS.oversample;
+
+    const now = this._ctx?.currentTime || 0;
+    if (this._ctx && this._stageChain) {
+      if (oldStages !== this._stages) {
+        this._buildStages(this._ctx);
+        this._connectWetPath();
+      } else {
+        this._updateStageGain();
+      }
+    }
+    if (this._toneLP) {
+      this._toneLP.frequency.cancelScheduledValues(now);
+      this._toneLP.frequency.setValueAtTime(this._tone, now);
+    }
+    if (this._sagComp) {
+      this._sagComp.ratio.cancelScheduledValues(now);
+      this._sagComp.ratio.setValueAtTime(2 + this._sag * 10, now);
+    }
+    if (this._lowShelf) this._applyTonestack(this._tonestack, now);
+    if (this._dryGain) {
+      this._dryGain.gain.cancelScheduledValues(now);
+      this._dryGain.gain.setValueAtTime(1.0, now);
+    }
+    if (this._wetGain) {
+      this._wetGain.gain.cancelScheduledValues(now);
+      this._wetGain.gain.setValueAtTime(0.0, now);
+    }
+  },
+
+  clone() {
+    const clone = { ...this };
+    clone._ctx = null;
+    clone._input = null;
+    clone._out = null;
+    clone._dryGain = null;
+    clone._wetGain = null;
+    clone._dcBlock = null;
+    clone._toneLP = null;
+    clone._lowShelf = null;
+    clone._midPeak = null;
+    clone._highShelf = null;
+    clone._sagComp = null;
+    clone._stageChain = [];
+    clone.resetParams();
+    return clone;
   },
 
   bypass(on) {

@@ -13,11 +13,16 @@
     "dev": "npx shadow-cljs watch app",
     "dev:full": "npm run build:wasm && npx shadow-cljs watch app",
     "test": "npx shadow-cljs compile test && node out/test.js",
+    "test:cljs": "npx shadow-cljs compile test && node out/test.js",
+    "test:rust": "cargo test --manifest-path packages/audio/Cargo.toml",
+    "test:e2e": "playwright test",
+    "test:all": "./scripts/test-all.sh",
     "gen:grammar": "lezer-generator app/src/repulse/lisp-lang/repulse-lisp.grammar -o app/src/repulse/lisp-lang/parser.js",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@lezer/generator": "^1.8.0",
+    "@playwright/test": "^1.59.1",
     "@vercel/node": "^5.7.12",
     "shadow-cljs": "^2.28.0"
   },

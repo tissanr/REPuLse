@@ -110,7 +110,8 @@ create policy "stars insertable by owner"
 
 create policy "stars updatable by owner"
   on public.stars for update
-  using (auth.uid() = user_id);
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 
 create policy "stars deletable by owner"
   on public.stars for delete

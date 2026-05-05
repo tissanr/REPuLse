@@ -2,6 +2,13 @@
 
 [![CI](https://github.com/tissanr/REPuLse/actions/workflows/ci.yml/badge.svg)](https://github.com/tissanr/REPuLse/actions/workflows/ci.yml)
 [![Lint](https://github.com/tissanr/REPuLse/actions/workflows/lint.yml/badge.svg)](https://github.com/tissanr/REPuLse/actions/workflows/lint.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js&logoColor=white)
+![ClojureScript](https://img.shields.io/badge/ClojureScript-pattern_engine-5881D8?logo=clojure&logoColor=white)
+![Rust + WASM](https://img.shields.io/badge/Rust%20%2B%20WASM-audio_engine-DEA584?logo=rust&logoColor=white)
+![Web Audio](https://img.shields.io/badge/Web%20Audio-live_synthesis-FF6F00)
+![CodeMirror 6](https://img.shields.io/badge/CodeMirror-6-1F6FEB)
+![Status](https://img.shields.io/badge/status-active_development-blue)
 
 A browser-based live coding instrument where music is written in a small, purpose-built Lisp.
 Think [Strudel](https://strudel.cc), but the user-facing language is a minimal Lisp and the
@@ -79,6 +86,23 @@ You'll hear a kick and snare alternating in a loop. To stop:
 
 > If you skip `npm run build:wasm`, the app still works — it falls back to a JS synthesis
 > engine automatically. You'll see `[REPuLse] audio backend: clojurescript synthesis` in the browser console.
+
+## Testing
+
+```bash
+npm test              # ClojureScript unit/integration tests
+npm run test:rust     # Rust AudioEngine tests
+npm run test:e2e      # Playwright browser offline audio tests
+npm run test:all      # full local verification suite
+./scripts/test-all.sh # same full suite
+```
+
+The browser audio tests use a dedicated test harness with `OfflineAudioContext`
+and report the `"offline-js"` backend. They verify the offline render/export-style
+path. Production browser `AudioWorklet` + WASM PCM capture is tracked separately
+in Phase TEST2.
+
+See [docs/TESTPLAN.md](./docs/TESTPLAN.md) for the coverage map.
 
 ---
 

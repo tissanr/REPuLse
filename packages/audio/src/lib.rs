@@ -510,55 +510,7 @@ impl AudioEngine {
     /// `n_samples * 2` values: [L0, R0, L1, R1, …].
     /// `current_time` = AudioWorkletGlobalScope.currentTime at the block start.
     pub fn process_block(&mut self, n_samples: u32, current_time: f64) -> Float32Array {
-        let sr = self.sample_rate;
-        let n = n_samples as usize;
-        let block_end = current_time + n as f64 / sr as f64;
-
-        // Activate pending events whose scheduled time falls in this block
-        let pending = std::mem::take(&mut self.pending);
-        let mut deferred = Vec::new();
-        for p in pending {
-            if p.time < block_end {
-                self.activate(p);
-            } else {
-                deferred.push(p);
-            }
-        }
-        self.pending = deferred;
-
-        // Generate stereo samples (interleaved L R L R …)
-        let mut buf = vec![0.0f32; n * 2];
-        for i in 0..n {
-            let mut l = 0.0f32;
-            let mut r = 0.0f32;
-            for av in self.voices.iter_mut() {
-                let s = av.voice.tick(sr);
-                // Constant-power panning
-                let angle = (av.pan + 1.0) / 2.0 * std::f32::consts::FRAC_PI_2;
-                l += s * angle.cos();
-                r += s * angle.sin();
-            }
-
-            // Apply amp transition (global post-mix multiplier)
-            let amp_scale = if let Some(ref mut tr) = self.amp_transition {
-                tr.tick()
-            } else {
-                1.0
-            };
-
-            // Apply pan transition (global stereo balance, additive on top of per-voice pan)
-            if let Some(ref mut tr) = self.pan_transition {
-                let pan_val = tr.tick().clamp(-1.0, 1.0);
-                let bal_angle = (pan_val + 1.0) / 2.0 * std::f32::consts::FRAC_PI_2;
-                buf[i * 2] = ((l + r) * bal_angle.cos() * amp_scale).clamp(-1.0, 1.0);
-                buf[i * 2 + 1] = ((l + r) * bal_angle.sin() * amp_scale).clamp(-1.0, 1.0);
-            } else {
-                buf[i * 2] = (l * amp_scale).clamp(-1.0, 1.0);
-                buf[i * 2 + 1] = (r * amp_scale).clamp(-1.0, 1.0);
-            }
-        }
-        self.voices.retain(|av| !av.voice.is_silent());
-
+        let buf = self.process_block_raw(n_samples, current_time);
         let arr = Float32Array::new_with_length(n_samples * 2);
         arr.copy_from(&buf);
         arr
@@ -572,6 +524,111 @@ impl AudioEngine {
 }
 
 impl AudioEngine {
+    #[cfg(test)]
+    pub fn new_for_test(sample_rate: f32) -> AudioEngine {
+        AudioEngine {
+            sample_rate,
+            voices: Vec::new(),
+            pending: Vec::new(),
+            noise_seed: 0xDEAD_BEEF,
+            amp_transition: None,
+            pan_transition: None,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn trigger_raw(&mut self, value: &str, time: f64) {
+        self.pending.push(Pending {
+            time,
+            value: value.to_string(),
+            amp: 1.0,
+            attack: 0.001,
+            decay: 1.5,
+            pan: 0.0,
+        });
+    }
+
+    #[cfg(test)]
+    pub fn trigger_raw_v2(
+        &mut self,
+        value: &str,
+        time: f64,
+        amp: f32,
+        attack: f32,
+        decay: f32,
+        pan: f32,
+    ) {
+        self.pending.push(Pending {
+            time,
+            value: value.to_string(),
+            amp,
+            attack,
+            decay,
+            pan,
+        });
+    }
+
+    /// Pure-Rust stereo render — no JS types. Returns interleaved [L0, R0, L1, …].
+    pub fn process_block_raw(&mut self, n_samples: u32, current_time: f64) -> Vec<f32> {
+        let sr = self.sample_rate;
+        let n = n_samples as usize;
+        if n == 0 {
+            return Vec::new();
+        }
+        let block_end = current_time + n as f64 / sr as f64;
+
+        let pending = std::mem::take(&mut self.pending);
+        let mut deferred = Vec::new();
+        let mut scheduled: Vec<Vec<Pending>> = (0..n).map(|_| Vec::new()).collect();
+        for p in pending {
+            if p.time < block_end {
+                let sample_idx = if p.time <= current_time {
+                    0
+                } else {
+                    ((p.time - current_time) * sr as f64).floor() as usize
+                };
+                scheduled[sample_idx.min(n.saturating_sub(1))].push(p);
+            } else {
+                deferred.push(p);
+            }
+        }
+        self.pending = deferred;
+
+        let mut buf = vec![0.0f32; n * 2];
+        for i in 0..n {
+            for p in std::mem::take(&mut scheduled[i]) {
+                self.activate(p);
+            }
+
+            let mut l = 0.0f32;
+            let mut r = 0.0f32;
+            for av in self.voices.iter_mut() {
+                let s = av.voice.tick(sr);
+                let angle = (av.pan + 1.0) / 2.0 * std::f32::consts::FRAC_PI_2;
+                l += s * angle.cos();
+                r += s * angle.sin();
+            }
+
+            let amp_scale = if let Some(ref mut tr) = self.amp_transition {
+                tr.tick()
+            } else {
+                1.0
+            };
+
+            if let Some(ref mut tr) = self.pan_transition {
+                let pan_val = tr.tick().clamp(-1.0, 1.0);
+                let bal_angle = (pan_val + 1.0) / 2.0 * std::f32::consts::FRAC_PI_2;
+                buf[i * 2] = ((l + r) * bal_angle.cos() * amp_scale).clamp(-1.0, 1.0);
+                buf[i * 2 + 1] = ((l + r) * bal_angle.sin() * amp_scale).clamp(-1.0, 1.0);
+            } else {
+                buf[i * 2] = (l * amp_scale).clamp(-1.0, 1.0);
+                buf[i * 2 + 1] = (r * amp_scale).clamp(-1.0, 1.0);
+            }
+        }
+        self.voices.retain(|av| !av.voice.is_silent());
+        buf
+    }
+
     fn next_seed(&mut self) -> u32 {
         self.noise_seed = self
             .noise_seed
@@ -787,5 +844,237 @@ mod transition_tests {
         assert!(eng.amp_transition.is_some());
         eng.clear_transitions();
         assert!(eng.amp_transition.is_none());
+    }
+}
+
+#[cfg(test)]
+mod engine_tests {
+    use super::AudioEngine;
+
+    fn rms(buf: &[f32]) -> f32 {
+        let sum: f32 = buf.iter().map(|s| s * s).sum();
+        (sum / buf.len() as f32).sqrt()
+    }
+
+    fn rms_stereo(buf: &[f32]) -> (f32, f32) {
+        let n = buf.len() / 2;
+        let mut l_sum = 0.0f32;
+        let mut r_sum = 0.0f32;
+        for i in 0..n {
+            l_sum += buf[i * 2] * buf[i * 2];
+            r_sum += buf[i * 2 + 1] * buf[i * 2 + 1];
+        }
+        ((l_sum / n as f32).sqrt(), (r_sum / n as f32).sqrt())
+    }
+
+    #[test]
+    fn kick_produces_nonsilent_output() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw("bd", 0.0);
+        let buf = eng.process_block_raw(4410, 0.0);
+        assert!(rms(&buf) > 0.001, "kick should produce audible output");
+    }
+
+    #[test]
+    fn snare_produces_nonsilent_output() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw("sd", 0.0);
+        let buf = eng.process_block_raw(4410, 0.0);
+        assert!(rms(&buf) > 0.001, "snare should produce audible output");
+    }
+
+    #[test]
+    fn hihat_produces_nonsilent_output() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw("hh", 0.0);
+        let buf = eng.process_block_raw(4410, 0.0);
+        assert!(rms(&buf) > 0.001, "hihat should produce audible output");
+    }
+
+    #[test]
+    fn tone_440_produces_nonsilent_output() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw("440", 0.0);
+        let buf = eng.process_block_raw(4410, 0.0);
+        assert!(rms(&buf) > 0.001, "tone 440 should produce audible output");
+    }
+
+    #[test]
+    fn saw_produces_nonsilent_output() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw("saw:440", 0.0);
+        let buf = eng.process_block_raw(4410, 0.0);
+        assert!(rms(&buf) > 0.001, "saw should produce audible output");
+    }
+
+    #[test]
+    fn square_produces_nonsilent_output() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw("square:440:0.5", 0.0);
+        let buf = eng.process_block_raw(4410, 0.0);
+        assert!(rms(&buf) > 0.001, "square should produce audible output");
+    }
+
+    #[test]
+    fn noise_produces_nonsilent_output() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw("noise", 0.0);
+        let buf = eng.process_block_raw(4410, 0.0);
+        assert!(rms(&buf) > 0.001, "noise should produce audible output");
+    }
+
+    #[test]
+    fn fm_produces_nonsilent_output() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw("fm:440:2.0:3.0", 0.0);
+        let buf = eng.process_block_raw(4410, 0.0);
+        assert!(rms(&buf) > 0.001, "fm should produce audible output");
+    }
+
+    #[test]
+    fn voice_decays_to_silence() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw_v2("440", 0.0, 1.0, 0.001, 0.1, 0.0);
+        // Render 0.5s — well past the 0.1s decay
+        let buf = eng.process_block_raw(22050, 0.0);
+        // Last 1000 samples should be near-silent
+        let tail: Vec<f32> = buf[buf.len() - 2000..].to_vec();
+        assert!(rms(&tail) < 0.001, "voice should decay to silence");
+        assert!(eng.voices.is_empty(), "silent voices should be pruned");
+    }
+
+    #[test]
+    fn pan_right_produces_right_heavy_stereo() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw_v2("440", 0.0, 1.0, 0.001, 1.5, 1.0);
+        let buf = eng.process_block_raw(4410, 0.0);
+        let (l, r) = rms_stereo(&buf);
+        assert!(
+            r > l * 5.0,
+            "pan=1.0 should be right-heavy, got L={:.4} R={:.4}",
+            l,
+            r
+        );
+    }
+
+    #[test]
+    fn pan_left_produces_left_heavy_stereo() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw_v2("440", 0.0, 1.0, 0.001, 1.5, -1.0);
+        let buf = eng.process_block_raw(4410, 0.0);
+        let (l, r) = rms_stereo(&buf);
+        assert!(
+            l > r * 5.0,
+            "pan=-1.0 should be left-heavy, got L={:.4} R={:.4}",
+            l,
+            r
+        );
+    }
+
+    #[test]
+    fn center_pan_produces_balanced_stereo() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw_v2("440", 0.0, 1.0, 0.001, 1.5, 0.0);
+        let buf = eng.process_block_raw(4410, 0.0);
+        let (l, r) = rms_stereo(&buf);
+        let ratio = if l > r { l / r } else { r / l };
+        assert!(
+            ratio < 1.1,
+            "pan=0 should be balanced, got L={:.4} R={:.4}",
+            l,
+            r
+        );
+    }
+
+    #[test]
+    fn stop_all_clears_voices() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw("bd", 0.0);
+        eng.trigger_raw("sd", 0.0);
+        eng.process_block_raw(128, 0.0);
+        assert!(!eng.voices.is_empty());
+        eng.stop_all();
+        assert!(eng.voices.is_empty());
+        assert!(eng.pending.is_empty());
+    }
+
+    #[test]
+    fn amp_half_produces_lower_rms() {
+        let mut eng1 = AudioEngine::new_for_test(44100.0);
+        eng1.trigger_raw_v2("440", 0.0, 1.0, 0.001, 1.5, 0.0);
+        let buf1 = eng1.process_block_raw(4410, 0.0);
+        let rms1 = rms(&buf1);
+
+        let mut eng2 = AudioEngine::new_for_test(44100.0);
+        eng2.trigger_raw_v2("440", 0.0, 0.5, 0.001, 1.5, 0.0);
+        let buf2 = eng2.process_block_raw(4410, 0.0);
+        let rms2 = rms(&buf2);
+
+        assert!(
+            rms2 < rms1 * 0.7,
+            "amp=0.5 should produce lower RMS than amp=1.0, got {:.4} vs {:.4}",
+            rms2,
+            rms1
+        );
+    }
+
+    #[test]
+    fn stereo_output_is_interleaved() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw("bd", 0.0);
+        let buf = eng.process_block_raw(128, 0.0);
+        assert_eq!(
+            buf.len(),
+            256,
+            "128 samples should produce 256 interleaved values"
+        );
+    }
+
+    #[test]
+    fn pending_event_activates_in_block() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        // Schedule at time 0.001 — should activate in a block starting at 0.0
+        eng.trigger_raw("bd", 0.001);
+        assert!(eng.voices.is_empty());
+        assert_eq!(eng.pending.len(), 1);
+        let _buf = eng.process_block_raw(128, 0.0);
+        assert!(!eng.voices.is_empty(), "pending event should activate");
+        assert!(eng.pending.is_empty());
+    }
+
+    #[test]
+    fn pending_event_starts_at_in_block_sample_offset() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        let event_time = 0.001;
+        let sample_idx = (event_time * 44100.0_f64).floor() as usize;
+        eng.trigger_raw_v2("440", event_time, 1.0, 0.001, 1.5, 0.0);
+
+        let buf = eng.process_block_raw(256, 0.0);
+        let before: Vec<f32> = buf[..sample_idx * 2].to_vec();
+        let after_start = ((sample_idx + 8) * 2).min(buf.len());
+        let after_end = ((sample_idx + 80) * 2).min(buf.len());
+        let after: Vec<f32> = buf[after_start..after_end].to_vec();
+
+        assert!(
+            rms(&before) < 1e-8,
+            "samples before scheduled time should stay silent"
+        );
+        assert!(
+            rms(&after) > 0.001,
+            "samples after scheduled time should contain the event"
+        );
+    }
+
+    #[test]
+    fn pending_event_deferred_past_block() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        // Schedule at time 1.0 — should NOT activate in a short block at 0.0
+        eng.trigger_raw("bd", 1.0);
+        let _buf = eng.process_block_raw(128, 0.0);
+        assert!(
+            eng.voices.is_empty(),
+            "event at t=1.0 should not activate in block at t=0.0"
+        );
+        assert_eq!(eng.pending.len(), 1);
     }
 }

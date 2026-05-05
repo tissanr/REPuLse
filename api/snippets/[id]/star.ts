@@ -60,13 +60,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const sb = userClient(jwt);
-  const { data: { user }, error: authErr } = await sb.auth.getUser();
+  const authClient = userClient(jwt);
+  const { data: { user }, error: authErr } = await authClient.auth.getUser();
   if (authErr || !user) {
     res.status(401).json({ error: "Invalid token" });
     return;
   }
 
+  const sb = authClient;
   if (rating === 0) {
     const { error } = await sb
       .from("stars")
@@ -75,14 +76,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (error) { res.status(500).json({ error: error.message }); return; }
     res.status(200).json({ rating: 0 });
   } else {
-    // Upsert — insert or update the rating for this user+snippet
-    const { error } = await sb
+    const row = { user_id: user.id, snippet_id: snippetId, rating };
+    const { data: updated, error: updateErr } = await sb
       .from("stars")
-      .upsert(
-        { user_id: user.id, snippet_id: snippetId, rating },
-        { onConflict: "user_id,snippet_id" }
-      );
-    if (error) { res.status(500).json({ error: error.message }); return; }
+      .update({ rating })
+      .match({ user_id: user.id, snippet_id: snippetId })
+      .select("snippet_id");
+    if (updateErr) { res.status(500).json({ error: updateErr.message }); return; }
+
+    if (!updated || updated.length === 0) {
+      const { error: insertErr } = await sb
+        .from("stars")
+        .insert(row);
+      if (insertErr) { res.status(500).json({ error: insertErr.message }); return; }
+    }
+
     res.status(200).json({ rating });
   }
 }

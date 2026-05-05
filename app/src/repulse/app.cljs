@@ -11,6 +11,7 @@
             [repulse.ui.context-panel :as ctx-panel]
             [repulse.ui.snippet-panel :as snippet-panel]
             [repulse.ui.snippet-submit-modal :as snippet-submit-modal]
+            [repulse.snippets.preview :as snippet-preview]
             [repulse.ui.auth-button :as auth-button]
             [repulse.auth :as auth]
             [repulse.env.builtins :as builtins]
@@ -83,6 +84,7 @@
 
 (defn make-stop-fn []
   (fn []
+    (snippet-preview/stop!)
     (audio/stop!)
     (editor/clear-highlights!)
     (set-playing! false)
@@ -162,7 +164,8 @@
 
 (defn on-play-btn-click []
   (if (audio/playing?)
-    (do (audio/stop!)
+    (do (snippet-preview/stop!)
+        (audio/stop!)
         (editor/clear-highlights!)
         (set-playing! false)
         (set-output! "stopped" :idle))
@@ -243,7 +246,22 @@
                 (eo/fx-slider-patch-and-eval! fx-name param-name new-val)
                 ;; Track param slider: has data-track only
                 :else
-                (eo/slider-patch-and-eval! track-name param-name new-val)))))))))
+                (eo/slider-patch-and-eval! track-name param-name new-val)))))))
+    (.addEventListener panel "change"
+      (fn [^js e]
+        (let [target (.-target e)]
+          (when (and (= "SELECT" (.-tagName target))
+                     (.contains (.-classList target) "ctx-select"))
+            (let [fx-name    (.. target -dataset -fx)
+                  track-name (.. target -dataset -track)
+                  param-name (.. target -dataset -param)
+                  new-val    (.-value target)]
+              (cond
+                (and (seq fx-name) (seq track-name))
+                (eo/per-track-fx-select-patch-and-eval! track-name fx-name param-name new-val)
+
+                (seq fx-name)
+                (eo/fx-select-patch-and-eval! fx-name param-name new-val)))))))))
 
 (defn init []
   ;; Wire module-level callbacks before anything else runs
@@ -322,19 +340,11 @@
         (doseq [{:keys [type id]} (or (:sources active-sess) [])]
           (when (and id (= "github" (str type)))
             (samples/load-external! (str "github:" id))))
-        ;; Restore effect params + bypass after plugins finish loading (~500ms)
+        ;; Store mutes for application after the user's first eval creates tracks.
+        ;; FX params are intentionally NOT restored from localStorage — the buffer's
+        ;; source code is the sole source of truth for which effects are active.
         (js/setTimeout
           (fn []
-            (doseq [{:keys [name params bypassed]} (or (:fx active-sess) [])]
-              (when name
-                (doseq [[k v] (or params {})]
-                  (fx/set-param! name (clojure.core/name k) v))
-                (when bypassed
-                  (fx/bypass! name true))))
-            ;; set-param! marks effects :active? true — reset so the context panel
-            ;; only shows effects that the user's code explicitly activates via (fx ...).
-            (swap! fx/chain (fn [c] (mapv #(assoc % :active? false) c)))
-            ;; Store mutes for application after the user's first eval creates tracks
             (reset! eo/pending-mutes (set (map keyword (or (:muted active-sess) [])))))
           500))
 

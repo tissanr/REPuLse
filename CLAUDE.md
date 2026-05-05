@@ -126,6 +126,27 @@ and calls into Rust/WASM for synthesis:
 
 ---
 
+## Pre-push verification (MANDATORY)
+
+Before committing and pushing any ClojureScript changes, **always** run both checks:
+
+```bash
+npm run test                        # unit tests (core + lisp + session)
+npx shadow-cljs compile app         # full app compile — catches bracket errors,
+                                    # missing requires, and type errors in app/ files
+                                    # that the :test target does not compile
+```
+
+The `:test` shadow-cljs target compiles only `packages/core`, `packages/lisp`, and the
+session-test namespace. It does **not** compile `app/src/repulse/env/builtins/` or any
+other app-layer namespace. Bracket mismatches, unresolved namespaces, and unused
+requires in those files are only caught by compiling the `:app` target.
+
+**Never push without running both commands.** CI runs `shadow-cljs release app` and
+`clj-kondo` on the full source tree and will catch errors that the test runner misses.
+
+---
+
 ## Coding conventions
 
 - **Pure functions by default.** Side effects only at the edges: audio output, DOM.
@@ -155,10 +176,19 @@ npm run dev:full         # build:wasm + shadow-cljs watch app
 
 # Tests
 npm run test             # shared cljs.test runner for core + lisp + app session tests
+npm run test:rust        # Rust AudioEngine unit tests
+npm run test:e2e         # Playwright browser offline audio tests
+npm run test:all         # CLJS + Rust + browser offline tests
+./scripts/test-all.sh    # same full TEST1 verification suite
 
 # Lezer grammar (syntax highlighting) — run after editing repulse-lisp.grammar
 npm run gen:grammar      # regenerates parser.js + parser.terms.js
 ```
+
+TEST1 browser audio tests use a dedicated `:test-harness` build with
+`OfflineAudioContext` and the `"offline-js"` backend. They verify the offline
+render/export-style path, not production browser AudioWorklet + WASM capture.
+That live production path is tracked separately in TEST2.
 
 ### Syntax highlighting + completions checklist
 
@@ -180,6 +210,24 @@ runs on port 3000 via `npm run dev` (shadow-cljs watch only — does **not** bui
 Use `npm run dev:full` on the first run of a session to build WASM first, then start
 the watcher. After code edits, follow the standard `<verification_workflow>` using the
 preview tools.
+
+### Worktrees and Vercel
+
+This repo uses git worktrees. Each worktree needs its own one-time setup:
+
+```bash
+npm install                  # node_modules are not shared across worktrees
+vercel link                  # writes .vercel/project.json (gitignored)
+vercel env pull .env.local   # pulls Vercel env vars (gitignored)
+```
+
+`vercel link` can be run in as many worktrees as needed — they all point at the
+same Vercel project. `.vercel/` and `.env.local` are gitignored so each worktree
+holds its own copy independently.
+
+**Are the env vars required for local dev?**
+Only if you're working on auth or community features (Phase S2/S3). Core audio,
+pattern engine, and editor work entirely client-side with no env vars needed.
 
 ---
 
@@ -227,8 +275,8 @@ preview tools.
 | R1    | Refactor — split app.cljs into focused modules                 | ✓ delivered  |
 | S2    | Backend & auth — Vercel + Supabase, GitHub OAuth, REST API     | ✓ delivered  |
 | S3    | Community snippets — submit, star, rank, usage tracking        | ✓ delivered  |
-| S4    | Snippet audio preview — sandboxed eval, waveforms, indicators  | planned      |
-| R2    | Refactor — decompose eval.cljs builtin map into domain namespaces | planned      |
+| S4    | Snippet audio preview — sandboxed eval, waveforms, indicators  | ✓ delivered  |
+| R2    | Refactor — decompose Lisp and app builtin environments          | ✓ delivered  |
 | DST1  | Distortion — soft clipping (:distort, tanh/sigmoid/atan)       | ✓ delivered  |
 | DST2  | Distortion — asymmetric clipping (:asym) + DC blocker          | ✓ delivered  |
 | DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | ✓ delivered  |
@@ -236,8 +284,18 @@ preview tools.
 | DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | planned   |
 | DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | planned      |
 | CI1   | CI pipeline — GitHub Actions: tests, lint, Rust, grammar drift | ✓ delivered  |
+| TEST1 | Automated audio verification — CLJS, Rust DSP, offline PCM tests | ✓ delivered  |
+| TEST2 | Production browser audio capture — AudioWorklet/WASM PCM verification | planned      |
+| HRD1  | Hardening — AST editor patching, fetch validation, reproducible Rust builds | ✓ delivered  |
 | HRD2  | Security hardening — XSS, RLS, CORS, input validation, CSP    | ✓ delivered  |
+| HRD3  | Interface specs — plugins, pattern data, sessions, FX, MIDI   | planned      |
 | DOC1  | User docs — split manual, tutorials, cookbook, reference       | planned      |
+| R3    | Refactor — purify hand-written JS into CLJS where appropriate  | planned      |
+| PLUG1 | Drop-in plugins — drag local JS/package plugins into the app   | planned      |
+| AI1   | AI knowledge base — /docs/ai/*.json, gen:ai-docs, help-export  | planned      |
+| AI2   | AI assistant panel — BYO key, streaming chat, opt-in feature   | planned      |
+| AI3   | Tool-using agent — read_buffer, propose_edit, eval_preview     | planned      |
+| AI4   | AI safety & limits — budgets, injection guards, auto-apply     | planned      |
 
 See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full delivery notes.
 
@@ -276,12 +334,44 @@ When the code for a phase is complete and working, **always also**:
    example.
 5. Commit all documentation changes in the same commit as (or immediately after) the
    implementation commit.
+6. Run `npm run test:all` before marking the phase delivered. For docs-only phases,
+   run at least `npm test` and explain why the full suite was not needed.
 
-### Rule 3 — Documentation is part of done
+### Rule 3 — Verification is part of done
+
+A phase implementation is **not complete** until the relevant verification command
+has passed:
+
+- Run `npm run test:all` for code phases. This covers CLJS tests, Rust AudioEngine
+  tests, and browser offline audio tests.
+- Run `npm test` at minimum for docs-only phases or prompt-only updates.
+- If `npm run test:all` cannot run because of environment limits, state the exact
+  blocker and run the strongest available subset.
+
+Do not mark a phase delivered in this file or `ROADMAP.md` until verification is
+complete or the exception is documented.
+
+### Rule 4 — Documentation is part of done
 
 A phase is **not complete** until Rules 2.1–2.5 are satisfied. "The code works" is
 necessary but not sufficient. If you finish implementing a phase and realise the docs
 haven't been updated, do not mark the task done — update the docs first.
+
+### Rule 5 — AI docs are part of done
+
+When adding a new built-in name that should be highlighted and autocompleted in the editor:
+
+1. Add the name to `BuiltinName` in `app/src/repulse/lisp-lang/repulse-lisp.grammar`
+2. **Run `npm run gen:grammar`** — overwrites the committed `parser.js`
+3. Add a `{ label, type, detail }` entry in `app/src/repulse/lisp-lang/completions.js`
+4. **Add an entry to `app/src/repulse/content/builtin_meta.edn`** with `category`,
+   `returns`, `side-effects`, `examples` (≥1), and `see-also`
+5. **Run `npm run gen:ai-docs`** — overwrites `docs/ai/builtins.json`
+6. Commit grammar, `parser.js`, `completions.js`, `builtin_meta.edn`, and
+   `builtins.json` together
+
+Skipping steps 4–5 means the AI knowledge base drifts from the real surface and CI
+will fail on the `ai-docs` drift check.
 
 ---
 

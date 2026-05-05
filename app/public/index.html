@@ -9,6 +9,9 @@
 </head>
 <body>
   <div id="app"></div>
+  <!-- Exposes dynamic import() without going through Closure Compiler, avoiding
+       the new Function() workaround that requires unsafe-eval in the CSP. -->
+  <script>window.__import__ = u => import(u);</script>
   <script src="/js/main.js"></script>
 </body>
 </html>
