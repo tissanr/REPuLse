@@ -572,13 +572,22 @@ impl AudioEngine {
     pub fn process_block_raw(&mut self, n_samples: u32, current_time: f64) -> Vec<f32> {
         let sr = self.sample_rate;
         let n = n_samples as usize;
+        if n == 0 {
+            return Vec::new();
+        }
         let block_end = current_time + n as f64 / sr as f64;
 
         let pending = std::mem::take(&mut self.pending);
         let mut deferred = Vec::new();
+        let mut scheduled: Vec<Vec<Pending>> = (0..n).map(|_| Vec::new()).collect();
         for p in pending {
             if p.time < block_end {
-                self.activate(p);
+                let sample_idx = if p.time <= current_time {
+                    0
+                } else {
+                    ((p.time - current_time) * sr as f64).floor() as usize
+                };
+                scheduled[sample_idx.min(n.saturating_sub(1))].push(p);
             } else {
                 deferred.push(p);
             }
@@ -587,6 +596,10 @@ impl AudioEngine {
 
         let mut buf = vec![0.0f32; n * 2];
         for i in 0..n {
+            for p in std::mem::take(&mut scheduled[i]) {
+                self.activate(p);
+            }
+
             let mut l = 0.0f32;
             let mut r = 0.0f32;
             for av in self.voices.iter_mut() {
@@ -1027,6 +1040,29 @@ mod engine_tests {
         let _buf = eng.process_block_raw(128, 0.0);
         assert!(!eng.voices.is_empty(), "pending event should activate");
         assert!(eng.pending.is_empty());
+    }
+
+    #[test]
+    fn pending_event_starts_at_in_block_sample_offset() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        let event_time = 0.001;
+        let sample_idx = (event_time * 44100.0_f64).floor() as usize;
+        eng.trigger_raw_v2("440", event_time, 1.0, 0.001, 1.5, 0.0);
+
+        let buf = eng.process_block_raw(256, 0.0);
+        let before: Vec<f32> = buf[..sample_idx * 2].to_vec();
+        let after_start = ((sample_idx + 8) * 2).min(buf.len());
+        let after_end = ((sample_idx + 80) * 2).min(buf.len());
+        let after: Vec<f32> = buf[after_start..after_end].to_vec();
+
+        assert!(
+            rms(&before) < 1e-8,
+            "samples before scheduled time should stay silent"
+        );
+        assert!(
+            rms(&after) > 0.001,
+            "samples after scheduled time should contain the event"
+        );
     }
 
     #[test]
