@@ -1,10 +1,17 @@
+const DEFAULTS = {
+  drive: 1.0,
+  tone: 20000,
+  mix: 0.0,
+  curve: new Float32Array([-1, 0, 1]),
+};
+
 export default {
   type: "effect", name: "waveshape", version: "1.0.0",
 
-  _drive: 1.0,
-  _tone: 20000,
-  _mix: 1.0,
-  _curve: null,   // Float32Array | null
+  _drive: DEFAULTS.drive,
+  _tone: DEFAULTS.tone,
+  _mix: DEFAULTS.mix,
+  _curve: DEFAULTS.curve,
 
   init(_host) {},
 
@@ -17,6 +24,8 @@ export default {
     this._dryGain = ctx.createGain();
     this._out     = ctx.createGain();
 
+    this.resetParams();
+
     this._preGain.gain.value    = this._drive;
     this._toneLP.type           = "lowpass";
     this._toneLP.frequency.value = this._tone;
@@ -24,10 +33,6 @@ export default {
     this._dryGain.gain.value    = 1 - this._mix;
     this._wetGain.gain.value    = this._mix;
 
-    // Default curve: identity (linear, no distortion)
-    if (!this._curve) {
-      this._curve = new Float32Array([-1, 0, 1]);
-    }
     this._shaper.curve = this._curve;
 
     // Routing:
@@ -68,11 +73,13 @@ export default {
       }
       this._curve = value;
       if (this._shaper) this._shaper.curve = value;
+      this._activate(now);
     }
 
     if (name === "drive" || name === "value") {
       this._drive = Math.max(1.0, Math.min(20.0, Number(value)));
       if (this._preGain) this._preGain.gain.linearRampToValueAtTime(this._drive, now + 0.02);
+      this._activate(now);
     }
 
     if (name === "tone") {
@@ -85,6 +92,53 @@ export default {
       if (this._dryGain) this._dryGain.gain.linearRampToValueAtTime(1 - this._mix, now + 0.02);
       if (this._wetGain) this._wetGain.gain.linearRampToValueAtTime(this._mix,     now + 0.02);
     }
+  },
+
+  _activate(now) {
+    if (this._mix === 0.0) {
+      this._mix = 1.0;
+      if (this._dryGain) { this._dryGain.gain.cancelScheduledValues(0); this._dryGain.gain.setValueAtTime(0.0, now); }
+      if (this._wetGain) { this._wetGain.gain.cancelScheduledValues(0); this._wetGain.gain.setValueAtTime(1.0, now); }
+    }
+  },
+
+  resetParams() {
+    this._drive = DEFAULTS.drive;
+    this._tone = DEFAULTS.tone;
+    this._mix = DEFAULTS.mix;
+    this._curve = DEFAULTS.curve;
+
+    const now = this._input?.context?.currentTime ?? 0;
+    if (this._preGain) {
+      this._preGain.gain.cancelScheduledValues(now);
+      this._preGain.gain.setValueAtTime(this._drive, now);
+    }
+    if (this._toneLP) {
+      this._toneLP.frequency.cancelScheduledValues(now);
+      this._toneLP.frequency.setValueAtTime(this._tone, now);
+    }
+    if (this._dryGain) {
+      this._dryGain.gain.cancelScheduledValues(now);
+      this._dryGain.gain.setValueAtTime(1.0, now);
+    }
+    if (this._wetGain) {
+      this._wetGain.gain.cancelScheduledValues(now);
+      this._wetGain.gain.setValueAtTime(0.0, now);
+    }
+    if (this._shaper) this._shaper.curve = this._curve;
+  },
+
+  clone() {
+    const clone = { ...this };
+    clone._input = null;
+    clone._preGain = null;
+    clone._shaper = null;
+    clone._toneLP = null;
+    clone._wetGain = null;
+    clone._dryGain = null;
+    clone._out = null;
+    clone.resetParams();
+    return clone;
   },
 
   bypass(on) {
