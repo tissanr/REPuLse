@@ -2,7 +2,6 @@ import { parser } from "./parser.js";
 import { LRLanguage, LanguageSupport, indentNodeProp, foldNodeProp } from "@codemirror/language";
 import { autocompletion } from "@codemirror/autocomplete";
 import { repulseLispHighlight } from "./highlight.js";
-import { rainbowBrackets } from "./rainbow.js";
 import { builtinCompletions } from "./completions.js";
 import { defsCompletionSource } from "./defs-completion.js";
 import { keywordsCompletionSource } from "./keywords-completion.js";
@@ -27,7 +26,6 @@ const lispParser = parser.configure({
 export const lispLanguage = new LanguageSupport(
   LRLanguage.define({ parser: lispParser, languageData: { commentTokens: { line: ";" } } }),
   [
-    rainbowBrackets,
     insertHelper,
     lispHoverTooltip,
     autocompletion({ override: [builtinCompletions, defsCompletionSource, keywordsCompletionSource] }),

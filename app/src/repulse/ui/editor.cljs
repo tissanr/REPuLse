@@ -8,10 +8,11 @@
             ["@codemirror/view" :refer [EditorView Decoration keymap lineNumbers]]
             ["@codemirror/state" :refer [EditorState StateEffect StateField]]
             ["@codemirror/commands" :refer [defaultKeymap historyKeymap history selectAll]]
-            ["@codemirror/language" :refer [bracketMatching]]
+            ["@codemirror/language" :refer [bracketMatching syntaxHighlighting]]
             ["@codemirror/lint" :refer [setDiagnostics lintGutter]]
-            ["@codemirror/theme-one-dark" :refer [oneDark]]
+            ["@codemirror/theme-one-dark" :refer [oneDarkTheme]]
             ["../lisp-lang/index.js" :refer [lispLanguage]]
+            ["../lisp-lang/highlight.js" :refer [repulseLispSyntaxTheme]]
             [clojure.string :as cstr]))
 
 ;;; Atoms
@@ -118,8 +119,9 @@
                         (clear-view! view)
                         (when-let [ev @editor-view] (.focus ev))
                         true)
-        extensions  #js [oneDark
+        extensions  #js [oneDarkTheme
                          lispLanguage
+                         (syntaxHighlighting repulseLispSyntaxTheme)
                          (.of keymap #js [#js {:key "Mod-a"  :run selectAll}
                                           #js {:key "Enter"  :run eval-cmd}
                                           #js {:key "Escape" :run clear+return!}])]
@@ -146,8 +148,9 @@
                                     true)}
         extensions #js [(history)
                         (lineNumbers)
-                        oneDark
+                        oneDarkTheme
                         lispLanguage
+                        (syntaxHighlighting repulseLispSyntaxTheme)
                         (bracketMatching)
                         highlights-field
                         (lintGutter)

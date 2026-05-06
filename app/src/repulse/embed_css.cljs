@@ -29,14 +29,6 @@
   outline: none;
 }
 
-/* Rainbow delimiters */
-.rainbow-1 { color: #e06c75; }
-.rainbow-2 { color: #e5c07b; }
-.rainbow-3 { color: #98c379; }
-.rainbow-4 { color: #56b6c2; }
-.rainbow-5 { color: #c678dd; }
-.rainbow-6 { color: #61afef; }
-
 /* Active code highlighting */
 .active-event {
   background-color: rgba(255, 200, 50, 0.35);
