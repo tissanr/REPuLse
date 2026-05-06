@@ -1,0 +1,198 @@
+[
+  {
+    "id": "four-on-the-floor",
+    "title": "Four on the Floor",
+    "tags": ["drums", "kick", "house"],
+    "bpm": 124,
+    "code": "(track :kick (seq :bd :bd :bd :bd))"
+  },
+  {
+    "id": "boom-bap",
+    "title": "Boom-Bap",
+    "tags": ["drums", "kick", "snare", "breakbeat", "hip-hop"],
+    "bpm": 90,
+    "code": "(track :boom-bap\n  (stack\n    (seq :bd :_ :_ :bd :_ :_ :bd :_)\n    (seq :_ :_ :sd :_ :_ :_ :sd :_)))"
+  },
+  {
+    "id": "amen-break",
+    "title": "Amen Break",
+    "tags": ["drums", "breakbeat", "dnb"],
+    "bpm": 165,
+    "code": "(track :amen\n  (seq :bd :_ :_ :bd :_ :_ :sd :_\n       :bd :_ :bd :_ :_ :sd :_ :_))"
+  },
+  {
+    "id": "minimal-techno",
+    "title": "Minimal Techno",
+    "tags": ["drums", "techno", "minimal", "hihat"],
+    "bpm": 130,
+    "code": "(track :minimal\n  (stack\n    (seq :bd :_ :_ :_ :bd :_ :_ :_)\n    (->> (seq :_ :hh :_ :hh :_ :hh :_ :_)\n         (amp 0.4))))"
+  },
+  {
+    "id": "euclidean-kick",
+    "title": "Euclidean 5/8 Kick",
+    "tags": ["drums", "euclidean", "polyrhythm"],
+    "bpm": 120,
+    "code": "(track :kick (euclidean 5 8 :bd))"
+  },
+  {
+    "id": "polyrhythm-3-4",
+    "title": "Polyrhythm 3:4",
+    "tags": ["drums", "polyrhythm", "technique"],
+    "bpm": 120,
+    "code": "(track :poly\n  (stack\n    (fast 3 (seq :bd :_ :_))\n    (fast 4 (seq :_ :sd :_ :sd))))"
+  },
+  {
+    "id": "clave-3-2",
+    "title": "Clave 3-2",
+    "tags": ["drums", "percussion", "afrobeat"],
+    "bpm": 110,
+    "code": "(track :clave\n  (seq :bd :_ :_ :bd :_ :_ :bd :_\n       :_ :_ :bd :_ :_ :bd :_ :_))"
+  },
+  {
+    "id": "acid-303",
+    "title": "Acid 303 Line",
+    "tags": ["bassline", "techno", "house", "scale"],
+    "bpm": 130,
+    "code": "(track :acid\n  (->> (scale :minor :c2 (seq 0 :_ 0 3 :_ 5 3 :_))\n       (decay 0.12)\n       (amp 0.8)))"
+  },
+  {
+    "id": "sub-bass-walk",
+    "title": "Sub Bass Walk",
+    "tags": ["bassline", "minimal", "scale"],
+    "bpm": 120,
+    "code": "(track :sub\n  (->> (scale :minor :c1 (seq 0 3 5 7))\n       (slow 2)\n       (amp 0.9)\n       (decay 0.3)))"
+  },
+  {
+    "id": "reese-bass",
+    "title": "Reese Bass",
+    "tags": ["bassline", "dnb", "scale"],
+    "bpm": 174,
+    "code": "(track :reese\n  (->> (scale :minor :e1 (seq 0 :_ 0 :_ 3 :_ 5 :_))\n       (amp 0.9)\n       (decay 0.2)))"
+  },
+  {
+    "id": "walking-bass",
+    "title": "Walking Bass",
+    "tags": ["bassline", "jazz", "scale"],
+    "bpm": 130,
+    "code": "(track :walk\n  (->> (scale :major :c2 (seq 0 2 4 5 3 1 0 :_))\n       (decay 0.6)\n       (amp 0.7)))"
+  },
+  {
+    "id": "offbeat-bass",
+    "title": "Offbeat Bass",
+    "tags": ["bassline", "groove"],
+    "bpm": 140,
+    "code": "(track :bass\n  (->> (scale :minor :c2 (seq :_ 0 :_ 0))\n       (amp 0.8)\n       (attack 0.01)\n       (decay 0.4)))"
+  },
+  {
+    "id": "minor-arpeggio",
+    "title": "Minor Arpeggio",
+    "tags": ["melody", "arpeggio", "scale"],
+    "bpm": 120,
+    "code": "(track :arp\n  (->> (scale :minor :c4 (seq 0 3 7 0))\n       (fast 2)\n       (amp 0.5)\n       (decay 0.3)))"
+  },
+  {
+    "id": "chromatic-descent",
+    "title": "Chromatic Descent",
+    "tags": ["melody", "lead", "scale"],
+    "bpm": 120,
+    "code": "(track :descent\n  (->> (scale :minor :a4 (seq 7 6 5 4 3 2 1 0))\n       (slow 2)\n       (amp 0.5)\n       (decay 0.5)))"
+  },
+  {
+    "id": "pentatonic-loop",
+    "title": "Pentatonic Loop",
+    "tags": ["melody", "lead", "scale", "pentatonic"],
+    "bpm": 120,
+    "code": "(track :penta\n  (->> (scale :pentatonic :a4 (seq 0 1 2 3 4 3 2 1))\n       (amp 0.6)\n       (decay 0.4)))"
+  },
+  {
+    "id": "algo-lead",
+    "title": "Algorithmic Lead",
+    "tags": ["melody", "lead", "technique", "every"],
+    "bpm": 110,
+    "code": "(track :lead\n  (->> (every 3 rev (scale :minor :c5 (seq 0 2 5 7 5 2)))\n       (amp 0.5)\n       (decay 0.35)))"
+  },
+  {
+    "id": "maj7-progression",
+    "title": "Major 7 Progression",
+    "tags": ["chords", "harmony", "pad"],
+    "bpm": 90,
+    "code": "(track :chords\n  (->> (cat (chord :major7 :c4) (chord :major7 :f4))\n       (amp 0.4)\n       (attack 0.05)\n       (decay 1.5)))"
+  },
+  {
+    "id": "dreamy-pad",
+    "title": "Dreamy Pad",
+    "tags": ["chords", "ambient", "pad", "slow"],
+    "bpm": 72,
+    "code": "(track :pad\n  (->> (chord :major7 :d4)\n       (slow 4)\n       (amp 0.3)\n       (attack 0.4)\n       (decay 3.0)))"
+  },
+  {
+    "id": "iivi-jazz",
+    "title": "ii-V-I Jazz Turnaround",
+    "tags": ["chords", "jazz", "harmony"],
+    "bpm": 130,
+    "code": "(track :jazz\n  (->> (cat (chord :minor7 :d4) (chord :dom7 :g3) (chord :major7 :c4))\n       (slow 2)\n       (amp 0.35)\n       (attack 0.03)\n       (decay 1.0)))"
+  },
+  {
+    "id": "reverb-tail",
+    "title": "Reverb Tail",
+    "tags": ["effects", "reverb", "ambient"],
+    "bpm": 80,
+    "code": "(track :reverb-demo\n  (->> (seq :sd :_ :_ :_ :_ :_ :_ :_)\n       (amp 0.6)\n       (fx :reverb :wet 0.9 :size 0.9)))"
+  },
+  {
+    "id": "delay-feedback",
+    "title": "Delay Feedback",
+    "tags": ["effects", "delay", "echo"],
+    "bpm": 120,
+    "code": "(track :delay-demo\n  (->> (seq :hh :_ :_ :hh :_ :_ :hh :_)\n       (amp 0.5)\n       (fx :delay :time 0.375 :feedback 0.5 :wet 0.6)))"
+  },
+  {
+    "id": "dattorro-shimmer",
+    "title": "Dattorro Shimmer",
+    "tags": ["effects", "reverb", "ambient", "shimmer"],
+    "bpm": 72,
+    "code": "(track :shimmer\n  (->> (scale :major :c5 (seq 0 :_ :_ 4 :_ :_ 7 :_))\n       (slow 2)\n       (amp 0.4)\n       (attack 0.1)\n       (decay 2.0)\n       (fx :dattorro :wet 0.8 :shimmer 0.6)))"
+  },
+  {
+    "id": "filter-sweep",
+    "title": "Filter Sweep",
+    "tags": ["effects", "filter", "technique"],
+    "bpm": 120,
+    "code": "(track :filter-demo\n  (->> (fast 2 (seq :bd :hh :sd :hh))\n       (amp 0.7)\n       (fx :filter :value 600 :resonance 6.0)))"
+  },
+  {
+    "id": "euclidean-multi",
+    "title": "Euclidean Multi-Rhythm",
+    "tags": ["drums", "euclidean", "polyrhythm", "technique"],
+    "bpm": 120,
+    "code": "(stack\n  (track :kick  (euclidean 5 8 :bd))\n  (track :snare (euclidean 3 8 :sd))\n  (track :hat   (euclidean 7 8 :hh)))"
+  },
+  {
+    "id": "jux-stereo",
+    "title": "Jux Stereo Spread",
+    "tags": ["technique", "stereo", "jux"],
+    "bpm": 120,
+    "code": "(track :wide\n  (->> (scale :minor :c4 (seq 0 2 4 7))\n       (jux (fast 2))\n       (amp 0.5)\n       (decay 0.4)))"
+  },
+  {
+    "id": "off-layer",
+    "title": "Off Layer Echo",
+    "tags": ["technique", "off", "echo"],
+    "bpm": 120,
+    "code": "(track :echoed\n  (->> (seq :bd :_ :sd :_)\n       (off 0.25 (amp 0.4))\n       (amp 0.8)))"
+  },
+  {
+    "id": "mini-notation-beat",
+    "title": "Mini-Notation Beat",
+    "tags": ["drums", "mini-notation", "technique"],
+    "bpm": 130,
+    "code": "(track :beat (~ \"bd sd [hh hh] sd bd*2 sd hh oh\"))"
+  },
+  {
+    "id": "amp-fadeout",
+    "title": "Amplitude Fade Out",
+    "tags": ["technique", "tween", "fade"],
+    "bpm": 120,
+    "code": "(track :fade\n  (->> (fast 2 (seq :bd :sd :hh :oh))\n       (amp (tween :exp 1.0 0.0 8))))"
+  }
+]

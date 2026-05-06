@@ -303,3 +303,21 @@
           result (lisp/eval-string "(def ok 1)\n(fail-later)" env)]
       (is (lisp/eval-error? result))
       (is (= "nope" (:message result))))))
+
+;;; ── Keyword as lookup function ───────────────────────────────────────
+
+(deftest keyword-as-function-basic
+  (testing "(:key m) looks up key in map"
+    (is (= 42 (eval-seq "(:answer {:answer 42})")))))
+
+(deftest keyword-as-function-missing-returns-nil
+  (testing "(:key m) returns nil when key absent"
+    (is (nil? (eval-seq "(:missing {:answer 42})")))))
+
+(deftest keyword-as-function-with-default
+  (testing "(:key m default) returns default when key absent"
+    (is (= 0 (eval-seq "(:missing {:answer 42} 0)")))))
+
+(deftest keyword-as-function-via-def
+  (testing "keyword lookup works on a def'd map"
+    (is (= 99 (eval-seq "(def m {:x 99}) (:x m)")))))

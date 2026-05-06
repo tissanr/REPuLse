@@ -1229,6 +1229,36 @@ When no session exists (first visit or after `(reset!)`), a random demo template
 
 Stops playback, deletes all persisted state (editor, BPM, effects, bank, sample sources, mutes), and reloads the page to first-visit state with a fresh demo. Use this when you want a clean slate.
 
+### `(help-export)` — AI session snapshot
+
+Returns the live session state as a map. Useful for sharing context with an AI assistant without copying code.
+
+```lisp
+(help-export)
+; → {:bpm 130
+;    :tracks {:kick {:fx [{:name "reverb" :params {"value" 0.4} :bypassed false}]}
+;             :bass {:fx []}}
+;    :muted []
+;    :fx []        ; global FX chain only
+;    :bank nil
+;    :sources []}
+
+(:bpm (help-export))                         ; → 130
+(:tracks (help-export))                      ; → {:kick {:fx [...]}, ...}
+(:kick (:tracks (help-export)))              ; → {:fx [...]}
+(:fx (:kick (:tracks (help-export))))        ; → per-track FX for :kick
+```
+
+**Fields:**
+- `:bpm` — current tempo
+- `:tracks` — keyword-keyed map of active tracks. Each value is `{:fx [...]}` with the track's per-track FX chain. Pattern functions are never included.
+- `:muted` — vector of muted track name strings
+- `:fx` — global FX chain (effects added with a top-level `(fx ...)` call), as `[{:name :params :bypassed}]`
+- `:bank` — active drum bank prefix or `nil`
+- `:sources` — loaded external sample repos: `[{:type :id}]`
+
+Editor code is intentionally excluded. Copy-paste from the editor to share code.
+
 ### URL sharing
 
 Click the **share** button or call `(share!)` to copy a full session URL to the clipboard. The URL encodes the complete session state (editor text, BPM, effects, bank, mutes) in the URL hash using base64. Loading the URL restores the full session immediately.

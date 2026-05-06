@@ -423,3 +423,18 @@ app/src/repulse/plugins/
 
 All files under `app/src/` are on the shadow-cljs source path and compile automatically.
 Register the plugin in `app.cljs` `init` — no other wiring needed.
+
+---
+
+## AI knowledge base
+
+When adding a new effect plugin that introduces a new built-in name (e.g. `:my-effect` via `fx`), keep the AI knowledge base in sync by running `gen:ai-docs` alongside `gen:grammar`:
+
+```bash
+npm run gen:grammar    # regenerate Lezer parser
+# edit completions.js + hover.js + builtin_meta.edn
+npm run gen:ai-docs    # regenerate docs/ai/builtins.json
+```
+
+See `docs/ai/README.md` for the full update workflow and `CLAUDE.md` Rule 5 for the complete checklist.
+
