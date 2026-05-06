@@ -1,0 +1,1055 @@
+{;; ── Pattern constructors ────────────────────────────────────────────────────
+ :seq        {:category "source"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(seq :bd :sd :bd :sd)" "(seq 220 330 440)" "(seq :c4 :e4 :g4)"]
+              :see-also ["stack" "pure" "cat" "alt"]}
+
+ :stack      {:category "source"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(stack (seq :bd :_ :bd :_) (seq :_ :sd :_ :sd))"
+                         "(stack (seq :bd :bd :bd :bd) (fast 2 (seq :hh :oh)))"]
+              :see-also ["seq" "track"]}
+
+ :pure       {:category "source"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(pure :bd)" "(pure 440)"]
+              :see-also ["seq" "stack"]}
+
+ :euclidean  {:category "source"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(euclidean 5 8 :bd)" "(euclidean 3 8 :sd 2)"]
+              :see-also ["seq" "degrade"]}
+
+ :cat        {:category "source"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(cat (seq :bd :sd) (seq :hh :oh))"
+                         "(cat (scale :minor :c4 (seq 0 2 4)) (scale :major :c4 (seq 0 2 4)))"]
+              :see-also ["seq" "alt" "arrange"]}
+
+ :alt        {:category "source"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(alt (seq :bd :sd) (seq :sd :bd))"
+                         "(alt (seq :hh :hh :hh) (seq :oh :_ :hh))"]
+              :see-also ["cat" "seq"]}
+
+ :choose     {:category "source"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(choose [:bd :sd :hh :oh])"
+                         "(track :perc (choose [:bd :sd :hh]))"]
+              :see-also ["wchoose" "seq"]}
+
+ :wchoose    {:category "source"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(wchoose [[:bd 3] [:sd 1] [:hh 2]])"
+                         "(wchoose [[:c4 4] [:e4 2] [:g4 1]])"]
+              :see-also ["choose" "seq"]}
+
+ "~"         {:category "source"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(~ \"bd sd [hh hh] bd\")"
+                         "(~ \"bd*4 sd <oh hh>\")"]
+              :see-also ["seq" "stack"]}
+
+ :arrange    {:category "source"
+              :returns "nil"
+              :side-effects ["audio" "dom"]
+              :examples ["(arrange [[(seq :bd :sd) 4] [(seq :hh :oh) 2]])"
+                         "(arrange [[(fast 2 (seq :bd :sd)) 8] [(slow 2 (seq :bd :hh)) 4]])"]
+              :see-also ["play-scenes" "track"]}
+
+ :play-scenes {:category "source"
+               :returns "nil"
+               :side-effects ["audio" "dom"]
+               :examples ["(play-scenes [(seq :bd :sd) (seq :hh :oh)])"
+                          "(play-scenes [(fast 2 (seq :bd)) (slow 2 (seq :sd))])"]
+               :see-also ["arrange" "cat"]}
+
+ ;; ── Pattern transformers ─────────────────────────────────────────────────────
+ :fast       {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(fast 2 (seq :bd :sd))" "(fast 3 (seq :hh :oh :hh))"]
+              :see-also ["slow" "every" "rev"]}
+
+ :slow       {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(slow 2 (seq :bd :sd :hh :oh))" "(slow 4 (seq :c4 :e4 :g4))"]
+              :see-also ["fast" "every"]}
+
+ :rev        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(rev (seq :bd :sd :hh :oh))" "(every 4 rev (seq :bd :sd))"]
+              :see-also ["every" "jux"]}
+
+ :every      {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(every 4 (fast 2) (seq :bd :sd))"
+                         "(every 3 rev (seq :bd :sd :hh :oh))"]
+              :see-also ["sometimes" "fast" "slow"]}
+
+ :fmap       {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(fmap (fn [x] (* x 2)) (seq 1 2 3))"
+                         "(fmap (fn [x] (+ x 100)) (seq 220 330))"]
+              :see-also ["map" "scale"]}
+
+ :late       {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(late 0.25 (seq :hh :hh :hh :hh))"
+                         "(late 0.5 (euclidean 3 8 :sd))"]
+              :see-also ["early" "off"]}
+
+ :early      {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(early 0.125 (seq :sd :_ :sd :_))"
+                         "(early 0.25 (seq :hh :oh))"]
+              :see-also ["late" "off"]}
+
+ :sometimes  {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(sometimes (fast 2) (seq :bd :sd))"
+                         "(sometimes rev (seq :bd :sd :hh :oh))"]
+              :see-also ["often" "rarely" "sometimes-by" "every"]}
+
+ :often      {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(often rev (seq :bd :sd :hh :oh))"
+                         "(often (fast 2) (seq :hh))"]
+              :see-also ["sometimes" "rarely" "every"]}
+
+ :rarely     {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(rarely (fast 2) (seq :bd :sd))"
+                         "(rarely rev (seq :bd :sd :hh :oh))"]
+              :see-also ["sometimes" "often" "sometimes-by"]}
+
+ :sometimes-by {:category "transform"
+                :returns "Pattern"
+                :side-effects []
+                :examples ["(sometimes-by 0.3 rev (seq :bd :sd :hh :oh))"
+                           "(sometimes-by 0.8 (fast 2) (seq :hh))"]
+                :see-also ["sometimes" "often" "rarely"]}
+
+ :degrade    {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(degrade (seq :hh :hh :hh :hh))"
+                         "(degrade (euclidean 5 8 :bd))"]
+              :see-also ["degrade-by" "sometimes"]}
+
+ :degrade-by {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(degrade-by 0.3 (seq :hh :hh :hh :hh))"
+                         "(degrade-by 0.7 (fast 2 (seq :bd :sd)))"]
+              :see-also ["degrade" "sometimes-by"]}
+
+ :jux        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(jux (fast 2) (seq :bd :sd :hh :oh))"
+                         "(jux rev (scale :minor :c4 (seq 0 2 4 7)))"]
+              :see-also ["jux-by" "pan" "off"]}
+
+ :jux-by     {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(jux-by 0.5 rev (seq :bd :sd))"
+                         "(jux-by 0.8 (fast 2) (seq :hh :oh))"]
+              :see-also ["jux" "pan"]}
+
+ :off        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(off 0.25 (fast 2) (seq :bd :sd))"
+                         "(off 0.125 rev (seq :hh :oh))"]
+              :see-also ["late" "jux"]}
+
+ :comp       {:category "transform"
+              :returns "fn"
+              :side-effects []
+              :examples ["(def pluck (comp (amp 0.8) (attack 0.003) (decay 0.15)))"
+                         "(def bright (comp (amp 1.0) (release 0.05)))"]
+              :see-also ["->>" "amp" "decay"]}
+
+ :tween      {:category "transform"
+              :returns "number"
+              :side-effects ["audio"]
+              :examples ["(->> (seq :c4 :e4 :g4) (synth :saw) (amp (tween :linear 0.0 1.0 2)))"
+                         "(->> (seq :bd) (amp (tween :exp 1.0 0.0 4)))"]
+              :see-also ["amp" "->>"]}
+
+ ;; ── Per-event parameters ────────────────────────────────────────────────────
+ :->>        {:category "special"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :c4 :e4) (amp 0.7) (decay 0.5))"
+                         "(->> (seq :bd :sd) (fx :reverb 0.4))"]
+              :see-also ["->" "amp" "fx" "comp"]}
+
+ :->         {:category "special"
+              :returns "any"
+              :side-effects []
+              :examples ["(-> x (f a) (g b))"
+                         "(-> (seq :c4 :e4) (fast 2))"]
+              :see-also ["->>"]}
+
+ :amp        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(amp 0.8 (seq :c4 :e4 :g4))"
+                         "(->> (seq :bd) (amp 0.6))"]
+              :see-also ["attack" "decay" "release" "pan" "->>"]}
+
+ :attack     {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(attack 0.1 (pure :c4))"
+                         "(->> (seq :c4 :e4) (attack 0.02))"]
+              :see-also ["decay" "release" "amp"]}
+
+ :decay      {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(decay 0.5 (seq :c4 :e4))"
+                         "(->> (seq :bd) (decay 0.08))"]
+              :see-also ["attack" "release" "amp"]}
+
+ :release    {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(release 0.3 (seq :c4 :e4))"
+                         "(->> (seq :pad) (release 2.0))"]
+              :see-also ["attack" "decay" "amp"]}
+
+ :pan        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(pan -0.5 (seq :c4 :e4))"
+                         "(->> (seq :hh) (pan 0.7))"]
+              :see-also ["jux" "amp"]}
+
+ ;; ── Music theory ────────────────────────────────────────────────────────────
+ :scale      {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(scale :minor :c4 (seq 0 2 4 7))"
+                         "(scale :major :g3 (seq 1 3 5 8))"]
+              :see-also ["chord" "transpose" "seq"]}
+
+ :chord      {:category "source"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(chord :minor7 :a3)" "(chord :major :c4)"]
+              :see-also ["scale" "transpose" "stack"]}
+
+ :transpose  {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(transpose 7 (scale :major :c4 (seq 0 1 2 3)))"
+                         "(transpose -12 (chord :minor :e4))"]
+              :see-also ["scale" "chord"]}
+
+ ;; ── Sample playback ─────────────────────────────────────────────────────────
+ :rate       {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :bd) (rate 2.0))"
+                         "(->> (seq :hh) (rate 0.5))"]
+              :see-also ["begin" "end" "loop-sample"]}
+
+ :begin      {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :bd) (begin 0.2))"
+                         "(->> (seq :bd) (begin 0.5) (end 0.8))"]
+              :see-also ["end" "rate"]}
+
+ :end        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :bd) (end 0.7))"
+                         "(->> (seq :hh) (begin 0.1) (end 0.9))"]
+              :see-also ["begin" "rate"]}
+
+ :loop-sample {:category "transform"
+               :returns "Pattern"
+               :side-effects []
+               :examples ["(->> (seq :bd) (loop-sample true))"
+                          "(->> (pure :bd) (loop-sample true) (decay 2.0))"]
+               :see-also ["rate" "begin" "end"]}
+
+ ;; ── Synth voices ────────────────────────────────────────────────────────────
+ :synth      {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :c4 :eb4) (synth :saw))"
+                         "(->> (scale :minor :c3 (seq 0 2 4)) (synth :fm :index 3))"]
+              :see-also ["saw" "square" "noise" "fm" "defsynth"]}
+
+ :saw        {:category "source"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(saw :c4)" "(->> (seq :c4 :e4) (synth :saw))"]
+              :see-also ["square" "noise" "fm" "synth"]}
+
+ :square     {:category "source"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(square :c4)" "(square :c4 :pw 0.25)"]
+              :see-also ["saw" "noise" "synth"]}
+
+ :noise      {:category "source"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(noise)" "(->> (noise) (amp 0.5) (decay 0.1))"]
+              :see-also ["saw" "square"]}
+
+ :fm         {:category "source"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(fm :c4 :index 3 :ratio 2)"
+                         "(->> (scale :minor :c2 (seq 0 2 4)) (synth :fm :index 5))"]
+              :see-also ["saw" "synth" "defsynth"]}
+
+ ;; ── UGens (inside defsynth) ─────────────────────────────────────────────────
+ :sin        {:category "ugen"
+              :returns "UGen"
+              :side-effects []
+              :examples ["(sin freq)" "(->> (sin (* 2 freq)) (gain 0.5))"]
+              :see-also ["tri" "lpf" "env-perc" "defsynth"]}
+
+ :tri        {:category "ugen"
+              :returns "UGen"
+              :side-effects []
+              :examples ["(tri freq)" "(->> (tri freq) (lpf 2000))"]
+              :see-also ["sin" "lpf" "defsynth"]}
+
+ :lpf        {:category "ugen"
+              :returns "UGen"
+              :side-effects []
+              :examples ["(lpf 2000 (saw freq))" "(lpf cutoff (mix a b))"]
+              :see-also ["hpf" "bpf" "sin" "defsynth"]}
+
+ :hpf        {:category "ugen"
+              :returns "UGen"
+              :side-effects []
+              :examples ["(hpf 300 (saw freq))" "(hpf 200 (tri freq))"]
+              :see-also ["lpf" "bpf" "defsynth"]}
+
+ :bpf        {:category "ugen"
+              :returns "UGen"
+              :side-effects []
+              :examples ["(bpf freq (saw freq))" "(bpf 1000 (noise))"]
+              :see-also ["lpf" "hpf" "defsynth"]}
+
+ :mix        {:category "ugen"
+              :returns "UGen"
+              :side-effects []
+              :examples ["(mix (sin freq) (tri freq))"
+                         "(mix (lpf 2000 a) (hpf 500 b))"]
+              :see-also ["gain" "sin" "defsynth"]}
+
+ :gain       {:category "ugen"
+              :returns "UGen"
+              :side-effects []
+              :examples ["(gain 0.5 (sin freq))" "(gain level (mix a b))"]
+              :see-also ["mix" "env-perc" "defsynth"]}
+
+ :delay-node {:category "ugen"
+              :returns "UGen"
+              :side-effects []
+              :examples ["(delay-node 0.25 (saw freq))"
+                         "(mix sig (gain 0.5 (delay-node 0.5 sig)))"]
+              :see-also ["mix" "gain" "defsynth"]}
+
+ :env-perc   {:category "ugen"
+              :returns "UGen"
+              :side-effects []
+              :examples ["(env-perc 0.01 0.3 (sin freq))"
+                         "(env-perc attack decay (lpf 2000 (saw freq)))"]
+              :see-also ["env-asr" "env" "env-gen" "gain" "defsynth"]}
+
+ :env-asr    {:category "ugen"
+              :returns "UGen"
+              :side-effects []
+              :examples ["(env-asr 0.1 1.0 0.5 (sin freq))"
+                         "(env-asr 0.02 0.8 0.3 (lpf cutoff (saw freq)))"]
+              :see-also ["env-perc" "env" "env-gen" "defsynth"]}
+
+ :env        {:category "ugen"
+              :returns "EnvelopeDescriptor"
+              :side-effects []
+              :examples ["(env [0 1 0] [0.01 0.5] [:lin :exp])"
+                         "(env [0 1 0.5 0] [0.01 0.1 0.5])"]
+              :see-also ["env-gen" "env-perc" "env-asr"]}
+
+ :env-gen    {:category "ugen"
+              :returns "UGen"
+              :side-effects []
+              :examples ["(-> (sin freq) (env-gen (env [0 1 0] [0.01 0.5] [:lin :exp])))"
+                         "(env-gen (env [0 1 0] [0.01 0.3]) (mix (sin freq) (tri freq)))"]
+              :see-also ["env" "env-perc" "env-asr" "defsynth"]}
+
+ ;; ── Bus system ───────────────────────────────────────────────────────────────
+ :bus        {:category "audio"
+              :returns "nil"
+              :side-effects ["audio" "dom"]
+              :examples ["(bus :lfo :control)" "(bus :reverb-send :audio)"]
+              :see-also ["out" "in" "kr"]}
+
+ :out        {:category "ugen"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(out :lfo (sin 4))" "(out :send (gain 0.3 sig))"]
+              :see-also ["in" "bus"]}
+
+ :in         {:category "ugen"
+              :returns "UGen"
+              :side-effects []
+              :examples ["(in :lfo)" "(lpf (* 2000 (in :lfo)) (saw freq))"]
+              :see-also ["out" "bus"]}
+
+ :kr         {:category "ugen"
+              :returns "UGen"
+              :side-effects []
+              :examples ["(kr 100 (in :lfo))"]
+              :see-also ["in" "bus"]}
+
+ ;; ── Effects ─────────────────────────────────────────────────────────────────
+ :fx         {:category "effect"
+              :returns "nil"
+              :side-effects ["audio" "dom"]
+              :examples ["(fx :reverb 0.4)"
+                         "(fx :delay :wet 0.3 :time 0.25)"
+                         "(->> (seq :bd :_ :bd :_) (fx :filter 1000))"]
+              :see-also ["track" "distort" "amp-sim"]}
+
+ :distort    {:category "effect"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(fx :distort :drive 25)"
+                         "(->> (seq :c2 :g2) (synth :saw) (fx :distort :drive 20 :oversample 4))"]
+              :see-also ["amp-sim" "waveshape" "fx"]}
+
+ :amp-sim    {:category "effect"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(fx :amp-sim :gain 40)"
+                         "(->> (seq :e2 :_ :e2 :g2) (synth :saw) (fx :amp-sim :gain 40 :stages 2))"]
+              :see-also ["distort" "waveshape" "fx"]}
+
+ :waveshape  {:category "effect"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(fx :waveshape :curve (chebyshev 3) :drive 2)"
+                         "(fx :waveshape :curve (fold) :drive 8)"]
+              :see-also ["chebyshev" "fold" "bitcrush" "fx"]}
+
+ :chebyshev  {:category "effect"
+              :returns "Float32Array"
+              :side-effects []
+              :examples ["(fx :waveshape :curve (chebyshev 2) :drive 4)"
+                         "(fx :waveshape :curve (chebyshev 5))"]
+              :see-also ["fold" "bitcrush" "waveshape"]}
+
+ :fold       {:category "effect"
+              :returns "Float32Array"
+              :side-effects []
+              :examples ["(fx :waveshape :curve (fold) :drive 8)"]
+              :see-also ["chebyshev" "bitcrush" "waveshape"]}
+
+ :bitcrush   {:category "effect"
+              :returns "Float32Array"
+              :side-effects []
+              :examples ["(fx :waveshape :curve (bitcrush 4))"
+                         "(fx :waveshape :curve (bitcrush 8) :drive 2)"]
+              :see-also ["fold" "chebyshev" "waveshape"]}
+
+ :load-plugin  {:category "io"
+                :returns "nil"
+                :side-effects ["network" "dom"]
+                :examples ["(load-plugin \"/plugins/reverb.js\")"
+                           "(load-plugin \"https://example.com/repulse-chorus.js\")"]
+                :see-also ["unload-plugin" "fx"]}
+
+ :unload-plugin {:category "io"
+                 :returns "nil"
+                 :side-effects ["dom"]
+                 :examples ["(unload-plugin \"chorus\")" "(unload-plugin \"reverb\")"]
+                 :see-also ["load-plugin"]}
+
+ ;; ── Audio / playback ────────────────────────────────────────────────────────
+ :sound      {:category "sample"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(sound :808 0)" "(sound :AkaiLinn 3)"]
+              :see-also ["samples!" "sample-banks"]}
+
+ :bpm        {:category "audio"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(bpm 130)" "(bpm 174)"]
+              :see-also ["tap!" "midi-sync!"]}
+
+ :stop       {:category "audio"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(stop)"]
+              :see-also ["mute!" "clear!"]}
+
+ :samples!   {:category "sample"
+              :returns "nil"
+              :side-effects ["network" "audio"]
+              :examples ["(samples! \"github:tidalcycles/Dirt-Samples\")"
+                         "(samples! \"github:owner/my-samples\")"]
+              :see-also ["sample-banks" "sound"]}
+
+ :sample-banks {:category "sample"
+                :returns "vector"
+                :side-effects []
+                :examples ["(sample-banks)"]
+                :see-also ["samples!" "sound"]}
+
+ ;; ── Track management ────────────────────────────────────────────────────────
+ :track      {:category "audio"
+              :returns "nil"
+              :side-effects ["audio" "dom"]
+              :examples ["(track :kick (seq :bd :_ :bd :_))"
+                         "(track :bass (->> (scale :minor :c2 (seq 0 3 5)) (amp 0.9)))"]
+              :see-also ["mute!" "unmute!" "solo!" "clear!" "tracks"]}
+
+ :mute!      {:category "audio"
+              :returns "nil"
+              :side-effects ["audio" "dom"]
+              :examples ["(mute! :kick)" "(mute! :bass)"]
+              :see-also ["unmute!" "solo!" "track"]}
+
+ :unmute!    {:category "audio"
+              :returns "nil"
+              :side-effects ["audio" "dom"]
+              :examples ["(unmute! :kick)" "(unmute! :bass)"]
+              :see-also ["mute!" "solo!" "track"]}
+
+ :solo!      {:category "audio"
+              :returns "nil"
+              :side-effects ["audio" "dom"]
+              :examples ["(solo! :bass)" "(solo! :kick)"]
+              :see-also ["mute!" "unmute!" "track"]}
+
+ :clear!     {:category "audio"
+              :returns "nil"
+              :side-effects ["audio" "dom"]
+              :examples ["(clear! :kick)" "(clear!)"]
+              :see-also ["track" "stop"]}
+
+ :tracks     {:category "audio"
+              :returns "vector"
+              :side-effects []
+              :examples ["(tracks)"]
+              :see-also ["track" "mute!" "clear!"]}
+
+ :upd        {:category "audio"
+              :returns "nil"
+              :side-effects ["audio" "dom"]
+              :examples ["(upd)"]
+              :see-also ["track" "stop"]}
+
+ :tap!       {:category "audio"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(tap!)"]
+              :see-also ["bpm" "midi-sync!"]}
+
+ :midi-sync! {:category "midi"
+              :returns "nil"
+              :side-effects ["midi" "audio"]
+              :examples ["(midi-sync! true)" "(midi-sync! false)"]
+              :see-also ["midi-clock-out!" "bpm"]}
+
+ ;; ── MIDI ─────────────────────────────────────────────────────────────────────
+ :midi-map   {:category "midi"
+              :returns "nil"
+              :side-effects ["midi" "dom"]
+              :examples ["(midi-map :cc 1 :filter)"
+                         "(midi-map :cc 7 :amp)" "(midi-map :cc 14 :bpm)"]
+              :see-also ["midi-out" "midi-clock-out!"]}
+
+ :midi-out   {:category "midi"
+              :returns "Pattern"
+              :side-effects ["midi"]
+              :examples ["(->> (scale :minor :c4 (seq 0 2 4 7)) (midi-out 1))"
+                         "(midi-out 2 (chord :major :c3))"]
+              :see-also ["midi-map" "midi-export" "midi-clock-out!"]}
+
+ :midi-clock-out! {:category "midi"
+                   :returns "nil"
+                   :side-effects ["midi"]
+                   :examples ["(midi-clock-out! true)" "(midi-clock-out! false)"]
+                   :see-also ["midi-sync!" "midi-out"]}
+
+ :midi-export {:category "midi"
+               :returns "nil"
+               :side-effects ["dom"]
+               :examples ["(midi-export :bass 4)" "(midi-export :kick 8)"]
+               :see-also ["midi-out" "export"]}
+
+ ;; ── Freesound ────────────────────────────────────────────────────────────────
+ :freesound-key! {:category "io"
+                  :returns "nil"
+                  :side-effects ["storage"]
+                  :examples ["(freesound-key! \"abc123xyz\")"]
+                  :see-also ["freesound!"]}
+
+ :freesound! {:category "io"
+              :returns "nil"
+              :side-effects ["network" "audio"]
+              :examples ["(do (freesound! \"kick 808\") (seq :freesound-12345))"
+                         "(freesound! \"snare trap\")"]
+              :see-also ["freesound-key!" "samples!"]}
+
+ ;; ── Sharing & IO ─────────────────────────────────────────────────────────────
+ :share!     {:category "io"
+              :returns "nil"
+              :side-effects ["dom" "storage"]
+              :examples ["(share!)"]
+              :see-also ["load-gist" "export"]}
+
+ :load-gist  {:category "io"
+              :returns "nil"
+              :side-effects ["network" "dom"]
+              :examples ["(load-gist \"https://gist.github.com/user/abc123\")"
+                         "(load-gist \"https://gist.githubusercontent.com/user/abc/raw/file.rpl\")"]
+              :see-also ["share!" "samples!"]}
+
+ :export     {:category "io"
+              :returns "nil"
+              :side-effects ["audio" "dom"]
+              :examples ["(export)" "(export 4)" "(export :kick)"]
+              :see-also ["midi-export" "share!"]}
+
+ ;; ── Content ──────────────────────────────────────────────────────────────────
+ :snippet    {:category "content"
+              :returns "nil"
+              :side-effects ["dom"]
+              :examples ["(snippet :four-on-the-floor)" "(snippet)"]
+              :see-also ["demo" "tutorial"]}
+
+ :demo       {:category "content"
+              :returns "nil"
+              :side-effects ["dom"]
+              :examples ["(demo :techno)" "(demo)"]
+              :see-also ["tutorial" "snippet"]}
+
+ :tutorial   {:category "content"
+              :returns "nil"
+              :side-effects ["dom"]
+              :examples ["(tutorial)" "(tutorial 3)"]
+              :see-also ["demo" "snippet"]}
+
+ :reset!     {:category "audio"
+              :returns "nil"
+              :side-effects ["audio" "dom" "storage"]
+              :examples ["(reset!)"]
+              :see-also ["stop" "clear!"]}
+
+ ;; ── Help / session ───────────────────────────────────────────────────────────
+ :help-export {:category "session"
+               :returns "object"
+               :side-effects []
+               :examples ["(help-export)"]
+               :see-also ["tracks" "bpm"]}
+
+ ;; ── Special forms ────────────────────────────────────────────────────────────
+ :def        {:category "special"
+              :returns "nil"
+              :side-effects []
+              :examples ["(def kick (seq :bd :_ :bd :_))"
+                         "(def tempo 130)"]
+              :see-also ["defn" "let" "defmacro"]}
+
+ :defn       {:category "special"
+              :returns "nil"
+              :side-effects []
+              :examples ["(defn double-fast [p] (fast 2 p))"
+                         "(defn accent [v p] (amp v p))"]
+              :see-also ["def" "fn" "defmacro"]}
+
+ :let        {:category "special"
+              :returns "any"
+              :side-effects []
+              :examples ["(let [x (seq :bd :sd)] (fast 2 x))"
+                         "(let [n 4 pat (seq :bd :sd)] (every n rev pat))"]
+              :see-also ["def" "fn"]}
+
+ :fn         {:category "special"
+              :returns "fn"
+              :side-effects []
+              :examples ["(fn [p] (fast 2 p))"
+                         "(every 4 (fn [p] (slow 2 (rev p))) (seq :bd :sd))"]
+              :see-also ["defn" "lambda" "comp"]}
+
+ :lambda     {:category "special"
+              :returns "fn"
+              :side-effects []
+              :examples ["(lambda [p] (fast 2 p))"]
+              :see-also ["fn" "defn"]}
+
+ :if         {:category "special"
+              :returns "any"
+              :side-effects []
+              :examples ["(if (> x 0) :bd :sd)"
+                         "(if (= (mod cycle 4) 0) (fast 2 pat) pat)"]
+              :see-also ["let" "do"]}
+
+ :do         {:category "special"
+              :returns "any"
+              :side-effects []
+              :examples ["(do (def x 1) (+ x 2))"
+                         "(do (bpm 130) (track :kick (seq :bd :bd :bd :bd)))"]
+              :see-also ["let" "def"]}
+
+ :defmacro   {:category "special"
+              :returns "nil"
+              :side-effects []
+              :examples ["(defmacro unless [cond body] `(if (not ~cond) ~body nil))"]
+              :see-also ["defn" "fn"]}
+
+ :defsynth   {:category "special"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(defsynth bell [freq] (->> (sin freq) (env-perc 0.01 1.5)))"
+                         "(defsynth bass [freq] (->> (saw freq) (lpf 800) (env-perc 0.01 0.3)))"]
+              :see-also ["synth" "sin" "tri" "saw" "env-perc"]}
+
+ :loop       {:category "special"
+              :returns "any"
+              :side-effects []
+              :examples ["(loop [i 0 acc 0] (if (= i 4) acc (recur (+ i 1) (+ acc i))))"
+                         "(loop [xs (range 8) result []] (if (empty? xs) result (recur (rest xs) (conj result (* (first xs) 2)))))"]
+              :see-also ["recur" "reduce" "map"]}
+
+ :recur      {:category "special"
+              :returns "any"
+              :side-effects []
+              :examples ["(loop [i 0] (if (= i 4) i (recur (+ i 1))))"]
+              :see-also ["loop"]}
+
+ :quasiquote {:category "special"
+              :returns "any"
+              :side-effects []
+              :examples ["`(seq ~a ~b)" "`(stack ~@patterns)"]
+              :see-also ["quote" "defmacro"]}
+
+ :quote      {:category "special"
+              :returns "any"
+              :side-effects []
+              :examples ["'(seq :bd :sd)" "'x"]
+              :see-also ["quasiquote"]}
+
+ :symbol     {:category "util"
+              :returns "symbol"
+              :side-effects []
+              :examples ["(symbol \"foo\")" "(symbol \"track-name\")"]
+              :see-also ["keyword" "name"]}
+
+ ;; ── Collection utilities ─────────────────────────────────────────────────────
+ :conj       {:category "util"
+              :returns "vector"
+              :side-effects []
+              :examples ["(conj [1 2 3] 4)" "(conj patterns new-pat)"]
+              :see-also ["cons" "concat" "vec"]}
+
+ :count      {:category "util"
+              :returns "number"
+              :side-effects []
+              :examples ["(count [1 2 3])" "(count (range 8))"]
+              :see-also ["nth" "first" "rest"]}
+
+ :nth        {:category "util"
+              :returns "any"
+              :side-effects []
+              :examples ["(nth [1 2 3] 0)" "(nth degrees 2)"]
+              :see-also ["first" "rest" "count"]}
+
+ :first      {:category "util"
+              :returns "any"
+              :side-effects []
+              :examples ["(first [1 2 3])" "(first (range 8))"]
+              :see-also ["rest" "nth" "count"]}
+
+ :rest       {:category "util"
+              :returns "vector"
+              :side-effects []
+              :examples ["(rest [1 2 3])" "(rest (range 4))"]
+              :see-also ["first" "cons" "count"]}
+
+ :empty?     {:category "util"
+              :returns "boolean"
+              :side-effects []
+              :examples ["(empty? [])" "(empty? (filter odd? (range 4)))"]
+              :see-also ["count" "first"]}
+
+ :cons       {:category "util"
+              :returns "list"
+              :side-effects []
+              :examples ["(cons 0 [1 2 3])" "(cons :bd degrees)"]
+              :see-also ["conj" "rest" "first"]}
+
+ :concat     {:category "util"
+              :returns "vector"
+              :side-effects []
+              :examples ["(concat [1 2] [3 4])" "(concat (range 4) [10 11])"]
+              :see-also ["conj" "vec"]}
+
+ :vec        {:category "util"
+              :returns "vector"
+              :side-effects []
+              :examples ["(vec (range 8))" "(vec (map * (range 4) (range 4)))"]
+              :see-also ["concat" "conj"]}
+
+ :map        {:category "util"
+              :returns "sequence"
+              :side-effects []
+              :examples ["(map (fn [x] (* x 2)) (range 4))"
+                         "(map (fn [n] (+ n 100)) degrees)"]
+              :see-also ["filter" "reduce" "fmap"]}
+
+ :filter     {:category "util"
+              :returns "sequence"
+              :side-effects []
+              :examples ["(filter even? (range 8))"
+                         "(filter (fn [x] (> x 2)) [1 2 3 4])"]
+              :see-also ["map" "reduce" "empty?"]}
+
+ :reduce     {:category "util"
+              :returns "any"
+              :side-effects []
+              :examples ["(reduce + (range 5))" "(reduce conj [] (range 4))"]
+              :see-also ["map" "filter" "count"]}
+
+ :range      {:category "util"
+              :returns "sequence"
+              :side-effects []
+              :examples ["(range 8)" "(range 2 8)" "(range 0 8 2)"]
+              :see-also ["count" "map" "filter"]}
+
+ :mod        {:category "util"
+              :returns "number"
+              :side-effects []
+              :examples ["(mod 7 4)" "(mod cycle 3)"]
+              :see-also ["quot" "abs"]}
+
+ :quot       {:category "util"
+              :returns "number"
+              :side-effects []
+              :examples ["(quot 7 2)" "(quot n 4)"]
+              :see-also ["mod" "abs"]}
+
+ :abs        {:category "util"
+              :returns "number"
+              :side-effects []
+              :examples ["(abs -5)" "(abs (- x y))"]
+              :see-also ["mod" "max" "min"]}
+
+ :max        {:category "util"
+              :returns "number"
+              :side-effects []
+              :examples ["(max 3 7)" "(max 0 (- x 1))"]
+              :see-also ["min" "abs"]}
+
+ :min        {:category "util"
+              :returns "number"
+              :side-effects []
+              :examples ["(min 3 7)" "(min 1.0 (+ x 0.5))"]
+              :see-also ["max" "abs"]}
+
+ :identity   {:category "util"
+              :returns "any"
+              :side-effects []
+              :examples ["(identity :bd)" "(every 4 identity (seq :bd :sd))"]
+              :see-also ["comp" "fn"]}
+
+ :apply      {:category "util"
+              :returns "any"
+              :side-effects []
+              :examples ["(apply + [1 2 3])" "(apply stack patterns)"]
+              :see-also ["map" "reduce"]}
+
+ :list       {:category "util"
+              :returns "list"
+              :side-effects []
+              :examples ["(list 1 2 3)" "(list :bd :sd :hh)"]
+              :see-also ["conj" "vec" "cons"]}
+
+ :str        {:category "util"
+              :returns "string"
+              :side-effects []
+              :examples ["(str \"hello \" \"world\")" "(str \"bpm: \" 130)"]
+              :see-also ["keyword" "name"]}
+
+ :keyword    {:category "util"
+              :returns "keyword"
+              :side-effects []
+              :examples ["(keyword \"bd\")" "(keyword (str bank \"-\" n))"]
+              :see-also ["name" "symbol" "str"]}
+
+ :name       {:category "util"
+              :returns "string"
+              :side-effects []
+              :examples ["(name :bd)" "(name :kick)"]
+              :see-also ["keyword" "str"]}
+
+ :number?    {:category "util"
+              :returns "boolean"
+              :side-effects []
+              :examples ["(number? 440)" "(number? :bd)"]
+              :see-also ["string?" "keyword?" "nil?"]}
+
+ :string?    {:category "util"
+              :returns "boolean"
+              :side-effects []
+              :examples ["(string? \"hello\")" "(string? :bd)"]
+              :see-also ["number?" "keyword?" "nil?"]}
+
+ :keyword?   {:category "util"
+              :returns "boolean"
+              :side-effects []
+              :examples ["(keyword? :bd)" "(keyword? 440)"]
+              :see-also ["number?" "string?" "nil?"]}
+
+ :nil?       {:category "util"
+              :returns "boolean"
+              :side-effects []
+              :examples ["(nil? nil)" "(nil? :bd)"]
+              :see-also ["empty?" "number?" "string?"]}
+
+ :not        {:category "util"
+              :returns "boolean"
+              :side-effects []
+              :examples ["(not true)" "(not (empty? xs))"]
+              :see-also ["and" "or" "if"]}
+
+ :and        {:category "special"
+              :returns "any"
+              :side-effects []
+              :examples ["(and (> x 0) (< x 10))" "(and pat1 pat2)"]
+              :see-also ["or" "not" "if"]}
+
+ :or         {:category "special"
+              :returns "any"
+              :side-effects []
+              :examples ["(or x default)" "(or (get m :k) 0)"]
+              :see-also ["and" "not" "if"]}
+
+ ;; ── Arithmetic ───────────────────────────────────────────────────────────────
+ :+          {:category "util"
+              :returns "number"
+              :side-effects []
+              :examples ["(+ 1 2)" "(+ 100 (* 12 n))"]
+              :see-also ["-" "*" "/"]}
+
+ :-          {:category "util"
+              :returns "number"
+              :side-effects []
+              :examples ["(- 10 3)" "(- x 1)"]
+              :see-also ["+" "*" "/"]}
+
+ :*          {:category "util"
+              :returns "number"
+              :side-effects []
+              :examples ["(* 2 3)" "(* factor n)"]
+              :see-also ["+" "-" "/"]}
+
+ :/          {:category "util"
+              :returns "number"
+              :side-effects []
+              :examples ["(/ 10 3)" "(/ n 4)"]
+              :see-also ["+" "-" "*" "mod"]}
+
+ ;; ── Comparison ───────────────────────────────────────────────────────────────
+ :=          {:category "util"
+              :returns "boolean"
+              :side-effects []
+              :examples ["(= x 4)" "(= :bd val)"]
+              :see-also ["not=" "<" ">" "if"]}
+
+ :not=       {:category "util"
+              :returns "boolean"
+              :side-effects []
+              :examples ["(not= x 0)" "(not= val :bd)"]
+              :see-also ["=" "<" ">" "if"]}
+
+ :<          {:category "util"
+              :returns "boolean"
+              :side-effects []
+              :examples ["(< x 10)" "(< 0 n 8)"]
+              :see-also [">" "<=" ">=" "if"]}
+
+ :>          {:category "util"
+              :returns "boolean"
+              :side-effects []
+              :examples ["(> x 0)" "(> bpm 120)"]
+              :see-also ["<" "<=" ">=" "if"]}
+
+ :<=         {:category "util"
+              :returns "boolean"
+              :side-effects []
+              :examples ["(<= x 8)" "(<= 0 n 7)"]
+              :see-also ["<" ">" ">=" "if"]}
+
+ :>=         {:category "util"
+              :returns "boolean"
+              :side-effects []
+              :examples ["(>= x 0)" "(>= bpm 60)"]
+              :see-also ["<" ">" "<=" "if"]}
+
+ ;; ── Map operations ───────────────────────────────────────────────────────────
+ :get        {:category "util"
+              :returns "any"
+              :side-effects []
+              :examples ["(get m :key)" "(get m :k default)"]
+              :see-also ["assoc" "merge" "keys"]}
+
+ :assoc      {:category "util"
+              :returns "map"
+              :side-effects []
+              :examples ["(assoc m :key val)" "(assoc {} :a 1 :b 2)"]
+              :see-also ["merge" "get"]}
+
+ :merge      {:category "util"
+              :returns "map"
+              :side-effects []
+              :examples ["(merge {:a 1} {:b 2})" "(merge defaults overrides)"]
+              :see-also ["assoc" "get"]}
+
+ :keys       {:category "util"
+              :returns "sequence"
+              :side-effects []
+              :examples ["(keys {:a 1 :b 2})" "(keys m)"]
+              :see-also ["vals" "get" "assoc"]}
+
+ :vals       {:category "util"
+              :returns "sequence"
+              :side-effects []
+              :examples ["(vals {:a 1 :b 2})" "(vals m)"]
+              :see-also ["keys" "get"]}
+}

@@ -448,6 +448,13 @@ const DOCS = {
     description: "Control-rate pass-through. In Web Audio, control-rate is not separately exposed — this is an informational wrapper that returns the signal unchanged.",
     example: "(kr 100 (in :lfo))",
   },
+
+  // --- Session ---
+  "help-export": {
+    signature: "(help-export)",
+    description: "Return the live session state as a map. Access fields with (:bpm (help-export)), (:tracks (help-export)), etc. Fields: :bpm, :tracks (name→true), :muted (vector), :fx (vector of {:name :params :bypassed}), :bank, :sources. Editor code is intentionally omitted.",
+    example: "(:tracks (help-export))",
+  },
 };
 
 /**

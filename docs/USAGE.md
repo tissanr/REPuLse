@@ -1229,6 +1229,25 @@ When no session exists (first visit or after `(reset!)`), a random demo template
 
 Stops playback, deletes all persisted state (editor, BPM, effects, bank, sample sources, mutes), and reloads the page to first-visit state with a fresh demo. Use this when you want a clean slate.
 
+### `(help-export)` — AI session snapshot
+
+Returns the live session state as a plain JS object. Useful for sharing context with an AI assistant without copying code.
+
+```lisp
+(help-export)
+; → { bpm: 130, tracks: { kick: true, bass: true }, muted: [], fx: [...], bank: null, sources: [] }
+```
+
+**Fields:**
+- `bpm` — current tempo
+- `tracks` — active track names (values always `true`; pattern functions are never included)
+- `muted` — array of muted track name strings
+- `fx` — array of active global effects: `{ name, params, bypassed }`
+- `bank` — active drum bank prefix or `null`
+- `sources` — loaded external sample repos: `[{ type, id }]`
+
+Editor code is intentionally excluded. Copy-paste from the editor to share code.
+
 ### URL sharing
 
 Click the **share** button or call `(share!)` to copy a full session URL to the clipboard. The URL encodes the complete session state (editor text, BPM, effects, bank, mutes) in the URL hash using base64. Loading the URL restores the full session immediately.

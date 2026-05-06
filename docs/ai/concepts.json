@@ -1,0 +1,100 @@
+{
+  "pattern-model": {
+    "summary": "A Pattern is a pure function from a TimeSpan to a list of Events.",
+    "time": "Rational arithmetic only. TimeSpan = { start, end } where start and end are rational numbers (numerator/denominator pairs). Never floating-point for time values.",
+    "cycle": "The fundamental time unit. One cycle = one bar at the current BPM. All patterns repeat in cycles unless transformed.",
+    "event-shape": {
+      "value": "The payload: a keyword (:bd), a number (440), a map ({:note :c4 :amp 0.8}), or a rest keyword (:_).",
+      "whole": "TimeSpan covering the logical slot of the full event (e.g. one step in a seq).",
+      "part": "TimeSpan of the active slice — may be narrower than whole due to splitting."
+    },
+    "purity": "Pattern functions have no side-effects and produce identical output for the same TimeSpan. Audio output and DOM updates happen at the scheduler layer, not inside patterns."
+  },
+
+  "value-types": {
+    "keyword": "Sample trigger or note name: :bd (bass drum), :sd (snare), :hh (hihat), :oh (open hihat). Arbitrary keywords look up samples by name in the active bank.",
+    "number": "Hz frequency passed directly to synthesis: 440, 220.5. Combine with scale/chord to derive from degrees.",
+    "note-keyword": "Pitch in equal temperament with A4=440 Hz. Format: :note[s|b]octave where s=sharp, b=flat. Examples: :c4 (middle C, 261.6 Hz), :fs3 (F#3), :bb5 (Bb5). Converted to Hz at eval time.",
+    "rest": ":_ — silence. An event whose value is :_ is skipped by the audio scheduler.",
+    "map": "Per-event parameter map merged into the event's metadata: {:note :c4 :amp 0.8 :decay 0.3 :pan -0.5}. Used by ->> and parameter transformers.",
+    "boolean": "true / false — used in conditionals and control arguments like (midi-sync! true).",
+    "nil": "null / absence. Many side-effecting built-ins return nil."
+  },
+
+  "transformer-vs-pattern": {
+    "pattern": "A value that generates events when queried. (seq :bd :sd) is a Pattern. Patterns are the primary currency of REPuLse.",
+    "transformer": "A function Pattern → Pattern. (fast 2) with one argument returns a transformer. (amp 0.8) with one argument returns a transformer. Transformers compose with comp and chain with ->>.",
+    "two-arg-form": "Most transformers accept (f arg pat) — apply immediately — or (f arg) — return a transformer for ->> or comp.",
+    "thread-last": "(->> pat (amp 0.8) (attack 0.02) (decay 0.3)) threads pat as the last argument of each step. The natural way to apply a sequence of parameter transforms."
+  },
+
+  "threading": {
+    "->>": "Thread-last macro. (->> x (f a) (g b)) expands to (g b (f a x)). Use for chaining pattern transformers.",
+    "->": "Thread-first macro. (-> x (f a) (g b)) expands to (g (f x a) b). Less common in REPuLse; ->> is preferred for pattern pipelines.",
+    "comp": "(comp f g …) composes transformers right-to-left. Useful for building named preset transformers: (def pluck (comp (amp 0.8) (decay 0.15) (attack 0.003)))."
+  },
+
+  "mini-notation": {
+    "syntax": "Space-separated tokens inside a string passed to (~): (~ \"bd sd [hh hh] bd\")",
+    "tokens": {
+      "space": "Sequence: 'bd sd hh oh' plays four events in equal steps.",
+      "[…]": "Subdivision: [hh hh] shares one parent step, each sub-event gets half the time.",
+      "*N": "Repeat: 'bd*4' expands to four bd events in one step.",
+      "<…>": "Alternation: <bd sd> plays bd on cycle 0, sd on cycle 1, cycling. Equivalent to (alt …).",
+      "~": "Rest: silence for that step.",
+      "?": "50% probability: 'bd?' plays bd roughly half the time.",
+      ":N": "Sample index: 'bd:2' selects the third sample in the bd bank.",
+      "@N": "Weight: 'bd@2 sd' gives bd twice the time slot of sd."
+    }
+  },
+
+  "track-model": {
+    "named-tracks": "(track :name pattern) registers a pattern under a keyword name. Multiple tracks run in parallel, each queried independently by the scheduler.",
+    "anonymous-track": "A bare top-level pattern (not wrapped in track) runs on the implicit anonymous track. Only one anonymous track exists at a time.",
+    "mute": "(mute! :name) silences a track without removing it from the scheduler. (unmute! :name) re-enables. (solo! :name) mutes all other tracks.",
+    "update": "(upd) re-evaluates the editor buffer and hot-swaps running tracks without restarting the scheduler or producing audible glitches.",
+    "clear": "(clear! :name) removes a specific track. (clear!) removes all tracks. Stopping audio entirely: (stop)."
+  },
+
+  "effects": {
+    "global-fx": "(fx :reverb 0.4) sets a master-chain effect parameter. Global effects persist across evaluations.",
+    "per-track-fx": "(->> pat (fx :filter 1000)) routes a pattern through a per-track effect chain. Re-evaluating code that omits the fx call removes the effect.",
+    "bypass": "(fx :off :reverb) bypasses an effect. (fx :on :reverb) restores it.",
+    "built-in-effects": ["reverb", "delay", "filter", "compressor", "chorus", "phaser", "tremolo", "overdrive", "bitcrusher", "dattorro", "distort", "amp-sim", "waveshape"]
+  },
+
+  "synthesis": {
+    "sample-playback": "Default audio output. Keywords like :bd look up WAV samples in the active bank.",
+    "synth-voices": "(synth :saw pat) applies a built-in oscillator voice. Available voices: :saw, :square, :fm. Alternatively: (saw :c4), (square :c4), (fm :c4 :index 3).",
+    "defsynth": "(defsynth name [params] body) defines a custom synthesizer using Web Audio UGens: sin, tri, saw, lpf, hpf, bpf, mix, gain, env-perc, env-asr, env-gen, bus, out, in.",
+    "ugen-graph": "UGens are composable audio-graph nodes. (->> (sin freq) (lpf 2000) (env-perc 0.01 0.3)) wires a sine oscillator through a filter and percussive envelope."
+  },
+
+  "time-control": {
+    "bpm": "(bpm n) sets the global tempo. Patterns are time-mapped to this tempo. Range: 20–400 BPM.",
+    "fast-slow": "(fast 2 pat) doubles the playback rate within a cycle. (slow 2 pat) halves it. These are cycle-relative — fast 2 plays twice as many events per cycle.",
+    "late-early": "(late 0.25 pat) shifts all events forward by 0.25 cycles. (early 0.25 pat) shifts backward.",
+    "tween": "(tween :linear start end bars) produces a smoothly interpolated value over time. Use as an argument to amp, attack, etc. Transition is per-sample in the WASM engine."
+  },
+
+  "music-theory": {
+    "scale": "(scale :minor :c4 (seq 0 2 4 7)) maps degree integers to Hz using a named scale. Degree 0 is the root. Negative degrees and degrees > scale-length wrap into adjacent octaves.",
+    "scales": ["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "harmonic-minor", "melodic-minor", "pentatonic-major", "pentatonic-minor", "blues", "chromatic", "whole-tone", "diminished"],
+    "chord": "(chord :major7 :c4) stacks all tones of the named chord as simultaneous Hz values in a pattern.",
+    "chords": ["major", "minor", "dim", "aug", "sus2", "sus4", "major7", "minor7", "dom7", "dim7", "half-dim7", "aug7"],
+    "transpose": "(transpose n pat) shifts all Hz values by n semitones. Keywords that are not note-keywords (e.g. :bd, :_) pass through unchanged."
+  },
+
+  "session-snapshot": {
+    "description": "The output of (help-export) — a plain JS object suitable for pasting into an AI prompt or external tool.",
+    "fields": {
+      "bpm": "Current tempo in beats per minute (number).",
+      "tracks": "Active track names as an object with boolean true values. Patterns are stripped — only names are included.",
+      "muted": "Array of muted track name strings.",
+      "fx": "Array of global effect objects: { name, params, bypassed }.",
+      "bank": "Active bank prefix string or null.",
+      "sources": "Array of loaded external sample sources: { type, id }."
+    },
+    "privacy": "Editor buffer text (def bodies, pattern code) is intentionally omitted. Copy-paste from the editor if you want to share code."
+  }
+}

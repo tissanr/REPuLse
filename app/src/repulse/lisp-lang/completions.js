@@ -160,6 +160,7 @@ export const BUILTINS = [
   { label: "list",         type: "function", detail: "(list val …) — create a list" },
   { label: "str",          type: "function", detail: "(str val …) — concatenate to string" },
   { label: "keyword",      type: "function", detail: "(keyword str) — convert string to keyword" },
+  { label: "symbol",       type: "function", detail: "(symbol str) — convert string to symbol" },
   { label: "name",         type: "function", detail: "(name kw) — keyword or symbol to string" },
   { label: "number?",      type: "function", detail: "(number? x) — true if x is a number" },
   { label: "string?",      type: "function", detail: "(string? x) — true if x is a string" },
@@ -178,12 +179,19 @@ export const BUILTINS = [
   { label: "<=",           type: "function", detail: "(<= a b …) — less than or equal" },
   { label: ">=",           type: "function", detail: "(>= a b …) — greater than or equal" },
   { label: "not",          type: "function", detail: "(not x) — logical negation" },
+  { label: "and",          type: "keyword",  detail: "(and a b …) — logical conjunction; short-circuits on false" },
+  { label: "or",           type: "keyword",  detail: "(or a b …) — logical disjunction; short-circuits on true" },
   // --- Map operations ---
   { label: "get",          type: "function", detail: "(get m k default?) — look up key in map" },
   { label: "assoc",        type: "function", detail: "(assoc m k v) — add or replace key in map" },
   { label: "merge",        type: "function", detail: "(merge m …) — merge maps" },
   { label: "keys",         type: "function", detail: "(keys m) — list of map keys" },
   { label: "vals",         type: "function", detail: "(vals m) — list of map values" },
+  // --- Quote forms ---
+  { label: "quote",        type: "keyword",  detail: "(quote form) or 'form — prevent evaluation of form" },
+  { label: "quasiquote",   type: "keyword",  detail: "(quasiquote form) or `form — template with ~unquote and ~@splice; used in defmacro" },
+  // --- Session ---
+  { label: "help-export",  type: "function", detail: "(help-export) — return live session as a map; access with (:bpm (help-export)), (:tracks (help-export)), etc." },
 ];
 
 export const builtinCompletions = completeFromList(BUILTINS);
