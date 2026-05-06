@@ -1231,20 +1231,31 @@ Stops playback, deletes all persisted state (editor, BPM, effects, bank, sample 
 
 ### `(help-export)` — AI session snapshot
 
-Returns the live session state as a plain JS object. Useful for sharing context with an AI assistant without copying code.
+Returns the live session state as a map. Useful for sharing context with an AI assistant without copying code.
 
 ```lisp
 (help-export)
-; → { bpm: 130, tracks: { kick: true, bass: true }, muted: [], fx: [...], bank: null, sources: [] }
+; → {:bpm 130
+;    :tracks {:kick {:fx [{:name "reverb" :params {"value" 0.4} :bypassed false}]}
+;             :bass {:fx []}}
+;    :muted []
+;    :fx []        ; global FX chain only
+;    :bank nil
+;    :sources []}
+
+(:bpm (help-export))                         ; → 130
+(:tracks (help-export))                      ; → {:kick {:fx [...]}, ...}
+(:kick (:tracks (help-export)))              ; → {:fx [...]}
+(:fx (:kick (:tracks (help-export))))        ; → per-track FX for :kick
 ```
 
 **Fields:**
-- `bpm` — current tempo
-- `tracks` — active track names (values always `true`; pattern functions are never included)
-- `muted` — array of muted track name strings
-- `fx` — array of active global effects: `{ name, params, bypassed }`
-- `bank` — active drum bank prefix or `null`
-- `sources` — loaded external sample repos: `[{ type, id }]`
+- `:bpm` — current tempo
+- `:tracks` — keyword-keyed map of active tracks. Each value is `{:fx [...]}` with the track's per-track FX chain. Pattern functions are never included.
+- `:muted` — vector of muted track name strings
+- `:fx` — global FX chain (effects added with a top-level `(fx ...)` call), as `[{:name :params :bypassed}]`
+- `:bank` — active drum bank prefix or `nil`
+- `:sources` — loaded external sample repos: `[{:type :id}]`
 
 Editor code is intentionally excluded. Copy-paste from the editor to share code.
 
