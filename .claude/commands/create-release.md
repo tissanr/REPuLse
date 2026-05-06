@@ -8,7 +8,7 @@ description: Create a GitHub release — drafts notes from delivered phases, bum
 - Latest releases: !`gh release list --limit 5`
 - Latest release tag: !`gh release list --limit 1 --json tagName --jq '.[0].tagName'`
 - Latest release date: !`gh release list --limit 1 --json publishedAt --jq '.[0].publishedAt'`
-- Commits since last tag: !`git log $(git describe --tags --abbrev=0 2>/dev/null || echo "")..HEAD --oneline 2>/dev/null | head -40`
+- Latest tag ref: !`git describe --tags --abbrev=0`
 - Current CLAUDE.md phase table (delivered only): !`grep -E "^\| [0-9A-ZA-z]" CLAUDE.md | grep "✓ delivered"`
 - Arguments provided by user: $ARGUMENTS
 
@@ -51,7 +51,7 @@ Construct the tag as:
 
 ### Step 4 — Identify new phases since last release
 
-Look at the commits since the last tag (from context above). Cross-reference with the CLAUDE.md phase table to identify which phases were delivered in this release cycle. If the commit log is thin or unclear, include all delivered phases grouped clearly, noting that this is a cumulative list.
+Run `git log --oneline <latest-tag>..HEAD` (substituting the actual tag from context) to get commits since the last release. Cross-reference with the CLAUDE.md phase table to identify which phases were delivered in this release cycle. If the commit log is thin or unclear, include all delivered phases grouped clearly, noting that this is a cumulative list.
 
 ### Step 5 — Draft release notes
 
