@@ -52,6 +52,8 @@
                                        system messages model key)
       "groq"      (openai-like-request "https://api.groq.com/openai/v1/chat/completions"
                                        system messages model key)
+      "xai"       (openai-like-request "https://api.x.ai/v1/chat/completions"
+                                       system messages model key)
       "google"    (google-request      system messages model key)
       (throw (ex-info "Unknown provider" {:provider provider})))))
 
@@ -66,7 +68,7 @@
             (case provider
               "anthropic"        (when (= "content_block_delta" (.-type obj))
                                    (some-> (.-delta obj) (.-text)))
-              ("openai" "groq")  (some-> (.. obj -choices (aget 0) -delta -content))
+              ("openai" "groq" "xai") (some-> (.. obj -choices (aget 0) -delta -content))
               "google"           (some-> (.. obj -candidates (aget 0) -content -parts
                                             (aget 0) -text))
               nil)))))

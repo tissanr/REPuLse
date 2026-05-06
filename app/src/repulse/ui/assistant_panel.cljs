@@ -91,7 +91,7 @@
                         (str "<option value=\"" p "\""
                              (when (= p @settings/provider) " selected")
                              ">" p "</option>"))
-                      ["anthropic" "openai" "google" "groq"]))
+                      ["anthropic" "openai" "google" "groq" "xai"]))
                "  </select>"
                "</label>"
                "<label class=\"ai-label\">API key"

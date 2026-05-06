@@ -22,7 +22,8 @@
   {"anthropic" "claude-sonnet-4-6"
    "openai"    "gpt-4o"
    "google"    "gemini-2.0-flash"
-   "groq"      "llama-3.3-70b-versatile"})
+   "groq"      "llama-3.3-70b-versatile"
+   "xai"       "grok-3"})
 
 (defn effective-model []
   (let [override @model-override]
