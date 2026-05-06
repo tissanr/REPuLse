@@ -27,6 +27,9 @@
 
 (defn el [id] (.getElementById js/document id))
 
+(defn- strip-console-prefix [msg]
+  (str/replace (str msg) #"^=>\s*" ""))
+
 (def ^:private header-icon-svg
   (str "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 128 128\""
        " id=\"header-icon\" class=\"header-icon\" aria-hidden=\"true\">"
@@ -59,7 +62,7 @@
 
 (defn set-output! [msg status]
   (when-let [e (el "output")]
-    (set! (.-textContent e) msg)
+    (set! (.-textContent e) (strip-console-prefix msg))
     (set! (.-className e) (str "output " (name status)))))
 
 (defn set-playing! [playing?]
