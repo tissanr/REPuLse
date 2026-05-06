@@ -38,4 +38,4 @@
         :muted   muted-names
         :fx      fx-list
         :bank    bank
-        :sources sources})))})
+        :sources sources}))})
