@@ -52,7 +52,7 @@
                          "(wchoose [[:c4 4] [:e4 2] [:g4 1]])"]
               :see-also ["choose" "seq"]}
 
- :~          {:category "source"
+ "~"         {:category "source"
               :returns "Pattern"
               :side-effects []
               :examples ["(~ \"bd sd [hh hh] bd\")"
