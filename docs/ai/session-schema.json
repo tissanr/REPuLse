@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://repulse.dev/docs/ai/session-schema.json",
+  "title": "REPuLse AI Session Snapshot",
+  "description": "Output of (help-export). Structural metadata only — editor code is intentionally omitted.",
+  "type": "object",
+  "required": ["bpm", "tracks", "muted", "fx"],
+  "additionalProperties": false,
+  "properties": {
+    "bpm": {
+      "type": "number",
+      "minimum": 20,
+      "maximum": 400,
+      "description": "Current tempo in beats per minute."
+    },
+    "tracks": {
+      "type": "object",
+      "description": "Active track names as keys. Values are always true. Pattern functions are never included.",
+      "additionalProperties": {
+        "type": "boolean",
+        "const": true
+      }
+    },
+    "muted": {
+      "type": "array",
+      "description": "Names of currently muted tracks.",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "fx": {
+      "type": "array",
+      "description": "Global effect chain. Only active effects are included.",
+      "items": {
+        "type": "object",
+        "required": ["name", "params", "bypassed"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Effect name, e.g. 'reverb', 'delay', 'filter'."
+          },
+          "params": {
+            "type": "object",
+            "description": "Current parameter values as returned by the plugin's getParams().",
+            "additionalProperties": true
+          },
+          "bypassed": {
+            "type": "boolean",
+            "description": "True if the effect is bypassed (inactive but not removed)."
+          }
+        }
+      }
+    },
+    "bank": {
+      "type": ["string", "null"],
+      "description": "Active drum bank prefix set by (bank :name), or null if none."
+    },
+    "sources": {
+      "type": "array",
+      "description": "External sample sources loaded via (samples! …).",
+      "items": {
+        "type": "object",
+        "required": ["type", "id"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Source type, e.g. 'github'."
+          },
+          "id": {
+            "type": "string",
+            "description": "Source identifier, e.g. 'owner/repo'."
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "examples": [
+    {
+      "bpm": 130,
+      "tracks": { "kick": true, "bass": true, "melody": true },
+      "muted": ["melody"],
+      "fx": [
+        { "name": "reverb", "params": { "wet": 0.4, "decay": 2.0 }, "bypassed": false },
+        { "name": "delay",  "params": { "wet": 0.25, "time": 0.25 }, "bypassed": true }
+      ],
+      "bank": null,
+      "sources": []
+    },
+    {
+      "bpm": 174,
+      "tracks": { "amen": true, "bass": true },
+      "muted": [],
+      "fx": [],
+      "bank": "AkaiLinn",
+      "sources": [{ "type": "github", "id": "tidalcycles/Dirt-Samples" }]
+    },
+    {
+      "bpm": 90,
+      "tracks": { "boom-bap": true },
+      "muted": [],
+      "fx": [
+        { "name": "compressor", "params": { "threshold": -18, "ratio": 4 }, "bypassed": false }
+      ],
+      "bank": null,
+      "sources": []
+    }
+  ]
+}

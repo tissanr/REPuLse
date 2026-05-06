@@ -48,7 +48,7 @@ Map    { "{" expr* "}" }
     "mod" | "quot" | "abs" | "max" | "min" | "identity" | "apply" | "list" |
     "str" | "keyword" | "symbol" | "name" | "number?" | "string?" | "keyword?" | "nil?" |
     "quote" | "tween" |
-    "reset!"
+    "reset!" | "help-export"
   }
 
   Symbol { identStart identChar* }
