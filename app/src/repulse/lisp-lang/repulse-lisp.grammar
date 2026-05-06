@@ -1,5 +1,7 @@
 @top Program { expr* }
 
+@detectDelim
+
 expr {
   List | Vector | Map |
   LineComment | Number | String | Keyword | BuiltinName | Symbol
