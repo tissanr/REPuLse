@@ -1063,4 +1063,13 @@
               :side-effects []
               :examples ["(vals {:a 1 :b 2})" "(vals m)"]
               :see-also ["keys" "get"]}
+
+ ;; ── AI assistant ─────────────────────────────────────────────────────────────
+ :ai         {:category "ai"
+              :returns "nil or string"
+              :side-effects ["opens AI assistant panel" "sends prompt to AI provider"]
+              :examples ["(ai)"
+                         "(ai \"Give me a euclidean kick pattern at 130 bpm\")"
+                         "(ai \"How do I make a bass line with (scale :minor :c3 ...)?\")" ]
+              :see-also ["help-export"]}
 }

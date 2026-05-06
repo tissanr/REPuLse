@@ -193,6 +193,8 @@ export const BUILTINS = [
   { label: "quasiquote",   type: "keyword",  detail: "(quasiquote form) or `form — template with ~unquote and ~@splice; used in defmacro" },
   // --- Session ---
   { label: "help-export",  type: "function", detail: "(help-export) — return live session as a map; access with (:bpm (help-export)), (:tracks (help-export)), etc." },
+  // --- AI assistant ---
+  { label: "ai",           type: "function", detail: "(ai) — open AI assistant panel; (ai \"prompt\") — open and send prompt immediately" },
 ];
 
 export const builtinCompletions = completeFromList(BUILTINS);

@@ -1241,23 +1241,25 @@ See full spec: [PROMPTS/PHASE-AI1.md](PROMPTS/PHASE-AI1.md)
 
 ---
 
-## Phase AI2 — Assistant Panel & Providers 📋 *planned*
+## Phase AI2 — Assistant Panel & Providers ✅ *delivered*
 
 In-app AI chat panel with bring-your-own-key support for OpenAI, Anthropic, Google, and
 Groq — streaming responses, message persistence, and session context injection. Opt-in
 feature gate; no tool calling yet.
 
-**Key additions:**
+**Delivered:**
 - `app/src/repulse/ai/settings.cljs` — localStorage-backed atoms: `enabled?`, `provider`,
-  `api-key`, `model-override`, `include-code?`; settings modal accessible from the header
-- `app/src/repulse/ai/client.cljs` — provider abstraction with `stream!` fn; `parse-delta`
-  handles SSE format differences across OpenAI / Anthropic / Google / Groq
-- `app/src/repulse/ai/system_prompt.cljs` — assembles context from `/docs/ai/builtins.json`
-  summary + current `(help-export)` snapshot (track names, BPM, FX — no editor code)
-- `app/src/repulse/ui/assistant_panel.cljs` — collapsible right-side panel; streaming
-  render; code-block "↓ insert" and "↺ replace selection" buttons; cost/token indicator
-- `(ai)` / `(ai "prompt")` Lisp built-ins — open panel or send a one-shot prompt
-- `repulse:ai:*` localStorage namespace — keys, history (last 50 turns), feature flag
+  `api-key`, `model-override`, `include-code?`; persisted under `repulse:ai:*` namespace
+- `app/src/repulse/ai/client.cljs` — streaming fetch abstraction supporting all four
+  providers; SSE line buffer handles partial chunks; per-provider system prompt placement
+  (top-level field for Anthropic, first message for OpenAI/Groq, `systemInstruction` for Google)
+- `app/src/repulse/ai/system_prompt.cljs` — builds context from live session state
+  (BPM, track names, FX chain) + optional editor buffer (`include-code?`) + builtins summary
+- `app/src/repulse/ui/assistant_panel.cljs` — collapsible panel with streaming render,
+  code-block "↓ insert" button, settings drawer, conversation history, and clear button
+- `app/src/repulse/env/builtins/ai.cljs` — `(ai)` and `(ai "prompt")` Lisp built-ins
+- `(reset!)` now wipes `repulse:ai:*` localStorage entries alongside the session wipe
+- Grammar, completions, hover docs, and `builtin_meta.edn` updated with `ai` entry
 
 See full spec: [PROMPTS/PHASE-AI2.md](PROMPTS/PHASE-AI2.md)
 

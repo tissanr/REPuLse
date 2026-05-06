@@ -43,6 +43,7 @@ evaluate them with **Ctrl+Enter** (or the **▶ play** button), and hear them lo
 21. [Grammar summary](#grammar-summary)
 22. [Examples](#examples)
 23. [Embeddable component](#embeddable-component)
+24. [AI assistant](#ai--ai-assistant-panel)
 
 ---
 
@@ -1227,7 +1228,42 @@ When no session exists (first visit or after `(reset!)`), a random demo template
 (reset!)
 ```
 
-Stops playback, deletes all persisted state (editor, BPM, effects, bank, sample sources, mutes), and reloads the page to first-visit state with a fresh demo. Use this when you want a clean slate.
+Stops playback, deletes all persisted state (editor, BPM, effects, bank, sample sources, mutes, and AI settings/history), and reloads the page to first-visit state with a fresh demo. Use this when you want a clean slate.
+
+### `(ai)` — AI assistant panel
+
+Open the built-in AI assistant panel. The panel supports **bring-your-own API key** for Anthropic, OpenAI, Google Gemini, and Groq, with streaming responses and conversation history.
+
+```lisp
+(ai)                                          ; open the panel (or shows "enable AI" prompt)
+(ai "Give me a euclidean kick pattern")       ; open and immediately send prompt
+(ai "How do I add reverb to a track?")        ; open and immediately send prompt
+```
+
+**Getting started:**
+
+1. Click the **ai** button in the header, or run `(ai)` in the REPL
+2. Click **Enable AI assistant**
+3. Choose a provider and paste your API key (stored in localStorage only — never sent to REPuLse servers)
+4. Type a question and press **Send** or **Cmd/Ctrl+Enter**
+
+**Code blocks** in assistant responses include an **↓ insert** button that appends the code to the editor without replacing existing content.
+
+**Settings** (accessible via the ⚙ button):
+- **Provider** — `anthropic`, `openai`, `google`, `groq`
+- **API key** — stored in `repulse:ai:key` in localStorage; never relayed through any REPuLse backend
+- **Model override** — override the default model (e.g. `claude-opus-4-7`); leave blank for the provider default
+- **Share editor code with AI** — when enabled, the current editor buffer is included in the system prompt; disabled by default
+
+**Default models:** `claude-sonnet-4-6` (Anthropic), `gpt-4o` (OpenAI), `gemini-2.0-flash` (Google), `llama-3.3-70b-versatile` (Groq).
+
+**Conversation history** persists across page reloads (last 40 turns). Use the **✕** button to clear history.
+
+When AI is disabled, `(ai)` returns a descriptive string instead of opening the panel:
+```lisp
+(ai)
+; → "AI assistant is disabled — enable it in the AI panel settings"
+```
 
 ### `(help-export)` — AI session snapshot
 

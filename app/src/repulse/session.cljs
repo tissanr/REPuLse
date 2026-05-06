@@ -95,8 +95,14 @@
 ;;; ── Reset ────────────────────────────────────────────────────────────────
 
 (defn wipe!
-  "Delete all persisted state (current and legacy keys)."
+  "Delete all persisted state (current, legacy, and AI keys)."
   []
   (.removeItem js/localStorage storage-key)
   (.removeItem js/localStorage "repulse-editor")
-  (.removeItem js/localStorage "repulse-bpm"))
+  (.removeItem js/localStorage "repulse-bpm")
+  ;; Collect AI keys first (can't remove while iterating — indices shift)
+  (let [ls js/localStorage
+        ai-keys (filterv #(= 0 (.indexOf % "repulse:ai:"))
+                          (for [i (range (.-length ls))] (.key ls i)))]
+    (doseq [k ai-keys]
+      (.removeItem ls k))))

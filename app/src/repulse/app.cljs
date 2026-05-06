@@ -19,6 +19,7 @@
             [repulse.plugin-loading :as plugin-loading]
             [repulse.content.first-visit :as first-visit]
             [repulse.snippets :as snippets]
+            [repulse.ui.assistant-panel :as assistant-panel]
             [clojure.string :as str]
             ["./lisp-lang/providers.js" :refer [setBankNamesProvider setFxNamesProvider]]
             ["@codemirror/commands" :refer [selectAll]]))
@@ -189,6 +190,7 @@
                "  <div class=\"header-controls nav-actions\">"
                "    <button id=\"tap-btn\" class=\"tap-btn\">tap</button>"
                "    <button id=\"snippet-toggle-btn\" class=\"snippet-toggle-btn\">lib</button>"
+               "    <button id=\"ai-toggle-btn\" class=\"ai-toggle-btn\">ai</button>"
                "    <button id=\"share-btn\" class=\"share-btn\">share</button>"
                "  </div>"
                "  <div class=\"nav-spacer\"></div>"
@@ -202,6 +204,7 @@
                "  <div class=\"workbench\">"
                "    <div id=\"editor-container\" class=\"editor-container\"></div>"
                "    <div id=\"snippet-panel\" class=\"snippet-panel hidden\"></div>"
+               "    <div id=\"ai-panel\" class=\"ai-panel hidden\"></div>"
                "    <div id=\"cmd-bar\" class=\"cmd-bar console-panel\">"
                "      <div class=\"console-history\">"
                "        <div class=\"console-line console-line-out\">"
@@ -315,6 +318,9 @@
   (auth-button/init!)
   (snippet-panel/init!)
   (snippet-submit-modal/init!)
+  (assistant-panel/init!)
+  (when-let [btn (el "ai-toggle-btn")]
+    (.addEventListener btn "click" assistant-panel/toggle-panel!))
   (attach-slider-listener!)
   (builtins/ensure-env!)
   (setBankNamesProvider (fn [] (clj->js (samples/bank-names))))
