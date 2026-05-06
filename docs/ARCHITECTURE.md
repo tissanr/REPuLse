@@ -174,9 +174,9 @@ WorkletNode ──► masterGain ──► analyser ──► destination
 - `analyser` (AnalyserNode, fftSize 2048, smoothing 0.8) — exposed to visual plugins
 
 Then `init-worklet!` is called:
-1. Calls `audioWorklet.addModule("/worklet.js")` to register the processor
+1. Resolves `worklet.js` from the app public base and calls `audioWorklet.addModule(...)` to register the processor
 2. Creates an `AudioWorkletNode` connected to `masterGain` (not `destination` directly)
-3. Sends an `init` message with the WASM file URLs; the worklet loads WASM on the audio thread
+3. Fetches the WASM bytes from the app public base and sends them to the worklet in an `init` message
 4. On `ready` reply, sets `worklet-ready?` to `true` and logs the active backend
 
 The JS fallback synth voices also connect to `masterGain` via the `output-node` helper.
@@ -342,7 +342,7 @@ app/src/repulse/
 │       └── routing.cljs          bus, load-plugin, unload-plugin, freesound-key!, freesound!
 ├── ui/
 │   ├── editor.cljs               CodeMirror editor, highlighting (highlight-range!)
-│   ├── timeline.cljs             SVG track timeline + RAF playhead loop
+│   ├── timeline.cljs             Canvas track visualizer + cached RAF energy curves
 │   └── context_panel.cljs        Context panel DOM, slider config, schedule-render!
 └── content/
     ├── demos.cljs                Demo template data + demo builtin factory

@@ -1410,14 +1410,10 @@ footer {
   font-display: swap;
   src: local("JetBrains Mono"),
        local("JetBrainsMono Nerd Font"),
-       url("/fonts/JetBrainsMono[wght].ttf") format("truetype"),
-       url("/fonts/JetBrainsMono-Regular.woff2") format("woff2"),
-       url("/fonts/JetBrainsMono-Medium.woff2") format("woff2"),
-       url("/fonts/JetBrainsMono-Bold.woff2") format("woff2"),
-       url("/fonts/JetBrainsMonoNerdFont-Regular.ttf") format("truetype"),
-       url("/fonts/JetBrainsMonoNerdFontMono-Regular.ttf") format("truetype"),
-       url("/fonts/JetBrainsMonoNerdFontPropo-Regular.ttf") format("truetype"),
-       url("/fonts/JetBrainsMono-Regular.ttf") format("truetype");
+       url("../fonts/JetBrainsMono[wght].ttf") format("truetype"),
+       url("../fonts/JetBrainsMono-Regular.woff2") format("woff2"),
+       url("../fonts/JetBrainsMono-Medium.woff2") format("woff2"),
+       url("../fonts/JetBrainsMono-Bold.woff2") format("woff2");
 }
 
 @font-face {
@@ -1427,12 +1423,8 @@ footer {
   font-display: swap;
   src: local("JetBrains Mono Italic"),
        local("JetBrainsMono Nerd Font Italic"),
-       url("/fonts/JetBrainsMono-Italic[wght].ttf") format("truetype"),
-       url("/fonts/JetBrainsMono-Italic.woff2") format("woff2"),
-       url("/fonts/JetBrainsMonoNerdFont-Italic.ttf") format("truetype"),
-       url("/fonts/JetBrainsMonoNerdFontMono-Italic.ttf") format("truetype"),
-       url("/fonts/JetBrainsMonoNerdFontPropo-Italic.ttf") format("truetype"),
-       url("/fonts/JetBrainsMono-Italic.ttf") format("truetype");
+       url("../fonts/JetBrainsMono-Italic[wght].ttf") format("truetype"),
+       url("../fonts/JetBrainsMono-Italic.woff2") format("woff2");
 }
 
 html,

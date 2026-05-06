@@ -35,7 +35,7 @@
       (.addEventListener btn "click"
         (fn []
           (if (= "logout" (.. btn -dataset -action))
-          (auth/logout!)
+            (auth/logout!)
             (auth/login!))))
       (let [play-btn (and (not (.contains (.-classList controls) "auth-slot"))
                           (el "play-btn"))]
