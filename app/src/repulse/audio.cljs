@@ -1,5 +1,6 @@
 (ns repulse.audio
-  (:require [repulse.core :as core]
+  (:require [clojure.string :as str]
+            [repulse.core :as core]
             [repulse.theory :as theory]
             [repulse.samples :as samples]
             [repulse.synth :as synth]
@@ -26,6 +27,26 @@
 ;; Per-track audio routing: keyword → {:gain-node GainNode :fx-chain [...]}
 (defonce track-nodes (atom {}))
 
+(def ^:private public-base-url
+  (let [document (.-document js/globalThis)
+        script-src (some-> document .-currentScript .-src)]
+    (.-href
+     (cond
+       (and script-src (str/includes? script-src "/js/"))
+       (js/URL. "../" script-src)
+
+       script-src
+       (js/URL. "./" script-src)
+
+       document
+       (js/URL. "./" (.-baseURI document))
+
+       :else
+       (js/URL. "./" "http://localhost/")))))
+
+(defn- public-url [path]
+  (.-href (js/URL. path public-base-url)))
+
 (defn- build-master-chain! [ac]
   (let [gain (doto (.createGain ac)
                (-> .-gain (.setValueAtTime 1.0 (.-currentTime ac))))
@@ -44,7 +65,7 @@
   Falls back to JS synthesis if AudioWorklet is unavailable."
   [ac]
   (if-let [worklet (.-audioWorklet ac)]
-    (-> (.addModule worklet "/worklet.js")
+    (-> (.addModule worklet (public-url "worklet.js"))
         (.then (fn []
                  (let [node (js/AudioWorkletNode. ac "repulse-processor"
                                                   #js {:outputChannelCount #js [2]})]
@@ -62,7 +83,7 @@
                    ;; ArrayBuffer to the worklet.  The worklet uses initSync()
                    ;; (new WebAssembly.Module + new WebAssembly.Instance) which
                    ;; avoids every browser-specific limitation we hit before.
-                   (-> (js/fetch "/repulse_audio_bg.wasm")
+                   (-> (js/fetch (public-url "repulse_audio_bg.wasm"))
                        (.then (fn [resp] (.arrayBuffer resp)))
                        (.then (fn [buf]
                                 (when debug? (js/console.log "[REPuLse] WASM fetched, initializing worklet..."))
