@@ -1657,6 +1657,26 @@ header h1 {
   background: rgba(86, 182, 194, 0.04);
 }
 
+.editor-container .cm-selectionBackground,
+.cmd-container .cm-selectionBackground {
+  background: rgba(86, 182, 194, 0.28) !important;
+}
+
+.editor-container .cm-editor.cm-focused .cm-selectionBackground,
+.cmd-container .cm-editor.cm-focused .cm-selectionBackground {
+  background: rgba(86, 182, 194, 0.36) !important;
+}
+
+.editor-container .cm-content ::selection,
+.cmd-container .cm-content ::selection {
+  background: rgba(86, 182, 194, 0.36) !important;
+}
+
+.editor-container .cm-selectionMatch,
+.cmd-container .cm-selectionMatch {
+  background: rgba(229, 192, 123, 0.18) !important;
+}
+
 .active-event {
   background-color: rgba(229, 192, 123, 0.16);
   outline: 1px solid rgba(229, 192, 123, 0.38);
