@@ -439,7 +439,8 @@
                "/plugins/bitcrusher.js"
                "/plugins/sidechain.js"
                "/plugins/distort.js"
-               "/plugins/amp-sim.js"]]
+               "/plugins/amp-sim.js"
+               "/plugins/waveshape.js"]]
     (when-not (contains? @loaded-plugins url)
       (-> (plugin-loading/dynamic-import! url)
           (.then (fn [m]

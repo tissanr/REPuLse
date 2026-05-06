@@ -230,6 +230,12 @@
           r   (:result (lisp/eval-string "(vec (range 5))" env))]
       (is (= [0 1 2 3 4] r)))))
 
+(deftest parenthesized-literal-list
+  (testing "literal lists can start with a sourced number"
+    (let [env (make-test-env)
+          r   (:result (lisp/eval-string "(vec (-1.0 -0.5 0 0.5 1.0))" env))]
+      (is (= [-1.0 -0.5 0 0.5 1.0] (mapv leval/unwrap r))))))
+
 (deftest apply-seq-from-list
   (testing "(apply seq (list :bd :sd :hh)) creates a pattern"
     (let [env (make-test-env)
