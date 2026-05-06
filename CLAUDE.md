@@ -282,7 +282,7 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | DST3  | Distortion — multi-stage amp simulation (:amp-sim)             | ✓ delivered  |
 | DST4  | Distortion — oversampling wrapper (:oversample 1/2/4)          | planned      |
 | DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | planned   |
-| DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | planned      |
+| DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | ✓ delivered  |
 | CI1   | CI pipeline — GitHub Actions: tests, lint, Rust, grammar drift | ✓ delivered  |
 | TEST1 | Automated audio verification — CLJS, Rust DSP, offline PCM tests | ✓ delivered  |
 | TEST2 | Production browser audio capture — AudioWorklet/WASM PCM verification | planned      |

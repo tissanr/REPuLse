@@ -1857,6 +1857,36 @@ and power supply sag simulation.
 (fx :amp-sim :gain 6 :stages 2 :tonestack :bright)
 ```
 
+#### `cab` — speaker cabinet simulation
+
+Convolution-based speaker cabinet simulation using procedurally generated impulse responses.
+Best used after `:amp-sim` or `:distort`.
+
+| Parameter | Key | Default | Description |
+|-----------|-----|---------|-------------|
+| IR        | `ir` / positional | `:1x12` | `:1x12` `:2x12` `:4x12` or `:di` (bypass) |
+| Mix       | `mix` | `1.0` | Dry/wet blend (0–1) |
+
+```lisp
+;; Classic amp + cab chain:
+(->> (seq :e2 :_ :e2 :g2)
+     (synth :saw)
+     (fx :amp-sim :gain 12 :stages 3 :tonestack :bright)
+     (fx :cab :ir :2x12))
+
+;; Heavy metal:
+(->> (seq :c1 :_ :c1 :_ :c1 :_)
+     (synth :square)
+     (fx :amp-sim :gain 80 :stages 4 :tonestack :mid-scoop)
+     (fx :cab :ir :4x12))
+
+;; A/B: cab vs. no cab
+(def no-cab (->> (seq :c2 :e2 :g2) (synth :saw) (fx :distort :drive 10)))
+(def with-cab (->> (seq :c2 :e2 :g2) (synth :saw)
+                   (fx :distort :drive 10)
+                   (fx :cab :ir :1x12)))
+```
+
 #### `bitcrusher` — lo-fi bit/sample-rate reduction
 
 Reduces bit depth and sample rate for crunchy, glitchy textures. Uses an AudioWorklet.
@@ -1912,7 +1942,7 @@ so the duck is perfectly in time regardless of BPM, with zero look-ahead latency
 The default signal chain is:
 ```
 synthesis → reverb → delay → filter → compressor → dattorro-reverb
-         → chorus → phaser → tremolo → overdrive → distort → amp-sim → bitcrusher → sidechain → output
+         → chorus → phaser → tremolo → overdrive → distort → amp-sim → cab → bitcrusher → sidechain → output
 ```
 
 `sidechain` sits at the end of the chain so it ducks the fully-processed signal.

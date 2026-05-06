@@ -30,7 +30,7 @@ Map    { "{" expr* "}" }
     "def" | "defn" | "let" | "fn" | "lambda" | "if" | "do" |
     "defmacro" | "defsynth" | "loop" | "recur" | "quasiquote" |
     "bpm" | "stop" | "fx" | "load-plugin" | "unload-plugin" | "arrange" | "play-scenes" | "sound" |
-    "distort" | "amp-sim" |
+    "distort" | "amp-sim" | "cab" |
     "get" | "assoc" | "merge" | "not" | "and" | "or" | "comp" |
     "track" | "mute!" | "unmute!" | "solo!" | "clear!" | "tracks" | "tap!" | "midi-sync!" |
     "midi-map" | "midi-out" | "midi-clock-out!" | "midi-export" |
