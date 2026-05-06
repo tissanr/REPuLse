@@ -1288,6 +1288,25 @@ See full spec: [PROMPTS/PHASE-AI4.md](PROMPTS/PHASE-AI4.md)
 
 ---
 
+## Phase UI1 — Theming & Settings Dialog 📋 *planned*
+
+A Settings dialog (gear icon in the header) with a theme dropdown that repaints the
+entire application — chrome, panels, and CodeMirror editor — instantly on selection.
+
+**Key additions:**
+- `app/src/repulse/themes.cljs` — theme registry with five named palettes (`:dark`,
+  `:light`, `:high-contrast`, `:solarized`, `:nord`), `apply-theme!` mutates `:root`
+  CSS custom properties; `current-theme` atom persisted via D2 session as `:theme`
+- `app/src/repulse/ui/settings_modal.cljs` — modal component following the
+  `snippet_submit_modal.cljs` overlay pattern; ESC + outside-click to close
+- `app/src/repulse/ui/editor.cljs` — wrap `oneDark` in a CodeMirror `Compartment`;
+  add `set-editor-theme!` so chrome and editor theme always switch together
+- Gear button (⚙) added to the header in `app/src/repulse/app.cljs`
+
+See full spec: [PROMPTS/PHASE-UI1.md](PROMPTS/PHASE-UI1.md)
+
+---
+
 ## Future ideas (unscheduled)
 
 See [docs/FUTURE-FEATURES.md](docs/FUTURE-FEATURES.md) for the full prioritised feature
