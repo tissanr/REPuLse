@@ -21,8 +21,10 @@
 (defonce ^:private phase (atom 0))
 (defonce ^:private last-ts (atom nil))
 (defonce ^:private raf-started? (atom false))
+(defonce ^:private energy-cache (atom {}))
 
 (def ^:private track-colors ["#e94560" "#56b6c2" "#e5c07b" "#c678dd" "#98c379" "#d19a66"])
+(def ^:private energy-resolution 512)
 
 (defn- escape-html [s]
   (-> (str s)
@@ -31,7 +33,7 @@
       (str/replace ">" "&gt;")
       (str/replace "\"" "&quot;")))
 
-(defn- track-events [track-name pattern cycle color muted?]
+(defn track-events [track-name pattern cycle color muted?]
   (let [sp {:start [cycle 1] :end [(inc cycle) 1]}
         evs (try (core/query pattern sp) (catch :default _ []))]
     {:name track-name
@@ -84,15 +86,43 @@
           0.06
           events))
 
+(defn energy-curve [events]
+  (mapv (fn [i]
+          (event-energy events (/ i energy-resolution)))
+        (range energy-resolution)))
+
+(defn sample-energy [curve t]
+  (let [n (count curve)
+        x (* (mod t 1) n)
+        i (int (js/Math.floor x))
+        frac (- x i)
+        a (nth curve i)
+        b (nth curve (mod (inc i) n))]
+    (+ a (* (- b a) frac))))
+
+(defn- energy-key [{:keys [name cycle events]}]
+  [name cycle events])
+
+(defn- track-energy-curve [tr]
+  (let [key (energy-key tr)]
+    (or (get @energy-cache key)
+        (let [curve (energy-curve (:events tr))]
+          (swap! energy-cache assoc key curve)
+          curve))))
+
+(defn- prune-energy-cache! [tracks]
+  (let [live-keys (set (map energy-key tracks))]
+    (swap! energy-cache select-keys live-keys)))
+
 (defn- draw-wave! [ctx x y w h tr live? ph]
   (clear-row! ctx x y w h)
   (let [cy (+ y (/ h 2))
-        events (:events tr)
+        curve (track-energy-curve tr)
         color (if (:muted? tr) "#3a4868" (:color tr))]
     (.beginPath ctx)
     (doseq [px (range 0 (inc w))]
       (let [t (mod (+ (/ px w) (if live? (* ph 0.12) 0)) 1)
-            amp (event-energy events t)
+            amp (sample-energy curve t)
             yy (+ cy (* (js/Math.sin (+ (* t 56) (* ph 2))) amp h 0.38))]
         (if (zero? px)
           (.moveTo ctx (+ x px) yy)
@@ -107,13 +137,13 @@
 
 (defn- draw-spec! [ctx x y w h tr live? ph]
   (clear-row! ctx x y w h)
-  (let [events (:events tr)
+  (let [curve (track-energy-curve tr)
         color (:color tr)
         bars 56
         bw (/ w bars)]
     (doseq [i (range bars)]
       (let [t (mod (+ (/ i bars) (if live? (* ph 0.16) 0)) 1)
-            e (event-energy events t)
+            e (sample-energy curve t)
             fall (js/Math.exp (* -3 (/ i bars)))
             bh (max 1 (* h (+ (* e 0.72) (* fall 0.18))))
             alpha (if (:muted? tr) "44" "cc")]
@@ -124,14 +154,14 @@
 
 (defn- draw-loud! [ctx x y w h tr live? ph]
   (clear-row! ctx x y w h)
-  (let [events (:events tr)
+  (let [curve (track-energy-curve tr)
         color (if (:muted? tr) "#3a4868" (:color tr))
         bottom (+ y h -1)]
     (.beginPath ctx)
     (.moveTo ctx x bottom)
     (doseq [px (range 0 (inc w))]
       (let [t (mod (+ (/ px w) (if live? (* ph 0.1) 0)) 1)
-            e (event-energy events t)]
+            e (sample-energy curve t)]
         (.lineTo ctx (+ x px) (- bottom (* e h 0.88)))))
     (.lineTo ctx (+ x w) bottom)
     (.closePath ctx)
@@ -163,11 +193,12 @@
       (.fillRect ctx (+ x (* pos w)) (+ y 4) (max 2 (* dur w)) 5))
     (draw-label! ctx x y tr)))
 
-(defn- value-pitch [v idx]
+(defn value-pitch [v idx]
   (cond
     (map? v) (value-pitch (or (:note v) (:freq v) (:sample v) (:synth v) (:value v)) idx)
     (number? v) (mod (js/Math.abs v) 12)
-    (keyword? v) (mod (reduce + (map int (name v))) 12)
+    (keyword? v) (let [n (name v)]
+                   (mod (reduce + (map #(.charCodeAt n %) (range (count n)))) 12))
     :else (mod idx 12)))
 
 (defn- draw-roll! [ctx x y w h tr _live? _ph]
@@ -233,6 +264,7 @@
       (if (empty? data)
         (draw-empty! ctx w h)
         (let [row-h (max 28 (js/Math.floor (/ h (count data))))]
+          (prune-energy-cache! data)
           (doseq [[idx tr] (map-indexed vector data)]
             (let [y (* idx row-h)]
               (case @viz-mode

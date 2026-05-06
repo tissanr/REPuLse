@@ -17,8 +17,8 @@
 // worklet-polyfills.js MUST be imported first — ES module evaluation is depth-first
 // in source order, so the polyfills run before repulse_audio.js top-level code
 // (which calls `new TextDecoder()` / `new TextEncoder()` unconditionally).
-import '/worklet-polyfills.js';
-import { initSync, AudioEngine } from '/repulse_audio.js';
+import './worklet-polyfills.js';
+import { initSync, AudioEngine } from './repulse_audio.js';
 
 // Set globalThis.__REPULSE_DEBUG__ = true (before page load) to enable verbose logging.
 const DEBUG = !!globalThis.__REPULSE_DEBUG__;
