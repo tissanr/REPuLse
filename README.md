@@ -365,9 +365,10 @@ npx shadow-cljs compile test && node out/test.js
 7. **`app/app.cljs`** — mounts a CodeMirror 6 main editor and a single-line command bar
    editor; wires **Alt+Enter** to `eval-string` and routes Pattern results to the audio
    scheduler vs. plain values to the output line. A live context panel shows BPM, user `def`
-   bindings, and the active effect chain; a track timeline panel below the editor shows all
-   active tracks with SVG event bars and a `requestAnimationFrame` playhead sweep. All panels
-   update reactively via `add-watch` on the relevant atoms.
+   bindings, and the active effect chain; a track visualizer panel below the editor shows all
+   active tracks with canvas modes that reuse cached per-cycle energy curves during
+   `requestAnimationFrame` drawing. All panels update reactively via `add-watch` on the
+   relevant atoms.
 
 ### Editor keybindings
 
