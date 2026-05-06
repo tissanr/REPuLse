@@ -89,6 +89,7 @@ const CHAIN_CATEGORIES = [
       withDetail("overdrive", "(fx :overdrive ¦0.45)", "(fx :overdrive drive) — saturate the signal"),
       withDetail("distort", "(fx :distort :drive ¦8 :asym 0.3)", "(fx :distort :drive n :asym n) — soft clipping with tone and asymmetry control"),
       withDetail("amp-sim", "(fx :amp-sim :gain ¦12 :stages 2)", "(fx :amp-sim :gain n :stages n) — multi-stage tube amp simulation"),
+      withDetail("waveshape", "(fx :waveshape :curve ¦(chebyshev 3))", "(fx :waveshape :curve c) — arbitrary transfer function distortion"),
       withDetail("bitcrusher", "(fx :bitcrusher ¦0.35)", "(fx :bitcrusher mix) — lo-fi crush"),
       withDetail("compressor", "(fx :compressor ¦0.5)", "(fx :compressor amount) — tighten dynamics"),
       withDetail("dattorro", "(fx :dattorro ¦0.35)", "(fx :dattorro mix) — spacious algorithmic reverb"),

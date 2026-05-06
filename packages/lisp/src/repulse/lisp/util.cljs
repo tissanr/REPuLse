@@ -11,6 +11,18 @@
   [x]
   (if (sourced? x) (:v x) x))
 
+(defn deep-unwrap
+  "Recursively strip SourcedVal wrappers from collections."
+  [x]
+  (let [v (unwrap x)]
+    (cond
+      (vector? v) (mapv deep-unwrap v)
+      (seq? v)    (map deep-unwrap v)
+      (map? v)    (into {} (map (fn [[k val]]
+                                   [(deep-unwrap k) (deep-unwrap val)])
+                                 v))
+      :else       v)))
+
 (defn source-of
   "Return the source position map {:from N :to N} for a value, or nil."
   [x]
