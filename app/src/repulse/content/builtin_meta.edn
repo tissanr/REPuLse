@@ -1070,6 +1070,12 @@
               :side-effects ["opens AI assistant panel" "sends prompt to AI provider"]
               :examples ["(ai)"
                          "(ai \"Give me a euclidean kick pattern at 130 bpm\")"
-                         "(ai \"How do I make a bass line with (scale :minor :c3 ...)?\")" ]
+                         "(ai \"How do I make a bass line with (scale :minor :c3 ...)?\")"
+                         "(ai \"Add reverb and slow the melody down\")"]
+              :providers ["anthropic (claude-sonnet-4-6)"
+                          "openai (gpt-4o)"
+                          "google (gemini-2.0-flash)"
+                          "groq (llama-3.3-70b-versatile)"
+                          "xai (grok-3)"]
               :see-also ["help-export"]}
 }

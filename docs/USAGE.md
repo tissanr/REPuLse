@@ -1250,12 +1250,14 @@ Open the built-in AI assistant panel. The panel supports **bring-your-own API ke
 **Code blocks** in assistant responses include an **↓ insert** button that appends the code to the editor without replacing existing content.
 
 **Settings** (accessible via the ⚙ button):
-- **Provider** — `anthropic`, `openai`, `google`, `groq`
+- **Provider** — `anthropic`, `openai`, `google`, `groq`, `xai`
 - **API key** — stored in `repulse:ai:key` in localStorage; never relayed through any REPuLse backend
-- **Model override** — override the default model (e.g. `claude-opus-4-7`); leave blank for the provider default
+- **Model override** — override the default model (e.g. `claude-opus-4-7`, `grok-3-mini`); leave blank for the provider default
 - **Share editor code with AI** — when enabled, the current editor buffer is included in the system prompt; disabled by default
 
-**Default models:** `claude-sonnet-4-6` (Anthropic), `gpt-4o` (OpenAI), `gemini-2.0-flash` (Google), `llama-3.3-70b-versatile` (Groq).
+**Default models:** `claude-sonnet-4-6` (Anthropic), `gpt-4o` (OpenAI), `gemini-2.0-flash` (Google), `llama-3.3-70b-versatile` (Groq), `grok-3` (xAI).
+
+> **Groq vs xAI:** `groq` is [Groq cloud](https://groq.com) — fast inference for open-source models like Llama. `xai` is [xAI](https://x.ai) — Elon Musk's company, makers of the Grok model family. Get an xAI key at [console.x.ai](https://console.x.ai).
 
 **Conversation history** persists across page reloads (last 40 turns). Use the **✕** button to clear history.
 
