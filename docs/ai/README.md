@@ -29,7 +29,8 @@ cookbook.filter(r => r.tags.includes('drums'));
 
 // 4. Read the live session snapshot from the REPL
 // In the REPuLse editor, evaluate: (help-export)
-// Paste the JSON here for the agent to inspect.
+// Access fields with keyword lookup: (:bpm (help-export)), (:kick (:tracks (help-export)))
+// Paste the printed output (EDN map) into the agent prompt for inspection.
 ```
 
 ## `builtins.json` schema

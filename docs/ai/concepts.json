@@ -86,14 +86,14 @@
   },
 
   "session-snapshot": {
-    "description": "The output of (help-export) — a plain JS object suitable for pasting into an AI prompt or external tool.",
+    "description": "The output of (help-export) — a CLJS map suitable for pasting into an AI prompt or external tool. Access fields with keyword lookup: (:bpm (help-export)).",
     "fields": {
       "bpm": "Current tempo in beats per minute (number).",
-      "tracks": "Active track names as an object with boolean true values. Patterns are stripped — only names are included.",
-      "muted": "Array of muted track name strings.",
-      "fx": "Array of global effect objects: { name, params, bypassed }.",
-      "bank": "Active bank prefix string or null.",
-      "sources": "Array of loaded external sample sources: { type, id }."
+      "tracks": "Keyword-keyed map of active tracks. Each value is {:fx [...]} with the track's per-track FX chain. Patterns are stripped — only names and FX are included. Access: (:kick (:tracks (help-export))).",
+      "muted": "Vector of muted track name strings.",
+      "fx": "Vector of active global effect maps: {:name :params :bypassed}. Only effects added with a top-level (fx ...) call appear here. Per-track FX are listed under each track in :tracks.",
+      "bank": "Active bank prefix string or nil.",
+      "sources": "Vector of loaded external sample sources: {:type :id}."
     },
     "privacy": "Editor buffer text (def bodies, pattern code) is intentionally omitted. Copy-paste from the editor if you want to share code."
   }
