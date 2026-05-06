@@ -36,7 +36,7 @@ Based on the changes above, do all of the following:
 ### Regression tests
 <Bulleted checklist of things that MUST still work after this change.
  Always include these baseline checks plus any area-specific ones:>
-- [ ] `npm run test:core` — all core unit tests pass
+- [ ] `npm run test:cljs` — all core unit tests pass
 - [ ] `(seq :bd :sd :bd :sd)` — basic playback works
 - [ ] `(stop)` — stops playback cleanly
 - [ ] `(every 4 (fast 2) (seq :bd :sd :hh :oh))` — pattern transforms work
