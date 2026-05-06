@@ -2512,14 +2512,18 @@
     "returns": "object",
     "side-effects": [],
     "examples": [
-      "(help-export)"
+      "(help-export)",
+      "(:bpm (help-export))",
+      "(:kick (:tracks (help-export)))",
+      "(:fx (:kick (:tracks (help-export))))"
     ],
     "see-also": [
       "tracks",
-      "bpm"
+      "bpm",
+      "fx"
     ],
     "detail": "(help-export) — return live session as a map; access with (:bpm (help-export)), (:tracks (help-export)), etc.",
-    "description": "Return the live session state as a map. Access fields with (:bpm (help-export)), (:tracks (help-export)), etc. Fields: :bpm, :tracks (name→true), :muted (vector), :fx (vector of {:name :params :bypassed}), :bank, :sources. Editor code is intentionally omitted."
+    "description": "Return the live session state as a map. Fields: :bpm (number), :tracks (keyword→{:fx [...]}), :muted (vector of strings), :fx (global FX chain, vector of {:name :params :bypassed}), :bank, :sources. Access per-track FX with (:fx (:kick (:tracks (help-export))))."
   },
   "samples!": {
     "category": "sample",

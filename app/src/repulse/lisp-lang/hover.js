@@ -452,8 +452,8 @@ const DOCS = {
   // --- Session ---
   "help-export": {
     signature: "(help-export)",
-    description: "Return the live session state as a map. Access fields with (:bpm (help-export)), (:tracks (help-export)), etc. Fields: :bpm, :tracks (name→true), :muted (vector), :fx (vector of {:name :params :bypassed}), :bank, :sources. Editor code is intentionally omitted.",
-    example: "(:tracks (help-export))",
+    description: "Return the live session state as a map. Fields: :bpm (number), :tracks (keyword→{:fx [...]}), :muted (vector of strings), :fx (global FX chain, vector of {:name :params :bypassed}), :bank, :sources. Access per-track FX with (:fx (:kick (:tracks (help-export)))).",
+    example: "(:kick (:tracks (help-export)))",
   },
 };
 

@@ -21,8 +21,15 @@
    "help-export"
    (fn []
      (let [state       @audio/scheduler-state
-           track-names (into {} (map (fn [k] [(cljs.core/name k) true]) (keys (:tracks state))))
-           muted-names (mapv cljs.core/name (:muted state))
+           track-nodes @audio/track-nodes
+           tracks      (into {} (map (fn [[k _]]
+                                       [k {:fx (mapv (fn [{:keys [name params bypassed?]}]
+                                                       {:name     name
+                                                        :params   (or params {})
+                                                        :bypassed (boolean bypassed?)})
+                                                     (or (:fx-chain (get track-nodes k)) []))}])
+                                     (:tracks state)))
+           muted       (mapv cljs.core/name (:muted state))
            bpm         (audio/get-bpm)
            fx-list     (mapv (fn [{:keys [name plugin bypassed?]}]
                                {:name     name
@@ -34,8 +41,8 @@
                                {:type (cljs.core/name type) :id id})
                              (filter #(= :github (:type %)) @samples/loaded-sources))]
        {:bpm     bpm
-        :tracks  track-names
-        :muted   muted-names
+        :tracks  tracks
+        :muted   muted
         :fx      fx-list
         :bank    bank
         :sources sources}))})

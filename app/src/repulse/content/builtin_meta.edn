@@ -675,8 +675,11 @@
  :help-export {:category "session"
                :returns "object"
                :side-effects []
-               :examples ["(help-export)"]
-               :see-also ["tracks" "bpm"]}
+               :examples ["(help-export)"
+                          "(:bpm (help-export))"
+                          "(:kick (:tracks (help-export)))"
+                          "(:fx (:kick (:tracks (help-export))))"]
+               :see-also ["tracks" "bpm" "fx"]}
 
  ;; ── Special forms ────────────────────────────────────────────────────────────
  :def        {:category "special"

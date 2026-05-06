@@ -15,10 +15,25 @@
     },
     "tracks": {
       "type": "object",
-      "description": "Active track names as keys. Values are always true. Pattern functions are never included.",
+      "description": "Active track names as keyword keys. Each value is a map with per-track info. In REPuLse-Lisp, access with (:kick (:tracks (help-export))).",
       "additionalProperties": {
-        "type": "boolean",
-        "const": true
+        "type": "object",
+        "required": ["fx"],
+        "properties": {
+          "fx": {
+            "type": "array",
+            "description": "Per-track FX chain applied to this track.",
+            "items": {
+              "type": "object",
+              "required": ["name", "params", "bypassed"],
+              "properties": {
+                "name": { "type": "string" },
+                "params": { "type": "object", "additionalProperties": true },
+                "bypassed": { "type": "boolean" }
+              }
+            }
+          }
+        }
       }
     },
     "muted": {
@@ -31,7 +46,7 @@
     },
     "fx": {
       "type": "array",
-      "description": "Global effect chain. Only active effects are included.",
+      "description": "Global effect chain. Only active effects are included. Per-track effects are listed under each track in :tracks.",
       "items": {
         "type": "object",
         "required": ["name", "params", "bypassed"],
@@ -80,18 +95,24 @@
   "examples": [
     {
       "bpm": 130,
-      "tracks": { "kick": true, "bass": true, "melody": true },
+      "tracks": {
+        "kick": { "fx": [{ "name": "reverb", "params": { "wet": 0.4 }, "bypassed": false }] },
+        "bass": { "fx": [] },
+        "melody": { "fx": [] }
+      },
       "muted": ["melody"],
       "fx": [
-        { "name": "reverb", "params": { "wet": 0.4, "decay": 2.0 }, "bypassed": false },
-        { "name": "delay",  "params": { "wet": 0.25, "time": 0.25 }, "bypassed": true }
+        { "name": "delay", "params": { "wet": 0.25, "time": 0.25 }, "bypassed": true }
       ],
       "bank": null,
       "sources": []
     },
     {
       "bpm": 174,
-      "tracks": { "amen": true, "bass": true },
+      "tracks": {
+        "amen": { "fx": [] },
+        "bass": { "fx": [] }
+      },
       "muted": [],
       "fx": [],
       "bank": "AkaiLinn",
@@ -99,11 +120,11 @@
     },
     {
       "bpm": 90,
-      "tracks": { "boom-bap": true },
+      "tracks": {
+        "boom-bap": { "fx": [{ "name": "compressor", "params": { "threshold": -18, "ratio": 4 }, "bypassed": false }] }
+      },
       "muted": [],
-      "fx": [
-        { "name": "compressor", "params": { "threshold": -18, "ratio": 4 }, "bypassed": false }
-      ],
+      "fx": [],
       "bank": null,
       "sources": []
     }
