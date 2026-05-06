@@ -24,10 +24,10 @@
         (set! (.-dataset.action btn) "login")))))
 
 (defn init!
-  "Inject the #auth-btn into the header controls and wire click handler."
+  "Inject the #auth-btn into the header auth slot and wire click handler."
   []
-  (when-let [controls (.querySelector js/document ".header-controls")]
-    ;; Insert before the play button
+  (when-let [controls (or (.querySelector js/document ".auth-slot")
+                          (.querySelector js/document ".header-controls"))]
     (let [btn (js/document.createElement "button")]
       (set! (.-id btn) "auth-btn")
       (set! (.-className btn) "auth-btn")
@@ -35,10 +35,11 @@
       (.addEventListener btn "click"
         (fn []
           (if (= "logout" (.. btn -dataset -action))
-            (auth/logout!)
+          (auth/logout!)
             (auth/login!))))
-      (let [play-btn (el "play-btn")]
-        (if play-btn
+      (let [play-btn (and (not (.contains (.-classList controls) "auth-slot"))
+                          (el "play-btn"))]
+        (if (and play-btn (.-parentNode play-btn))
           (.insertBefore controls btn play-btn)
           (.appendChild controls btn)))))
   (render-auth-btn!))

@@ -5,11 +5,18 @@ expr {
   LineComment | Number | String | Keyword | BuiltinName | Symbol
 }
 
-List   { "(" expr* ")" }
-Vector { "[" expr* "]" }
-Map    { "{" expr* "}" }
+List   { OpenParen expr* CloseParen }
+Vector { OpenBracket expr* CloseBracket }
+Map    { OpenBrace expr* CloseBrace }
 
 @tokens {
+  OpenParen    { "(" }
+  CloseParen   { ")" }
+  OpenBracket  { "[" }
+  CloseBracket { "]" }
+  OpenBrace    { "{" }
+  CloseBrace   { "}" }
+
   LineComment { ";" ![\n]* }
 
   Number { @digit+ ("." @digit+)? }
