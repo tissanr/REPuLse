@@ -77,7 +77,7 @@
          :*synths* (atom (or (some-> (:*synths* env) deref) {}))))
 
 (defn- sandbox-fx [& raw-args]
-  (let [args'    (mapv leval/unwrap raw-args)
+  (let [args'    (mapv leval/deep-unwrap raw-args)
         last-arg (last args')
         per-track? (and (> (count args') 1) (core/pattern? last-arg))]
     (when per-track?

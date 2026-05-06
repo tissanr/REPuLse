@@ -9,7 +9,7 @@
   [_ctx]
   {"fx"
    (fn [& raw-args]
-     (let [args'    (mapv leval/unwrap raw-args)
+     (let [args'    (mapv leval/deep-unwrap raw-args)
            last-arg (last args')
            per-track? (and (> (count args') 1)
                            (core/pattern? last-arg))]

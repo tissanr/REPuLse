@@ -13,6 +13,7 @@
 
 (def sourced? util/sourced?)
 (def unwrap   util/unwrap)
+(def deep-unwrap util/deep-unwrap)
 (def source-of util/source-of)
 (def ->num    util/->num)
 
@@ -296,27 +297,32 @@
         ;; Function call — check macros first, then eval as function
         (let [head-name (when (symbol? head) (str head))
               macros    (some-> (:*macros* env) deref)]
-          (if-let [macro-fn (and head-name macros (get macros head-name))]
+          (if (and (sourced? head)
+                   (every? #(number? (unwrap %)) form))
+            ;; Parenthesized numeric lists are useful for data passed to host
+            ;; APIs, e.g. waveshaper curves: (-1.0 -0.5 0 0.5 1.0).
+            (map #(eval-form % env) form)
+            (if-let [macro-fn (and head-name macros (get macros head-name))]
             ;; Macro expansion: call with unevaluated forms, then eval the result
-            (let [expanded (apply macro-fn tail)]
-              (eval-form expanded env))
+              (let [expanded (apply macro-fn tail)]
+                (eval-form expanded env))
             ;; Normal function call
-            (let [f   (eval-form head env)
-                  src (source-of head)]
-              (if (fn? f)
-                (try
-                  (apply f (map #(eval-form % env) tail))
-                  (catch :default e
-                    ;; Re-throw with the source position of the call head,
-                    ;; unless the error already carries a more specific range.
-                    (let [data (ex-data e)
-                          loc  (if (contains? data :from)
-                                 (select-keys data [:from :to])
-                                 {:from (:from src) :to (:to src)})]
-                      (throw (ex-info (.-message e)
-                                      (merge {:type :eval-error} loc))))))
-                (throw (ex-info (str (pr-str head) " is not a function")
-                                {:type :eval-error :from (:from src) :to (:to src)}))))))))
+              (let [f   (eval-form head env)
+                    src (source-of head)]
+                (if (fn? f)
+                  (try
+                    (apply f (map #(eval-form % env) tail))
+                    (catch :default e
+                      ;; Re-throw with the source position of the call head,
+                      ;; unless the error already carries a more specific range.
+                      (let [data (ex-data e)
+                            loc  (if (contains? data :from)
+                                   (select-keys data [:from :to])
+                                   {:from (:from src) :to (:to src)})]
+                        (throw (ex-info (.-message e)
+                                        (merge {:type :eval-error} loc))))))
+                  (throw (ex-info (str (pr-str head) " is not a function")
+                                  {:type :eval-error :from (:from src) :to (:to src)})))))))))
 
     :else
     (throw (ex-info (str "Cannot evaluate: " (pr-str form)) {:type :eval-error}))))
