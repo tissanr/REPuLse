@@ -41,10 +41,10 @@
   "Register the AudioWorkletProcessor. The main thread fetches the WASM bytes
    and transfers them as an ArrayBuffer; the worklet uses initSync to compile
    and instantiate synchronously — works on Chrome, Firefox, and Safari.
-   Falls back to JS synthesis if AudioWorklet is unavailable."
+  Falls back to JS synthesis if AudioWorklet is unavailable."
   [ac]
   (if-let [worklet (.-audioWorklet ac)]
-    (-> (.addModule worklet "worklet.js")
+    (-> (.addModule worklet "/worklet.js")
         (.then (fn []
                  (let [node (js/AudioWorkletNode. ac "repulse-processor"
                                                   #js {:outputChannelCount #js [2]})]
@@ -62,7 +62,7 @@
                    ;; ArrayBuffer to the worklet.  The worklet uses initSync()
                    ;; (new WebAssembly.Module + new WebAssembly.Instance) which
                    ;; avoids every browser-specific limitation we hit before.
-                   (-> (js/fetch "repulse_audio_bg.wasm")
+                   (-> (js/fetch "/repulse_audio_bg.wasm")
                        (.then (fn [resp] (.arrayBuffer resp)))
                        (.then (fn [buf]
                                 (when debug? (js/console.log "[REPuLse] WASM fetched, initializing worklet..."))

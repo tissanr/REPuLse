@@ -27,37 +27,42 @@
 
 (defn el [id] (.getElementById js/document id))
 
+(defn- strip-console-prefix [msg]
+  (str/replace (str msg) #"^=>\s*" ""))
+
 (def ^:private header-icon-svg
   (str "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 128 128\""
-       " id=\"header-icon\" class=\"header-icon\">"
+       " id=\"header-icon\" class=\"header-icon\" aria-hidden=\"true\">"
        "<defs>"
-       "<filter id=\"icon-gp\" x=\"-50%\" y=\"-50%\" width=\"200%\" height=\"200%\">"
-       "<feGaussianBlur stdDeviation=\"2.5\" result=\"b\"/>"
-       "<feMerge><feMergeNode in=\"b\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>"
+       "<filter id=\"icon-glow-pink\" x=\"-40%\" y=\"-40%\" width=\"180%\" height=\"180%\">"
+       "<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"2.5\" result=\"blur\"/>"
+       "<feMerge><feMergeNode in=\"blur\"/><feMergeNode in=\"blur\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>"
        "</filter>"
-       "<filter id=\"icon-gc\" x=\"-80%\" y=\"-80%\" width=\"260%\" height=\"260%\">"
-       "<feGaussianBlur stdDeviation=\"2.5\" result=\"b\"/>"
-       "<feMerge><feMergeNode in=\"b\"/><feMergeNode in=\"b\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>"
+       "<filter id=\"icon-glow-cyan\" x=\"-60%\" y=\"-60%\" width=\"220%\" height=\"220%\">"
+       "<feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"2\" result=\"blur\"/>"
+       "<feMerge><feMergeNode in=\"blur\"/><feMergeNode in=\"blur\"/><feMergeNode in=\"SourceGraphic\"/></feMerge>"
        "</filter>"
+       "<clipPath id=\"icon-sweep\"><rect class=\"icon-sweep-rect\" x=\"-128\" y=\"0\" width=\"128\" height=\"128\"/></clipPath>"
        "<style>"
-       "@keyframes icon-paren-pulse{0%,100%{stroke-opacity:.6}50%{stroke-opacity:1}}"
-       "@keyframes icon-wave-flow{0%{stroke-dashoffset:0}100%{stroke-dashoffset:-120}}"
-       "#header-icon.playing .icon-paren{animation:icon-paren-pulse 1.2s ease-in-out infinite}"
-       "#header-icon.playing #icon-wave{stroke-dasharray:120;animation:icon-wave-flow 1.2s linear infinite}"
+       "@keyframes icon-sweep{0%{transform:translateX(0)}85%{transform:translateX(128px)}86%,100%{transform:translateX(0)}}"
+       "@keyframes icon-cursor-x{0%{cx:36}85%{cx:92}86%,100%{cx:36}}"
+       "@keyframes icon-cursor-y{0%,32%,85%,86%,100%{cy:64}43%{cy:41}52%{cy:80}57%{cy:64}}"
+       "#header-icon.playing .icon-sweep-rect{animation:icon-sweep 2.2s cubic-bezier(.4,0,.2,1) infinite}"
+       "#header-icon.playing .icon-cursor{animation:icon-cursor-x 2.2s cubic-bezier(.4,0,.2,1) infinite,icon-cursor-y 2.2s cubic-bezier(.4,0,.2,1) infinite}"
        "</style>"
        "</defs>"
-       "<path class=\"icon-paren\" d=\"M 38,16 C 14,16 9,40 9,64 C 9,88 14,112 38,112\""
-       " fill=\"none\" stroke=\"#e94560\" stroke-width=\"7.5\" stroke-linecap=\"round\" filter=\"url(#icon-gp)\"/>"
-       "<path class=\"icon-paren\" d=\"M 90,16 C 114,16 119,40 119,64 C 119,88 114,112 90,112\""
-       " fill=\"none\" stroke=\"#e94560\" stroke-width=\"7.5\" stroke-linecap=\"round\" filter=\"url(#icon-gp)\"/>"
-       "<path id=\"icon-wave\" d=\"M 36,64 L 50,64 L 56,41 L 61,80 L 66,64 L 92,64\""
-       " fill=\"none\" stroke=\"#56b6c2\" stroke-width=\"2.5\" stroke-linecap=\"round\""
-       " stroke-linejoin=\"round\" filter=\"url(#icon-gc)\"/>"
+       "<path d=\"M 38,16 C 14,16 9,40 9,64 C 9,88 14,112 38,112\" fill=\"none\" stroke=\"#e94560\" stroke-width=\"7.5\" stroke-linecap=\"round\" filter=\"url(#icon-glow-pink)\"/>"
+       "<path d=\"M 90,16 C 114,16 119,40 119,64 C 119,88 114,112 90,112\" fill=\"none\" stroke=\"#e94560\" stroke-width=\"7.5\" stroke-linecap=\"round\" filter=\"url(#icon-glow-pink)\"/>"
+       "<path d=\"M 36,64 L 50,64 L 56,41 L 61,80 L 66,64 L 92,64\" fill=\"none\" stroke=\"#56b6c2\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" opacity=\"0.22\"/>"
+       "<g clip-path=\"url(#icon-sweep)\" filter=\"url(#icon-glow-cyan)\">"
+       "<path d=\"M 36,64 L 50,64 L 56,41 L 61,80 L 66,64 L 92,64\" fill=\"none\" stroke=\"#56b6c2\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
+       "</g>"
+       "<circle class=\"icon-cursor\" cx=\"36\" cy=\"64\" r=\"2.2\" fill=\"#56b6c2\" filter=\"url(#icon-glow-cyan)\" opacity=\"0.9\"/>"
        "</svg>"))
 
 (defn set-output! [msg status]
   (when-let [e (el "output")]
-    (set! (.-textContent e) msg)
+    (set! (.-textContent e) (strip-console-prefix msg))
     (set! (.-className e) (str "output " (name status)))))
 
 (defn set-playing! [playing?]
@@ -176,31 +181,49 @@
 (defn build-dom! []
   (let [app (el "app")]
     (set! (.-innerHTML app)
-          (str "<header>"
-               "  <h1>" header-icon-svg " REPuLse</h1>"
-               "  <div class=\"header-controls\">"
+          (str "<header class=\"top-nav\">"
+               "  <div class=\"brand-mark\">"
+               header-icon-svg
+               "    <h1>REP<span class=\"brand-cyan\">u</span>Lse</h1>"
+               "  </div>"
+               "  <div class=\"header-controls nav-actions\">"
                "    <button id=\"tap-btn\" class=\"tap-btn\">tap</button>"
-               "    <button id=\"share-btn\" class=\"share-btn\">share</button>"
                "    <button id=\"snippet-toggle-btn\" class=\"snippet-toggle-btn\">lib</button>"
+               "    <button id=\"share-btn\" class=\"share-btn\">share</button>"
+               "  </div>"
+               "  <div class=\"nav-spacer\"></div>"
+               "  <div class=\"auth-slot\"></div>"
+               "  <div class=\"transport-controls\">"
                "    <button id=\"play-btn\" class=\"play-btn\">&#9654; play</button>"
                "    <div id=\"playing-dot\" class=\"playing-dot\"></div>"
                "  </div>"
                "</header>"
-               "<div class=\"main-area\">"
-               "  <div id=\"editor-container\" class=\"editor-container\"></div>"
+               "<div class=\"main-area app-shell\">"
+               "  <div class=\"workbench\">"
+               "    <div id=\"editor-container\" class=\"editor-container\"></div>"
+               "    <div id=\"snippet-panel\" class=\"snippet-panel hidden\"></div>"
+               "    <div id=\"cmd-bar\" class=\"cmd-bar console-panel\">"
+               "      <div class=\"console-history\">"
+               "        <div class=\"console-line console-line-out\">"
+               "          <span class=\"console-prefix\">=&gt;</span>"
+               "          <span id=\"output\" class=\"output\">ready &mdash; Alt+Enter or click play</span>"
+               "        </div>"
+               "      </div>"
+               "      <div class=\"console-input-row\">"
+               "        <span class=\"cmd-prompt\">&gt;</span>"
+               "        <div id=\"cmd-container\" class=\"cmd-container\"></div>"
+               "      </div>"
+               "    </div>"
+               "    <div id=\"track-panel\" class=\"track-panel\"></div>"
+               "    <div id=\"plugin-panel\" class=\"plugin-panel hidden\"></div>"
+               "    <footer class=\"status-bar\">"
+               "      <span class=\"status-spacer\"></span>"
+               "      <span class=\"hint\">Alt+Enter to eval</span>"
+               "    </footer>"
+               "  </div>"
                "  <div id=\"context-panel\" class=\"context-panel\"></div>"
                "</div>"
-               "<div id=\"cmd-bar\" class=\"cmd-bar\">"
-               "  <span class=\"cmd-prompt\">&gt;</span>"
-               "  <div id=\"cmd-container\" class=\"cmd-container\"></div>"
-               "</div>"
-               "<div id=\"track-panel\" class=\"track-panel\"></div>"
-               "<div id=\"snippet-panel\" class=\"snippet-panel hidden\"></div>"
-               "<div id=\"plugin-panel\" class=\"plugin-panel hidden\"></div>"
-               "<footer>"
-               "  <span id=\"output\" class=\"output\">ready &mdash; Alt+Enter or click play</span>"
-               "  <span class=\"hint\">Alt+Enter to eval</span>"
-               "</footer>")))
+               )))
   (.addEventListener (el "play-btn")           "click" on-play-btn-click)
   (.addEventListener (el "tap-btn")            "click" (fn [] (eo/evaluate! "(tap!)")))
   (.addEventListener (el "share-btn")          "click" share!)
@@ -439,6 +462,7 @@
   (add-watch midi/cc-mappings                ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))
 
   (ctx-panel/render-context-panel!)
+  (timeline/render-track-panel!)
   (timeline/start-playhead-raf!))
 
 (defn reload []
