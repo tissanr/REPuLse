@@ -452,8 +452,8 @@ const DOCS = {
   // --- Session ---
   "help-export": {
     signature: "(help-export)",
-    description: "Return the live session state as a plain JS object suitable for pasting into an AI prompt. Fields: bpm, tracks (name→true map), muted (array), fx (array of {name, params, bypassed}), bank, sources. Editor code is intentionally omitted.",
-    example: "(help-export)",
+    description: "Return the live session state as a map. Access fields with (:bpm (help-export)), (:tracks (help-export)), etc. Fields: :bpm, :tracks (name→true), :muted (vector), :fx (vector of {:name :params :bypassed}), :bank, :sources. Editor code is intentionally omitted.",
+    example: "(:tracks (help-export))",
   },
 };
 

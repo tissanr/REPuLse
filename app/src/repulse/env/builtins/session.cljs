@@ -33,9 +33,9 @@
            sources     (mapv (fn [{:keys [type id]}]
                                {:type (cljs.core/name type) :id id})
                              (filter #(= :github (:type %)) @samples/loaded-sources))]
-       (clj->js {:bpm     bpm
-                 :tracks  track-names
-                 :muted   muted-names
-                 :fx      fx-list
-                 :bank    bank
-                 :sources sources})))})
+       {:bpm     bpm
+        :tracks  track-names
+        :muted   muted-names
+        :fx      fx-list
+        :bank    bank
+        :sources sources})))})

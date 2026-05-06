@@ -2518,8 +2518,8 @@
       "tracks",
       "bpm"
     ],
-    "detail": "(help-export) — return live session state as JSON: bpm, tracks, muted, fx, bank, sources",
-    "description": "Return the live session state as a plain JS object suitable for pasting into an AI prompt. Fields: bpm, tracks (name→true map), muted (array), fx (array of {name, params, bypassed}), bank, sources. Editor code is intentionally omitted."
+    "detail": "(help-export) — return live session as a map; access with (:bpm (help-export)), (:tracks (help-export)), etc.",
+    "description": "Return the live session state as a map. Access fields with (:bpm (help-export)), (:tracks (help-export)), etc. Fields: :bpm, :tracks (name→true), :muted (vector), :fx (vector of {:name :params :bypassed}), :bank, :sources. Editor code is intentionally omitted."
   },
   "samples!": {
     "category": "sample",

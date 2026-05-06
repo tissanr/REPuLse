@@ -191,7 +191,7 @@ export const BUILTINS = [
   { label: "quote",        type: "keyword",  detail: "(quote form) or 'form — prevent evaluation of form" },
   { label: "quasiquote",   type: "keyword",  detail: "(quasiquote form) or `form — template with ~unquote and ~@splice; used in defmacro" },
   // --- Session ---
-  { label: "help-export",  type: "function", detail: "(help-export) — return live session state as JSON: bpm, tracks, muted, fx, bank, sources" },
+  { label: "help-export",  type: "function", detail: "(help-export) — return live session as a map; access with (:bpm (help-export)), (:tracks (help-export)), etc." },
 ];
 
 export const builtinCompletions = completeFromList(BUILTINS);
