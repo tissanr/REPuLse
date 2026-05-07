@@ -82,7 +82,7 @@
 (defn- render-settings! []
   (when-let [panel (el "ai-panel")]
     (set! (.-innerHTML panel)
-          (str "<div class=\"ai-settings\">"
+          (str "<form class=\"ai-settings\" onsubmit=\"return false\">"
                "<h3 class=\"ai-settings-title\">AI Settings</h3>"
                "<label class=\"ai-label\">Provider"
                "  <select id=\"ai-provider-sel\" class=\"ai-select\">"
@@ -110,10 +110,10 @@
                "> Share editor code with AI"
                "</label>"
                "<div class=\"ai-settings-btns\">"
-               "<button id=\"ai-settings-save-btn\" class=\"ai-btn\">Save</button>"
-               "<button id=\"ai-settings-back-btn\" class=\"ai-btn ai-btn--secondary\">Back</button>"
+               "<button id=\"ai-settings-save-btn\" class=\"ai-btn\" type=\"button\">Save</button>"
+               "<button id=\"ai-settings-back-btn\" class=\"ai-btn ai-btn--secondary\" type=\"button\">Back</button>"
                "</div>"
-               "</div>"))))
+               "</form>"))))
 
 ;; ── Main panel render ─────────────────────────────────────────────────────────
 
@@ -241,31 +241,45 @@
     ;; Click delegation
     (.addEventListener panel "click"
       (fn [^js e]
-        (let [t (.-target e)]
-          (condp = (.-id t)
-            "ai-enable-btn"        (do (reset! settings/enabled? true) (render-panel!))
-            "ai-settings-btn"      (render-settings!)
-            "ai-clear-btn"         (do (reset! messages [])
-                                       (save-history! [])
-                                       (render-panel!))
-            "ai-send-btn"          (when-let [inp (el "ai-input")]
-                                     (let [txt (.-value inp)]
-                                       (set! (.-value inp) "")
-                                       (send! txt)))
-            "ai-settings-save-btn" (do
-                                     (when-let [sel (el "ai-provider-sel")]
-                                       (reset! settings/provider (.-value sel)))
-                                     (when-let [ki (el "ai-key-input")]
-                                       (reset! settings/api-key (.-value ki)))
-                                     (when-let [mi (el "ai-model-input")]
-                                       (reset! settings/model-override (.-value mi)))
-                                     (when-let [cb (el "ai-include-code-cb")]
-                                       (reset! settings/include-code? (.-checked cb)))
-                                     (render-panel!))
-            "ai-settings-back-btn" (render-panel!)
-            ;; "↓ insert" button on code blocks — matched by class
-            nil (when (.contains (.-classList t) "ai-insert-btn")
-                  (insert-code! (.getAttribute t "data-code"))))))
+        (let [t  (.-target e)
+              id (.-id t)]
+          (cond
+            (= id "ai-enable-btn")
+            (do (reset! settings/enabled? true) (render-panel!))
+
+            (= id "ai-settings-btn")
+            (render-settings!)
+
+            (= id "ai-clear-btn")
+            (do (reset! messages []) (save-history! []) (render-panel!))
+
+            (= id "ai-send-btn")
+            (when-let [inp (el "ai-input")]
+              (let [txt (.-value inp)]
+                (set! (.-value inp) "")
+                (send! txt)))
+
+            (= id "ai-settings-save-btn")
+            (do
+              (when-let [sel (el "ai-provider-sel")]
+                (reset! settings/provider (.-value sel)))
+              (when-let [ki (el "ai-key-input")]
+                (reset! settings/api-key (.-value ki)))
+              (when-let [mi (el "ai-model-input")]
+                (reset! settings/model-override (.-value mi)))
+              (when-let [cb (el "ai-include-code-cb")]
+                (reset! settings/include-code? (.-checked cb)))
+              (render-panel!))
+
+            (= id "ai-settings-back-btn")
+            (render-panel!)
+
+            ;; ↓ insert button on code blocks — matched by class, any other id
+            (.contains (.-classList t) "ai-insert-btn")
+            (insert-code! (.getAttribute t "data-code"))
+
+            ;; All other clicks (ai-messages, ai-input, etc.) — ignore
+            :else nil)))
       false)
 
     ;; Cmd/Ctrl+Enter in the textarea sends the message
