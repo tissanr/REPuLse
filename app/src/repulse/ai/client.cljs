@@ -81,17 +81,24 @@
    system   — system prompt string
    messages — vector of {:role :content} chat turns (no system role)
    callbacks — {:on-chunk f, :on-done f, :on-error f}
-   Returns an AbortController."
+   Returns an AbortController.
+
+   Requests are routed through /api/ai-stream (a thin server-side proxy) to
+   avoid CORS rejections from AI provider APIs when called from the browser."
   [system messages {:keys [on-chunk on-done on-error]}]
   (let [abort-ctrl (js/AbortController.)
         {:keys [url headers body]} (make-request system messages)
         provider   @settings/provider
-        line-buf   (atom "")]
+        line-buf   (atom "")
+        proxy-body (js/JSON.stringify #js {:url     url
+                                           :headers (clj->js headers)
+                                           :body    body})]
     (->
-      (js/fetch url #js {:method  "POST"
-                         :headers (clj->js headers)
-                         :body    body
-                         :signal  (.-signal abort-ctrl)})
+      (js/fetch "/api/ai-stream"
+                #js {:method  "POST"
+                     :headers #js {"content-type" "application/json"}
+                     :body    proxy-body
+                     :signal  (.-signal abort-ctrl)})
       (.then
         (fn [resp]
           (if (.-ok resp)
