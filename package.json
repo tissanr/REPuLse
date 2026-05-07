@@ -18,6 +18,8 @@
     "test:e2e": "playwright test",
     "test:all": "./scripts/test-all.sh",
     "gen:grammar": "lezer-generator app/src/repulse/lisp-lang/repulse-lisp.grammar -o app/src/repulse/lisp-lang/parser.js",
+    "gen:ai-docs": "node scripts/gen_ai_docs.mjs",
+    "check:ai-docs": "node scripts/gen_ai_docs.mjs && git diff --exit-code docs/ai/builtins.json",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

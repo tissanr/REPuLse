@@ -308,8 +308,10 @@
                 (eval-form expanded env))
             ;; Normal function call
               (let [f   (eval-form head env)
-                    src (source-of head)]
-                (if (fn? f)
+                    src (source-of head)
+                    raw (unwrap f)]
+                (cond
+                  (fn? f)
                   (try
                     (apply f (map #(eval-form % env) tail))
                     (catch :default e
@@ -321,6 +323,13 @@
                                    {:from (:from src) :to (:to src)})]
                         (throw (ex-info (.-message e)
                                         (merge {:type :eval-error} loc))))))
+                  ;; Keywords as lookup functions: (:key m) -> (get m :key [default])
+                  (keyword? raw)
+                  (let [[m & more] (map #(unwrap (eval-form % env)) tail)]
+                    (if (seq more)
+                      (get m raw (first more))
+                      (get m raw)))
+                  :else
                   (throw (ex-info (str (pr-str head) " is not a function")
                                   {:type :eval-error :from (:from src) :to (:to src)})))))))))
 
