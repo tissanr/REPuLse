@@ -39,7 +39,7 @@ Map    { OpenBrace expr* CloseBrace }
     "def" | "defn" | "let" | "fn" | "lambda" | "if" | "do" |
     "defmacro" | "defsynth" | "loop" | "recur" | "quasiquote" |
     "bpm" | "stop" | "fx" | "load-plugin" | "unload-plugin" | "arrange" | "play-scenes" | "sound" |
-    "distort" | "amp-sim" | "waveshape" |
+    "distort" | "amp-sim" | "waveshape" | "cab" |
     "chebyshev" | "fold" | "bitcrush" |
     "get" | "assoc" | "merge" | "not" | "and" | "or" | "comp" |
     "track" | "mute!" | "unmute!" | "solo!" | "clear!" | "tracks" | "tap!" | "midi-sync!" |

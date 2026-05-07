@@ -440,7 +440,8 @@
                "/plugins/sidechain.js"
                "/plugins/distort.js"
                "/plugins/amp-sim.js"
-               "/plugins/waveshape.js"]]
+               "/plugins/waveshape.js"
+               "/plugins/cab.js"]]
     (when-not (contains? @loaded-plugins url)
       (-> (plugin-loading/dynamic-import! url)
           (.then (fn [m]

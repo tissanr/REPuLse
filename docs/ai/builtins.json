@@ -796,7 +796,8 @@
     "see-also": [
       "track",
       "distort",
-      "amp-sim"
+      "amp-sim",
+      "cab"
     ],
     "detail": "(fx :name param) — global effect; inside ->>: (fx :name param pat) — per-track effect on this track only",
     "description": "Global: sets a master-chain effect parameter. Per-track: use inside ->> to route a track through its own effect chain — re-evaluating play without (fx ...) removes the effect automatically. Use (fx :off :name) / (fx :on :name) to bypass/restore global effects."
@@ -905,6 +906,7 @@
     "see-also": [
       "amp-sim",
       "waveshape",
+      "cab",
       "fx"
     ],
     "detail": "effect — soft/asymmetric clipping distortion",
@@ -924,6 +926,7 @@
     "see-also": [
       "distort",
       "waveshape",
+      "cab",
       "fx"
     ],
     "detail": "effect — multi-stage amp simulation",
@@ -944,10 +947,32 @@
       "chebyshev",
       "fold",
       "bitcrush",
+      "cab",
       "fx"
     ],
     "detail": "effect — arbitrary waveshaper LUT",
     "description": "Arbitrary waveshaper distortion via a user-defined transfer function. :curve accepts a Float32Array, a vector of floats, or a generator function. :drive sets pre-shaper gain from 1.0–20.0 (default 1.0). :tone sets the post-shaper lowpass cutoff (default 20000)."
+  },
+  "cab": {
+    "category": "effect",
+    "signature": "(fx :cab [:ir kw] [:mix N])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(fx :cab :ir :2x12)",
+      "(->> (seq :e2 :_ :e2 :g2) (synth :saw) (fx :amp-sim :gain 30 :stages 3) (fx :cab :ir :4x12))",
+      "(->> (seq :c2 :e2) (synth :saw) (fx :distort :drive 8) (fx :cab :ir :di))"
+    ],
+    "see-also": [
+      "amp-sim",
+      "distort",
+      "waveshape",
+      "fx"
+    ],
+    "detail": "effect — speaker cabinet simulation",
+    "description": "Speaker cabinet impulse response convolution. :ir chooses :1x12, :2x12, :4x12, or :di (dry passthrough). :mix blends dry/wet from 0.0–1.0. Pairs well with (fx :amp-sim ...) or (fx :distort ...)."
   },
   "chebyshev": {
     "category": "effect",

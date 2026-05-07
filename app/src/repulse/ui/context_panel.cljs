@@ -81,6 +81,7 @@
                       "sag"      {:min 0   :max 1     :step 0.01}
                       "mix"      {:min 0   :max 1     :step 0.01}
                       "oversample" {:values [1 2 4]}}
+   "cab"             {"mix"      {:min 0   :max 1     :step 0.01}}
    "bitcrusher"      {"wet"       {:min 0    :max 1   :step 0.01}}
    "sidechain"       {"amount"    {:min 0    :max 1   :step 0.01}}
    "compressor"      {"wet"       {:min 0    :max 1   :step 0.01}
@@ -92,7 +93,8 @@
 
 ;; FX select config: {effect-name {param-name [option-name ...]}}
 (def FX-SELECT-PARAMS
-  {"amp-sim" {"tonestack" ["neutral" "bright" "dark" "mid-scoop" "mid-hump"]}})
+  {"amp-sim" {"tonestack" ["neutral" "bright" "dark" "mid-scoop" "mid-hump"]}
+   "cab" {"ir" ["1x12" "2x12" "4x12" "di"]}})
 
 ;; Which getParams key corresponds to the positional (fx :name NUMBER) form
 (def FX-PRIMARY-PARAM
@@ -106,6 +108,7 @@
    "overdrive"       "drive"
    "distort"         "drive"
    "amp-sim"         "gain"
+   "cab"             "mix"
    "bitcrusher"      "wet"
    "sidechain"       "amount"
    "compressor"      "wet"})

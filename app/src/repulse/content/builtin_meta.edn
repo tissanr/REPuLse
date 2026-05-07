@@ -441,28 +441,36 @@
               :examples ["(fx :reverb 0.4)"
                          "(fx :delay :wet 0.3 :time 0.25)"
                          "(->> (seq :bd :_ :bd :_) (fx :filter 1000))"]
-              :see-also ["track" "distort" "amp-sim"]}
+              :see-also ["track" "distort" "amp-sim" "cab"]}
 
  :distort    {:category "effect"
               :returns "nil"
               :side-effects ["audio"]
               :examples ["(fx :distort :drive 25)"
                          "(->> (seq :c2 :g2) (synth :saw) (fx :distort :drive 20 :oversample 4))"]
-              :see-also ["amp-sim" "waveshape" "fx"]}
+              :see-also ["amp-sim" "waveshape" "cab" "fx"]}
 
  :amp-sim    {:category "effect"
               :returns "nil"
               :side-effects ["audio"]
               :examples ["(fx :amp-sim :gain 40)"
                          "(->> (seq :e2 :_ :e2 :g2) (synth :saw) (fx :amp-sim :gain 40 :stages 2))"]
-              :see-also ["distort" "waveshape" "fx"]}
+              :see-also ["distort" "waveshape" "cab" "fx"]}
 
  :waveshape  {:category "effect"
               :returns "nil"
               :side-effects ["audio"]
               :examples ["(fx :waveshape :curve (chebyshev 3) :drive 2)"
                          "(fx :waveshape :curve (fold) :drive 8)"]
-              :see-also ["chebyshev" "fold" "bitcrush" "fx"]}
+              :see-also ["chebyshev" "fold" "bitcrush" "cab" "fx"]}
+
+ :cab        {:category "effect"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(fx :cab :ir :2x12)"
+                         "(->> (seq :e2 :_ :e2 :g2) (synth :saw) (fx :amp-sim :gain 30 :stages 3) (fx :cab :ir :4x12))"
+                         "(->> (seq :c2 :e2) (synth :saw) (fx :distort :drive 8) (fx :cab :ir :di))"]
+              :see-also ["amp-sim" "distort" "waveshape" "fx"]}
 
  :chebyshev  {:category "effect"
               :returns "Float32Array"

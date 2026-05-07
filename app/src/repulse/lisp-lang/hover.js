@@ -326,6 +326,11 @@ const DOCS = {
     description: "Arbitrary waveshaper distortion via a user-defined transfer function. :curve accepts a Float32Array, a vector of floats, or a generator function. :drive sets pre-shaper gain from 1.0–20.0 (default 1.0). :tone sets the post-shaper lowpass cutoff (default 20000).",
     example: "(fx :waveshape :curve (chebyshev 3) :drive 2)",
   },
+  "cab": {
+    signature: "(fx :cab [:ir kw] [:mix N])",
+    description: "Speaker cabinet impulse response convolution. :ir chooses :1x12, :2x12, :4x12, or :di (dry passthrough). :mix blends dry/wet from 0.0–1.0. Pairs well with (fx :amp-sim ...) or (fx :distort ...).",
+    example: "(->> (seq :e2 :_ :e2 :g2) (synth :saw) (fx :amp-sim :gain 30 :stages 3 :tonestack :mid-scoop) (fx :cab :ir :4x12))",
+  },
   "chebyshev": {
     signature: "(chebyshev N)",
     description: "Generate a Chebyshev polynomial curve of order N (1–8) for use with (fx :waveshape). Order N adds primarily the Nth harmonic. Use as a :curve value.",

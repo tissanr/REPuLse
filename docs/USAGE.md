@@ -1640,7 +1640,7 @@ Write BPM inline with a `bpm` suffix — the reader evaluates it as `(bpm N)`:
 ## Effect plugins
 
 REPuLse has a built-in effect chain between the synthesis engine and the audio output.
-Eleven effects are loaded automatically at startup, all silent/inactive by default.
+Fifteen effects are loaded automatically at startup, all silent/inactive by default.
 Control them with the `fx` built-in.
 
 ### `fx` — effect control
@@ -1682,6 +1682,13 @@ Route a track through its own private effect chain by placing `fx` inside the `-
   (->> (seq :c2 :_ :eb2 :_)
        (fx :filter 600)
        (fx :distort :drive 6 :asym 0.4 :tone 1800)))
+
+;; Full amp chain on one track
+(track :guitar
+  (->> (seq :e2 :_ :e2 :g2)
+       (synth :saw)
+       (fx :amp-sim :gain 30 :stages 3 :tonestack :mid-scoop)
+       (fx :cab :ir :4x12)))
 
 ;; Named params work the same as global fx
 (track :snare
@@ -1919,6 +1926,49 @@ Uses the Web Audio `WaveShaperNode`.
      (fx :waveshape :curve [-1.0 -0.5 0 0.8 1.0] :drive 2))
 ```
 
+#### `cab` — speaker cabinet simulation
+
+Convolution-based speaker cabinet coloration using short procedurally generated impulse
+responses. Use it after `amp-sim`, `distort`, or `waveshape` to roll off harsh highs and
+add cabinet resonance.
+
+| Parameter | Key | Default | Description |
+|-----------|-----|---------|-------------|
+| IR        | `ir` | `:1x12` | `:1x12` tight/clear, `:2x12` balanced, `:4x12` heavy/dark, `:di` dry passthrough |
+| Mix       | `mix` / positional | `1.0` once activated | Dry/wet blend (0–1) |
+
+```lisp
+;; Classic amp + cab chain
+(->> (seq :e2 :_ :e2 :g2)
+     (synth :saw)
+     (fx :amp-sim :gain 12 :stages 3 :tonestack :bright)
+     (fx :cab :ir :2x12))
+
+;; Heavy metal
+(->> (seq :c1 :_ :c1 :_ :c1 :_)
+     (synth :square)
+     (fx :amp-sim :gain 80 :stages 4 :tonestack :mid-scoop)
+     (fx :cab :ir :4x12))
+
+;; A/B: cab vs. no cab
+(def no-cab
+  (->> (seq :c2 :e2 :g2)
+       (synth :saw)
+       (fx :distort :drive 10)))
+
+(def with-cab
+  (->> (seq :c2 :e2 :g2)
+       (synth :saw)
+       (fx :distort :drive 10)
+       (fx :cab :ir :1x12)))
+
+;; Direct signal passthrough for A/B comparison
+(->> (seq :c2 :e2)
+     (synth :saw)
+     (fx :distort :drive 8)
+     (fx :cab :ir :di))
+```
+
 #### `bitcrusher` — lo-fi bit/sample-rate reduction
 
 Reduces bit depth and sample rate for crunchy, glitchy textures. Uses an AudioWorklet.
@@ -1973,11 +2023,13 @@ so the duck is perfectly in time regardless of BPM, with zero look-ahead latency
 
 The default signal chain is:
 ```
-synthesis → reverb → delay → filter → compressor → dattorro-reverb
-         → chorus → phaser → tremolo → overdrive → distort → amp-sim → waveshape → bitcrusher → sidechain → output
+synthesis → compressor → reverb → delay → filter → dattorro-reverb
+         → chorus → phaser → tremolo → overdrive → bitcrusher → sidechain
+         → distort → amp-sim → waveshape → cab → output
 ```
 
-`sidechain` sits at the end of the chain so it ducks the fully-processed signal.
+`cab` sits after the distortion-family effects so amp chains can finish with speaker
+coloration.
 
 Use `(fx :remove :name)` to take an effect out of the chain entirely.
 Use `(fx :off :name)` / `(fx :on :name)` for transparent bypass without removing.
