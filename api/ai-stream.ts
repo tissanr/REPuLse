@@ -114,21 +114,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.end(errText);
   }
 
-  if (!upstream.body) {
-    return res.end();
+  // Collect the full SSE body and send in one shot.
+  // Vercel Node.js serverless functions buffer res.write() calls and don't
+  // flush until the function returns, so true streaming isn't possible here.
+  // The client-side line-splitting logic handles receiving all SSE events at
+  // once, so this is functionally equivalent for our use case.
+  let fullBody: Buffer;
+  try {
+    const ab = await upstream.arrayBuffer();
+    fullBody = Buffer.from(ab);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return res.status(502).json({ error: `Stream read error: ${msg}` });
   }
 
-  // Stream SSE chunks straight through
-  const reader = upstream.body.getReader();
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      res.write(Buffer.from(value));
-    }
-  } catch {
-    // Client disconnected or upstream error — end cleanly
-  } finally {
-    res.end();
-  }
+  res.send(fullBody);
 }
