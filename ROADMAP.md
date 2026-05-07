@@ -804,10 +804,17 @@ See full spec: [PROMPTS/PHASE-DST5.md](PROMPTS/PHASE-DST5.md)
 
 ---
 
-## Phase DST6 — Cabinet Simulation 📋 *planned*
+## Phase DST6 — Cabinet Simulation ✅ *delivered*
 
 New `(fx :cab :ir :4x12)` effect — convolution-based speaker cabinet simulation using
 Web Audio `ConvolverNode` with procedurally generated impulse responses.
+
+**Delivered:**
+- `app/public/plugins/cab.js` — Web Audio `ConvolverNode` cabinet simulation
+- Procedural stereo impulse responses for `:1x12`, `:2x12`, and `:4x12`
+- `:di` dry passthrough mode for A/B comparison
+- `:mix` dry/wet blend and context-panel controls
+- Syntax highlighting, completions, insertion helper, hover docs, README, and usage docs updated
 
 **Key additions:**
 - `:ir` — `:1x12`, `:2x12`, `:4x12` (synthetic cabinet IRs), `:di` (bypass)

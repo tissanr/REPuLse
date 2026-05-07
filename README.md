@@ -32,7 +32,7 @@ REPuLse is a **pattern-based** live coding instrument. Patterns describe **what*
 - Sound sources: sample keywords (`:bd`, `:sd`), note keywords (`:c4`), Hz numbers (`440`), or `(synth :saw)` / `(synth :fm :index 4)`
 - Timing/structure: `seq`, `stack`, `fast`, `slow`, `every`, `cat`, `euclidean`
 - Parameters: `amp`, `decay`, `attack`, `pan`, `synth` — applied via `->>` (thread-last)
-- Effects: `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)` — not inline filter graphs
+- Effects: `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`, `(fx :cab :ir :4x12)` — not inline filter graphs
 - The only signal-flow construct is `defsynth`, which defines reusable instruments from UGen primitives — this is a separate layer from pattern code
 
 ### Quick example
@@ -145,6 +145,7 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(fx :delay :wet 0.4 :time 0.25)` | Tape delay with feedback |
 | `(fx :filter 800)` | Lowpass filter cutoff in Hz |
 | `(fx :compressor :threshold -18)` | Dynamics compressor |
+| `(fx :cab :ir :4x12)` | Speaker cabinet simulation |
 | `(fx :off :reverb)` | Bypass an effect (transparent) |
 | `(fx :on :reverb)` | Re-enable a bypassed effect |
 | `(track :name pattern)` | Define or replace a named track — use in the editor buffer |
@@ -307,7 +308,8 @@ repulse/
 │       │   ├── reverb.js            # Convolution reverb effect
 │       │   ├── delay.js             # Tape delay effect
 │       │   ├── filter.js            # Biquad filter effect
-│       │   └── dattorro-reverb.js   # Dattorro plate reverb (AudioWorklet)
+│       │   ├── dattorro-reverb.js   # Dattorro plate reverb (AudioWorklet)
+│       │   └── cab.js               # Speaker cabinet convolution effect
 │       ├── worklets/
 │       │   └── dattorro-reverb-processor.js  # AudioWorkletProcessor
 │       └── …            # Static assets + compiled JS output

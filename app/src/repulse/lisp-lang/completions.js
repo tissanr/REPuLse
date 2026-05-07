@@ -70,6 +70,7 @@ export const BUILTINS = [
   { label: "distort",     type: "keyword",  detail: "effect — soft/asymmetric clipping distortion" },
   { label: "amp-sim",      type: "keyword",  detail: "effect — multi-stage amp simulation" },
   { label: "waveshape",    type: "keyword",  detail: "effect — arbitrary waveshaper LUT" },
+  { label: "cab",          type: "keyword",  detail: "effect — speaker cabinet simulation" },
   { label: "chebyshev",    type: "function", detail: "curve — Chebyshev polynomial (order 1–8)" },
   { label: "fold",         type: "function", detail: "curve — wavefolder transfer function" },
   { label: "bitcrush",     type: "function", detail: "curve — bitcrusher staircase (bits 1–16)" },
