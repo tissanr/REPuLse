@@ -2381,12 +2381,15 @@ footer {
   color: #e2a;
   margin: 0;
 }
-.ai-label {
+.ai-field {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.ai-label {
   font-size: 0.75rem;
   color: var(--dim);
+  font-weight: bold;
 }
 .ai-key-hint {
   font-size: 0.68rem;

@@ -82,9 +82,12 @@
 (defn- render-settings! []
   (when-let [panel (el "ai-panel")]
     (set! (.-innerHTML panel)
-          (str "<form class=\"ai-settings\" onsubmit=\"return false\">"
+          (str "<form class=\"ai-settings\" onsubmit=\"return false\" autocomplete=\"off\">"
                "<h3 class=\"ai-settings-title\">AI Settings</h3>"
-               "<label class=\"ai-label\">Provider"
+               ;; Each field uses explicit for= on <label> + matching id on control.
+               ;; Hint text is a <span> OUTSIDE the <label> to avoid association issues.
+               "<div class=\"ai-field\">"
+               "  <label for=\"ai-provider-sel\" class=\"ai-label\">Provider</label>"
                "  <select id=\"ai-provider-sel\" class=\"ai-select\">"
                (str/join ""
                  (map (fn [p]
@@ -93,22 +96,28 @@
                              ">" p "</option>"))
                       ["anthropic" "openai" "google" "groq" "xai"]))
                "  </select>"
-               "</label>"
-               "<label class=\"ai-label\">API key"
-               "  <span class=\"ai-key-hint\">(stored locally only — never sent to REPuLse servers)</span>"
+               "</div>"
+               "<div class=\"ai-field\">"
+               "  <label for=\"ai-key-input\" class=\"ai-label\">API key</label>"
+               "  <span class=\"ai-key-hint\">Stored in localStorage only — never sent to REPuLse servers</span>"
                "  <input id=\"ai-key-input\" class=\"ai-input-text\" type=\"password\""
-               "  value=\"" (escape-html @settings/api-key) "\">"
-               "</label>"
-               "<label class=\"ai-label\">Model override"
-               "  <span class=\"ai-key-hint\">(leave blank for default)</span>"
+               "   autocomplete=\"new-password\""
+               "   value=\"" (escape-html @settings/api-key) "\">"
+               "</div>"
+               "<div class=\"ai-field\">"
+               "  <label for=\"ai-model-input\" class=\"ai-label\">Model override</label>"
+               "  <span class=\"ai-key-hint\">Leave blank for provider default</span>"
                "  <input id=\"ai-model-input\" class=\"ai-input-text\" type=\"text\""
-               "  value=\"" (escape-html @settings/model-override) "\">"
-               "</label>"
-               "<label class=\"ai-checkbox-label\">"
-               "  <input id=\"ai-include-code-cb\" type=\"checkbox\""
+               "   autocomplete=\"off\""
+               "   value=\"" (escape-html @settings/model-override) "\">"
+               "</div>"
+               "<div class=\"ai-field\">"
+               "  <label class=\"ai-checkbox-label\">"
+               "    <input id=\"ai-include-code-cb\" type=\"checkbox\""
                (when @settings/include-code? " checked")
                "> Share editor code with AI"
-               "</label>"
+               "  </label>"
+               "</div>"
                "<div class=\"ai-settings-btns\">"
                "<button id=\"ai-settings-save-btn\" class=\"ai-btn\" type=\"button\">Save</button>"
                "<button id=\"ai-settings-back-btn\" class=\"ai-btn ai-btn--secondary\" type=\"button\">Back</button>"
@@ -199,7 +208,11 @@
 
              :on-done
              (fn [_]
-               (let [final-msgs (conj @messages {:role "assistant" :content @result})]
+               ;; Guard: if result is empty the model returned no text — show a notice
+               ;; instead of appending an invisible empty message.
+               (let [content    (if (seq @result) @result
+                                  "(No text content received. The model may have returned an empty response.)")
+                     final-msgs (conj @messages {:role "assistant" :content content})]
                  (reset! messages final-msgs)
                  (save-history! final-msgs)
                  (reset! pending false)
