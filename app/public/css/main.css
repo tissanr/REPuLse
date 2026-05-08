@@ -2251,6 +2251,23 @@ footer {
 }
 .ai-icon-btn:hover { color: var(--text); }
 
+.ai-clear-btn {
+  background: transparent;
+  border: 1px solid #e2a;
+  color: #e2a;
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 7px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+.ai-clear-btn:hover {
+  background: rgba(238, 34, 170, 0.12);
+  color: var(--text);
+}
+
 .ai-messages {
   flex: 1;
   overflow-y: auto;

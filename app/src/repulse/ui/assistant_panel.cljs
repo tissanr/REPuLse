@@ -24,6 +24,11 @@
               (js/JSON.stringify (clj->js (take-last 40 msgs))))
     (catch :default _ nil)))
 
+(defn- clear-history! []
+  (try
+    (.removeItem js/localStorage "repulse:ai:history")
+    (catch :default _ nil)))
+
 ;; ── State ─────────────────────────────────────────────────────────────────────
 
 (defonce visible?         (atom false))
@@ -142,8 +147,8 @@
                    "<span class=\"ai-provider-badge\">"
                    (escape-html @settings/provider) " &middot; " (escape-html (settings/effective-model))
                    "</span>"
-                   "<button id=\"ai-settings-btn\" class=\"ai-icon-btn\" title=\"AI settings\">&#9881;</button>"
-                   "<button id=\"ai-clear-btn\" class=\"ai-icon-btn\" title=\"Clear chat\">&#10005;</button>"
+                   "<button id=\"ai-settings-btn\" class=\"ai-icon-btn\" title=\"AI settings\" aria-label=\"AI settings\">&#9881;</button>"
+                   "<button id=\"ai-clear-btn\" class=\"ai-clear-btn\" type=\"button\" title=\"Clear chat\" aria-label=\"Clear chat\">clear</button>"
                    "</div>"
                    "<div id=\"ai-messages\" class=\"ai-messages\">"
                    (str/join "" (map render-message @messages))
@@ -264,7 +269,7 @@
             (render-settings!)
 
             (= id "ai-clear-btn")
-            (do (reset! messages []) (save-history! []) (render-panel!))
+            (do (reset! messages []) (clear-history!) (render-panel!))
 
             (= id "ai-send-btn")
             (when-let [inp (el "ai-input")]
