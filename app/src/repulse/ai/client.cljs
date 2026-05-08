@@ -1,6 +1,7 @@
 (ns repulse.ai.client
   (:require [repulse.ai.settings :as settings]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [goog.object :as gobj]))
 
 ;; ── Request builders ──────────────────────────────────────────────────────────
 
@@ -57,22 +58,70 @@
       "google"    (google-request      system messages model key)
       (throw (ex-info "Unknown provider" {:provider provider})))))
 
-;; ── SSE delta parser ──────────────────────────────────────────────────────────
+;; ── Response parsers ─────────────────────────────────────────────────────────
 
-(defn- parse-delta [provider line]
+(defn- first-item [xs]
+  (when (and xs (pos? (.-length xs)))
+    (aget xs 0)))
+
+(defn- jget [obj k]
+  (when obj
+    (gobj/get obj k)))
+
+(defn- error-message [obj]
+  (some-> (jget obj "error") (jget "message")))
+
+(defn- text-from-json [provider obj]
+  (case provider
+    "anthropic" (or (when (= "content_block_delta" (jget obj "type"))
+                      (some-> (jget obj "delta") (jget "text")))
+                    (some-> (jget obj "content_block") (jget "text"))
+                    (some-> (jget obj "content") first-item (jget "text")))
+    ("openai" "groq" "xai") (let [choice (some-> (jget obj "choices") first-item)]
+                               (or (some-> choice (jget "delta") (jget "content"))
+                                   (some-> choice (jget "message") (jget "content"))
+                                   (some-> choice (jget "text"))))
+    "google" (some-> (jget obj "candidates") first-item (jget "content") (jget "parts")
+                     first-item (jget "text"))
+    nil))
+
+(defn- parse-json [s]
   (try
-    (when (str/starts-with? line "data: ")
-      (let [json-str (str/trim (subs line 6))]
-        (when-not (= "[DONE]" json-str)
-          (let [obj (js/JSON.parse json-str)]
-            (case provider
-              "anthropic"        (when (= "content_block_delta" (.-type obj))
-                                   (some-> (.-delta obj) (.-text)))
-              ("openai" "groq" "xai") (some-> (.. obj -choices (aget 0) -delta -content))
-              "google"           (some-> (.. obj -candidates (aget 0) -content -parts
-                                            (aget 0) -text))
-              nil)))))
+    (js/JSON.parse s)
     (catch :default _ nil)))
+
+(defn- parse-sse-event [provider line]
+  (try
+    ;; SSE permits both "data:<payload>" and "data: <payload>".
+    (when (str/starts-with? line "data:")
+      (let [json-str (str/trim (subs line 5))]
+        (cond
+          (= "[DONE]" json-str)
+          {:type :done}
+
+          :else
+          (when-let [obj (parse-json json-str)]
+            (cond
+              (error-message obj)
+              {:type :error :message (error-message obj)}
+
+              (= "error" (jget obj "type"))
+              {:type :error
+               :message (or (some-> (jget obj "error") (jget "message"))
+                            (jget obj "message")
+                            "Provider returned a streaming error.")}
+
+              :else
+              (when-let [text (text-from-json provider obj)]
+                {:type :delta :text text}))))))
+    (catch :default _ nil)))
+
+(defn- parse-full-response [provider text]
+  (when-let [obj (parse-json (str/trim text))]
+    (cond
+      (error-message obj) {:type :error :message (error-message obj)}
+      :else (when-let [content (text-from-json provider obj)]
+              {:type :delta :text content}))))
 
 ;; ── Streaming fetch ───────────────────────────────────────────────────────────
 
@@ -90,6 +139,9 @@
         {:keys [url headers body]} (make-request system messages)
         provider   @settings/provider
         line-buf   (atom "")
+        raw-buf    (atom "")
+        got-text?  (atom false)
+        failed?    (atom false)
         proxy-body (js/JSON.stringify #js {:url     url
                                            :headers (clj->js headers)
                                            :body    body})]
@@ -105,14 +157,25 @@
             ;; Stream the response body
             (let [reader  (.getReader (.-body resp))
                   decoder (js/TextDecoder.)]
-              (letfn [(process-text [text]
+              (letfn [(handle-event [event]
+                        (case (:type event)
+                          :delta (do
+                                   (reset! got-text? true)
+                                   (on-chunk (:text event)))
+                          :error (do
+                                   (reset! failed? true)
+                                   (on-error (:message event)))
+                          :done nil
+                          nil))
+                      (process-text [text]
                         ;; Split on newlines, keeping a buffer for partial lines
+                        (swap! raw-buf str text)
                         (let [combined (str @line-buf text)
                               lines    (str/split combined #"\n")]
                           ;; All lines except the last are complete
                           (doseq [line (butlast lines)]
-                            (when-let [delta (parse-delta provider line)]
-                              (on-chunk delta)))
+                            (when-let [event (parse-sse-event provider line)]
+                              (handle-event event)))
                           ;; Last fragment may be incomplete
                           (reset! line-buf (last lines))))
                       (read-loop []
@@ -120,12 +183,20 @@
                             (.then (fn [result]
                                      (if (.-done result)
                                        (do
+                                         (let [tail (.decode decoder)]
+                                           (when (seq tail)
+                                             (process-text tail)))
                                          ;; Flush remaining buffer
-                                         (when-let [delta (parse-delta provider @line-buf)]
-                                           (on-chunk delta))
-                                         (on-done nil))
+                                         (when-let [event (parse-sse-event provider @line-buf)]
+                                           (handle-event event))
+                                         (when-not @got-text?
+                                           (when-let [event (parse-full-response provider @raw-buf)]
+                                             (handle-event event)))
+                                         (when-not @failed?
+                                           (on-done nil)))
                                        (do
-                                         (process-text (.decode decoder (.-value result)))
+                                         (process-text (.decode decoder (.-value result)
+                                                               #js {:stream true}))
                                          (read-loop)))))))]
                 (read-loop)))
             ;; Non-2xx: read body text for a useful error message
