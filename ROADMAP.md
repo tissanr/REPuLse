@@ -1329,6 +1329,29 @@ See full spec: [PROMPTS/PHASE-AI4.md](PROMPTS/PHASE-AI4.md)
 
 ---
 
+## Phase AI5 — Variation Workflows & Live Audition 📋 *planned*
+
+Extend the AI3 agent so it can generate multiple code variants for any named def (or
+the full buffer), then let the user hear each one live before committing — turning AI
+generation from a guess-and-apply loop into an audible *hear → compare → commit* flow.
+
+**Key additions:**
+- `app/src/repulse/ai/variations.cljs` — variations state atom, `audition-variant!`
+  (swaps `:audition-tracks` in `scheduler-state`), `cancel-audition!` (restores original)
+- `app/src/repulse/audio.cljs` — `:audition-tracks {}` added to `scheduler-state`;
+  `schedule-cycle!` merges `:audition-tracks` over `:tracks` so one track can be
+  previewed live without touching the real pattern
+- `app/src/repulse/ai/tools.cljs` — three new tools: `generate_variations` (returns
+  N structured variants), `audition_track` (live swap for arbitrary code), `cancel_audition`
+- `app/src/repulse/ai/buffer_scope.cljs` — `def-ranges` pass over the reader output;
+  maps def names to `{:from N :to N}` char ranges so the agent can target named forms
+- Variations strip in `app/src/repulse/ui/assistant_panel.cljs` — tabs A / B / C,
+  "Use this" button (writes buffer + AI4 undo stack), "Cancel" button
+
+See full spec: [PROMPTS/PHASE-AI5.md](PROMPTS/PHASE-AI5.md)
+
+---
+
 ## Phase UI1 — Theming & Settings Dialog 📋 *planned*
 
 A Settings dialog (gear icon in the header) with a theme dropdown that repaints the

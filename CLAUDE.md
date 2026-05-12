@@ -297,6 +297,7 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | AI3   | Tool-using agent — read_buffer, propose_edit, eval_preview     | planned      |
 | AI3b  | AI sample discovery — freesound_search, freesound_load, web_search | planned  |
 | AI4   | AI safety & limits — budgets, injection guards, auto-apply     | planned      |
+| AI5   | Variation workflows — multi-variant generation, live audition  | planned      |
 | UI1   | Theming — settings dialog, named palettes, editor theme switch | planned      |
 
 See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full delivery notes.
