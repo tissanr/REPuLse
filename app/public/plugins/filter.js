@@ -31,6 +31,14 @@ export default {
     }
   },
 
+  resetParams() {
+    if (!this._filter) return;
+    const t = this._filter.context.currentTime;
+    this._filter.frequency.setTargetAtTime(20000, t, 0.01);
+    this._filter.Q.setTargetAtTime(1.0, t, 0.01);
+    this._filter.type = "lowpass";
+  },
+
   getParams() {
     return {
       freq: this._filter?.frequency.value,

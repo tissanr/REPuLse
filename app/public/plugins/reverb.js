@@ -52,6 +52,11 @@ export default {
     }
   },
 
+  resetParams() {
+    if (this._wet) this._wet.gain.value = 0.0;
+    if (this._dry) this._dry.gain.value = 0.8;
+  },
+
   getParams() {
     return { wet: this._wet?.gain.value, dry: this._dry?.gain.value };
   },

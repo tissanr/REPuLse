@@ -76,6 +76,13 @@ export default {
     }
   },
 
+  resetParams() {
+    this._depth = 0;
+    if (this._ampGain) this._ampGain.gain.value = 1.0;
+    if (this._lfoGain) this._lfoGain.gain.value = 0.0;
+    if (this._lfo)     this._lfo.frequency.value = 4.0;
+  },
+
   getParams() {
     return { depth: this._depth, rate: this._lfo?.frequency.value };
   },
