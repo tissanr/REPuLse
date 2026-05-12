@@ -864,6 +864,26 @@ See full spec: [PROMPTS/PHASE-SYN2.md](PROMPTS/PHASE-SYN2.md)
 
 ---
 
+## Phase SYN3 — Bowed String Waveguide 📋 *planned*
+
+Add a full bi-directional digital waveguide bowed-string voice to the WASM engine,
+unlocking `:violin`, `:viola`, `:cello`, and `:bass-arco` as continuously sustaining
+voices with `bow-pressure` and `bow-pos` per-event parameters.
+
+**Key additions:**
+- `packages/audio/src/lib.rs` — `Voice::BowedString`: two 2205-sample pre-allocated
+  delay lines, piecewise-linear `bow_table()` friction function, `bow_preset()` table
+  with body resonance IIR coefficients per instrument, `tick` and `is_silent`
+- Trigger dispatch via `"bow:{preset}:{freq}:{amp}:{pressure}:{pos}"`
+- `app/src/repulse/env/builtins/tracks.cljs` — `bow-pressure` and `bow-pos` parameter
+  transformer builtins (same pattern as `amp`, `decay`, `pan`)
+- Grammar, completions, `builtin_meta.edn`, `docs/ai/builtins.json` updated for four
+  synth names and two new parameter names
+
+See full spec: [PROMPTS/PHASE-SYN3.md](PROMPTS/PHASE-SYN3.md)
+
+---
+
 ## Phase J2 — Contextual Insertion Buttons ✅ *delivered*
 
 Point-and-click code scaffolding: `+` buttons appear on hover over parentheses and
