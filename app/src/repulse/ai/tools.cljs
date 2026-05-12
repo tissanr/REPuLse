@@ -10,6 +10,9 @@
 ;;; eval-preview dependency injected from eval-orchestrator to avoid circular deps
 (defonce eval-preview-fn (atom nil))
 
+;;; open-snippet-search injected from snippet-panel to avoid circular deps
+(defonce open-snippet-search-fn (atom nil))
+
 ;; ── Diff overlay ─────────────────────────────────────────────────────────────
 
 (defonce ^:private active-proposal (atom nil))
@@ -145,10 +148,11 @@
 
 (defn- exec-find-snippet [{:keys [q limit]}]
   (let [results (snippets/filter-snippets q nil)
-        n       (or limit 5)]
+        n       (or limit 5)
+        trimmed (take n results)]
+    (when-let [f @open-snippet-search-fn] (f q))
     {:ok      true
-     :results (mapv #(select-keys % [:id :title :description :tags])
-                    (take n results))}))
+     :results (mapv #(select-keys % [:id :title :description :tags]) trimmed)}))
 
 (defn- exec-insert-snippet [{:keys [id]}]
   (if-let [snippet (snippets/by-id id)]
