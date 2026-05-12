@@ -884,6 +884,26 @@ See full spec: [PROMPTS/PHASE-SYN3.md](PROMPTS/PHASE-SYN3.md)
 
 ---
 
+## Phase SYN4 — Electric Guitar Voices 📋 *planned*
+
+Add five electric guitar presets — `:strat`, `:tele`, `:es335`, `:sg`, `:lp` — to the
+SYN1 Karplus-Strong engine with per-instrument body resonance IIR filters and two new
+per-event parameters (`pick-pos`, `tone`) for live tonal shaping. Depends on SYN1.
+
+**Key additions:**
+- `packages/audio/src/lib.rs` — five new entries in `ks_preset()`; body resonance
+  IIR fields added to `Voice::KarplusStrong`; `pick_pos` and `tone` overrides in the
+  `"ks:"` trigger string; acoustic presets from SYN1 use identity IIR (no change in
+  behaviour)
+- `app/src/repulse/env/builtins/tracks.cljs` — `pick-pos` and `tone` parameter
+  transformer builtins
+- `builtin_meta.edn` `see-also` entries cross-reference `:amp-sim`, `:cab`,
+  `:overdrive`, `:distort` for the full guitar signal chain
+
+See full spec: [PROMPTS/PHASE-SYN4.md](PROMPTS/PHASE-SYN4.md)
+
+---
+
 ## Phase J2 — Contextual Insertion Buttons ✅ *delivered*
 
 Point-and-click code scaffolding: `+` buttons appear on hover over parentheses and
