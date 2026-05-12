@@ -100,56 +100,75 @@
 (defn- render-md-block
   "Render a non-code Markdown segment to HTML.
    Handles: ### headings, - / * unordered lists, 1. ordered lists,
-   inline-code, bold, italic, paragraphs."
+   inline-code, bold, italic, paragraphs.
+
+   Two list-specific behaviours:
+   - Blank lines between list items are ignored (lookahead: only close the
+     list when the next real line is NOT another list item).
+   - Non-list lines immediately after a list item are treated as continuations
+     of that item (appended to the last <li>) rather than starting a new <p>.
+     This handles models that put inline-code snippets on their own line."
   [raw]
-  (let [out       (atom [])
-        list-open (atom nil)]   ; :ul | :ol | nil
-    (doseq [line (str/split-lines raw)]
-      (let [t (str/trim line)]
-        (cond
-          ;; blank — close any open list, emit nothing
-          (empty? t)
-          (when-let [lt @list-open]
-            (swap! out conj (if (= lt :ul) "</ul>" "</ol>"))
-            (reset! list-open nil))
-
-          ;; heading (# / ## / ###)
-          (re-matches #"#{1,3} .+" t)
-          (let [[_ hashes text] (re-matches #"(#{1,3}) (.*)" t)
-                tag (get ["h3" "h4" "h5"] (dec (count hashes)) "h5")]
-            (when-let [lt @list-open]
-              (swap! out conj (if (= lt :ul) "</ul>" "</ol>"))
+  (let [lines      (vec (str/split-lines raw))
+        n          (count lines)
+        out        (atom [])
+        list-open  (atom nil)
+        next-real  (fn [i]
+                     (loop [j (inc i)]
+                       (cond (>= j n)                        nil
+                             (seq (str/trim (nth lines j)))  (str/trim (nth lines j))
+                             :else                           (recur (inc j)))))
+        list-line? (fn [s]
+                     (and s (or (re-matches #"[-*] .+" s)
+                                (re-matches #"\d+\. .+" s))))]
+    (loop [i 0]
+      (when (< i n)
+        (let [t (str/trim (nth lines i))]
+          (cond
+            ;; blank — only close the list if the next real line is not a list item
+            (empty? t)
+            (when (and @list-open (not (list-line? (next-real i))))
+              (swap! out conj (if (= @list-open :ul) "</ul>" "</ol>"))
               (reset! list-open nil))
-            (swap! out conj (str "<" tag ">" (inline-md (escape-html text)) "</" tag ">")))
 
-          ;; unordered list item (- or *)
-          (re-matches #"[-*] .+" t)
-          (let [text (str/replace-first t #"^[-*] " "")]
-            (when (not= @list-open :ul)
-              (when @list-open (swap! out conj "</ol>"))
-              (swap! out conj "<ul>")
-              (reset! list-open :ul))
-            (swap! out conj (str "<li>" (inline-md (escape-html text)) "</li>")))
+            ;; heading (# / ## / ###)
+            (re-matches #"#{1,3} .+" t)
+            (let [[_ hashes text] (re-matches #"(#{1,3}) (.*)" t)
+                  tag (get ["h3" "h4" "h5"] (dec (count hashes)) "h5")]
+              (when @list-open
+                (swap! out conj (if (= @list-open :ul) "</ul>" "</ol>"))
+                (reset! list-open nil))
+              (swap! out conj (str "<" tag ">" (inline-md (escape-html text)) "</" tag ">")))
 
-          ;; ordered list item (N.)
-          (re-matches #"\d+\. .+" t)
-          (let [text (str/replace-first t #"^\d+\. " "")]
-            (when (not= @list-open :ol)
-              (when @list-open (swap! out conj "</ul>"))
-              (swap! out conj "<ol>")
-              (reset! list-open :ol))
-            (swap! out conj (str "<li>" (inline-md (escape-html text)) "</li>")))
+            ;; unordered list item (- or *)
+            (re-matches #"[-*] .+" t)
+            (let [text (str/replace-first t #"^[-*] " "")]
+              (when (not= @list-open :ul)
+                (when @list-open (swap! out conj "</ol>"))
+                (swap! out conj "<ul>")
+                (reset! list-open :ul))
+              (swap! out conj (str "<li>" (inline-md (escape-html text)) "</li>")))
 
-          ;; plain paragraph line
-          :else
-          (do
-            (when-let [lt @list-open]
-              (swap! out conj (if (= lt :ul) "</ul>" "</ol>"))
-              (reset! list-open nil))
-            (swap! out conj (str "<p>" (inline-md (escape-html t)) "</p>"))))))
-    ;; close any trailing open list
-    (when-let [lt @list-open]
-      (swap! out conj (if (= lt :ul) "</ul>" "</ol>")))
+            ;; ordered list item (N.)
+            (re-matches #"\d+\. .+" t)
+            (let [text (str/replace-first t #"^\d+\. " "")]
+              (when (not= @list-open :ol)
+                (when @list-open (swap! out conj "</ul>"))
+                (swap! out conj "<ol>")
+                (reset! list-open :ol))
+              (swap! out conj (str "<li>" (inline-md (escape-html text)) "</li>")))
+
+            ;; continuation line inside an open list — append to the last <li>
+            @list-open
+            (swap! out update (dec (count @out))
+                   #(str/replace % #"</li>$" (str " " (inline-md (escape-html t)) "</li>")))
+
+            ;; plain paragraph
+            :else
+            (swap! out conj (str "<p>" (inline-md (escape-html t)) "</p>"))))
+        (recur (inc i))))
+    (when @list-open
+      (swap! out conj (if (= @list-open :ul) "</ul>" "</ol>")))
     (str/join "" @out)))
 
 ;; ── Message rendering ─────────────────────────────────────────────────────────
