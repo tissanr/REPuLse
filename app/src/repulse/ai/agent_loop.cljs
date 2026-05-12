@@ -49,10 +49,18 @@
   (when-let [f @panel-set-pending!]
     (f v)))
 
+(defn- truncate-arg [v]
+  (if (and (string? v) (> (count v) 60))
+    (str (subs v 0 57) "…")
+    v))
+
+(defn- summarise-args [args]
+  (when (seq args)
+    (str " " (pr-str (into {} (map (fn [[k v]] [k (truncate-arg v)]) args))))))
+
 (defn- tool-status-line [call result]
   (str "▸ " (:name call)
-       (when-let [args (and (seq (:args call)) (:args call))]
-         (str " " (pr-str args)))
+       (summarise-args (:args call))
        " → "
        (cond
          (:error result)   (str "error: " (:error result))
