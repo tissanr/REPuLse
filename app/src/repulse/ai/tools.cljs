@@ -146,13 +146,30 @@
 (defn- exec-query-track [{:keys [name]}]
   {:ok true :track (query-track (keyword name))})
 
+(defn- snippets-ready []
+  "Return a Promise that resolves once the snippet library is loaded."
+  (if @snippets/loaded?
+    (js/Promise.resolve nil)
+    (js/Promise.
+      (fn [resolve _]
+        (snippets/load!)
+        (let [key (str ::snippet-wait (js/Date.now))]
+          (add-watch snippets/loaded? key
+            (fn [_ _ _ v]
+              (when v
+                (remove-watch snippets/loaded? key)
+                (resolve nil)))))))))
+
 (defn- exec-find-snippet [{:keys [q limit]}]
-  (let [results (snippets/filter-snippets q nil)
-        n       (or limit 5)
-        trimmed (take n results)]
-    (when-let [f @open-snippet-search-fn] (f q))
-    {:ok      true
-     :results (mapv #(select-keys % [:id :title :description :tags]) trimmed)}))
+  (-> (snippets-ready)
+      (.then (fn [_]
+               (let [n       (or limit 5)
+                     results (snippets/filter-snippets q nil)
+                     trimmed (take n results)]
+                 (when-let [f @open-snippet-search-fn] (f q))
+                 {:ok      true
+                  :results (mapv #(select-keys % [:id :title :description :tags])
+                                 trimmed)})))))
 
 (defn- exec-insert-snippet [{:keys [id]}]
   (if-let [snippet (snippets/by-id id)]
