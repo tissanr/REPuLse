@@ -825,6 +825,25 @@ See full spec: [PROMPTS/PHASE-DST6.md](PROMPTS/PHASE-DST6.md)
 
 ---
 
+## Phase SYN1 — Karplus-Strong Plucked String 📋 *planned*
+
+Add a Karplus-Strong delay-line voice to the WASM engine, giving REPuLse its first
+melodic instrument tier: six plucked-string presets callable as `(synth :guitar)`,
+`(synth :harp)`, `(synth :koto)`, `(synth :pizz)`, `(synth :lute)`, `(synth :mandolin)`.
+
+**Key additions:**
+- `packages/audio/src/lib.rs` — `Voice::KarplusStrong` variant with pre-allocated
+  2205-sample ring buffer, `ks_preset()` table, feedback/brightness/pick-pos/vibrato
+  coefficients per preset, `tick` and `is_silent` implementations
+- Trigger dispatch via `"ks:{preset}:{freq}:{amp}"` value string in `trigger_v2`
+- `app/src/repulse/synth.cljs` — six preset entries in builtin-voice-map
+- Grammar, completions, `builtin_meta.edn`, and `docs/ai/builtins.json` updated for
+  all six names; `npm run gen:grammar` and `npm run gen:ai-docs` required
+
+See full spec: [PROMPTS/PHASE-SYN1.md](PROMPTS/PHASE-SYN1.md)
+
+---
+
 ## Phase J2 — Contextual Insertion Buttons ✅ *delivered*
 
 Point-and-click code scaffolding: `+` buttons appear on hover over parentheses and
