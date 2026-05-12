@@ -844,6 +844,26 @@ See full spec: [PROMPTS/PHASE-SYN1.md](PROMPTS/PHASE-SYN1.md)
 
 ---
 
+## Phase SYN2 — FM Instrument Presets 📋 *planned*
+
+Extend the existing WASM FM voice with a full ADSR envelope and a hard-coded preset
+table, unlocking nine named instruments — `(synth :sax)`, `(synth :trumpet)`,
+`(synth :trumpet-muted)`, `(synth :epiano)`, `(synth :bell)`, and more — without any
+new synthesis algorithm.
+
+**Key additions:**
+- `packages/audio/src/lib.rs` — `Voice::FM` gains `attack`/`decay`/`sustain`/`release`/
+  `env_phase` fields; `fm_preset()` table returns tuned coefficients for nine instruments;
+  `trigger_v2` gains a preset dispatch path `"fm:{preset}:{freq}:{amp}"` alongside the
+  legacy manual path
+- `app/src/repulse/synth.cljs` — nine preset entries in builtin-voice-map
+- Grammar, completions, `builtin_meta.edn`, and `docs/ai/builtins.json` updated for
+  all nine names
+
+See full spec: [PROMPTS/PHASE-SYN2.md](PROMPTS/PHASE-SYN2.md)
+
+---
+
 ## Phase J2 — Contextual Insertion Buttons ✅ *delivered*
 
 Point-and-click code scaffolding: `+` buttons appear on hover over parentheses and

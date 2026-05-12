@@ -305,6 +305,7 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | ✓ delivered  |
 | DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | ✓ delivered  |
 | SYN1  | Plucked strings — :guitar :harp :koto :pizz :lute :mandolin    | planned      |
+| SYN2  | FM presets — :sax :trumpet :epiano :bell :marimba :flute       | planned      |
 | CI1   | CI pipeline — GitHub Actions: tests, lint, Rust, grammar drift | ✓ delivered  |
 | TEST1 | Automated audio verification — CLJS, Rust DSP, offline PCM tests | ✓ delivered  |
 | TEST2 | Production browser audio capture — AudioWorklet/WASM PCM verification | planned      |
