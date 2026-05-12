@@ -1,9 +1,9 @@
 (ns repulse.ui.assistant-panel
   "AI assistant chat panel — BYO API key, streaming responses, code insert.
-   Exports: init!, show-panel!, hide-panel!, toggle-panel!, send!, visible?"
+   Exports: init!, show-panel!, hide-panel!, toggle-panel!, send!, visible?,
+            add-message!, set-pending!, get-builtins-summary"
   (:require [repulse.ai.settings :as settings]
-            [repulse.ai.client :as ai-client]
-            [repulse.ai.system-prompt :as sys-prompt]
+            [repulse.ai.agent-loop :as agent-loop]
             [repulse.ui.editor :as editor]
             [clojure.string :as str]))
 
@@ -31,10 +31,9 @@
 
 ;; ── State ─────────────────────────────────────────────────────────────────────
 
-(defonce visible?         (atom false))
-(defonce messages         (atom (or (load-history) [])))
-(defonce ^:private pending    (atom false))
-(defonce ^:private abort-ctrl (atom nil))
+(defonce visible?                   (atom false))
+(defonce messages                   (atom (or (load-history) [])))
+(defonce ^:private pending          (atom false))
 (defonce ^:private builtins-summary (atom ""))
 
 ;; ── DOM helper ────────────────────────────────────────────────────────────────
@@ -58,6 +57,29 @@
           nl      (if (> doc-len 0) "\n\n" "")]
       (.dispatch view #js {:changes #js {:from doc-len :to doc-len
                                          :insert (str nl code)}}))))
+
+;; ── Public message / state API (used by agent-loop) ─────────────────────────
+
+(defn add-message!
+  "Append a message to the chat and re-render. role is \"user\", \"assistant\", or \"tool\"."
+  [role content]
+  (let [new-msgs (conj @messages {:role role :content (str content)})]
+    (reset! messages new-msgs)
+    ;; Tool-status lines are ephemeral — don't persist them to localStorage
+    (when (not= role "tool")
+      (save-history! new-msgs))
+    (render-panel!)))
+
+(defn set-pending!
+  "Set the pending (typing indicator) state and re-render."
+  [v]
+  (reset! pending v)
+  (render-panel!))
+
+(defn get-builtins-summary
+  "Return the current built-ins vocabulary summary string."
+  []
+  @builtins-summary)
 
 ;; ── Message rendering ─────────────────────────────────────────────────────────
 
@@ -158,8 +180,9 @@
                    "<div class=\"ai-input-row\">"
                    "<textarea id=\"ai-input\" class=\"ai-textarea\""
                    " placeholder=\"Describe a pattern, ask for help…\" rows=\"2\"></textarea>"
-                   "<button id=\"ai-send-btn\" class=\"ai-btn\""
-                   (when @pending " disabled") ">send</button>"
+                   (if @pending
+                     "<button id=\"ai-cancel-btn\" class=\"ai-btn ai-btn--secondary\">cancel</button>"
+                     "<button id=\"ai-send-btn\" class=\"ai-btn\">send</button>")
                    "</div>"))
         ;; Scroll messages to bottom
         (when-let [msgs-el (el "ai-messages")]
@@ -184,55 +207,10 @@
 ;; ── Send a message ────────────────────────────────────────────────────────────
 
 (defn send!
-  "Append user-text to the conversation and stream an assistant response."
+  "Append user-text to the conversation and run the agent loop."
   [user-text]
   (when (and (seq (str/trim user-text)) (not @pending))
-    (let [user-msg  {:role "user" :content (str/trim user-text)}
-          new-msgs  (conj @messages user-msg)]
-      (reset! messages new-msgs)
-      (reset! pending true)
-      (render-panel!)
-      (let [system  (sys-prompt/build @builtins-summary)
-            history (mapv #(select-keys % [:role :content]) new-msgs)
-            result  (atom "")]
-        (reset! abort-ctrl
-          (ai-client/stream!
-            system
-            history
-            {:on-chunk
-             (fn [delta]
-               (swap! result str delta)
-               ;; Live-update the thinking placeholder with partial content
-               (when-let [thinking (and (el "ai-panel")
-                                        (.querySelector (el "ai-panel") ".ai-thinking"))]
-                 (set! (.-innerHTML thinking)
-                       (render-message {:role "assistant" :content @result}))
-                 ;; Keep scrolled to bottom during streaming
-                 (when-let [msgs-el (el "ai-messages")]
-                   (set! (.-scrollTop msgs-el) (.-scrollHeight msgs-el)))))
-
-             :on-done
-             (fn [_]
-               ;; Guard: if result is empty the model returned no text — show a notice
-               ;; instead of appending an invisible empty message.
-               (let [content    (if (seq @result) @result
-                                  "(No text content received. The model may have returned an empty response.)")
-                     final-msgs (conj @messages {:role "assistant" :content content})]
-                 (reset! messages final-msgs)
-                 (save-history! final-msgs)
-                 (reset! pending false)
-                 (reset! abort-ctrl nil)
-                 (render-panel!)))
-
-             :on-error
-             (fn [err]
-               (let [err-msgs (conj @messages {:role "assistant"
-                                               :content (str "Error: " err)})]
-                 (reset! messages err-msgs)
-                 (save-history! err-msgs)
-                 (reset! pending false)
-                 (reset! abort-ctrl nil)
-                 (render-panel!)))}))))))
+    (agent-loop/run-agent-turn! (str/trim user-text))))
 
 ;; ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -255,6 +233,12 @@
                             (str/join ", " (map #(get % "name") entries)))))))))
       (.catch (fn [_] nil)))
 
+  ;; Wire agent-loop callbacks (avoids circular require — agent-loop holds atoms)
+  (agent-loop/set-panel-fns!
+    {:add-message!        add-message!
+     :set-pending!        set-pending!
+     :get-builtins-summary get-builtins-summary})
+
   (when-let [panel (el "ai-panel")]
     ;; Click delegation
     (.addEventListener panel "click"
@@ -269,13 +253,16 @@
             (render-settings!)
 
             (= id "ai-clear-btn")
-            (do (reset! messages []) (clear-history!) (render-panel!))
+            (do (reset! messages []) (clear-history!) (agent-loop/reset-history!) (render-panel!))
 
             (= id "ai-send-btn")
             (when-let [inp (el "ai-input")]
               (let [txt (.-value inp)]
                 (set! (.-value inp) "")
                 (send! txt)))
+
+            (= id "ai-cancel-btn")
+            (do (agent-loop/cancel!) (set-pending! false))
 
             (= id "ai-settings-save-btn")
             (do

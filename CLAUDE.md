@@ -294,7 +294,7 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | PLUG1 | Drop-in plugins — drag local JS/package plugins into the app   | planned      |
 | AI1   | AI knowledge base — /docs/ai/*.json, gen:ai-docs, help-export  | ✓ delivered  |
 | AI2   | AI assistant panel — BYO key, streaming chat, opt-in feature   | ✓ delivered  |
-| AI3   | Tool-using agent — read_buffer, propose_edit, eval_preview     | planned      |
+| AI3   | Tool-using agent — read_buffer, propose_edit, eval_preview     | ✓ delivered  |
 | AI3b  | AI sample discovery — freesound_search, freesound_load, web_search | planned  |
 | AI4   | AI safety & limits — budgets, injection guards, auto-apply     | planned      |
 | UI1   | Theming — settings dialog, named palettes, editor theme switch | planned      |
