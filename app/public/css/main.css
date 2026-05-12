@@ -2299,7 +2299,6 @@ footer {
   font-family: var(--font-mono);
   font-size: 0.75rem;
   color: #56b6c2;
-  display: block;
 }
 
 .ai-msg--user {
