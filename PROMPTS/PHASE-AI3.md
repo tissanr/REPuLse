@@ -30,9 +30,9 @@ confirmation. No change is ever applied automatically (that opt-in arrives in AI
 ### Existing code the agent will call into
 
 **Editor / buffer access**
-- `app/src/repulse/ui/editor.cljs` owns the `editor-view` and `cmd-view` atoms.
-  The agent reads `.state.doc.toString()` from `@editor/editor-view` to get the
-  full buffer text.
+- `app/src/repulse/app.cljs` — `editor-view` CodeMirror EditorView instance (global);
+  `editor-state` atom updated after each eval. The agent reads `.state.doc.toString()`
+  to get the full buffer text.
 - `app/src/repulse/eval_orchestrator.cljs` — `evaluate!` is the top-level eval entry
   point the agent reuses for `eval_preview` (with a patched silent AudioContext).
 
@@ -47,12 +47,10 @@ confirmation. No change is ever applied automatically (that opt-in arrives in AI
   used by the snippet panel; AI3 calls them via the tool layer.
 
 **AI panel (AI2 layer)**
-- `app/src/repulse/ai/client.cljs` currently sends provider requests through
-  `/api/ai-stream`, not directly from the browser to provider APIs. AI3 should extend
-  this proxy-aware path with tool descriptors/tool results instead of adding a
-  separate direct-provider request flow.
-- `app/src/repulse/ui/assistant_panel.cljs` owns chat history, settings rendering,
-  pending state, and the abort controller.
+- `app/src/repulse/ai/client.cljs` — `stream!` with `on-tool-call` callback added in
+  this phase; tool results returned to the model via a second request in the agent loop.
+- `app/src/repulse/ui/assistant_panel.cljs` — `add-message!` and `set-pending!` used by
+  the agent loop to render intermediary state and tool-call status.
 
 ### CodeMirror patching for the diff overlay
 
@@ -90,7 +88,7 @@ Define all tool descriptors and their executor functions:
     :params {}
     :side-effects #{:none}
     :execute (fn [_args]
-               (let [view @repulse.ui.editor/editor-view]
+               (let [view @repulse.app/editor-view]
                  {:ok true :text (.. view -state -doc toString)}))}
 
    :propose_edit
@@ -177,9 +175,8 @@ text and "Apply" / "Reject" buttons. The overlay is removed once the user acts.
             (reject {:ok false :error (.-message e)})))))))
 ```
 
-Before adding `evaluate-in-context!`, check whether the existing snippet preview /
-sandbox and TEST1 offline harness paths can provide the silent preview safely. Prefer
-reusing those existing preview boundaries over adding a second evaluator entry point.
+`evaluate-in-context!` is a new thin wrapper around `evaluate!` that accepts a
+caller-supplied audio context and master gain node instead of the global ones.
 
 ### 4. `app/src/repulse/ai/agent_loop.cljs` — bounded loop
 
@@ -204,11 +201,10 @@ reusing those existing preview boundaries over adding a second evaluator entry p
 `max-tool-calls` defaults to 8 per user turn and is configurable via AI4's budget
 settings. A "Cancel" button in the panel calls `(.abort abort-controller)`.
 
-### 5. Provider/proxy tool-call adapters
+### 5. Provider tool-call adapters
 
-`client.cljs` gains an `on-tool-call` callback path alongside `on-chunk`, and
-`api/ai-stream.ts` must pass through any provider-specific tool-call fields needed
-by the client. Each provider's SSE delta format differs:
+`client.cljs` gains an `on-tool-call` callback path alongside `on-chunk`. Each
+provider's SSE delta format differs:
 
 | Provider | Tool call format |
 |---|---|
