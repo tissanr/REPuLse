@@ -234,6 +234,51 @@ cancels the whole agent turn (including any pending overlay).
 
 ---
 
+## Markdown rendering
+
+AI model responses are Markdown. The panel renders them with a zero-dependency inline
+renderer in `assistant_panel.cljs` rather than an npm library.
+
+### Design
+
+Security model: `escape-html` runs on every text node first; the Markdown transforms
+only ever inject hard-coded tag names (`<strong>`, `<em>`, `<code>`, `<h3>`–`<h5>`,
+`<ul>`, `<ol>`, `<li>`, `<p>`) — never raw content — so XSS is impossible.
+
+```
+raw string
+  └─ split on ``` → [text, code, text, code, ...]
+       ├─ code segments → <pre><code>...</code> + insert button
+       └─ text segments → render-md-block
+            ├─ split on \n, process line by line
+            ├─ heading (#/##/###) → <h3>–<h5>
+            ├─ list item (- /*) → <ul><li>
+            ├─ ordered item (N.) → <ol><li>
+            └─ paragraph → inline-md → <p>
+                 ├─ `backtick` → <code>
+                 ├─ ***bold+italic*** → <strong><em>
+                 ├─ **bold** → <strong>
+                 └─ *italic* → <em>
+```
+
+### Supported constructs
+
+| Markdown | Output |
+|---|---|
+| `# Heading` / `## H2` / `### H3` | `<h3>`–`<h5>` |
+| `- item` or `* item` | `<ul><li>` |
+| `1. item` | `<ol><li>` |
+| `` `code` `` | `<code>` |
+| `**bold**` | `<strong>` |
+| `*italic*` | `<em>` |
+| `***bold+italic***` | `<strong><em>` |
+| blank line | closes open list, paragraph break |
+
+Tables, links, and images are not rendered (left as plain text). These cover
+>95 % of AI assistant output in practice.
+
+---
+
 ## Files to change
 
 | File | Change |
@@ -242,7 +287,7 @@ cancels the whole agent turn (including any pending overlay).
 | `app/src/repulse/ai/agent_loop.cljs` | **New** — bounded go-loop, tool dispatch |
 | `app/src/repulse/ai/client.cljs` | Add `on-tool-call` callback, `complete!` fn, provider tool adapters |
 | `app/src/repulse/eval_orchestrator.cljs` | Add `evaluate-in-context!` accepting caller-supplied AudioContext + gain |
-| `app/src/repulse/ui/assistant_panel.cljs` | Add diff overlay render, tool-call status lines, Cancel button |
+| `app/src/repulse/ui/assistant_panel.cljs` | Add diff overlay render, tool-call status lines, Cancel button, Markdown renderer |
 | `app/src/repulse/app.cljs` | Export `editor-view` atom so `tools.cljs` can read it |
 | `app/src/repulse/env/builtins.cljs` | Update `(ai "prompt")` to trigger agent loop if tools enabled |
 

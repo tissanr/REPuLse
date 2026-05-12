@@ -81,6 +81,77 @@
   []
   @builtins-summary)
 
+;; ── Markdown renderer ────────────────────────────────────────────────────────
+;;
+;; Converts a plain-text Markdown string to an HTML fragment.
+;; Security model: escape-html runs first on every text node; inline-md only
+;; ever injects hard-coded tag names — never raw content — so XSS is impossible.
+
+(defn- inline-md
+  "Apply inline Markdown transforms to an already HTML-escaped string.
+   Inline-code runs first so backtick content is immune to bold/italic."
+  [s]
+  (-> s
+      (str/replace #"`([^`\n]+)`"           "<code>$1</code>")
+      (str/replace #"\*\*\*([^*\n]+)\*\*\*" "<strong><em>$1</em></strong>")
+      (str/replace #"\*\*([^*\n]+)\*\*"     "<strong>$1</strong>")
+      (str/replace #"\*([^*\n]+)\*"         "<em>$1</em>")))
+
+(defn- render-md-block
+  "Render a non-code Markdown segment to HTML.
+   Handles: ### headings, - / * unordered lists, 1. ordered lists,
+   inline-code, bold, italic, paragraphs."
+  [raw]
+  (let [out       (atom [])
+        list-open (atom nil)]   ; :ul | :ol | nil
+    (doseq [line (str/split-lines raw)]
+      (let [t (str/trim line)]
+        (cond
+          ;; blank — close any open list, emit nothing
+          (empty? t)
+          (when-let [lt @list-open]
+            (swap! out conj (if (= lt :ul) "</ul>" "</ol>"))
+            (reset! list-open nil))
+
+          ;; heading (# / ## / ###)
+          (re-matches #"#{1,3} .+" t)
+          (let [[_ hashes text] (re-matches #"(#{1,3}) (.*)" t)
+                tag (get ["h3" "h4" "h5"] (dec (count hashes)) "h5")]
+            (when-let [lt @list-open]
+              (swap! out conj (if (= lt :ul) "</ul>" "</ol>"))
+              (reset! list-open nil))
+            (swap! out conj (str "<" tag ">" (inline-md (escape-html text)) "</" tag ">")))
+
+          ;; unordered list item (- or *)
+          (re-matches #"[-*] .+" t)
+          (let [text (str/replace-first t #"^[-*] " "")]
+            (when (not= @list-open :ul)
+              (when @list-open (swap! out conj "</ol>"))
+              (swap! out conj "<ul>")
+              (reset! list-open :ul))
+            (swap! out conj (str "<li>" (inline-md (escape-html text)) "</li>")))
+
+          ;; ordered list item (N.)
+          (re-matches #"\d+\. .+" t)
+          (let [text (str/replace-first t #"^\d+\. " "")]
+            (when (not= @list-open :ol)
+              (when @list-open (swap! out conj "</ul>"))
+              (swap! out conj "<ol>")
+              (reset! list-open :ol))
+            (swap! out conj (str "<li>" (inline-md (escape-html text)) "</li>")))
+
+          ;; plain paragraph line
+          :else
+          (do
+            (when-let [lt @list-open]
+              (swap! out conj (if (= lt :ul) "</ul>" "</ol>"))
+              (reset! list-open nil))
+            (swap! out conj (str "<p>" (inline-md (escape-html t)) "</p>"))))))
+    ;; close any trailing open list
+    (when-let [lt @list-open]
+      (swap! out conj (if (= lt :ul) "</ul>" "</ol>")))
+    (str/join "" @out)))
+
 ;; ── Message rendering ─────────────────────────────────────────────────────────
 
 (defn- render-message [{:keys [role content]}]
@@ -99,8 +170,8 @@
                         "<button class=\"ai-insert-btn\""
                         " data-code=\"" (escape-html code)
                         "\">&#8595; insert</button></pre>"))
-                 ;; Plain text paragraph
-                 (str "<p>" (escape-html part) "</p>")))
+                 ;; Non-code segment — render as Markdown
+                 (render-md-block part)))
              parts))
          "</div>")))
 
