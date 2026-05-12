@@ -460,6 +460,13 @@ const DOCS = {
     description: "Return the live session state as a map. Fields: :bpm (number), :tracks (keyword→{:fx [...]}), :muted (vector of strings), :fx (global FX chain, vector of {:name :params :bypassed}), :bank, :sources. Access per-track FX with (:fx (:kick (:tracks (help-export)))).",
     example: "(:kick (:tracks (help-export)))",
   },
+
+  // --- AI assistant ---
+  "ai": {
+    signature: "(ai) or (ai \"prompt\")",
+    description: "Open the AI assistant panel. With no args, just opens the panel. With a string argument, opens the panel and immediately sends the prompt.\n\nSupported providers (configured in ⚙ settings):\n  anthropic — claude-sonnet-4-6 (default)\n  openai    — gpt-4o (default)\n  google    — gemini-2.0-flash (default)\n  groq      — llama-3.3-70b-versatile (Groq cloud, fast Llama)\n  xai       — grok-3 (xAI / Grok; key from console.x.ai)\n\nAPI keys are stored in localStorage only — never sent to REPuLse servers. When AI is disabled, returns an informational string.",
+    example: "(ai \"Give me a euclidean kick pattern at 130 bpm\")",
+  },
 };
 
 /**

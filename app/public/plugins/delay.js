@@ -46,6 +46,11 @@ export default {
     }
   },
 
+  resetParams() {
+    if (this._wet)      this._wet.gain.value      = 0.0;
+    if (this._feedback) this._feedback.gain.value = 0.35;
+  },
+
   getParams() {
     return {
       time:     this._delay?.delayTime.value,

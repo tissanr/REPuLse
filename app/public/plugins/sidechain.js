@@ -72,6 +72,16 @@ export default {
     }
   },
 
+  resetParams() {
+    this._trigger = null;
+    this._amount  = 0;
+    this._release = 0.1;
+    if (this._gain && this._ctx) {
+      this._gain.gain.cancelScheduledValues(this._ctx.currentTime);
+      this._gain.gain.setValueAtTime(1.0, this._ctx.currentTime);
+    }
+  },
+
   getParams() {
     return {
       trigger: this._trigger,

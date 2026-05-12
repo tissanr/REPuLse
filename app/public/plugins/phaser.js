@@ -115,6 +115,12 @@ export default {
     }
   },
 
+  resetParams() {
+    if (this._wet)       this._wet.gain.value        = 0.0;
+    if (this._depthGain) this._depthGain.gain.value  = 0.0;
+    this._active = false;
+  },
+
   getParams() {
     return {
       wet:      this._wet?.gain.value,

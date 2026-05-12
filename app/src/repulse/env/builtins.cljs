@@ -16,7 +16,8 @@
             [repulse.env.builtins.content :as b-content]
             [repulse.env.builtins.export :as b-export]
             [repulse.env.builtins.session :as b-session]
-            [repulse.env.builtins.routing :as b-routing]))
+            [repulse.env.builtins.routing :as b-routing]
+            [repulse.env.builtins.ai :as b-ai]))
 
 ;;; Owned atoms
 
@@ -75,7 +76,8 @@
                      (b-content/make-builtins ctx)
                      (b-export/make-builtins ctx)
                      (b-session/make-builtins ctx)
-                     (b-routing/make-builtins ctx)))
+                     (b-routing/make-builtins ctx)
+                     (b-ai/make-builtins ctx)))
       ;; Wire the FX event notification callback (used by sidechain plugin)
       (swap! audio/scheduler-state assoc :on-fx-event fx/notify-fx-event!)
       ;; Snapshot built-in names so render-context-panel! can filter them out

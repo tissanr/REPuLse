@@ -2550,6 +2550,26 @@
     "detail": "(help-export) — return live session as a map; access with (:bpm (help-export)), (:tracks (help-export)), etc.",
     "description": "Return the live session state as a map. Fields: :bpm (number), :tracks (keyword→{:fx [...]}), :muted (vector of strings), :fx (global FX chain, vector of {:name :params :bypassed}), :bank, :sources. Access per-track FX with (:fx (:kick (:tracks (help-export))))."
   },
+  "ai": {
+    "category": "ai",
+    "signature": "(ai) or (ai \"prompt\")",
+    "returns": "nil or string",
+    "side-effects": [
+      "opens AI assistant panel",
+      "sends prompt to AI provider"
+    ],
+    "examples": [
+      "(ai)",
+      "(ai \"Give me a euclidean kick pattern at 130 bpm\")",
+      "(ai \"How do I make a bass line with (scale :minor :c3 ...)?\")",
+      "(ai \"Add reverb and slow the melody down\")"
+    ],
+    "see-also": [
+      "help-export"
+    ],
+    "detail": "(ai) — open AI assistant panel; (ai \"prompt\") — open and send prompt immediately",
+    "description": "Open the AI assistant panel. With no args, just opens the panel. With a string argument, opens the panel and immediately sends the prompt.\n\nSupported providers (configured in ⚙ settings):\n  anthropic — claude-sonnet-4-6 (default)\n  openai    — gpt-4o (default)\n  google    — gemini-2.0-flash (default)\n  groq      — llama-3.3-70b-versatile (Groq cloud, fast Llama)\n  xai       — grok-3 (xAI / Grok; key from console.x.ai)\n\nAPI keys are stored in localStorage only — never sent to REPuLse servers. When AI is disabled, returns an informational string."
+  },
   "samples!": {
     "category": "sample",
     "signature": "(samples! \"github:owner/repo\")",

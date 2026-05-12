@@ -80,6 +80,12 @@ export default {
     }
   },
 
+  resetParams() {
+    if (this._wet)     this._wet.gain.value          = 0.0;
+    if (this._preGain) this._preGain.gain.value       = 1.0;
+    if (this._tone)    this._tone.frequency.value     = 20000;
+  },
+
   getParams() {
     return {
       drive: this._drive,
