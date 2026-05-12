@@ -1286,6 +1286,25 @@ See full spec: [PROMPTS/PHASE-AI3.md](PROMPTS/PHASE-AI3.md)
 
 ---
 
+## Phase AI3b — AI Sample Discovery & Web Search Tools 📋 *planned*
+
+Extend the AI3 tool registry so the assistant can find Freesound samples, list available
+banks, and optionally search the web — all without the user leaving the editor.
+
+**Key additions:**
+- `app/src/repulse/ai/tools.cljs` — four new tools: `freesound_search`, `freesound_load`,
+  `list_banks`, `list_samples_in_bank`; optional `web_search` when Brave Search key set
+- `app/src/repulse/ai/settings.cljs` — `freesound-api-key` and `search-api-key` atoms,
+  persisted under `repulse:ai:freesound-key` / `repulse:ai:search-key` in localStorage
+- `app/src/repulse/ui/assistant_panel.cljs` — "Sample & Search" settings section with
+  API key inputs; Freesound and Brave Search key registration links
+- `freesound_load` calls `samples/register-url!` and returns `{:keyword ":freesound-<id>"}`;
+  the agent then calls `propose_edit` so the user confirms before the sample plays
+
+See full spec: [PROMPTS/PHASE-AI3b.md](PROMPTS/PHASE-AI3b.md)
+
+---
+
 ## Phase AI4 — Assistant Safety & Limits 📋 *planned*
 
 The trust and economics layer: hard token + tool-call budgets, prompt-injection guards
