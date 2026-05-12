@@ -10,6 +10,12 @@ This phase is not a feature phase. It should make invalid data fail earlier, wit
 clearer error messages, while preserving existing user-facing behaviour for valid
 programs and valid plugins.
 
+This prompt has been adapted after R1/R2 and the later hardening phases. Implement
+it against the current namespace layout and current data representations. In
+particular, `packages/core` still uses REPuLse's explicit vector rational form
+`[numerator denominator]`, not CLJS `Ratio` values, and AI tool-calling is still a
+future phase.
+
 ---
 
 ## Background
@@ -30,6 +36,17 @@ the real contract explicit in code and tests.
 
 Use specs at boundaries and in tests. Do not add expensive spec checks inside the
 tight audio scheduler loop in production.
+
+Current implementation notes:
+
+- `app.cljs` has already been split. App built-ins live under
+  `app/src/repulse/env/builtins/`; keep new validation near the owning boundary
+  namespace rather than re-centralising app logic.
+- AI1 and AI2 are delivered, but AI3 is still planned. There is no
+  `app/src/repulse/ai/tools.cljs`, no agent loop, and no `propose_edit` tool yet.
+  Do not create those as part of HRD3.
+- `packages/core/src/repulse/core.cljs` represents rational time as vectors such
+  as `[1 4]`. The old wording about CLJS runtime `Ratio` values no longer applies.
 
 ---
 
@@ -59,7 +76,10 @@ Implementation expectations:
 
 Add low-level specs for the pure pattern engine:
 
-- Rational time: a `cljs.core.Ratio` or integer — spec predicate `(s/or :ratio ratio? :int integer?)`; `Ratio` values carry an implicitly positive denominator and must never be constructed with zero denominator; do **not** spec as `[integer integer]` — that is not how CLJS rationals are represented at runtime
+- Rational time: REPuLse's current vector representation `[numerator denominator]`.
+  Both entries are integers, the denominator must be positive and non-zero, and the
+  value should be normalized by `repulse.core/rat` at construction boundaries.
+  Do **not** migrate `packages/core` to CLJS `Ratio` values in this phase.
 - Time span: `{:start rat :end rat}` with `start < end`
 - Event: `{:value any? :whole span :part span}` plus optional `:source`
 - Pattern: tagged map created by `repulse.core/pattern`
@@ -98,8 +118,15 @@ than partially applied.
 
 ### 5. AI tool-call interface specs
 
-Add specs for the AI surface introduced by AI3 so the tool layer inherits the same
-spec discipline as the rest of the app:
+Deferred until AI3.
+
+The original HRD3 draft included specs for the AI tool-call surface, but the current
+codebase has only AI1 and AI2 delivered. The assistant panel streams chat text and
+can insert code blocks, but there is not yet a tool registry, agent loop, tool-call
+envelope, `propose_edit`, or eval-preview tool.
+
+Do not implement AI tool-call specs in HRD3. When AI3 lands, its implementation
+should add a follow-up spec pass covering:
 
 | Contract | Shape |
 |---|---|
@@ -109,17 +136,8 @@ spec discipline as the rest of the app:
 | Session snapshot for AI | matches shape validated by §4 session spec |
 | Tool-call envelope | `{:tool keyword :args map :request-id string}` returned with `{:ok bool :result any :error (s/nilable string)}` |
 
-Implementation expectations:
-
-- Tool descriptors are defined as data maps and validated against a named spec before
-  registration; invalid descriptors fail loudly at startup rather than silently at
-  call time.
-- `propose_edit` args are validated against current document length before the diff
-  overlay is shown; out-of-bounds proposals return a typed error the model can read
-  and retry.
-- All tool input maps are validated before the executor function is called; failures
-  return `{:ok false :error "..."}` rather than throwing to the agent loop.
-- Tool result envelopes are validated before being sent back to the model context.
+Leave these bullets in this prompt as design continuity only. They are not HRD3
+acceptance criteria until AI3 exists.
 
 ---
 
@@ -140,11 +158,14 @@ Expected files:
 | `app/src/repulse/fx_test.cljs` | Tests for invalid effect plugin/node contracts |
 | `app/src/repulse/session_test.cljs` | Tests for malformed persisted session rejection/sanitization |
 | `docs/PLUGINS.md` | Update method requirement table to match runtime validation |
-| `app/src/repulse/ai/tools.cljs` | Add spec validation for tool descriptors, call envelopes, and result shapes (§5) |
 | `README.md` / `docs/ARCHITECTURE.md` | Briefly document the spec boundary strategy if useful |
 
 The exact file split may change if a narrower namespace layout fits the codebase
 better. Keep `packages/core` independent from app, DOM, audio, and JS plugin code.
+
+Do not add `app/src/repulse/ai/tools.cljs` during HRD3. That file belongs to AI3.
+If HRD3 touches AI code at all, limit it to documenting that the later AI3 tool
+registry should use the same boundary-validation style.
 
 ---
 
@@ -200,6 +221,8 @@ Good places for validation:
 - sample manifest parsing before `registry` mutation
 - MIDI mapping creation
 - tests and constructor-level assertions in `packages/core`
+- current built-in boundaries under `app/src/repulse/env/builtins/*` when user input
+  is converted into FX, MIDI, sample, session, or track data
 
 Avoid validation in:
 
@@ -218,14 +241,12 @@ Avoid validation in:
 - Invalid `createNodes` results never enter the FX chain.
 - Malformed persisted sessions are rejected or sanitized without throwing during app
   startup.
-- Core specs cover rational time, spans, events, and patterns without introducing app
-  dependencies into `packages/core`.
+- Core specs cover current vector rational time, spans, events, and patterns without
+  introducing app dependencies into `packages/core`.
 - Tests cover at least plugin validation, effect-node validation, session validation,
   and core data specs.
-- AI tool descriptors are validated at registration time; an invalid descriptor (missing
-  `:description` or unknown `:side-effects` keyword) throws a clear error at startup.
-- `propose_edit` with `:to` beyond document length returns `{:ok false :error "..."}` and
-  does not show the diff overlay.
+- AI tool-call specs are explicitly deferred in the prompt and not implemented before
+  AI3.
 - `npm run test` passes.
 
 ---
