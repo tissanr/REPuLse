@@ -308,6 +308,7 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | SYN2  | FM presets — :sax :trumpet :epiano :bell :marimba :flute       | planned      |
 | SYN3  | Bowed strings — :violin :viola :cello :bass-arco (waveguide)   | planned      |
 | SYN4  | Electric guitars — :strat :tele :es335 :sg :lp (KS + body IIR) | planned      |
+| SYN5  | Lo-fi piano — :piano :piano-felt (KS bi-linear decay)          | planned      |
 | CI1   | CI pipeline — GitHub Actions: tests, lint, Rust, grammar drift | ✓ delivered  |
 | TEST1 | Automated audio verification — CLJS, Rust DSP, offline PCM tests | ✓ delivered  |
 | TEST2 | Production browser audio capture — AudioWorklet/WASM PCM verification | planned      |

@@ -904,6 +904,25 @@ See full spec: [PROMPTS/PHASE-SYN4.md](PROMPTS/PHASE-SYN4.md)
 
 ---
 
+## Phase SYN5 — Lo-Fi Piano 📋 *planned*
+
+Add `(synth :piano)` and `(synth :piano-felt)` using an extended Karplus-Strong model
+with a bi-linear decay filter that approximates hammer-struck string character — bright
+transient, warm sustain — without attempting full physical accuracy. Depends on SYN1.
+
+**Key additions:**
+- `packages/audio/src/lib.rs` — `brightness_peak`, `brightness_low`, `bright_dur`,
+  `elapsed` fields added to `Voice::KarplusStrong`; bi-linear decay in `tick`; pitch-
+  dependent feedback scaling; piano and piano-felt presets in `ks_preset()`
+- `app/src/repulse/synth.cljs` — two dispatch entries: `:piano`, `:piano-felt`
+- `builtin_meta.edn` `see-also` references to `:bitcrusher`, `:reverb` for lo-fi chain
+- High-fidelity piano (inharmonicity, multi-string beating, soundboard) is intentionally
+  deferred to `docs/FUTURE-FEATURES.md`
+
+See full spec: [PROMPTS/PHASE-SYN5.md](PROMPTS/PHASE-SYN5.md)
+
+---
+
 ## Phase J2 — Contextual Insertion Buttons ✅ *delivered*
 
 Point-and-click code scaffolding: `+` buttons appear on hover over parentheses and

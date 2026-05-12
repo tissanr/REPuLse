@@ -31,6 +31,7 @@ there's energy for side quests.
 |---|---|
 | SC-style UGen aliases | Alias existing UGen names to SuperCollider conventions: `sin` → `sin-osc`, `saw` → `saw-osc`, `square` → `pulse`, `tri` → `tri-osc`. Both names coexist — no breaking changes. Trivial: one `assoc` per alias in `make-build-fn`. Valuable for users coming from SC/Overtone. |
 | Granular synthesis | AudioWorklet-based grain engine: pitch, density, spread, position |
+| High-fidelity piano | Full physical piano model: per-string inharmonicity (dispersion all-pass filter chain), 2–3 detuned strings per note with beating, soundboard resonance (body IIR from measured impulse responses), sympathetic string resonance, sustain-pedal parameter. Requires significantly more Rust DSP than the SYN5 lo-fi piano. |
 | Multi-buffer editor | Multiple named code buffers switchable per track |
 
 ### Editor
