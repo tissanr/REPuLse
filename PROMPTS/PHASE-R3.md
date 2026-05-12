@@ -33,7 +33,6 @@ The best first target is the CodeMirror language support island:
 - `app/src/repulse/lisp-lang/insert-helper.js`
 - `app/src/repulse/lisp-lang/keywords-completion.js`
 - `app/src/repulse/lisp-lang/providers.js`
-- `app/src/repulse/lisp-lang/rainbow.js`
 
 These files are editor/application logic and are already consumed by CLJS.
 Porting them removes the largest hand-written JS island without changing the
@@ -79,10 +78,10 @@ hyphenated directory causes awkward CLJS namespace names, introduce
 ## Migration plan
 
 1. Move provider state first (`setBankNamesProvider`, `setFxNamesProvider`) and
-   update `app.cljs`.
+   update `app.cljs`. These are currently imported from `lisp-lang/providers.js`.
 2. Port data-only modules (`completions`, `insert-categories`, hover docs).
-3. Port CodeMirror extension modules (`highlight`, `rainbow`, `insert-helper`,
-   completion sources).
+3. Port CodeMirror extension modules (`highlight`, `insert-helper`, completion
+   sources).
 4. Replace `lispLanguage` import in `ui/editor.cljs`.
 5. Delete only the hand-written JS files that are fully replaced.
 6. Run grammar generation only if the grammar changed. This phase should not
@@ -98,7 +97,7 @@ The old and new language extensions should not coexist permanently.
 - [ ] All hand-written CodeMirror language-support JS listed above has CLJS equivalents
 - [ ] `repulse.ui.editor` consumes the CLJS `lisp-language` extension directly
 - [ ] `repulse.app` updates bank/effect provider functions through CLJS
-- [ ] Syntax highlighting, bracket matching, rainbow parens, completions, live `def` completion, hover docs, diagnostics, and contextual insertion still work
+- [ ] Syntax highlighting, bracket matching, completions, live `def` completion, hover docs, diagnostics, and contextual insertion still work
 - [ ] Generated `parser.js` / `parser.terms.js` remain generated JS and are not manually edited
 - [ ] `app/public/plugin-base.js`, `app/public/plugins/*.js`, and worklets remain JS
 - [ ] `npm run test` passes

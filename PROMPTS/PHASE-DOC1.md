@@ -11,7 +11,8 @@ syntax, effects, samples, MIDI, or examples.
 
 DOC1 turns the documentation into a small, purpose-built user manual with
 progressive examples. It is a documentation phase only: no language, audio, or
-UI feature changes.
+UI feature changes. In-app help ideas may be captured as anchors and design notes,
+but should not be implemented in DOC1.
 
 ---
 
@@ -84,10 +85,11 @@ reference only if existing links require it.
 It should also include a compact feature map grouped by task, not implementation
 phase.
 
-### 2. In-app help and documentation access
+### 2. Future in-app help and documentation access
 
-The documentation should not only live in Markdown files. REPuLse should expose
-help at the moment the user needs it, from the editor and surrounding UI.
+This section is a design handoff for a later UI/help phase. DOC1 should create
+stable anchors and content structure that make in-app help possible, but it should
+not add help drawers, new Lisp built-ins, command-bar commands, or editor UI.
 
 High-value ideas:
 
@@ -124,7 +126,7 @@ High-value ideas:
 - **Offline docs bundle** — because REPuLse is browser-based, core docs should ship
   with the app and work without network access.
 
-Potential app files for a later implementation phase:
+Potential app files for a later implementation phase, not DOC1:
 
 | File | Possible change |
 |------|-----------------|
@@ -137,7 +139,7 @@ Potential app files for a later implementation phase:
 | `app/src/repulse/ui/snippet_panel.cljs` | Cross-link snippets with cookbook/help topics |
 
 DOC1 should design the content model and anchors so this can be built cleanly
-later, even if the full in-app help UI is implemented in a separate phase.
+later. The full in-app help UI belongs in a separate implementation phase.
 
 ### 3. Getting Started
 

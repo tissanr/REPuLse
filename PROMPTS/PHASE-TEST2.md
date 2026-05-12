@@ -28,8 +28,11 @@ This is intentionally a stub, not a full implementation prompt yet.
 
 TEST2 should investigate and implement:
 
-- A Playwright harness that starts a real `AudioContext`, not an
-  `OfflineAudioContext`.
+- Extend the existing Playwright setup (`playwright.config.ts`, `e2e/audio-render.spec.ts`)
+  or add a second production-audio project. The current harness compiles
+  `:test-harness` and serves `app/public/test-harness.html`, which intentionally uses
+  `OfflineAudioContext`; TEST2 needs a path that loads the production app/worklet and
+  starts a real `AudioContext`.
 - A reliable way to wait until `audio/worklet-ready?` is true.
 - PCM capture from the production worklet output.
 - Verification that the loaded backend is AudioWorklet + WASM, not JS fallback.
@@ -41,7 +44,8 @@ TEST2 should investigate and implement:
   is useful.
 - Coverage for the major gaps documented in `docs/TESTPLAN.md` where automation
   is practical.
-- Browser support decision: Chromium-only gate or cross-browser suite.
+- Browser support: Chromium-only for this phase. Cross-browser production audio
+  capture can be added later if the harness proves stable and valuable.
 
 Possible capture approaches to evaluate:
 
@@ -75,4 +79,4 @@ Possible capture approaches to evaluate:
 - [ ] Targeted PCM snapshots are added only where stable and valuable.
 - [ ] `docs/TESTPLAN.md` is updated to show which remaining gaps TEST2 closed and
       which gaps are still intentionally manual or external.
-- [ ] CI runs the suite according to the browser support decision.
+- [ ] CI runs the suite in Chromium.

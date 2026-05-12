@@ -121,6 +121,10 @@ Implementation expectations:
   return `{:ok false :error "..."}` rather than throwing to the agent loop.
 - Tool result envelopes are validated before being sent back to the model context.
 
+If HRD3 is implemented before AI3, skip this subsection and note in the delivered
+roadmap entry that AI tool specs move into AI3 or a follow-up hardening phase. Do not
+create placeholder AI tool namespaces just to satisfy this section.
+
 ---
 
 ## Files to change
@@ -140,7 +144,7 @@ Expected files:
 | `app/src/repulse/fx_test.cljs` | Tests for invalid effect plugin/node contracts |
 | `app/src/repulse/session_test.cljs` | Tests for malformed persisted session rejection/sanitization |
 | `docs/PLUGINS.md` | Update method requirement table to match runtime validation |
-| `app/src/repulse/ai/tools.cljs` | Add spec validation for tool descriptors, call envelopes, and result shapes (§5) |
+| `app/src/repulse/ai/tools.cljs` | Add spec validation for tool descriptors, call envelopes, and result shapes (§5), only if AI3 already exists |
 | `README.md` / `docs/ARCHITECTURE.md` | Briefly document the spec boundary strategy if useful |
 
 The exact file split may change if a narrower namespace layout fits the codebase
@@ -222,7 +226,7 @@ Avoid validation in:
   dependencies into `packages/core`.
 - Tests cover at least plugin validation, effect-node validation, session validation,
   and core data specs.
-- AI tool descriptors are validated at registration time; an invalid descriptor (missing
+- If AI3 exists, AI tool descriptors are validated at registration time; an invalid descriptor (missing
   `:description` or unknown `:side-effects` keyword) throws a clear error at startup.
 - `propose_edit` with `:to` beyond document length returns `{:ok false :error "..."}` and
   does not show the diff overlay.
