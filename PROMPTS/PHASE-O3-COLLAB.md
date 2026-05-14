@@ -17,12 +17,19 @@ buffer. Audio remains local; only code and lightweight presence state sync.
 ## Design Notes
 
 The old umbrella O prompt suggested Yjs + WebRTC. That is still plausible, but the
-implementation must choose the signaling approach explicitly before coding:
+implementation must choose the signaling approach explicitly before coding.
 
-- public signaling service
-- self-hosted signaling endpoint
-- Supabase realtime
-- no collaboration until a backend decision is made
+**Recommended approach: Supabase Realtime as the signaling channel.** It reuses the
+existing S2 backend (no new external dependency), works with Supabase auth, and keeps
+the stack uniform. Yjs with `y-supabase` (Supabase Realtime broadcast/presence) or
+`y-webrtc` with Supabase Realtime for signaling are both viable transports.
+
+Alternative signaling options (evaluate if Supabase Realtime proves unsuitable):
+
+- Public signaling service (e.g. `wss://y-webrtc-signaling.netlify.app`) — no server
+  cost, but introduces an external dependency and has no auth
+- Self-hosted signaling endpoint — maximum control, adds operational overhead
+- No collaboration until the team makes a deliberate signaling/privacy decision
 
 ## Definition Of Done
 

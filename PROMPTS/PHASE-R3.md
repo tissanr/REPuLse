@@ -38,7 +38,12 @@ These files are editor/application logic and are already consumed by CLJS.
 Porting them removes the largest hand-written JS island without changing the
 audio engine or external plugin story.
 
-### Keep as JS
+### Keep as JS (and explicitly excluded from R3 scope)
+
+`app/src/repulse/lisp-lang/rainbow.js` — rainbow parenthesis coloring (a self-contained
+ViewPlugin over the Lezer syntax tree with no CLJS callers) is intentionally excluded
+from R3. It can be ported or removed in a later cleanup phase without blocking the main
+R3 goal.
 
 Do not convert generated or boundary files:
 
