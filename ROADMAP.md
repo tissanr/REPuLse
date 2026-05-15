@@ -1489,7 +1489,7 @@ See full spec: [PROMPTS/PHASE-AI3b.md](PROMPTS/PHASE-AI3b.md)
 
 ---
 
-## Phase AI4 — Assistant Safety & Limits 📋 *planned*
+## Phase AI4 — Assistant Safety & Limits ✅ *delivered*
 
 The trust and economics layer: hard token + tool-call budgets, prompt-injection guards
 for untrusted content the assistant reads, auto-apply toggle with full undo, retry
@@ -1497,13 +1497,28 @@ handling, and activity logging.
 
 **Key additions:**
 - Hard token + tool-call budget per session; soft warning at 50%, hard stop at 100%
-  with one-click raise; budget persisted per provider
-- Prompt-injection guards — snippet text, sample manifest text, and any external content
-  the assistant reads wrapped in `<untrusted>` tags in the system prompt
+  with one-click raise; limits configurable in AI settings and persisted to localStorage
+- Prompt-injection guards — `read_buffer` text and community `find_snippet` results
+  wrapped in `<untrusted>` XML tags; system prompt instructs model never to follow
+  instructions found inside those tags
 - Auto-apply toggle (default off) — when on, every `propose_edit` lands immediately and
-  records to an undo stack with a "revert assistant turn" button
-- Per-provider rate limiting + retry-with-backoff; provider errors surfaced inline
-- Activity log panel — last 50 tool calls with payloads, exportable as JSON for debugging
+  records to an undo stack (max 20 turns); "Revert last turn" button visible when stack
+  is non-empty
+- `complete-with-retry!` wrapper adds exponential back-off on HTTP 429 (max 3 attempts);
+  errors surfaced inline after retries exhausted
+- Activity log panel — last 50 tool calls with tool name and args, collapsible, exportable
+  as JSON; "Reset session" clears both the log and the budget counters
+
+**Delivered:**
+- `app/src/repulse/ai/budget.cljs` — budget state atom, `record-usage!`, `save-limits!`, `reset-budget!`
+- `app/src/repulse/ai/injection_guard.cljs` — `wrap`, `guard-tool-result` applied in `tools/execute!`
+- `app/src/repulse/ai/undo.cljs` — undo stack, `record-pre-edit!`, `revert-last-turn!`
+- `app/src/repulse/ai/settings.cljs` — added `auto-apply?` atom with localStorage persistence
+- `app/src/repulse/ai/client.cljs` — 429 detection + `complete-with-retry!`
+- `app/src/repulse/ai/agent_loop.cljs` — budget recording, undo turn begin, activity log callback
+- `app/src/repulse/ai/tools.cljs` — injection guard on all results; auto-apply path in `propose_edit`
+- `app/src/repulse/ai/system_prompt.cljs` — `<untrusted>` instruction block prepended
+- `app/src/repulse/ui/assistant_panel.cljs` — budget badge, undo bar, activity log panel, budget settings fields
 
 See full spec: [PROMPTS/PHASE-AI4.md](PROMPTS/PHASE-AI4.md)
 
