@@ -4,6 +4,13 @@
             [repulse.fx :as fx]
             [repulse.lisp.eval :as leval]))
 
+(defn- effect-name
+  "Return the canonical plugin name for an effect keyword/symbol/string."
+  [x]
+  (case (cljs.core/name x)
+    "dattorro" "dattorro-reverb"
+    (cljs.core/name x)))
+
 (defn make-builtins
   "No ctx dependencies — all state accessed via fx/audio modules directly."
   [_ctx]
@@ -17,7 +24,7 @@
          ;; ── Per-track mode: annotate pattern with FX metadata ──────────
          (let [fx-args     (butlast args')
                pat         last-arg
-               effect-name (cljs.core/name (first fx-args))
+               effect-name (effect-name (first fx-args))
                rest-fx     (rest fx-args)
                params      (if (keyword? (first rest-fx))
                              ;; All named: (fx :reverb :wet 0.3)
@@ -35,16 +42,16 @@
            (let [first-arg (first args')]
              (cond
                (= first-arg :off)
-               (fx/bypass! (cljs.core/name (second args')) true)
+               (fx/bypass! (effect-name (second args')) true)
 
                (= first-arg :on)
-               (fx/bypass! (cljs.core/name (second args')) false)
+               (fx/bypass! (effect-name (second args')) false)
 
                (= first-arg :remove)
-               (fx/remove-effect! (cljs.core/name (second args')))
+               (fx/remove-effect! (effect-name (second args')))
 
                :else
-               (let [effect-name (cljs.core/name first-arg)
+               (let [effect-name (effect-name first-arg)
                      rest-args   (rest args')]
                  (if (keyword? (first rest-args))
                    (doseq [[k v] (partition 2 rest-args)]
