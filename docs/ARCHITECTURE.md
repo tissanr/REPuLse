@@ -246,21 +246,24 @@ Parsed by the existing reader — no new dependencies required.
 Maintains a map of `plugin-name → {:plugin js-obj :type keyword}`.
 
 ```clojure
-(register! plugin host)   ; validate!, call .init, replace existing registration
+(register! plugin host)   ; validate/normalize, call .init, replace existing registration
 (unregister! name)        ; calls .destroy, removes from registry
 (visual-plugins)          ; returns all registered :visual plugins
 ```
 
-`register!` validates that the plugin object exposes all required methods before
-calling `init`. Missing methods produce a descriptive error at load time rather
-than a silent failure later.
+`register!` validates plugin identity, type, and required methods before calling
+`init`. Optional protocol methods are normalized to safe defaults, and effect
+plugins are checked again when `createNodes(ctx)` returns its audio graph. Missing
+methods or invalid `{inputNode, outputNode}` results produce descriptive errors at
+the boundary rather than a silent failure later.
 
 Plugins are ES module default exports. Two authoring styles are supported:
 
 - **Class style** — extend `VisualPlugin` or `EffectPlugin` from `app/public/plugin-base.js`.
   The base classes set `type` automatically and provide default no-op implementations for
   optional methods.
-- **Plain object style** — export a literal object with the full method set.
+- **Plain object style** — export a literal object with the required methods; optional
+  methods are installed by the registry when absent.
 
 See [`docs/PLUGINS.md`](PLUGINS.md) for the complete protocol, Host API, worked examples,
 and registration rules.

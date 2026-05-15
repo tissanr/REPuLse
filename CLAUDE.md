@@ -317,7 +317,7 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | TEST2 | Production browser audio capture — AudioWorklet/WASM PCM verification | planned      |
 | HRD1  | Hardening — AST editor patching, fetch validation, reproducible Rust builds | ✓ delivered  |
 | HRD2  | Security hardening — XSS, RLS, CORS, input validation, CSP    | ✓ delivered  |
-| HRD3  | Interface specs — plugins, pattern data, sessions, FX, MIDI   | planned      |
+| HRD3  | Interface specs — plugins, pattern data, sessions, FX, MIDI   | ✓ delivered  |
 | DOC1  | User docs — split manual, tutorials, cookbook, reference       | planned      |
 | R3    | Refactor — purify hand-written JS into CLJS where appropriate  | planned      |
 | PLUG1 | Drop-in plugins — drag trusted local JS plugins into the app   | planned      |

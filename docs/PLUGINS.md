@@ -115,10 +115,10 @@ export default class SpectrumBars extends VisualPlugin {
 | Method | Required | Default | Description |
 |---|---|---|---|
 | `constructor({ name, version })` | — | — | Sets `this.type = "visual"` automatically |
-| `init(host)` | optional | no-op | Store host references. Called once at registration. |
+| `init(host)` | optional | no-op installed by REPuLse | Store host references. Called once at registration. |
 | `mount(container)` | **required** | throws | Append DOM, start render loop. `container` is a `div`. |
 | `unmount()` | **required** | throws | Stop render loop, remove DOM. |
-| `destroy()` | optional | calls `unmount()` | Full teardown. Override only if you hold extra refs. |
+| `destroy()` | optional | calls `unmount()` installed by REPuLse | Full teardown. Override only if you hold extra refs. |
 
 The `AnalyserNode` provides two data sources for drawing:
 
@@ -210,12 +210,13 @@ After loading, control the tremolo from the REPL:
 | Method | Required | Default | Description |
 |---|---|---|---|
 | `constructor({ name, version })` | — | — | Sets `this.type = "effect"` automatically |
-| `init(host)` | optional | no-op | Called once at registration. Use for async setup (e.g. `addModule`). |
+| `init(host)` | optional | no-op installed by REPuLse | Called once at registration. Use for async setup (e.g. `addModule`). |
 | `createNodes(ctx)` | **required** | throws | Build the audio sub-graph. Return `{ inputNode, outputNode }`. Must be synchronous. |
 | `setParam(name, value)` | **required** | throws | Update a named parameter. |
-| `bypass(on)` | optional | no-op | `on = true` → transparent pass-through. `on = false` → restore. |
-| `getParams()` | optional | `{}` | Return current `{ name: value }` state. |
+| `bypass(on)` | optional | no-op installed by REPuLse | `on = true` → transparent pass-through. `on = false` → restore. |
+| `getParams()` | optional | `{}` installed by REPuLse | Return current `{ name: value }` state. |
 | `destroy()` | **required** | throws | Disconnect all nodes and release references. |
+| `clone()` | optional | shallow object clone fallback | Return a fresh effect instance for per-track chains. Required for closure-state plugins. |
 
 ### Audio graph contract
 
@@ -227,7 +228,8 @@ return { inputNode: AudioNode, outputNode: AudioNode }
 
 REPuLse connects `masterGain → inputNode` and `outputNode → nextEffect.inputNode`
 (or `outputNode → analyser` if this is the last effect). Failing to return this object
-will produce silence and a disconnected graph.
+is rejected before the effect enters the chain. Both properties must be Web Audio
+node-like objects with `connect` and `disconnect` methods.
 
 ### Dry/wet topology
 
@@ -249,8 +251,9 @@ When `(load-plugin url)` is called, REPuLse:
 
 1. Dynamically imports the ES module
 2. Calls `plugins/register!` with the default export
-3. `register!` runs `validate!` — checking that all required methods exist
-4. If validation passes, calls `plugin.init(host)` and adds the plugin to the registry
+3. `register!` validates identity, type, and required methods
+4. REPuLse installs documented defaults for optional methods
+5. If validation passes, calls `plugin.init(host)` and adds the plugin to the registry
 
 **If a required method is missing**, registration throws with a descriptive error:
 
@@ -260,34 +263,32 @@ When `(load-plugin url)` is called, REPuLse:
 
 This check works for both class instances (methods resolved via prototype chain) and
 plain JS objects, so the feedback is always accurate regardless of authoring style.
+Effect plugins are checked again when their audio graph is built: invalid `createNodes`
+return values are rejected with the plugin name before REPuLse rewires the signal chain.
 
 ---
 
 ## Plain object style
 
 If you prefer not to import the base class, you can export a plain object directly.
-All methods the protocol marks as "optional" must then be provided explicitly:
+Only the methods marked as required must be provided explicitly; REPuLse installs
+safe defaults for optional methods at registration:
 
 ```javascript
 // Visual plugin — plain object
 export default {
   type: "visual", name: "oscilloscope", version: "1.0.0",
 
-  init(host)      { this._analyser = host.analyser; },
   mount(container){ /* ... */ },
   unmount()       { /* ... */ },
-  destroy()       { this.unmount(); this._analyser = null; },
 };
 
 // Effect plugin — plain object
 export default {
   type: "effect", name: "reverb", version: "1.0.0",
 
-  init(host)           {},
   createNodes(ctx)     { /* ... */ return { inputNode, outputNode }; },
   setParam(name, value){ /* ... */ },
-  bypass(on)           { /* ... */ },
-  getParams()          { return { wet: this._wet?.gain.value }; },
   destroy()            { /* ... */ },
 };
 ```
@@ -319,16 +320,16 @@ macro — keys are keywords in source, string properties in the emitted JS:
 #js {:type    "effect"
      :name    "my-effect"
      :version "1.0.0"
-     :init        (fn [_host] nil)
      :createNodes (fn [ctx] ...)
      :setParam    (fn [param-name value] ...)
-     :bypass      (fn [on] ...)
-     :getParams   (fn [] #js {})
-     :destroy     (fn [] ...)}
+     :destroy     (fn [] ...)
+     :clone       make}
 ```
 
-`validate!` calls `(fn? (aget plugin "createNodes"))` — this resolves correctly to the
-ClojureScript function stored at that JS property.
+`validate-plugin!` calls `(fn? (aget plugin "createNodes"))` — this resolves correctly
+to the ClojureScript function stored at that JS property. `clone` is optional for plain
+JavaScript objects, but CLJS plugins that keep state in closure atoms should provide it
+so per-track effect instances do not share state.
 
 ### Closure-based state instead of `this`
 
@@ -399,8 +400,8 @@ them directly in `app.cljs` `init` after the audio context is ready:
 (fx/add-effect!    compressor/plugin)
 ```
 
-The same `validate!` runs — if the `#js {}` object is missing a required method, you
-get the same descriptive error as with any other plugin.
+The same `validate-plugin!` check runs — if the `#js {}` object is missing a required
+method, you get the same descriptive error as with any other plugin.
 
 ### Complete example: the compressor
 
@@ -437,4 +438,3 @@ npm run gen:ai-docs    # regenerate docs/ai/builtins.json
 ```
 
 See `docs/ai/README.md` for the full update workflow and `CLAUDE.md` Rule 5 for the complete checklist.
-

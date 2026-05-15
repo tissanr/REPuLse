@@ -5,6 +5,7 @@
             [repulse.samples :as samples]
             [repulse.plugins :as plugins]
             [repulse.session :as session]
+            [repulse.specs :as specs]
             [repulse.plugins.compressor :as compressor-plugin]
             [repulse.ui.editor :as editor]
             [repulse.ui.timeline :as timeline]
@@ -137,20 +138,21 @@
       (and hash (str/starts-with? hash "#v2:"))
       (let [b64  (subs hash 4)
             data (js->clj (js/JSON.parse (b64-decode b64)) :keywordize-keys true)]
-        (when (= (:v data) 2) data))
+        (specs/sanitize-session-v2 (update data :bpm audio/coerce-bpm)))
 
       (and hash (str/starts-with? hash "#v1:"))
       (let [b64  (subs hash 4)
             data (js->clj (js/JSON.parse (js/atob b64)) :keywordize-keys true)]
         (when data
-          {:v       2
-           :bpm     (:bpm data)
-           :editor  (:editor data)
-           :fx      []
-           :bank    nil
-           :sources []
-           :muted   []
-           :midi    {}}))
+          (specs/sanitize-session-v2
+           {:v       2
+            :bpm     (audio/coerce-bpm (:bpm data))
+            :editor  (:editor data)
+            :fx      []
+            :bank    nil
+            :sources []
+            :muted   []
+            :midi    {}})))
 
       :else nil)
     (catch :default _ nil)))

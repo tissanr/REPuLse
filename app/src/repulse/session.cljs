@@ -1,7 +1,8 @@
 (ns repulse.session
   (:require [repulse.audio :as audio]
             [repulse.samples :as samples]
-            [repulse.midi :as midi]))
+            [repulse.midi :as midi]
+            [repulse.specs :as specs]))
 
 (def current-version 2)
 (def storage-key "repulse-session")
@@ -25,20 +26,24 @@
 (defn build-session-snapshot
   "Collect all session state into a serializable map."
   []
-  {:v       current-version
-   :editor  (if-let [f @editor-text-fn] (f) "")
-   :bpm     (or (audio/get-bpm) 120)
-   ;; FX params are intentionally not persisted. The editor buffer is the
-   ;; source of truth; restored plugin state would make reloads non-reproducible.
-   :fx      []
-   :bank    @samples/active-bank-prefix
-   :sources (mapv (fn [{:keys [type id]}]
-                    {:type (cljs.core/name type) :id id})
-                  (filter #(= :github (:type %)) @samples/loaded-sources))
-   :muted   (mapv cljs.core/name (:muted @audio/scheduler-state))
-   :midi    (into {} (map (fn [[k {:keys [target]}]]
-                            [(str k) (when target (cljs.core/name target))])
-                          @midi/cc-mappings))})
+  (let [snapshot {:v       current-version
+                  :editor  (if-let [f @editor-text-fn] (f) "")
+                  :bpm     (or (audio/get-bpm) 120)
+                  ;; FX params are intentionally not persisted. The editor buffer is the
+                  ;; source of truth; restored plugin state would make reloads non-reproducible.
+                  :fx      []
+                  :bank    @samples/active-bank-prefix
+                  :sources (mapv (fn [{:keys [type id]}]
+                                   {:type (cljs.core/name type) :id id})
+                                 (filter #(= :github (:type %)) @samples/loaded-sources))
+                  :muted   (mapv cljs.core/name (:muted @audio/scheduler-state))
+                  :midi    (into {} (map (fn [[k {:keys [target]}]]
+                                           [(str k) (when target (cljs.core/name target))])
+                                         @midi/cc-mappings))}]
+    (or (specs/sanitize-session-v2 snapshot)
+        (do
+          (js/console.warn "[REPuLse] Refusing to build invalid session snapshot")
+          {:v current-version :editor "" :bpm 120 :fx [] :bank nil :sources [] :muted [] :midi {}}))))
 
 ;;; ── Save (debounced) ─────────────────────────────────────────────────────
 
@@ -66,7 +71,12 @@
     (when-let [raw (.getItem js/localStorage storage-key)]
       (let [data (js->clj (js/JSON.parse raw) :keywordize-keys true)]
         (when (= (:v data) current-version)
-          (update data :bpm #(normalize-bpm % "localStorage")))))
+          (let [coerced (update data :bpm #(normalize-bpm % "localStorage"))]
+            (if-let [sanitized (specs/sanitize-session-v2 coerced)]
+              sanitized
+              (do
+                (js/console.warn "[REPuLse] Ignoring malformed persisted session")
+                nil))))))
     (catch :default _ nil)))
 
 ;;; ── Migration from Phase D ────────────────────────────────────────────────
@@ -86,11 +96,12 @@
                      :sources []
                      :muted   []
                      :midi    {}}]
-        (.setItem js/localStorage storage-key
-                  (js/JSON.stringify (clj->js session)))
-        (.removeItem js/localStorage "repulse-editor")
-        (.removeItem js/localStorage "repulse-bpm")
-        session))))
+        (when-let [sanitized (specs/sanitize-session-v2 session)]
+          (.setItem js/localStorage storage-key
+                    (js/JSON.stringify (clj->js sanitized)))
+          (.removeItem js/localStorage "repulse-editor")
+          (.removeItem js/localStorage "repulse-bpm")
+          sanitized)))))
 
 ;;; ── Reset ────────────────────────────────────────────────────────────────
 
