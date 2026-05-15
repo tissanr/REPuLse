@@ -868,6 +868,104 @@ See full spec: [PROMPTS/PHASE-DST6.md](PROMPTS/PHASE-DST6.md)
 
 ---
 
+## Phase SYN1 — Karplus-Strong Plucked String 📋 *planned*
+
+Add a Karplus-Strong delay-line voice to the WASM engine, giving REPuLse its first
+melodic instrument tier: six plucked-string presets callable as `(synth :guitar)`,
+`(synth :harp)`, `(synth :koto)`, `(synth :pizz)`, `(synth :lute)`, `(synth :mandolin)`.
+
+**Key additions:**
+- `packages/audio/src/lib.rs` — `Voice::KarplusStrong` variant with pre-allocated
+  2205-sample ring buffer, `ks_preset()` table, feedback/brightness/pick-pos/vibrato
+  coefficients per preset, `tick` and `is_silent` implementations
+- Trigger dispatch via `"ks:{preset}:{freq}:{amp}"` value string in `trigger_v2`
+- `app/src/repulse/synth.cljs` — six preset entries in builtin-voice-map
+- Grammar, completions, `builtin_meta.edn`, and `docs/ai/builtins.json` updated for
+  all six names; `npm run gen:grammar` and `npm run gen:ai-docs` required
+
+See full spec: [PROMPTS/PHASE-SYN1.md](PROMPTS/PHASE-SYN1.md)
+
+---
+
+## Phase SYN2 — FM Instrument Presets 📋 *planned*
+
+Extend the existing WASM FM voice with a full ADSR envelope and a hard-coded preset
+table, unlocking nine named instruments — `(synth :sax)`, `(synth :trumpet)`,
+`(synth :trumpet-muted)`, `(synth :epiano)`, `(synth :bell)`, and more — without any
+new synthesis algorithm.
+
+**Key additions:**
+- `packages/audio/src/lib.rs` — `Voice::FM` gains `attack`/`decay`/`sustain`/`release`/
+  `env_phase` fields; `fm_preset()` table returns tuned coefficients for nine instruments;
+  `trigger_v2` gains a preset dispatch path `"fm:{preset}:{freq}:{amp}"` alongside the
+  legacy manual path
+- `app/src/repulse/synth.cljs` — nine preset entries in builtin-voice-map
+- Grammar, completions, `builtin_meta.edn`, and `docs/ai/builtins.json` updated for
+  all nine names
+
+See full spec: [PROMPTS/PHASE-SYN2.md](PROMPTS/PHASE-SYN2.md)
+
+---
+
+## Phase SYN3 — Bowed String Waveguide 📋 *planned*
+
+Add a full bi-directional digital waveguide bowed-string voice to the WASM engine,
+unlocking `:violin`, `:viola`, `:cello`, and `:bass-arco` as continuously sustaining
+voices with `bow-pressure` and `bow-pos` per-event parameters.
+
+**Key additions:**
+- `packages/audio/src/lib.rs` — `Voice::BowedString`: two 2205-sample pre-allocated
+  delay lines, piecewise-linear `bow_table()` friction function, `bow_preset()` table
+  with body resonance IIR coefficients per instrument, `tick` and `is_silent`
+- Trigger dispatch via `"bow:{preset}:{freq}:{amp}:{pressure}:{pos}"`
+- `app/src/repulse/env/builtins/tracks.cljs` — `bow-pressure` and `bow-pos` parameter
+  transformer builtins (same pattern as `amp`, `decay`, `pan`)
+- Grammar, completions, `builtin_meta.edn`, `docs/ai/builtins.json` updated for four
+  synth names and two new parameter names
+
+See full spec: [PROMPTS/PHASE-SYN3.md](PROMPTS/PHASE-SYN3.md)
+
+---
+
+## Phase SYN4 — Electric Guitar Voices 📋 *planned*
+
+Add five electric guitar presets — `:strat`, `:tele`, `:es335`, `:sg`, `:lp` — to the
+SYN1 Karplus-Strong engine with per-instrument body resonance IIR filters and two new
+per-event parameters (`pick-pos`, `tone`) for live tonal shaping. Depends on SYN1.
+
+**Key additions:**
+- `packages/audio/src/lib.rs` — five new entries in `ks_preset()`; body resonance
+  IIR fields added to `Voice::KarplusStrong`; `pick_pos` and `tone` overrides in the
+  `"ks:"` trigger string; acoustic presets from SYN1 use identity IIR (no change in
+  behaviour)
+- `app/src/repulse/env/builtins/tracks.cljs` — `pick-pos` and `tone` parameter
+  transformer builtins
+- `builtin_meta.edn` `see-also` entries cross-reference `:amp-sim`, `:cab`,
+  `:overdrive`, `:distort` for the full guitar signal chain
+
+See full spec: [PROMPTS/PHASE-SYN4.md](PROMPTS/PHASE-SYN4.md)
+
+---
+
+## Phase SYN5 — Lo-Fi Piano 📋 *planned*
+
+Add `(synth :piano)` and `(synth :piano-felt)` using an extended Karplus-Strong model
+with a bi-linear decay filter that approximates hammer-struck string character — bright
+transient, warm sustain — without attempting full physical accuracy. Depends on SYN1.
+
+**Key additions:**
+- `packages/audio/src/lib.rs` — `brightness_peak`, `brightness_low`, `bright_dur`,
+  `elapsed` fields added to `Voice::KarplusStrong`; bi-linear decay in `tick`; pitch-
+  dependent feedback scaling; piano and piano-felt presets in `ks_preset()`
+- `app/src/repulse/synth.cljs` — two dispatch entries: `:piano`, `:piano-felt`
+- `builtin_meta.edn` `see-also` references to `:bitcrusher`, `:reverb` for lo-fi chain
+- High-fidelity piano (inharmonicity, multi-string beating, soundboard) is intentionally
+  deferred to `docs/FUTURE-FEATURES.md`
+
+See full spec: [PROMPTS/PHASE-SYN5.md](PROMPTS/PHASE-SYN5.md)
+
+---
+
 ## Phase J2 — Contextual Insertion Buttons ✅ *delivered*
 
 Point-and-click code scaffolding: `+` buttons appear on hover over parentheses and
@@ -1386,6 +1484,29 @@ want provider keys stored in browser localStorage.
 - BYO localStorage key mode remains fully supported
 
 See full spec: [PROMPTS/PHASE-AI4B-KEY-RELAY.md](PROMPTS/PHASE-AI4B-KEY-RELAY.md)
+
+---
+
+## Phase AI5 — Variation Workflows & Live Audition 📋 *planned*
+
+Extend the AI3 agent so it can generate multiple code variants for any named def (or
+the full buffer), then let the user hear each one live before committing — turning AI
+generation from a guess-and-apply loop into an audible *hear → compare → commit* flow.
+
+**Key additions:**
+- `app/src/repulse/ai/variations.cljs` — variations state atom, `audition-variant!`
+  (swaps `:audition-tracks` in `scheduler-state`), `cancel-audition!` (restores original)
+- `app/src/repulse/audio.cljs` — `:audition-tracks {}` added to `scheduler-state`;
+  `schedule-cycle!` merges `:audition-tracks` over `:tracks` so one track can be
+  previewed live without touching the real pattern
+- `app/src/repulse/ai/tools.cljs` — three new tools: `generate_variations` (returns
+  N structured variants), `audition_track` (live swap for arbitrary code), `cancel_audition`
+- `app/src/repulse/ai/buffer_scope.cljs` — `def-ranges` pass over the reader output;
+  maps def names to `{:from N :to N}` char ranges so the agent can target named forms
+- Variations strip in `app/src/repulse/ui/assistant_panel.cljs` — tabs A / B / C,
+  "Use this" button (writes buffer + AI4 undo stack), "Cancel" button
+
+See full spec: [PROMPTS/PHASE-AI5.md](PROMPTS/PHASE-AI5.md)
 
 ---
 
