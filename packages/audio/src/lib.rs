@@ -766,10 +766,10 @@ impl AudioEngine {
             let preset = parts.first().copied().unwrap_or("guitar");
             let freq: f32 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(440.0);
             let (feedback, brightness, pick_pos, vib_depth, vib_rate) = ks_preset(preset);
-            let buf_len = ((sr / freq).floor() as usize).max(2).min(2205);
+            let buf_len = ((sr / freq).floor() as usize).clamp(2, 2205);
             let mut buf = vec![0.0f32; 2205];
-            for i in 0..buf_len {
-                buf[i] = lcg_next(&mut self.noise_seed);
+            for slot in buf.iter_mut().take(buf_len) {
+                *slot = lcg_next(&mut self.noise_seed);
             }
             let comb = (buf_len as f32 * pick_pos).floor() as usize;
             if comb > 0 {
