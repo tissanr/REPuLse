@@ -34,8 +34,13 @@ processing.
 
 `app/src/repulse/fx.cljs` manages a global `chain` atom and per-track `fx-chain` in
 `audio/track-nodes`.
-- **Global**: `rewire!` has a hardcoded order (reverb → delay → filter → ...).
-- **Per-track**: Order is determined by the sequence of `(fx ...)` calls in the pattern.
+- **Global**: `chain` is already an ordered vector, and `rewire!` connects effects in
+  that vector order. P2 should add a user-facing order command and default-order policy,
+  not assume the order is hardcoded elsewhere.
+- **Per-track**: Order is determined by the sequence of `(fx ...)` calls stored as
+  `:track-fx` metadata on the pattern and then applied to `audio/track-nodes`.
+  This linear metadata is a useful base for reordering, but parallel FX require an
+  explicit graph/branch representation rather than plain `:track-fx` entries.
 
 ### Current Busses (Phase P)
 
@@ -49,12 +54,17 @@ inter-synth communication but are not yet integrated into the FX system as desti
 | File | Change |
 |---|---|
 | `app/src/repulse/fx.cljs` | Add `set-chain-order!` to reorder the master chain; Update `rewire!` to use the defined order; Implement `fx-send` plugin logic. |
-| `app/src/repulse/env/builtins.cljs` | Add `fx-chain` top-level command; Update `fx` builtin to handle `stack` of FX (parallel chains). |
+| `app/src/repulse/env/builtins/fx.cljs` | Add `fx-chain` top-level command; update `fx` builtin/metadata handling for the chosen parallel-chain representation. |
 | `app/src/repulse/audio.cljs` | Ensure bus nodes can receive audio from `fx-send` and route back to master. |
 | `app/src/repulse/lisp-lang/repulse-lisp.grammar` | Add `fx-chain` and `fx-send` to `BuiltinName`. |
 | `app/src/repulse/lisp-lang/completions.js` | Add completion entries for new commands. |
 | `app/src/repulse/lisp-lang/hover.js` | Add documentation for `fx-chain` and `fx-send`. |
 | `docs/USAGE.md` | Document reorderable chains and parallel routing. |
+
+Note: the example `(stack (fx :reverb 0.5) (fx :distort 8))` is not directly
+compatible with current semantics because a bare `(fx ...)` is a global side-effect
+command unless it receives a pattern via `->>`. Before implementing parallel FX, choose
+an unambiguous syntax for FX branches.
 
 ---
 

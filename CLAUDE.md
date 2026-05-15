@@ -163,6 +163,27 @@ requires in those files are only caught by compiling the `:app` target.
 
 ---
 
+## WASM synthesis — architectural decisions
+
+These decisions were made deliberately. Read before touching `packages/audio/src/lib.rs`.
+
+**Karplus-Strong delay buffer: pre-allocate max per voice.**
+Every `Voice::KarplusStrong` holds a fixed-capacity buffer sized for the lowest musical
+note (~20 Hz = 2205 samples at 44100 Hz, ~9 KB/voice). This wastes memory on high
+notes (440 Hz only uses ~100 slots) but keeps the AudioWorklet render callback
+allocation-free. If memory pressure becomes a problem with many simultaneous voices,
+revisit — but do not move buffer allocation into the render path without profiling first.
+
+**SYN3 bowed string: full bi-directional waveguide, not Karplus approximation.**
+`Voice::BowedString` uses two delay lines (nut→bridge, bridge→nut), a piecewise-linear
+bow friction table, and per-instrument body resonance IIR filters. A Karplus bow
+approximation (slow-attack + high feedback) was considered and rejected: it sounds
+plucked, not bowed, and re-triggers every note instead of sustaining continuously.
+The waveguide is more Rust code but the realism delta for violin/cello is large enough
+to justify it.
+
+---
+
 ## Build
 
 ```bash
@@ -264,8 +285,11 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | 10a   | Editor diagnostics — red squiggle underlines on eval errors    | ✓ delivered  |
 | D2    | Full session persistence — all state in localStorage + reset!  | ✓ delivered  |
 | N1    | MIDI CC mapping — bind controller knobs to any parameter      | planned      |
-| O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
+| O     | Platform umbrella — split into O1/O2/O3/O4                    | split        |
 | O1    | Embeddable component — `<repulse-editor>` custom element, snippet attr | ✓ delivered  |
+| O2    | PWA/offline — manifest, service worker, offline app shell     | planned      |
+| O3    | Collaboration — shared editor sessions via CRDT/WebRTC        | planned      |
+| O4    | Mobile layout — touch-friendly responsive performance UI      | planned      |
 | T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | ✓ delivered  |
 | P     | Modular routing — busses, control rate, general envelopes      | ✓ delivered  |
 | P2    | Modular effect routing — reorderable chains, parallel FX, sends | planned      |
@@ -283,6 +307,11 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | DST4  | Distortion — oversampling wrapper (:oversample 1/2/4)          | ✓ delivered  |
 | DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | ✓ delivered  |
 | DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | ✓ delivered  |
+| SYN1  | Plucked strings — :guitar :harp :koto :pizz :lute :mandolin    | planned      |
+| SYN2  | FM presets — :sax :trumpet :epiano :bell :marimba :flute       | planned      |
+| SYN3  | Bowed strings — :violin :viola :cello :bass-arco (waveguide)   | planned      |
+| SYN4  | Electric guitars — :strat :tele :es335 :sg :lp (KS + body IIR) | planned      |
+| SYN5  | Lo-fi piano — :piano :piano-felt (KS bi-linear decay)          | planned      |
 | CI1   | CI pipeline — GitHub Actions: tests, lint, Rust, grammar drift | ✓ delivered  |
 | TEST1 | Automated audio verification — CLJS, Rust DSP, offline PCM tests | ✓ delivered  |
 | TEST2 | Production browser audio capture — AudioWorklet/WASM PCM verification | planned      |
@@ -291,12 +320,14 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | HRD3  | Interface specs — plugins, pattern data, sessions, FX, MIDI   | planned      |
 | DOC1  | User docs — split manual, tutorials, cookbook, reference       | planned      |
 | R3    | Refactor — purify hand-written JS into CLJS where appropriate  | planned      |
-| PLUG1 | Drop-in plugins — drag local JS/package plugins into the app   | planned      |
+| PLUG1 | Drop-in plugins — drag trusted local JS plugins into the app   | planned      |
 | AI1   | AI knowledge base — /docs/ai/*.json, gen:ai-docs, help-export  | ✓ delivered  |
 | AI2   | AI assistant panel — BYO key, streaming chat, opt-in feature   | ✓ delivered  |
 | AI3   | Tool-using agent — read_buffer, propose_edit, eval_preview     | ✓ delivered  |
 | AI3b  | AI sample discovery — freesound_search, freesound_load, web_search | planned  |
 | AI4   | AI safety & limits — budgets, injection guards, auto-apply     | planned      |
+| AI4b  | AI encrypted key relay — Supabase-stored provider keys         | planned      |
+| AI5   | Variation workflows — multi-variant generation, live audition  | planned      |
 | UI1   | Theming — settings dialog, named palettes, editor theme switch | planned      |
 
 See `PROMPTS/` for detailed phase specifications and `ROADMAP.md` for full delivery notes.

@@ -6,18 +6,13 @@ Let users install third-party REPuLse plugins by dragging a local plugin file
 onto the app. The feature should build on the current plugin registry and
 effect/visual plugin protocols, not replace them.
 
-The first version is a **trusted local plugin** system: dropped plugins are
-JavaScript modules that run in the app context after explicit user consent.
+The first version is a **trusted local single-file plugin** system: dropped plugins
+are JavaScript modules that run in the app context after explicit user consent.
 This is honest, useful, and matches the current Web Audio plugin architecture.
+Zip/package plugin support is explicitly out of scope for PLUG1 v1.
 
 ```text
-my-delay.repulse-plugin.zip
-├── repulse-plugin.json
-├── main.js
-├── assets/
-│   └── impulse.wav
-└── worklets/
-    └── processor.js
+my-delay.js
 ```
 
 ---
@@ -32,6 +27,10 @@ REPuLse already has:
 - `app/public/plugins/*.js` — built-in effect/visual plugins loaded as ES modules
 - `app/src/repulse/fx.cljs` — inserts effect plugin nodes into the audio graph
 
+If Phase HRD3 has not run yet, keep PLUG1's runtime validation changes narrow and
+local. If HRD3 has run, reuse its normalized plugin validation helpers instead of
+adding a parallel validator.
+
 Drag-and-drop should reuse this path:
 
 1. load an ES module
@@ -39,12 +38,16 @@ Drag-and-drop should reuse this path:
 3. register it with `plugins/register!`
 4. mount it if visual, or add it to `fx` if effect
 
-The new work is packaging, local file loading, asset URL resolution,
-persistence, and UX.
+The new work is local file loading, trust/consent UX, validation, optional IndexedDB
+persistence for the single JS file, and plugin-manager UI. Package manifests, packaged
+assets, and packaged worklets move to a later PLUG2-style phase.
 
 ---
 
-## Plugin package format
+## Plugin package format — future phase
+
+Package manifests and zip archives are not required for PLUG1 v1. Keep this section
+as future design context only.
 
 ### Manifest
 
@@ -78,9 +81,9 @@ Optional fields:
 - `assets` — packaged assets exposed via `host.resolveAsset(path)`
 - `description`, `author`, `homepage`, `license`
 
-### Single-file fallback
+### Single-file plugin format
 
-For quick experiments, users may drop a single `.js` file. The loader infers:
+Users drop a single `.js` file. The loader infers:
 
 ```clojure
 {:id generated-local-id
@@ -166,7 +169,7 @@ surface and gives future sandboxed plugin types a clean contract.
 
 ### Drop target
 
-- Dragging a `.js` or `.repulse-plugin.zip` over the app shows a clear drop state.
+- Dragging a `.js` file over the app shows a clear drop state.
 - Dropping opens an install dialog before executing plugin code.
 - Unsupported files show a concise error and do not execute anything.
 
@@ -236,20 +239,16 @@ Startup behaviour:
 
 | File | Change |
 |------|--------|
-| `app/src/repulse/plugin_packages.cljs` | **New** — parse dropped files, manifests, zip packages, blob URLs |
-| `app/src/repulse/plugin_store.cljs` | **New** — IndexedDB persistence for packages |
+| `app/src/repulse/plugin_packages.cljs` | **New** — parse dropped single-file plugins and create/revoke blob URLs |
+| `app/src/repulse/plugin_store.cljs` | **New** — optional IndexedDB persistence for trusted single-file plugins |
 | `app/src/repulse/plugin_loading.cljs` | Add local blob-module loading and export normalization |
 | `app/src/repulse/plugins.cljs` | Add validation for `id`, `apiVersion`, optional metadata; keep current protocols |
 | `app/src/repulse/ui/plugin_manager.cljs` | **New** — install dialog and installed-plugin manager |
 | `app/src/repulse/app.cljs` | Wire drag/drop listeners and plugin manager mount point |
-| `app/public/plugin-base.js` | Document factory export and package manifest conventions |
-| `docs/PLUGINS.md` | Author guide for package format, API, examples, security model |
+| `app/public/plugin-base.js` | Document factory export conventions |
+| `docs/PLUGINS.md` | Author guide for single-file local plugins, API, examples, security model |
 | `docs/USAGE.md` | User instructions for installing/removing dropped plugins |
-| `package.json` / `app/package.json` | Add a zip parser dependency only if needed |
-
-If a zip parser dependency is added, prefer a small browser-compatible library
-with no Node-only assumptions. A no-dependency MVP may support single-file `.js`
-first, then package zip support in the same phase if time allows.
+| `package.json` / `app/package.json` | No zip parser dependency for PLUG1 v1 |
 
 ---
 
@@ -284,13 +283,12 @@ here.
 ## Definition of done
 
 - [ ] Dropping a single `.js` plugin asks for consent and installs it
-- [ ] Dropping a `.repulse-plugin.zip` with `repulse-plugin.json` asks for consent and installs it
-- [ ] Manifest validation rejects missing/invalid `id`, `name`, `version`, `apiVersion`, `type`, or `entry`
+- [ ] Zip/package plugin drops show a clear "not supported yet" message and do not execute code
+- [ ] Single-file metadata validation rejects missing/invalid `name`, `type`, or required protocol methods
 - [ ] Default export factory and default export object are both accepted
 - [ ] Effect plugins are registered and available through existing `(fx ...)` workflows
 - [ ] Visual plugins are registered and can mount/unmount
-- [ ] Packaged assets are available through `host.resolveAsset`
-- [ ] Worklet assets can be loaded through `host.addWorkletModule`
+- [ ] `host.resolveAsset` and packaged worklet support are not required in PLUG1 v1
 - [ ] Installed plugins persist in IndexedDB
 - [ ] User can disable, enable, reload, and remove installed plugins
 - [ ] Load failures are visible in the UI and logged to console without crashing the app
@@ -306,6 +304,8 @@ here.
 
 - No plugin marketplace
 - No remote package registry
+- No zip/package plugin support
+- No packaged asset or packaged worklet support
 - No code signing
 - No hard security sandbox
 - No changes to REPuLse-Lisp plugin syntax beyond existing `(load-plugin)` and `(unload-plugin)`
@@ -320,6 +320,3 @@ here.
 2. **Should plugins be allowed to replace built-ins by name?** Recommendation:
    yes, with an explicit warning when the installed plugin name collides with an
    existing plugin.
-3. **Should package extension be `.repulse-plugin.zip` or `.repulse-plugin`?**
-   Recommendation: support both, document `.repulse-plugin.zip` because it is
-   transparent and easy to inspect.

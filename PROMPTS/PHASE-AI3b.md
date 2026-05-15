@@ -57,8 +57,8 @@ preview MP3 URL at lookup time.
 ### AI3 tool registry
 
 `app/src/repulse/ai/tools.cljs` (new in AI3) — `tool-registry` map of keyword → descriptor
-`{:description … :params … :side-effects #{…} :execute fn}`. AI3b adds four entries to
-this map; no structural changes needed.
+`{:description … :params … :side-effects #{…} :execute fn}`. AI3b adds entries to
+this map after AI3 exists; do not implement AI3b first.
 
 ### Sample bank registry
 
@@ -138,9 +138,12 @@ Add to `tool-registry`:
 
 ### 3. Executor functions
 
-**`freesound-search!`** — fetches Freesound API directly from the browser (same URL as
-the existing `freesound!` builtin). Uses `@settings/freesound-api-key`. Returns a vector
-of `{:id :name :duration :tags}` maps. Errors return `{:error "…"}`.
+**`freesound-search!`** — searches Freesound using `@settings/freesound-api-key`.
+As of 2026-05-12, Freesound API responses include `Access-Control-Allow-Origin: *`
+for browser-origin requests, so direct browser fetch is technically viable. The
+tradeoff is key exposure: direct BYO-key mode puts the token in browser storage and
+network requests. That is acceptable for this phase if documented clearly; server-side
+proxying can be added later if hidden keys become a product requirement.
 
 ```clojure
 (defn freesound-search! [{:keys [query tags page_size]}]
@@ -185,7 +188,10 @@ to suggest a `(seq :freesound-<id>)` insertion at the cursor position.
           (.catch (fn [e] {:error (str "Freesound error: " (.-message e))}))))))
 ```
 
-**`web-search!`** — calls the Brave Search API (simple REST, no SDK):
+**`web-search!`** — optional. Only expose this tool when a search provider/key is
+configured. Unlike Freesound, do not assume browser CORS/key-exposure behavior for
+the chosen search provider. Prefer server-side proxying unless the provider is verified
+to allow browser use and the user explicitly accepts BYO-key exposure.
 
 ```clojure
 (defn web-search! [{:keys [query]}]

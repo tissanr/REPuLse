@@ -38,9 +38,13 @@ input** — the most immediately useful MIDI feature for live performance.
 
 ### What exists today
 
-- **`midi-sync!`** (Phase 4) already calls `navigator.requestMIDIAccess()`, enumerates
-  inputs, and listens for clock messages. This lives in `app/src/repulse/audio.cljs`
-  (lines ~636–679).
+- **`app/src/repulse/midi.cljs` already exists.** It owns `midi-access`,
+  `cc-mappings`, MIDI note output, MIDI clock output, and MIDI file export.
+  Extend it; do not recreate it from the old sketch below.
+- **`app/src/repulse/env/builtins/midi.cljs` already exposes a limited `midi-map`.**
+  The documented/current syntax is `(midi-map :cc N :target)`. It currently maps
+  only `:filter`, `:amp`, and `:bpm`, so N1 should finish that surface and avoid
+  introducing a second incompatible `(midi-map N :target)` form.
 - **Per-event parameters** (Phase H) — `amp`, `attack`, `decay`, `release`, `pan`,
   `rate`, `begin`, `end*` — are fully implemented in `packages/core/src/repulse/params.cljs`.
 - **Effects** (Phase 6b / A) — `reverb`, `delay`, `filter`, `compressor`, `dattorro-reverb`,
@@ -57,7 +61,7 @@ input** — the most immediately useful MIDI feature for live performance.
 | Target | Where it lives | Range | How to set |
 |--------|---------------|-------|------------|
 | `:filter` | Master lowpass via `fx.cljs` | 20–20000 Hz | `fx/set-param!` |
-| `:amp` | Master gain node | 0.0–1.0 | `audio/set-master-gain!` |
+| `:amp` | Master gain node | 0.0–1.0 | Set `@audio/master-gain` AudioParam or add `audio/set-master-gain!` helper |
 | `:bpm` | `audio/scheduler-state` | 60–240 | `audio/set-bpm!` |
 | `:reverb` | Effect wet mix | 0.0–1.0 | `fx/set-param!` |
 | `:delay` | Effect wet mix | 0.0–1.0 | `fx/set-param!` |
@@ -76,10 +80,11 @@ input** — the most immediately useful MIDI feature for live performance.
 
 ## Design
 
-### New file: `app/src/repulse/midi.cljs`
+### Existing file: `app/src/repulse/midi.cljs`
 
-A dedicated MIDI namespace. Phase N1 only implements the **input** side. Later N-phases
-(note output, clock output, file export) add to this module.
+A dedicated MIDI namespace already exists. Phase N1 completes the **input/CC mapping**
+side while preserving the output, clock, and MIDI export code already delivered by
+Phase N.
 
 ```
 State atoms:
@@ -456,8 +461,9 @@ CC #74 → :reverb   [==------]  0.28
 
 | File | Change |
 |------|--------|
-| `app/src/repulse/midi.cljs` | **New** — MIDI access, CC mapping, learn mode, param overrides |
-| `app/src/repulse/app.cljs` | `midi-map`, `midi-unmap`, `midi-maps`, `midi-learn` bindings; context panel MIDI section |
+| `app/src/repulse/midi.cljs` | Extend existing MIDI access, CC mapping, learn mode, param overrides |
+| `app/src/repulse/env/builtins/midi.cljs` | Finish `midi-map`; add `midi-unmap`, `midi-maps`, `midi-learn` bindings |
+| `app/src/repulse/ui/context_panel.cljs` | Extend existing MIDI section to list mappings/current values |
 | `app/src/repulse/audio.cljs` | Merge `param-overrides` in event dispatch; require `repulse.midi` |
 | `app/src/repulse/lisp-lang/repulse-lisp.grammar` | Add 4 tokens to `BuiltinName` |
 | `app/src/repulse/lisp-lang/completions.js` | Add 4 completion entries |
