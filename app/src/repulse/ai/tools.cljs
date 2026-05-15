@@ -229,7 +229,7 @@
           (.catch (fn [e] {:error (str "Freesound error: " (.-message e))}))))))
 
 (defn- list-banks! [_]
-  {:banks (vec (keys @samples/registry))})
+  {:banks (samples/format-banks)})
 
 (defn- list-samples-in-bank! [{:keys [bank]}]
   (if-let [urls (get @samples/registry bank)]
@@ -267,7 +267,7 @@
     :execute     freesound-load!}
 
    :list_banks
-   {:description "List all registered sample bank names available in the current session."
+   {:description "List all registered sample banks grouped by manufacturer. Returns a formatted string — report it verbatim to the user without adding examples."
     :params      {}
     :execute     list-banks!}
 
