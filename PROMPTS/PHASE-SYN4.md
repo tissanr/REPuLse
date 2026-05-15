@@ -145,14 +145,40 @@ Extend `ks_preset()` to return resonance parameters, or add a separate
 
 ### 3. `pick-pos` and `tone` per-event parameters
 
-Add to `app/src/repulse/env/builtins/tracks.cljs`:
+Per-event parameter transformers live in two files — not in `tracks.cljs` (that file
+handles track-level builtins like `track`/`mute!`).
+
+**Step 1:** Add core functions to `packages/core/src/repulse/params.cljs`:
 
 ```clojure
-"pick-pos" (fn [v pat] (fmap #(assoc-param % :pick-pos v) pat))
-"tone"     (fn [v pat] (fmap #(assoc-param % :tone v) pat))
+(defn pick-pos
+  "Pick/pluck contact point; 0.0 = nut, 1.0 = bridge. Lower = warmer.
+   (pick-pos 0.95 pat) — extreme bridge, maximum twang
+   (pick-pos 0.15)     — return transformer"
+  ([v]     (fn [pat] (pick-pos v pat)))
+  ([v pat] (apply-param :pick-pos v pat)))
+
+(defn tone
+  "Maps to LP filter brightness in the KS voice. 0.0 = dark, 1.0 = bright.
+   (tone 0.3 pat) — dark/rolled-off
+   (tone 0.9)     — return transformer"
+  ([v]     (fn [pat] (tone v pat)))
+  ([v pat] (apply-param :tone v pat)))
 ```
 
-In `trigger_v2` trigger string encoding, append `pick_pos` and `tone` overrides:
+**Step 2:** Expose as Lisp builtins in `packages/lisp/src/repulse/lisp/builtins/params.cljs`:
+
+```clojure
+"pick-pos" (fn
+             ([v]   (params/pick-pos (u/unwrap v)))
+             ([v p] (params/pick-pos (u/unwrap v) (u/unwrap p))))
+"tone"     (fn
+             ([v]   (params/tone (u/unwrap v)))
+             ([v p] (params/tone (u/unwrap v) (u/unwrap p))))
+```
+
+**Step 3:** In `play-event` (`app/src/repulse/audio.cljs`), read `:pick-pos` and
+`:tone` from the event map and encode in the trigger string:
 `"ks:{preset}:{freq}:{amp}:{pick_pos_override}:{tone_override}"`
 
 Use sentinels (`-1.0`) to indicate "use preset default".
@@ -183,9 +209,9 @@ Run `npm run gen:grammar` and `npm run gen:ai-docs`.
 | File | Change |
 |---|---|
 | `packages/audio/src/lib.rs` | Add five presets to `ks_preset()`; add body resonance fields to `Voice::KarplusStrong`; update `tick` to apply body IIR; handle `pick_pos` and `tone` overrides in trigger parsing |
-| `app/src/repulse/env/builtins/tracks.cljs` | Add `pick-pos` and `tone` parameter transformer builtins |
-| `app/src/repulse/audio.cljs` | Encode `pick-pos` and `tone` from event map into trigger string |
-| `app/src/repulse/synth.cljs` | Add `:strat :tele :es335 :sg :lp` to builtin-voice-map |
+| `packages/core/src/repulse/params.cljs` | Add `pick-pos` and `tone` core param functions |
+| `packages/lisp/src/repulse/lisp/builtins/params.cljs` | Expose `pick-pos` and `tone` as Lisp builtins |
+| `app/src/repulse/audio.cljs` | Add `#{:strat :tele :es335 :sg :lp}` branch to `play-event`; encode `pick-pos`/`tone` in trigger string |
 | `app/src/repulse/lisp-lang/repulse-lisp.grammar` | Add five synth names + `pick-pos` + `tone` |
 | `app/src/repulse/lisp-lang/completions.js` | Add completion entries |
 | `app/src/repulse/content/builtin_meta.edn` | Add metadata with `see-also` DST references |

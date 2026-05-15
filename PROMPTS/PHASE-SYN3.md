@@ -203,16 +203,41 @@ scheduler's event duration expires and the `ActiveVoice` is removed from `self.v
 
 ### 5. New per-event parameters: `bow-pressure` and `bow-pos`
 
-Add to the CLJS parameter threading in `app/src/repulse/env/builtins/tracks.cljs`
-(where `amp`, `decay`, `pan` etc. are handled):
+Per-event parameter transformers (like `amp`, `decay`, `pan`) live in two files —
+**not** in `tracks.cljs` (that file handles track-level builtins like `track`/`mute!`).
+
+**Step 1:** Add core functions to `packages/core/src/repulse/params.cljs`:
 
 ```clojure
-"bow-pressure" (fn [v pat] (fmap #(assoc-param % :bow-pressure v) pat))
-"bow-pos"      (fn [v pat] (fmap #(assoc-param % :bow-pos v) pat))
+(defn bow-pressure
+  "Bow normal force; higher = more biting tone. 0.0–1.0.
+   (bow-pressure 0.8 pat) — apply directly
+   (bow-pressure 0.5)     — return transformer"
+  ([v]     (fn [pat] (bow-pressure v pat)))
+  ([v pat] (apply-param :bow-pressure v pat)))
+
+(defn bow-pos
+  "Bow contact point along the string; 0.0 = nut, 1.0 = bridge.
+   (bow-pos 0.9 pat) — sul ponticello (bright/glassy)
+   (bow-pos 0.1 pat) — sul tasto (dark/full)
+   (bow-pos 0.15)    — return transformer"
+  ([v]     (fn [pat] (bow-pos v pat)))
+  ([v pat] (apply-param :bow-pos v pat)))
 ```
 
-In `play-event` (`app/src/repulse/audio.cljs`), read these keys from the event map and
-encode them in the trigger string:
+**Step 2:** Expose them as Lisp builtins in `packages/lisp/src/repulse/lisp/builtins/params.cljs`:
+
+```clojure
+"bow-pressure" (fn
+                 ([v]   (params/bow-pressure (u/unwrap v)))
+                 ([v p] (params/bow-pressure (u/unwrap v) (u/unwrap p))))
+"bow-pos"      (fn
+                 ([v]   (params/bow-pos (u/unwrap v)))
+                 ([v p] (params/bow-pos (u/unwrap v) (u/unwrap p))))
+```
+
+**Step 3:** In `play-event` (`app/src/repulse/audio.cljs`), read `:bow-pressure` and
+`:bow-pos` from the event map alongside `:amp`/`:decay`, then encode in the trigger:
 `"bow:{preset}:{freq}:{amp}:{pressure}:{pos}"`
 
 Defaults: `bow-pressure` → preset's `bow_force`; `bow-pos` → `0.15` (slightly off-nut,
@@ -233,9 +258,9 @@ Run `npm run gen:grammar` and `npm run gen:ai-docs`.
 | File | Change |
 |---|---|
 | `packages/audio/src/lib.rs` | Add `Voice::BowedString`, `bow_preset()`, `bow_table()`, trigger dispatch, `tick`, `is_silent` |
-| `app/src/repulse/audio.cljs` | Encode `bow-pressure`/`bow-pos` from event map into trigger string |
-| `app/src/repulse/env/builtins/tracks.cljs` | Add `bow-pressure` and `bow-pos` parameter transformer builtins |
-| `app/src/repulse/synth.cljs` | Add `:violin :viola :cello :bass-arco` to builtin-voice-map |
+| `packages/core/src/repulse/params.cljs` | Add `bow-pressure` and `bow-pos` core param functions |
+| `packages/lisp/src/repulse/lisp/builtins/params.cljs` | Expose `bow-pressure` and `bow-pos` as Lisp builtins |
+| `app/src/repulse/audio.cljs` | Add `#{:violin :viola :cello :bass-arco}` branch to `play-event`; encode `bow-pressure`/`bow-pos` in trigger string |
 | `app/src/repulse/lisp-lang/repulse-lisp.grammar` | Add four synth names + two param names |
 | `app/src/repulse/lisp-lang/completions.js` | Add completion entries |
 | `app/src/repulse/content/builtin_meta.edn` | Add metadata for all six new names |

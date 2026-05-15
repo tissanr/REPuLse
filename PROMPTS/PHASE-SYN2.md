@@ -43,26 +43,30 @@ produce deliberately gritty brass textures.
 
 ### Existing FM voice in WASM
 
-`packages/audio/src/lib.rs` — `Voice::FM` (line ~288 area):
+`packages/audio/src/lib.rs` — `Voice::FM` (line ~92):
 
 ```rust
 FM {
-    phase: f32,
-    mod_phase: f32,
-    freq: f32,
-    index: f32,   // modulation index
-    ratio: f32,   // modulator freq = carrier freq × ratio
-    gain: f32,
+    carrier_phase: f64,   // carrier oscillator phase
+    mod_phase:     f64,   // modulator oscillator phase
+    carrier_freq:  f64,   // carrier frequency in Hz
+    mod_freq:      f64,   // modulator frequency = carrier_freq × ratio (pre-computed at trigger)
+    index:         f32,   // modulation index
+    amp:           f32,   // peak amplitude (from amp param)
+    gain:          f32,   // current envelope amplitude
+    gain_decay:    f32,   // per-sample decay multiplier (from decay param)
+    attack_inc:    f32,   // per-sample gain increment during attack
+    in_attack:     bool,  // whether still in attack phase
 }
 ```
 
 `tick` computes one sample of 2-operator FM:
 `out = gain × sin(carrier_phase + index × sin(mod_phase))`
 
-This is structurally sufficient but has no ADSR envelope — the gain is set at trigger
-and decays linearly via the existing `decay` parameter in `play-event`. For expressive
-instrument presets, the FM voice needs its own attack/decay/sustain/release fields so
-each preset can shape its transient character correctly.
+The existing struct already has attack (`attack_inc`/`in_attack`) and decay
+(`gain_decay`). What is missing for expressive presets is **sustain level** and a
+**per-preset release time** — i.e., an independent hold-to-sustain-to-release shape
+per voice rather than driving decay purely through the shared `decay` event parameter.
 
 ### Trigger dispatch
 
@@ -166,21 +170,30 @@ if value.starts_with("fm:") && !value[3..].starts_with(|c: char| c.is_ascii_digi
 // Legacy manual path: "fm:{freq}:{index}:{ratio}" — unchanged
 ```
 
-### 4. CLJS dispatch entries
+### 4. CLJS dispatch entries in `app/src/repulse/audio.cljs`
+
+`app/src/repulse/synth.cljs` manages only user-defined `defsynth` voices. Built-in
+synth keyword dispatch lives in `play-event` in `app/src/repulse/audio.cljs`, where
+the existing `:fm` branch lives (~line 415).
+
+Add a new branch in the `(map? value) (:note value)` cond for all nine FM presets:
 
 ```clojure
-:sax           (fn [{:keys [freq amp]}] (str "fm:sax:"           freq ":" (or amp 1.0)))
-:trumpet       (fn [{:keys [freq amp]}] (str "fm:trumpet:"       freq ":" (or amp 1.0)))
-:trumpet-muted (fn [{:keys [freq amp]}] (str "fm:trumpet-muted:" freq ":" (or amp 1.0)))
-:trumpet-cup   (fn [{:keys [freq amp]}] (str "fm:trumpet-cup:"   freq ":" (or amp 1.0)))
-:trombone      (fn [{:keys [freq amp]}] (str "fm:trombone:"      freq ":" (or amp 1.0)))
-:epiano        (fn [{:keys [freq amp]}] (str "fm:epiano:"        freq ":" (or amp 1.0)))
-:bell          (fn [{:keys [freq amp]}] (str "fm:bell:"          freq ":" (or amp 1.0)))
-:marimba       (fn [{:keys [freq amp]}] (str "fm:marimba:"       freq ":" (or amp 1.0)))
-:flute         (fn [{:keys [freq amp]}] (str "fm:flute:"         freq ":" (or amp 1.0)))
+;; After the existing (= synth :fm) manual branch:
+(#{:sax :trumpet :trumpet-muted :trumpet-cup :trombone
+   :epiano :bell :marimba :flute} synth)
+(let [hz     (if (theory/note-keyword? note) (theory/note->hz note) (double note))
+      preset (name synth)]
+  (or (when-not offline?
+        (worklet-trigger-v2! (str "fm:" preset ":" hz)
+                              t amp-v attack-v decay-v pan-v dest))
+      (make-sine ac t hz decay-v amp-v attack-v pan-v dest)))
 ```
 
-Existing `:fm` manual dispatch is unchanged.
+The existing `:fm` manual dispatch (`"fm:{freq}:{index}:{ratio}"`) is unchanged.
+The new preset path (`"fm:{preset}:{freq}"`) is distinguished in `trigger_v2` by
+the character after `"fm:"` — a letter indicates a preset name, a digit indicates
+the legacy manual format.
 
 ### 5. Grammar, completions, metadata
 
@@ -193,8 +206,8 @@ Add completion entries and `builtin_meta.edn` entries for each, then `npm run ge
 
 | File | Change |
 |---|---|
-| `packages/audio/src/lib.rs` | Extend `Voice::FM` with ADSR fields; add `fm_preset()` table; update `trigger_v2` to handle preset path; update `tick` with ADSR envelope |
-| `app/src/repulse/synth.cljs` | Add nine preset dispatch entries to builtin-voice-map |
+| `packages/audio/src/lib.rs` | Extend `Voice::FM` with sustain/release fields; add `fm_preset()` table; update `trigger_v2` to handle preset path; update `tick` with full ADSR envelope |
+| `app/src/repulse/audio.cljs` | Add nine-preset `#{:sax :trumpet …}` branch to `play-event` cond |
 | `app/src/repulse/lisp-lang/repulse-lisp.grammar` | Add nine names to `BuiltinName` |
 | `app/src/repulse/lisp-lang/completions.js` | Add nine completion entries |
 | `app/src/repulse/content/builtin_meta.edn` | Add metadata for each preset |

@@ -125,11 +125,10 @@ if let Some(rest) = value.strip_prefix("ks:") {
     let mut buf = vec![0.0f32; 2205];       // pre-allocate full capacity
 
     // Fill active portion with noise burst
-    let mut lcg = self.lcg_state;
+    // AudioEngine has `noise_seed: u32` (not `lcg_state`)
     for i in 0..buf_len {
-        buf[i] = lcg_next(&mut lcg);
+        buf[i] = lcg_next(&mut self.noise_seed);
     }
-    self.lcg_state = lcg;
 
     // Apply pick-position comb notch: zero every buf[i * floor(buf_len * pick_pos)]
     let comb = (buf_len as f32 * pick_pos).floor() as usize;
@@ -181,17 +180,24 @@ Voice::KarplusStrong {
 
 `is_silent` for `KarplusStrong`: `*gain < 1e-4`.
 
-### 2. `app/src/repulse/synth.cljs` — builtin dispatch
+### 2. `app/src/repulse/audio.cljs` — builtin dispatch
 
-Add to the builtin-voice-map (or equivalent dispatch table that converts `{:synth :X}` to a trigger string):
+`app/src/repulse/synth.cljs` manages only user-defined `defsynth` voices. Built-in
+synth keyword dispatch lives in the `play-event` function in `app/src/repulse/audio.cljs`
+(~line 393), where existing entries for `:saw`, `:square`, `:fm` live.
+
+Add a new branch inside the `(map? value) (:note value)` cond for all six KS presets:
 
 ```clojure
-:guitar   (fn [{:keys [freq amp]}] (str "ks:guitar:"   freq ":" (or amp 1.0)))
-:harp     (fn [{:keys [freq amp]}] (str "ks:harp:"     freq ":" (or amp 1.0)))
-:koto     (fn [{:keys [freq amp]}] (str "ks:koto:"     freq ":" (or amp 1.0)))
-:pizz     (fn [{:keys [freq amp]}] (str "ks:pizz:"     freq ":" (or amp 1.0)))
-:lute     (fn [{:keys [freq amp]}] (str "ks:lute:"     freq ":" (or amp 1.0)))
-:mandolin (fn [{:keys [freq amp]}] (str "ks:mandolin:" freq ":" (or amp 1.0)))
+;; In play-event, after the existing (= synth :fm) branch:
+(#{:guitar :harp :koto :pizz :lute :mandolin} synth)
+(let [hz     (if (theory/note-keyword? note) (theory/note->hz note) (double note))
+      preset (name synth)]
+  (or (when-not offline?
+        (worklet-trigger-v2! (str "ks:" preset ":" hz)
+                              t amp-v attack-v decay-v pan-v dest))
+      ;; JS offline fallback: sine approximation
+      (make-sine ac t hz decay-v amp-v attack-v pan-v dest)))
 ```
 
 ### 3. Grammar, completions, metadata
@@ -229,7 +235,7 @@ npm run gen:ai-docs
 | File | Change |
 |---|---|
 | `packages/audio/src/lib.rs` | Add `Voice::KarplusStrong` variant, `ks_preset()`, trigger parsing, `tick`, `is_silent` |
-| `app/src/repulse/synth.cljs` | Add six preset entries to builtin-voice-map |
+| `app/src/repulse/audio.cljs` | Add six `#{:guitar :harp …}` branch to `play-event` cond |
 | `app/src/repulse/lisp-lang/repulse-lisp.grammar` | Add six names to `BuiltinName` |
 | `app/src/repulse/lisp-lang/completions.js` | Add six completion entries |
 | `app/src/repulse/content/builtin_meta.edn` | Add metadata for each preset |

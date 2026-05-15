@@ -133,11 +133,23 @@ Piano-felt uses:
 - `feedback 0.970` — short, fast-decaying (felt absorbs energy)
 - `brightness_peak / low 0.40 / 0.28` — always dark, minimal transient brightness
 
-### 4. CLJS dispatch entries
+### 4. CLJS dispatch entries in `app/src/repulse/audio.cljs`
+
+`app/src/repulse/synth.cljs` manages only user-defined `defsynth` voices. Built-in
+synth keyword dispatch lives in `play-event` in `app/src/repulse/audio.cljs`, alongside
+the existing KS preset branch added in SYN1.
+
+Add `:piano` and `:piano-felt` to the KS preset set in that branch (or extend it):
 
 ```clojure
-:piano       (fn [{:keys [freq amp]}] (str "ks:piano:"       freq ":" (or amp 1.0)))
-:piano-felt  (fn [{:keys [freq amp]}] (str "ks:piano-felt:"  freq ":" (or amp 1.0)))
+;; Extend the KS preset branch (from SYN1) to include piano variants:
+(#{:guitar :harp :koto :pizz :lute :mandolin :piano :piano-felt} synth)
+(let [hz     (if (theory/note-keyword? note) (theory/note->hz note) (double note))
+      preset (name synth)]
+  (or (when-not offline?
+        (worklet-trigger-v2! (str "ks:" preset ":" hz)
+                              t amp-v attack-v decay-v pan-v dest))
+      (make-sine ac t hz decay-v amp-v attack-v pan-v dest)))
 ```
 
 No new per-event parameters needed; `amp` and `decay` (already in the system) are
@@ -170,7 +182,7 @@ Run `npm run gen:grammar` and `npm run gen:ai-docs`.
 | File | Change |
 |---|---|
 | `packages/audio/src/lib.rs` | Add `brightness_peak`, `brightness_low`, `bright_dur`, `elapsed` to `Voice::KarplusStrong`; update `tick` with bi-linear decay; add pitch-scaling factor; add piano presets to `ks_preset()` |
-| `app/src/repulse/synth.cljs` | Add `:piano` and `:piano-felt` to builtin-voice-map |
+| `app/src/repulse/audio.cljs` | Add `:piano` and `:piano-felt` to the KS preset set in `play-event` |
 | `app/src/repulse/lisp-lang/repulse-lisp.grammar` | Add `piano` and `piano-felt` to `BuiltinName` |
 | `app/src/repulse/lisp-lang/completions.js` | Add two completion entries |
 | `app/src/repulse/content/builtin_meta.edn` | Add metadata with `see-also` FX references |
