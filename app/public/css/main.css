@@ -2213,13 +2213,17 @@ footer {
 .ai-toggle-btn.active { border-color: #e2a; color: #e2a; }
 
 .ai-panel {
-  border-top: 1px solid var(--border);
+  position: fixed;
+  top: 41px;
+  right: 0;
+  bottom: 0;
+  width: 380px;
   background: var(--bg2);
-  flex-shrink: 0;
+  border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  max-height: 55vh;
-  min-height: 200px;
+  z-index: 50;
+  box-shadow: -4px 0 16px rgba(0,0,0,0.4);
 }
 .ai-panel.hidden { display: none; }
 
@@ -2299,7 +2303,6 @@ footer {
   font-family: var(--font-mono);
   font-size: 0.75rem;
   color: #56b6c2;
-  display: block;
 }
 
 .ai-msg--user {

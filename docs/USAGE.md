@@ -1232,12 +1232,13 @@ Stops playback, deletes all persisted state (editor, BPM, effects, bank, sample 
 
 ### `(ai)` — AI assistant panel
 
-Open the built-in AI assistant panel. The panel supports **bring-your-own API key** for Anthropic, OpenAI, Google Gemini, and Groq, with streaming responses and conversation history.
+Open the built-in AI assistant panel. The assistant is a **tool-using agent** — it can read the editor buffer, query session state, browse snippets, propose edits with an Apply/Reject overlay, and silently evaluate code before suggesting it. Every change to the session requires explicit user confirmation.
 
 ```lisp
 (ai)                                          ; open the panel (or shows "enable AI" prompt)
 (ai "Give me a euclidean kick pattern")       ; open and immediately send prompt
-(ai "How do I add reverb to a track?")        ; open and immediately send prompt
+(ai "Add a dub delay to the bass track")      ; agent reads buffer, proposes an edit
+(ai "What tracks are active?")                ; agent queries session state
 ```
 
 **Getting started:**
@@ -1246,6 +1247,23 @@ Open the built-in AI assistant panel. The panel supports **bring-your-own API ke
 2. Click **Enable AI assistant**
 3. Choose a provider and paste your API key (stored in localStorage only — never sent to REPuLse servers)
 4. Type a question and press **Send** or **Cmd/Ctrl+Enter**
+
+**Agent tools** (the assistant calls these automatically — you never invoke them directly):
+
+| Tool | What it does |
+|---|---|
+| `read_buffer` | Reads the full editor text |
+| `propose_edit` | Shows a before/after diff card with **Apply** / **Reject** buttons |
+| `eval_preview` | Evaluates code silently and returns event count + duration (no audio) |
+| `query_session` | Returns BPM, track names, muted tracks, global FX |
+| `query_track` | Returns details for one track (mute state, FX chain) |
+| `find_snippet` | Searches the community snippet library |
+| `insert_snippet` | Inserts a snippet by ID at the end of the buffer |
+| `set_bpm_proposal` | Shows a confirm dialog before updating BPM |
+
+**Proposed edits:** When the agent calls `propose_edit`, a card appears below the editor showing the before and after text. Click **Apply** to commit the change, or **Reject** to tell the agent the suggestion was declined (it will try again with a revised proposal).
+
+**Cancel:** A **cancel** button replaces the **send** button while an agent turn is in progress. Clicking it stops the loop immediately and dismisses any pending overlay.
 
 **Code blocks** in assistant responses include an **↓ insert** button that appends the code to the editor without replacing existing content.
 
@@ -1259,7 +1277,7 @@ Open the built-in AI assistant panel. The panel supports **bring-your-own API ke
 
 > **Groq vs xAI:** `groq` is [Groq cloud](https://groq.com) — fast inference for open-source models like Llama. `xai` is [xAI](https://x.ai) — Elon Musk's company, makers of the Grok model family. Get an xAI key at [console.x.ai](https://console.x.ai).
 
-**Conversation history** persists across page reloads (last 40 turns). Use the **✕** button to clear history.
+**Conversation history** persists across page reloads (last 40 turns). Use the **clear** button to reset the chat and history.
 
 When AI is disabled, `(ai)` returns a descriptive string instead of opening the panel:
 ```lisp
