@@ -82,13 +82,14 @@ fn lcg_next(state: &mut u32) -> f32 {
 
 fn ks_preset(name: &str) -> (f32, f32, f32, f32, f32) {
     // Returns (feedback, brightness, pick_pos, vib_depth, vib_rate)
+    // T60 formula (at A440, buf_len≈100): -3*100 / (44100 * ln(feedback))
     match name {
-        "harp"     => (0.995, 0.40, 0.25, 0.0,  0.0),
-        "koto"     => (0.988, 0.60, 0.10, 0.01, 5.5),
-        "pizz"     => (0.972, 0.48, 0.20, 0.0,  0.0),
-        "lute"     => (0.985, 0.45, 0.18, 0.0,  0.0),
-        "mandolin" => (0.982, 0.62, 0.08, 0.02, 6.0),
-        _          => (0.990, 0.50, 0.14, 0.0,  0.0), // guitar default
+        "harp"     => (0.998, 0.55, 0.25, 0.0,   0.0), // ~3.4s T60, warm
+        "koto"     => (0.994, 0.62, 0.10, 0.015, 5.5), // ~1.5s, subtle vib
+        "pizz"     => (0.975, 0.55, 0.20, 0.0,   0.0), // ~0.27s, staccato
+        "lute"     => (0.996, 0.58, 0.16, 0.0,   0.0), // ~1.7s, warm
+        "mandolin" => (0.992, 0.68, 0.08, 0.025, 6.5), // ~0.85s, bright
+        _          => (0.997, 0.65, 0.12, 0.0,   0.0), // guitar ~2.3s T60
     }
 }
 
@@ -767,9 +768,10 @@ impl AudioEngine {
             let freq: f32 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(440.0);
             let (feedback, brightness, pick_pos, vib_depth, vib_rate) = ks_preset(preset);
             let buf_len = ((sr / freq).floor() as usize).clamp(2, 2205);
+            let peak = amp * 0.5;
             let mut buf = vec![0.0f32; 2205];
             for slot in buf.iter_mut().take(buf_len) {
-                *slot = lcg_next(&mut self.noise_seed);
+                *slot = lcg_next(&mut self.noise_seed) * peak;
             }
             let comb = (buf_len as f32 * pick_pos).floor() as usize;
             if comb > 0 {
@@ -783,9 +785,9 @@ impl AudioEngine {
                     buf_len,
                     write_pos: 0,
                     lp_prev: 0.0,
-                    feedback: feedback * amp.clamp(0.1, 1.0),
+                    feedback,
                     brightness,
-                    gain: amp,
+                    gain: peak,
                     vib_phase: 0.0,
                     vib_depth,
                     vib_rate,
