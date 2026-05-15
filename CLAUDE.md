@@ -345,7 +345,7 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | AI2   | AI assistant panel — BYO key, streaming chat, opt-in feature   | ✓ delivered  |
 | AI3   | Tool-using agent — read_buffer, propose_edit, eval_preview     | ✓ delivered  |
 | AI3b  | AI sample discovery — freesound_search, freesound_load, web_search | ✓ delivered  |
-| AI4   | AI safety & limits — budgets, injection guards, auto-apply     | planned      |
+| AI4   | AI safety & limits — budgets, injection guards, auto-apply     | ✓ delivered  |
 | AI4b  | AI encrypted key relay — Supabase-stored provider keys         | planned      |
 | AI5   | Variation workflows — multi-variant generation, live audition  | planned      |
 | UI1   | Theming — settings dialog, named palettes, editor theme switch | planned      |

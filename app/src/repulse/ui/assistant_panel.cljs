@@ -1,9 +1,11 @@
 (ns repulse.ui.assistant-panel
   "AI assistant chat panel — BYO API key, streaming responses, code insert.
    Exports: init!, show-panel!, hide-panel!, toggle-panel!, send!, visible?,
-            add-message!, set-pending!, get-builtins-summary"
+            add-message!, set-pending!, get-builtins-summary, log-tool-call!"
   (:require [repulse.ai.settings :as settings]
             [repulse.ai.agent-loop :as agent-loop]
+            [repulse.ai.budget :as budget]
+            [repulse.ai.undo :as undo]
             [repulse.ui.editor :as editor]
             [clojure.string :as str]))
 
@@ -35,6 +37,8 @@
 (defonce messages                   (atom (or (load-history) [])))
 (defonce ^:private pending          (atom false))
 (defonce ^:private builtins-summary (atom ""))
+(defonce ^:private activity-log     (atom []))
+(defonce ^:private log-expanded?    (atom false))
 
 ;; ── DOM helper ────────────────────────────────────────────────────────────────
 
@@ -80,6 +84,25 @@
   "Return the current built-ins vocabulary summary string."
   []
   @builtins-summary)
+
+(defn log-tool-call!
+  "Append a tool call record to the activity log (max 50 entries)."
+  [tool-name args result]
+  (swap! activity-log
+         (fn [log]
+           (let [entry {:ts (.now js/Date) :tool tool-name :args args :result result}
+                 log   (conj log entry)]
+             (if (> (count log) 50) (subvec log 1) log)))))
+
+(defn- export-activity-log! []
+  (let [json (js/JSON.stringify (clj->js @activity-log) nil 2)
+        blob (js/Blob. #js [json] #js {:type "application/json"})
+        url  (.createObjectURL js/URL blob)
+        a    (.createElement js/document "a")]
+    (set! (.-href a) url)
+    (set! (.-download a) "repulse-ai-activity-log.json")
+    (.click a)
+    (js/setTimeout #(.revokeObjectURL js/URL url) 1000)))
 
 ;; ── Markdown renderer ────────────────────────────────────────────────────────
 ;;
@@ -235,6 +258,29 @@
                "> Share editor code with AI"
                "  </label>"
                "</div>"
+               "<div class=\"ai-field\">"
+               "  <label class=\"ai-checkbox-label\">"
+               "    <input id=\"ai-auto-apply-cb\" type=\"checkbox\""
+               (when @settings/auto-apply? " checked")
+               "> Auto-apply edits (adds Revert button)"
+               "  </label>"
+               "</div>"
+               "<h4 class=\"ai-settings-section\">Budget (this session)</h4>"
+               (let [{:keys [tokens-used calls-used]} (budget/get-state)
+                     lims (budget/limits)]
+                 (str
+                   "<div class=\"ai-field\">"
+                   "  <label for=\"ai-token-budget\" class=\"ai-label\">Token limit</label>"
+                   "  <span class=\"ai-key-hint\">Remaining: " (max 0 (- (:tokens lims) tokens-used)) "</span>"
+                   "  <input id=\"ai-token-budget\" class=\"ai-input-text\" type=\"number\""
+                   "   min=\"1000\" step=\"1000\" value=\"" (:tokens lims) "\">"
+                   "</div>"
+                   "<div class=\"ai-field\">"
+                   "  <label for=\"ai-call-budget\" class=\"ai-label\">Tool-call limit</label>"
+                   "  <span class=\"ai-key-hint\">Remaining: " (max 0 (- (:calls lims) calls-used)) "</span>"
+                   "  <input id=\"ai-call-budget\" class=\"ai-input-text\" type=\"number\""
+                   "   min=\"1\" step=\"1\" value=\"" (:calls lims) "\">"
+                   "</div>"))
                "<h3 class=\"ai-settings-title ai-settings-subtitle\">Sample &amp; Search</h3>"
                "<div class=\"ai-field\">"
                "  <label for=\"ai-freesound-key-input\" class=\"ai-label\">Freesound API key</label>"
@@ -277,26 +323,57 @@
                  "<button id=\"ai-enable-btn\" class=\"ai-btn\">Enable AI assistant</button>"
                  "</div>"))
       (do
-        (set! (.-innerHTML panel)
-              (str "<div class=\"ai-header\">"
-                   "<span class=\"ai-provider-badge\">"
-                   (escape-html @settings/provider) " &middot; " (escape-html (settings/effective-model))
-                   "</span>"
-                   "<button id=\"ai-settings-btn\" class=\"ai-icon-btn\" title=\"AI settings\" aria-label=\"AI settings\">&#9881;</button>"
-                   "<button id=\"ai-clear-btn\" class=\"ai-clear-btn\" type=\"button\" title=\"Clear chat\" aria-label=\"Clear chat\">clear</button>"
-                   "</div>"
-                   "<div id=\"ai-messages\" class=\"ai-messages\">"
-                   (str/join "" (map render-message @messages))
-                   (when @pending
-                     "<div class=\"ai-msg ai-msg--assistant ai-thinking\">&#8230;</div>")
-                   "</div>"
-                   "<div class=\"ai-input-row\">"
-                   "<textarea id=\"ai-input\" class=\"ai-textarea\""
-                   " placeholder=\"Describe a pattern, ask for help…\" rows=\"2\"></textarea>"
-                   (if @pending
-                     "<button id=\"ai-cancel-btn\" class=\"ai-btn ai-btn--secondary\">cancel</button>"
-                     "<button id=\"ai-send-btn\" class=\"ai-btn\">send</button>")
-                   "</div>"))
+        (let [{:keys [tokens-used calls-used]} (budget/get-state)
+              {:keys [tokens calls]} (budget/limits)
+              log-count (count @activity-log)]
+          (set! (.-innerHTML panel)
+                (str "<div class=\"ai-header\">"
+                     "<span class=\"ai-provider-badge\">"
+                     (escape-html @settings/provider) " &middot; " (escape-html (settings/effective-model))
+                     "</span>"
+                     "<span class=\"ai-budget-badge\" title=\"Session token / call usage\">"
+                     tokens-used "/" tokens " tok &middot; " calls-used "/" calls " calls"
+                     "</span>"
+                     "<button id=\"ai-settings-btn\" class=\"ai-icon-btn\" title=\"AI settings\" aria-label=\"AI settings\">&#9881;</button>"
+                     "<button id=\"ai-clear-btn\" class=\"ai-clear-btn\" type=\"button\" title=\"Clear chat\" aria-label=\"Clear chat\">clear</button>"
+                     "</div>"
+                     ;; Undo button — only shown when auto-apply is on and stack has entries
+                     (when (and @settings/auto-apply? (pos? (undo/stack-size)))
+                       "<div class=\"ai-undo-bar\">"
+                       "<button id=\"ai-revert-btn\" class=\"ai-btn ai-btn--secondary\">&#8617; Revert last turn</button>"
+                       "</div>")
+                     "<div id=\"ai-messages\" class=\"ai-messages\">"
+                     (str/join "" (map render-message @messages))
+                     (when @pending
+                       "<div class=\"ai-msg ai-msg--assistant ai-thinking\">&#8230;</div>")
+                     "</div>"
+                     "<div class=\"ai-input-row\">"
+                     "<textarea id=\"ai-input\" class=\"ai-textarea\""
+                     " placeholder=\"Describe a pattern, ask for help…\" rows=\"2\"></textarea>"
+                     (if @pending
+                       "<button id=\"ai-cancel-btn\" class=\"ai-btn ai-btn--secondary\">cancel</button>"
+                       "<button id=\"ai-send-btn\" class=\"ai-btn\">send</button>")
+                     "</div>"
+                     ;; Activity log section — only shown when there are entries
+                     (when (pos? log-count)
+                       (str "<div class=\"ai-log-section\">"
+                            "<button id=\"ai-log-toggle-btn\" class=\"ai-log-toggle\">"
+                            "&#128269; tool log (" log-count ")"
+                            (if @log-expanded? " &#9650;" " &#9660;")
+                            "</button>"
+                            (when @log-expanded?
+                              (str "<div class=\"ai-log-entries\">"
+                                   (str/join ""
+                                     (map (fn [{:keys [tool ts]}]
+                                            (str "<div class=\"ai-log-entry\">"
+                                                 (escape-html (str tool)) "</div>"))
+                                          (take-last 10 @activity-log)))
+                                   "</div>"
+                                   "<div class=\"ai-log-btns\">"
+                                   "<button id=\"ai-log-export-btn\" class=\"ai-btn ai-btn--secondary\">Export log</button>"
+                                   "<button id=\"ai-log-reset-btn\" class=\"ai-btn ai-btn--secondary\">Reset session</button>"
+                                   "</div>"))
+                            "</div>")))))
         ;; Scroll messages to bottom
         (when-let [msgs-el (el "ai-messages")]
           (set! (.-scrollTop msgs-el) (.-scrollHeight msgs-el)))))))
@@ -348,9 +425,10 @@
 
   ;; Wire agent-loop callbacks (avoids circular require — agent-loop holds atoms)
   (agent-loop/set-panel-fns!
-    {:add-message!        add-message!
-     :set-pending!        set-pending!
-     :get-builtins-summary get-builtins-summary})
+    {:add-message!         add-message!
+     :set-pending!         set-pending!
+     :get-builtins-summary get-builtins-summary
+     :log-tool-call!       log-tool-call!})
 
   (when-let [panel (el "ai-panel")]
     ;; Click delegation
@@ -387,6 +465,14 @@
                 (reset! settings/model-override (.-value mi)))
               (when-let [cb (el "ai-include-code-cb")]
                 (reset! settings/include-code? (.-checked cb)))
+              (when-let [cb (el "ai-auto-apply-cb")]
+                (reset! settings/auto-apply? (.-checked cb)))
+              (when-let [ti (el "ai-token-budget")]
+                (when-let [ci (el "ai-call-budget")]
+                  (let [t (js/parseInt (.-value ti) 10)
+                        c (js/parseInt (.-value ci) 10)]
+                    (when (and (pos? t) (pos? c))
+                      (budget/save-limits! {:tokens t :calls c})))))
               (when-let [fk (el "ai-freesound-key-input")]
                 (reset! settings/freesound-api-key (let [v (.-value fk)] (when (seq v) v))))
               (when-let [sk (el "ai-search-key-input")]
@@ -417,6 +503,21 @@
 
             (= id "ai-settings-back-btn")
             (render-panel!)
+
+            (= id "ai-revert-btn")
+            (do (undo/revert-last-turn!) (render-panel!))
+
+            (= id "ai-log-toggle-btn")
+            (do (swap! log-expanded? not) (render-panel!))
+
+            (= id "ai-log-export-btn")
+            (export-activity-log!)
+
+            (= id "ai-log-reset-btn")
+            (do
+              (reset! activity-log [])
+              (budget/reset-budget!)
+              (render-panel!))
 
             ;; ↓ insert button on code blocks — matched by class, any other id
             (.contains (.-classList t) "ai-insert-btn")

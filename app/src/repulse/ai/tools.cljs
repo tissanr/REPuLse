@@ -7,6 +7,8 @@
             [repulse.snippets :as snippets]
             [repulse.samples :as samples]
             [repulse.ai.settings :as settings]
+            [repulse.ai.injection-guard :as injection-guard]
+            [repulse.ai.undo :as undo]
             [clojure.string :as str]))
 
 ;;; eval-preview dependency injected from eval-orchestrator to avoid circular deps
@@ -132,7 +134,14 @@
     {:ok false :error "Editor not initialized"}))
 
 (defn- exec-propose-edit [{:keys [from to replacement]}]
-  (show-diff-overlay! from to replacement))
+  (if @settings/auto-apply?
+    (do
+      ;; Snapshot editor state before applying so the user can revert.
+      (undo/record-pre-edit!)
+      (when-let [v @editor/editor-view]
+        (.dispatch v #js {:changes #js {:from from :to to :insert replacement}}))
+      (js/Promise.resolve {:ok true :applied true :auto-applied true}))
+    (show-diff-overlay! from to replacement)))
 
 (defn- exec-eval-preview [{:keys [code]}]
   (js/Promise.
@@ -379,13 +388,13 @@
 ;; ── Dispatch ─────────────────────────────────────────────────────────────────
 
 (defn execute!
-  "Execute a tool call. Returns a Promise resolving to the result map."
+  "Execute a tool call. Returns a Promise resolving to the result map.
+   All results are passed through the injection guard before returning."
   [{:keys [name args]}]
   (let [k   (keyword name)
         {:keys [execute]} (get registry k)]
     (if execute
       (let [result (execute (or args {}))]
-        (if (instance? js/Promise result)
-          result
-          (js/Promise.resolve result)))
+        (-> (if (instance? js/Promise result) result (js/Promise.resolve result))
+            (.then (fn [r] (injection-guard/guard-tool-result k r)))))
       (js/Promise.resolve {:ok false :error (str "Unknown tool: " name)}))))

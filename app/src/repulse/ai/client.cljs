@@ -399,11 +399,32 @@
                        :headers #js {"content-type" "application/json"}
                        :body    proxy-body})
         (.then (fn [resp]
-                 (if (.-ok resp)
-                   (.json resp)
+                 (cond
+                   (.-ok resp)
+                   (-> (.json resp) (.then #(parse-complete-response provider %)))
+                   ;; Return a CLJS map so complete-with-retry! can detect 429.
+                   (= 429 (.-status resp))
+                   (js/Promise.resolve {:rate-limited true})
+                   :else
                    (-> (.text resp)
                        (.then (fn [t] (js/Promise.reject (str "HTTP " (.-status resp) " — " t))))))))
-        (.then (fn [obj]
-                 (parse-complete-response provider obj)))
         (.catch (fn [err]
                   {:content (str "Error: " (if (string? err) err (or (.-message err) "unknown error")))})))))
+
+(defn complete-with-retry!
+  "Like complete! but retries on HTTP 429 with exponential back-off.
+   Max 3 attempts total. Surfaces an inline error after all retries are exhausted."
+  [system messages tools]
+  (letfn [(attempt [n]
+            (-> (complete! system messages tools)
+                (.then (fn [result]
+                         (if (and (:rate-limited result) (< n 3))
+                           (js/Promise.
+                             (fn [resolve _reject]
+                               (js/setTimeout
+                                 (fn [] (.then (attempt (inc n)) resolve))
+                                 (* 1000 (js/Math.pow 2 n)))))
+                           (if (:rate-limited result)
+                             {:content "Rate limited — all retry attempts exhausted. Try again shortly."}
+                             result))))))]
+    (attempt 0)))
