@@ -235,6 +235,29 @@
                "> Share editor code with AI"
                "  </label>"
                "</div>"
+               "<h3 class=\"ai-settings-title ai-settings-subtitle\">Sample &amp; Search</h3>"
+               "<div class=\"ai-field\">"
+               "  <label for=\"ai-freesound-key-input\" class=\"ai-label\">Freesound API key</label>"
+               "  <span class=\"ai-key-hint\">Get a key at freesound.org/apiv2/ &mdash; stored in localStorage only</span>"
+               "  <div class=\"ai-key-row\">"
+               "  <input id=\"ai-freesound-key-input\" class=\"ai-input-text\" type=\"password\""
+               "   autocomplete=\"new-password\""
+               "   value=\"" (escape-html (or @settings/freesound-api-key "")) "\">"
+               "  <button id=\"ai-freesound-key-toggle\" class=\"ai-btn ai-btn--secondary ai-btn--sm\" type=\"button\">show</button>"
+               "  <button id=\"ai-freesound-key-clear\" class=\"ai-btn ai-btn--secondary ai-btn--sm\" type=\"button\">clear</button>"
+               "  </div>"
+               "</div>"
+               "<div class=\"ai-field\">"
+               "  <label for=\"ai-search-key-input\" class=\"ai-label\">Web Search API key <em class=\"ai-opt\">(optional)</em></label>"
+               "  <span class=\"ai-key-hint\">Brave Search &mdash; brave.com/search/api/ &mdash; omit to disable web_search tool</span>"
+               "  <div class=\"ai-key-row\">"
+               "  <input id=\"ai-search-key-input\" class=\"ai-input-text\" type=\"password\""
+               "   autocomplete=\"new-password\""
+               "   value=\"" (escape-html (or @settings/search-api-key "")) "\">"
+               "  <button id=\"ai-search-key-toggle\" class=\"ai-btn ai-btn--secondary ai-btn--sm\" type=\"button\">show</button>"
+               "  <button id=\"ai-search-key-clear\" class=\"ai-btn ai-btn--secondary ai-btn--sm\" type=\"button\">clear</button>"
+               "  </div>"
+               "</div>"
                "<div class=\"ai-settings-btns\">"
                "<button id=\"ai-settings-save-btn\" class=\"ai-btn\" type=\"button\">Save</button>"
                "<button id=\"ai-settings-back-btn\" class=\"ai-btn ai-btn--secondary\" type=\"button\">Back</button>"
@@ -364,7 +387,33 @@
                 (reset! settings/model-override (.-value mi)))
               (when-let [cb (el "ai-include-code-cb")]
                 (reset! settings/include-code? (.-checked cb)))
+              (when-let [fk (el "ai-freesound-key-input")]
+                (reset! settings/freesound-api-key (let [v (.-value fk)] (when (seq v) v))))
+              (when-let [sk (el "ai-search-key-input")]
+                (reset! settings/search-api-key (let [v (.-value sk)] (when (seq v) v))))
               (render-panel!))
+
+            (= id "ai-freesound-key-toggle")
+            (when-let [inp (el "ai-freesound-key-input")]
+              (let [showing? (= "text" (.-type inp))]
+                (set! (.-type inp) (if showing? "password" "text"))
+                (set! (.-textContent t) (if showing? "show" "hide"))))
+
+            (= id "ai-freesound-key-clear")
+            (do
+              (reset! settings/freesound-api-key nil)
+              (when-let [inp (el "ai-freesound-key-input")] (set! (.-value inp) "")))
+
+            (= id "ai-search-key-toggle")
+            (when-let [inp (el "ai-search-key-input")]
+              (let [showing? (= "text" (.-type inp))]
+                (set! (.-type inp) (if showing? "password" "text"))
+                (set! (.-textContent t) (if showing? "show" "hide"))))
+
+            (= id "ai-search-key-clear")
+            (do
+              (reset! settings/search-api-key nil)
+              (when-let [inp (el "ai-search-key-input")] (set! (.-value inp) "")))
 
             (= id "ai-settings-back-btn")
             (render-panel!)
