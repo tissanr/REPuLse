@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@lezer/generator": "^1.8.0",
+    "@types/node": "^22.0.0",
     "@playwright/test": "^1.60.0",
     "@vercel/node": "^5.8.1",
     "shadow-cljs": "^2.28.0"
