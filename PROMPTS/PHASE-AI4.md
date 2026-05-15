@@ -4,10 +4,11 @@
 
 Add the trust and economics layer that makes the AI assistant safe to leave on: hard
 token and tool-call budgets, prompt-injection guards for untrusted content the assistant
-reads, a full auto-apply undo stack, per-provider rate limiting, and an optional
-Supabase server-relay that stores API keys encrypted in user settings instead of
-localStorage. Without this phase, a busy user could unknowingly run up a large API
-bill or have a malicious snippet's text instruct the model to delete their session.
+reads, a full auto-apply undo stack, per-provider rate limiting, and activity logging.
+Without this phase, a busy user could unknowingly run up a large API bill or have a
+malicious snippet's text instruct the model to delete their session.
+
+Encrypted server-stored AI keys are not part of AI4; they are split into AI4b.
 
 ```
 ;; Before (AI3) — no budget; snippet text injected verbatim into tool results:
@@ -20,7 +21,6 @@ bill or have a malicious snippet's text instruct the model to delete their sessi
 ;;     is wrapped: <untrusted>...</untrusted> in tool results
 ;;   - Hard stop at token budget; soft warning at 50%
 ;;   - Auto-apply toggle ON: edits land immediately + "Revert assistant turn" button
-;;   - Keys optionally stored in Supabase; no localStorage exposure on shared machines
 ```
 
 ---
@@ -85,19 +85,10 @@ The AI3 `apply-edit!` function applies diffs synchronously. AI4 wraps it:
 `set-editor-text!` dispatches a CodeMirror transaction replacing the full document.
 `undo-stack` holds the last 20 assistant turns.
 
-### Supabase server-relay
+### Server-side key relay
 
-Phase S2 already delivered `app/src/repulse/api.cljs` with Supabase auth and a REST
-client. AI4 adds an encrypted `ai_settings` column to `user_profiles` (or a new
-`user_ai_settings` table) that stores `{:provider :openai :api-key "sk-..."}` encrypted
-server-side. When server-relay mode is enabled:
-
-- The client sends the prompt + tools to a new Vercel serverless route
-  `/api/ai/proxy` (not directly to the provider).
-- The proxy reads the key from Supabase, forwards the request, and streams the SSE
-  response back.
-- The key never appears in localStorage or browser network logs.
-- The proxy enforces its own token budget as a second safety layer.
+Out of scope for AI4. See AI4b for encrypted Supabase-backed provider key storage and
+server-side relay mode.
 
 ---
 
@@ -225,35 +216,9 @@ The existing AI settings modal (from AI2) gains:
 - **Tool-call budget** — number input, default 100
 - **Auto-apply** — toggle (default off); when on, shows the undo button instead of
   the diff overlay
-- **Server-relay** — toggle (default off); only visible when user is logged in (S2
-  auth); shows masked key input for the Vercel proxy URL if self-hosting
+### 7. Server relay
 
-### 7. `/api/ai/proxy` Vercel serverless route (optional, server-relay mode)
-
-```typescript
-// api/ai/proxy.ts
-import { createClient } from "@supabase/supabase-js";
-
-export const config = { runtime: "nodejs" };
-
-export default async function handler(req, res) {
-  const { user } = await supabase.auth.getUser(req.headers.authorization);
-  const { data } = await supabase
-    .from("user_ai_settings")
-    .select("api_key, provider")
-    .eq("user_id", user.id)
-    .single();
-
-  const upstreamUrl = providerUrl(data.provider);
-  const upstream = await fetch(upstreamUrl, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${data.api_key}`, "Content-Type": "application/json" },
-    body: req.body,
-  });
-  upstream.body.pipeTo(new WritableStream({ write: (chunk) => res.write(chunk) }));
-  upstream.body.getReader().closed.then(() => res.end());
-}
-```
+No server-relay work in AI4. AI4b owns encrypted key storage and server-side relay.
 
 ---
 
@@ -269,10 +234,7 @@ export default async function handler(req, res) {
 | `app/src/repulse/ai/tools.cljs` | Wrap all tool results via `injection-guard/guard-tool-result` |
 | `app/src/repulse/ai/system_prompt.cljs` | Add `<untrusted>` instruction block to system prompt |
 | `app/src/repulse/ui/assistant_panel.cljs` | Budget indicator, auto-apply toggle, undo button, activity log panel |
-| `app/src/repulse/ui/ai_settings_modal.cljs` | Add budget fields, auto-apply toggle, server-relay toggle |
-| `api/ai/proxy.ts` | **New** — Vercel serverless proxy route (optional, server-relay mode) |
-| `supabase/migrations/YYYYMMDD_user_ai_settings.sql` | **New** — `user_ai_settings` table with encrypted `api_key` |
-| `app/src/repulse/api.cljs` | Add `save-ai-settings!` and `load-ai-settings` Supabase calls |
+| `app/src/repulse/ui/ai_settings_modal.cljs` | Add budget fields and auto-apply toggle |
 
 ---
 
@@ -296,9 +258,6 @@ export default async function handler(req, res) {
 - [ ] Activity log captures the last 50 tool calls with tool name, args, and result;
       "Export log" button downloads as JSON
 - [ ] Budget resets when the user clicks "Reset session" in the activity log panel
-- [ ] Server-relay mode (when toggled on and user is logged in): API key is never
-      stored in localStorage; all requests route through `/api/ai/proxy`; the proxy
-      fetches the key from Supabase and forwards the stream
 - [ ] A snippet whose title or body contains `"Ignore previous instructions"` does not
       cause the model to deviate from the normal assistant behaviour (manual smoke test)
 - [ ] `npm run test` passes
@@ -315,5 +274,5 @@ export default async function handler(req, res) {
 - Do not add new Lisp built-ins in this phase.
 - Do not redesign the provider abstraction — just add retry and token tracking on top
   of the existing `stream!` from AI2.
-- Do not require server-relay to use the AI assistant — BYO localStorage key must
-  remain a fully supported path.
+- Do not implement encrypted server-side key storage or relay mode in AI4; that belongs
+  to AI4b.

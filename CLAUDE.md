@@ -285,8 +285,11 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | 10a   | Editor diagnostics — red squiggle underlines on eval errors    | ✓ delivered  |
 | D2    | Full session persistence — all state in localStorage + reset!  | ✓ delivered  |
 | N1    | MIDI CC mapping — bind controller knobs to any parameter      | planned      |
-| O     | Platform — PWA, embeddable component, collaboration, mobile   | planned      |
+| O     | Platform umbrella — split into O1/O2/O3/O4                    | split        |
 | O1    | Embeddable component — `<repulse-editor>` custom element, snippet attr | ✓ delivered  |
+| O2    | PWA/offline — manifest, service worker, offline app shell     | planned      |
+| O3    | Collaboration — shared editor sessions via CRDT/WebRTC        | planned      |
+| O4    | Mobile layout — touch-friendly responsive performance UI      | planned      |
 | T1    | Parameter transitions — `tween` built-in, WASM per-sample ramp | ✓ delivered  |
 | P     | Modular routing — busses, control rate, general envelopes      | ✓ delivered  |
 | P2    | Modular effect routing — reorderable chains, parallel FX, sends | planned      |
@@ -317,12 +320,13 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | HRD3  | Interface specs — plugins, pattern data, sessions, FX, MIDI   | planned      |
 | DOC1  | User docs — split manual, tutorials, cookbook, reference       | planned      |
 | R3    | Refactor — purify hand-written JS into CLJS where appropriate  | planned      |
-| PLUG1 | Drop-in plugins — drag local JS/package plugins into the app   | planned      |
+| PLUG1 | Drop-in plugins — drag trusted local JS plugins into the app   | planned      |
 | AI1   | AI knowledge base — /docs/ai/*.json, gen:ai-docs, help-export  | ✓ delivered  |
 | AI2   | AI assistant panel — BYO key, streaming chat, opt-in feature   | ✓ delivered  |
 | AI3   | Tool-using agent — read_buffer, propose_edit, eval_preview     | planned      |
 | AI3b  | AI sample discovery — freesound_search, freesound_load, web_search | planned  |
 | AI4   | AI safety & limits — budgets, injection guards, auto-apply     | planned      |
+| AI4b  | AI encrypted key relay — Supabase-stored provider keys         | planned      |
 | AI5   | Variation workflows — multi-variant generation, live audition  | planned      |
 | UI1   | Theming — settings dialog, named palettes, editor theme switch | planned      |
 
