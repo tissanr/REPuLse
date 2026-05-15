@@ -883,12 +883,38 @@ one word:
 
 Available voices:
 
-| Voice        | Keyword   | Options                                                      |
-|--------------|-----------|--------------------------------------------------------------|
-| Sawtooth     | `:saw`    | —                                                            |
-| Pulse/square | `:square` | `:pw` 0.0–1.0 — duty cycle (default `0.5` = square wave)   |
-| FM synthesis | `:fm`     | `:index` modulation depth (default `1.0`), `:ratio` mod/carrier ratio (default `2.0`) |
-| White noise  | `:noise`  | —                                                            |
+| Voice                | Keyword      | Options                                                                           |
+|----------------------|--------------|-----------------------------------------------------------------------------------|
+| Sawtooth             | `:saw`       | —                                                                                 |
+| Pulse/square         | `:square`    | `:pw` 0.0–1.0 — duty cycle (default `0.5` = square wave)                        |
+| FM synthesis         | `:fm`        | `:index` modulation depth (default `1.0`), `:ratio` mod/carrier ratio (default `2.0`) |
+| White noise          | `:noise`     | —                                                                                 |
+| Acoustic guitar      | `:guitar`    | Karplus-Strong; `decay` shortens feedback                                         |
+| Harp                 | `:harp`      | Bright, long-decay pluck (feedback 0.995)                                         |
+| Pizzicato string     | `:pizz`      | Short staccato pluck (feedback 0.972)                                             |
+| Lute                 | `:lute`      | Warm plucked lute                                                                 |
+| Koto                 | `:koto`      | Japanese koto with subtle vibrato (5.5 Hz)                                        |
+| Mandolin             | `:mandolin`  | Bright mandolin with faster vibrato (6.0 Hz)                                      |
+
+```lisp
+;; Plucked string melody
+(->> (scale :minor :c3 (seq 0 3 5 7))
+     (synth :guitar)
+     (amp 0.8))
+
+;; Harp arpeggio
+(->> (chord :major :c4 (slow 2 (seq 0 2 4 7 4 2)))
+     (synth :harp))
+
+;; Pizzicato bass
+(->> (scale :minor :c2 (seq 0 :_ 5 :_))
+     (synth :pizz)
+     (amp 0.6))
+
+;; Fast koto figure
+(->> (scale :pentatonic :d4 (fast 4 (seq 0 2 4 7)))
+     (synth :koto))
+```
 
 `synth` works on any note-producing pattern: plain keywords, Hz values from `scale`, or
 already-transformed maps. All `amp`/`attack`/`decay`/`pan` parameters compose normally

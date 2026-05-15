@@ -49,6 +49,7 @@ Map    { OpenBrace expr* CloseBrace }
     "~" | "alt" | "load-gist" | "export" |
     "rate" | "begin" | "end" | "loop-sample" |
     "saw" | "square" | "noise" | "fm" | "synth" |
+    "guitar" | "harp" | "koto" | "pizz" | "lute" | "mandolin" |
     "sin" | "tri" | "lpf" | "hpf" | "bpf" | "mix" | "gain" | "delay-node" |
     "env-perc" | "env-asr" | "env-gen" | "env" |
     "bus" | "out" | "in" | "kr" |

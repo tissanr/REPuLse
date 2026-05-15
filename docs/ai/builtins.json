@@ -1706,16 +1706,135 @@
     "side-effects": [],
     "examples": [
       "(->> (seq :c4 :eb4) (synth :saw))",
-      "(->> (scale :minor :c3 (seq 0 2 4)) (synth :fm :index 3))"
+      "(->> (scale :minor :c3 (seq 0 2 4)) (synth :fm :index 3))",
+      "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :guitar))"
     ],
     "see-also": [
       "saw",
       "square",
       "noise",
       "fm",
+      "guitar",
+      "harp",
+      "koto",
+      "pizz",
+      "lute",
+      "mandolin",
       "defsynth"
     ],
     "detail": "(->> (seq :c4 :eb4) (synth :saw)) — apply voice to note pattern; opts: :pw :index :ratio",
+    "description": ""
+  },
+  "guitar": {
+    "category": "synth",
+    "signature": "(synth :guitar) — plucked acoustic guitar (Karplus-Strong)",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :guitar))",
+      "(->> (pure :e2) (synth :guitar) (decay 0.4))"
+    ],
+    "see-also": [
+      "harp",
+      "pizz",
+      "lute",
+      "koto",
+      "mandolin",
+      "synth"
+    ],
+    "detail": "(synth :guitar) — plucked acoustic guitar (Karplus-Strong)",
+    "description": ""
+  },
+  "harp": {
+    "category": "synth",
+    "signature": "(synth :harp) — bright plucked harp (long decay)",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (chord :major :c4 (slow 2 (seq 0 2 4 7 4 2))) (synth :harp))",
+      "(->> (scale :major :c5 (seq 0 2 4 5)) (synth :harp) (amp 0.7))"
+    ],
+    "see-also": [
+      "guitar",
+      "pizz",
+      "lute",
+      "koto",
+      "mandolin",
+      "synth"
+    ],
+    "detail": "(synth :harp) — bright plucked harp (long decay)",
+    "description": ""
+  },
+  "koto": {
+    "category": "synth",
+    "signature": "(synth :koto) — Japanese koto with subtle vibrato",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :pentatonic :d4 (fast 4 (seq 0 2 4 7))) (synth :koto))",
+      "(->> (seq :d4 :f4 :a4) (synth :koto) (amp 0.8))"
+    ],
+    "see-also": [
+      "guitar",
+      "harp",
+      "mandolin",
+      "synth"
+    ],
+    "detail": "(synth :koto) — Japanese koto with subtle vibrato",
+    "description": ""
+  },
+  "pizz": {
+    "category": "synth",
+    "signature": "(synth :pizz) — pizzicato string (short decay)",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :minor :c2 (seq 0 :_ 5 :_)) (synth :pizz) (amp 0.6))",
+      "(->> (seq :c3 :g3 :c4) (synth :pizz) (decay 0.3))"
+    ],
+    "see-also": [
+      "guitar",
+      "harp",
+      "lute",
+      "synth"
+    ],
+    "detail": "(synth :pizz) — pizzicato string (short decay)",
+    "description": ""
+  },
+  "lute": {
+    "category": "synth",
+    "signature": "(synth :lute) — warm plucked lute",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :major :c4 (seq 0 2 4 5)) (synth :lute))",
+      "(->> (seq :g3 :b3 :d4) (synth :lute) (amp 0.6))"
+    ],
+    "see-also": [
+      "guitar",
+      "pizz",
+      "mandolin",
+      "synth"
+    ],
+    "detail": "(synth :lute) — warm plucked lute",
+    "description": ""
+  },
+  "mandolin": {
+    "category": "synth",
+    "signature": "(synth :mandolin) — bright mandolin with tremolo vibrato",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (fast 2 (scale :major :c5 (seq 0 2 4 7))) (synth :mandolin))",
+      "(->> (seq :e5 :d5 :c5) (synth :mandolin) (amp 0.7))"
+    ],
+    "see-also": [
+      "guitar",
+      "koto",
+      "lute",
+      "synth"
+    ],
+    "detail": "(synth :mandolin) — bright mandolin with tremolo vibrato",
     "description": ""
   },
   "sin": {

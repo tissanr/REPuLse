@@ -307,7 +307,7 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | DST4  | Distortion — oversampling wrapper (:oversample 1/2/4)          | ✓ delivered  |
 | DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | ✓ delivered  |
 | DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | ✓ delivered  |
-| SYN1  | Plucked strings — :guitar :harp :koto :pizz :lute :mandolin    | planned      |
+| SYN1  | Plucked strings — :guitar :harp :koto :pizz :lute :mandolin    | ✓ delivered  |
 | SYN2  | FM presets — :sax :trumpet :epiano :bell :marimba :flute       | planned      |
 | SYN3  | Bowed strings — :violin :viola :cello :bass-arco (waveguide)   | planned      |
 | SYN4  | Electric guitars — :strat :tele :es335 :sg :lp (KS + body IIR) | planned      |

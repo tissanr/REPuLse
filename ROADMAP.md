@@ -868,7 +868,7 @@ See full spec: [PROMPTS/PHASE-DST6.md](PROMPTS/PHASE-DST6.md)
 
 ---
 
-## Phase SYN1 — Karplus-Strong Plucked String 📋 *planned*
+## Phase SYN1 — Karplus-Strong Plucked String ✅ *delivered*
 
 Add a Karplus-Strong delay-line voice to the WASM engine, giving REPuLse its first
 melodic instrument tier: six plucked-string presets callable as `(synth :guitar)`,
@@ -878,10 +878,20 @@ melodic instrument tier: six plucked-string presets callable as `(synth :guitar)
 - `packages/audio/src/lib.rs` — `Voice::KarplusStrong` variant with pre-allocated
   2205-sample ring buffer, `ks_preset()` table, feedback/brightness/pick-pos/vibrato
   coefficients per preset, `tick` and `is_silent` implementations
-- Trigger dispatch via `"ks:{preset}:{freq}:{amp}"` value string in `trigger_v2`
-- `app/src/repulse/synth.cljs` — six preset entries in builtin-voice-map
+- Trigger dispatch via `"ks:{preset}:{freq}"` value string parsed by `activate()` in
+  `trigger_v2`; amplitude from `p.amp` as with all other voices
+- `app/src/repulse/audio.cljs` — KS branch added to `play-event` after FM dispatch,
+  JS offline fallback uses `make-sine`
 - Grammar, completions, `builtin_meta.edn`, and `docs/ai/builtins.json` updated for
-  all six names; `npm run gen:grammar` and `npm run gen:ai-docs` required
+  all six names; `npm run gen:grammar` and `npm run gen:ai-docs` run
+
+**Delivered:**
+- All six presets produce distinct plucked-string timbres with natural decay
+- `harp` has the longest decay (feedback 0.995), `pizz` the shortest (0.972)
+- `koto` and `mandolin` include subtle vibrato via LFO-modulated read position
+- Pick-position comb filter notch applied at construction for tonal shaping per preset
+- 3 new Rust unit tests: non-silent output, all-presets smoke test, decay-to-silence
+- 28 Rust tests pass; 171 CLJS tests pass; app compiles clean
 
 See full spec: [PROMPTS/PHASE-SYN1.md](PROMPTS/PHASE-SYN1.md)
 

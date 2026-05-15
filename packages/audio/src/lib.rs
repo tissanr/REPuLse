@@ -80,6 +80,18 @@ fn lcg_next(state: &mut u32) -> f32 {
     (*state as f32 / u32::MAX as f32).mul_add(2.0, -1.0)
 }
 
+fn ks_preset(name: &str) -> (f32, f32, f32, f32, f32) {
+    // Returns (feedback, brightness, pick_pos, vib_depth, vib_rate)
+    match name {
+        "harp"     => (0.995, 0.40, 0.25, 0.0,  0.0),
+        "koto"     => (0.988, 0.60, 0.10, 0.01, 5.5),
+        "pizz"     => (0.972, 0.48, 0.20, 0.0,  0.0),
+        "lute"     => (0.985, 0.45, 0.18, 0.0,  0.0),
+        "mandolin" => (0.982, 0.62, 0.08, 0.02, 6.0),
+        _          => (0.990, 0.50, 0.14, 0.0,  0.0), // guitar default
+    }
+}
+
 // ── Decay rate: reach 1e-5 from 1.0 over `dur_secs` ──────────────────────
 
 fn decay_rate(dur_secs: f32, sr: f32) -> f32 {
@@ -158,6 +170,18 @@ enum Voice {
         gain_decay: f32,
         attack_inc: f32,
         in_attack: bool,
+    },
+    KarplusStrong {
+        buf: Vec<f32>,
+        buf_len: usize,
+        write_pos: usize,
+        lp_prev: f32,
+        feedback: f32,
+        brightness: f32,
+        gain: f32,
+        vib_phase: f32,
+        vib_depth: f32,
+        vib_rate: f32,
     },
 }
 
@@ -312,6 +336,32 @@ impl Voice {
                 *mod_phase += *mod_freq / sr as f64;
                 carrier_sig * *gain
             }
+            Voice::KarplusStrong {
+                buf,
+                buf_len,
+                write_pos,
+                lp_prev,
+                feedback,
+                brightness,
+                gain,
+                vib_phase,
+                vib_depth,
+                vib_rate,
+            } => {
+                let vib_offset = (*vib_depth * (*vib_phase).sin()) as isize;
+                let read_pos = (*write_pos + 1 + *buf_len) % *buf_len;
+                let vib_pos =
+                    ((read_pos as isize + vib_offset).rem_euclid(*buf_len as isize)) as usize;
+                let x = buf[vib_pos];
+                let y = *brightness * x + (1.0 - *brightness) * *lp_prev;
+                let y_fb = y * *feedback;
+                buf[*write_pos] = y_fb;
+                *write_pos = (*write_pos + 1) % *buf_len;
+                *lp_prev = y;
+                *vib_phase += 2.0 * std::f32::consts::PI * *vib_rate / sr;
+                *gain = y_fb.abs().max(*gain * 0.9999);
+                y_fb
+            }
         }
     }
 
@@ -333,6 +383,7 @@ impl Voice {
             | Voice::Snare { gain, .. }
             | Voice::Hihat { gain, .. }
             | Voice::Noise { gain, .. } => *gain < 1e-5,
+            Voice::KarplusStrong { gain, .. } => *gain < 1e-4,
         }
     }
 }
@@ -710,6 +761,38 @@ impl AudioEngine {
                 attack_inc: peak / attack_samples,
                 in_attack: true,
             }
+        } else if let Some(rest) = value.strip_prefix("ks:") {
+            let parts: Vec<&str> = rest.splitn(2, ':').collect();
+            let preset = parts.first().copied().unwrap_or("guitar");
+            let freq: f32 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(440.0);
+            let (feedback, brightness, pick_pos, vib_depth, vib_rate) = ks_preset(preset);
+            let buf_len = ((sr / freq).floor() as usize).max(2).min(2205);
+            let mut buf = vec![0.0f32; 2205];
+            for i in 0..buf_len {
+                buf[i] = lcg_next(&mut self.noise_seed);
+            }
+            let comb = (buf_len as f32 * pick_pos).floor() as usize;
+            if comb > 0 {
+                for i in (0..buf_len).step_by(comb) {
+                    buf[i] = 0.0;
+                }
+            }
+            self.voices.push(ActiveVoice {
+                voice: Voice::KarplusStrong {
+                    buf,
+                    buf_len,
+                    write_pos: 0,
+                    lp_prev: 0.0,
+                    feedback: feedback * amp.clamp(0.1, 1.0),
+                    brightness,
+                    gain: amp,
+                    vib_phase: 0.0,
+                    vib_depth,
+                    vib_rate,
+                },
+                pan: p.pan.clamp(-1.0, 1.0),
+            });
+            return;
         } else {
             match value {
                 "bd" => {
@@ -929,6 +1012,38 @@ mod engine_tests {
         eng.trigger_raw("fm:440:2.0:3.0", 0.0);
         let buf = eng.process_block_raw(4410, 0.0);
         assert!(rms(&buf) > 0.001, "fm should produce audible output");
+    }
+
+    #[test]
+    fn karplus_strong_guitar_produces_nonsilent_output() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw("ks:guitar:440", 0.0);
+        let buf = eng.process_block_raw(4410, 0.0);
+        assert!(rms(&buf) > 0.001, "guitar KS should produce audible output");
+    }
+
+    #[test]
+    fn karplus_strong_all_presets_produce_output() {
+        for preset in &["guitar", "harp", "koto", "pizz", "lute", "mandolin"] {
+            let mut eng = AudioEngine::new_for_test(44100.0);
+            eng.trigger_raw(&format!("ks:{}:440", preset), 0.0);
+            let buf = eng.process_block_raw(4410, 0.0);
+            assert!(
+                rms(&buf) > 0.001,
+                "preset '{}' should produce audible output",
+                preset
+            );
+        }
+    }
+
+    #[test]
+    fn karplus_strong_decays_to_silence() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw("ks:pizz:440", 0.0);
+        // Render 5s — pizz has low feedback so should die out
+        let buf = eng.process_block_raw(220500, 0.0);
+        let tail: Vec<f32> = buf[buf.len() - 2000..].to_vec();
+        assert!(rms(&tail) < 1e-3, "pizz KS should decay to silence");
     }
 
     #[test]
