@@ -106,3 +106,24 @@
                   :midi #js {}}))
   (let [loaded (session/load-session)]
     (is (= 640 (:bpm loaded)))))
+
+(deftest malformed-session-is-sanitized-at-load-boundary
+  (.setItem js/localStorage session/storage-key
+            (js/JSON.stringify
+             #js {:v session/current-version
+                  :editor 42
+                  :bpm 120
+                  :fx #js [#js {:name "ignored"}]
+                  :bank 10
+                  :sources #js [#js {:type "github" :id "owner/repo"}
+                                #js {:type "github" :id ""}
+                                #js {:type "freesound" :query "kick"}]
+                  :muted #js ["kick" 99 "snare"]
+                  :midi #js {"1" "wet" "2" 9}}))
+  (let [loaded (session/load-session)]
+    (is (= "" (:editor loaded)))
+    (is (= [] (:fx loaded)))
+    (is (nil? (:bank loaded)))
+    (is (= [{:type "github" :id "owner/repo"}] (:sources loaded)))
+    (is (= ["kick" "snare"] (:muted loaded)))
+    (is (= {"1" "wet"} (:midi loaded)))))

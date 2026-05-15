@@ -1,6 +1,7 @@
 (ns repulse.core-test
   (:require [cljs.test :refer [deftest is testing]]
-            [repulse.core :as c]))
+            [repulse.core :as c]
+            [repulse.core.specs :as specs]))
 
 (deftest test-rat
   (testing "rat reduces"
@@ -12,6 +13,23 @@
     (is (= [1 4] (c/rat- [1 2] [1 4])))
     (is (= [1 6] (c/rat* [1 2] [1 3])))
     (is (= [2 1] (c/rat-div [1 2] [1 4])))))
+
+(deftest core-data-specs
+  (testing "rational vectors are normalized with positive denominators"
+    (is (specs/valid-rat? [1 2]))
+    (is (not (specs/valid-rat? [2 4])))
+    (is (not (specs/valid-rat? [1 0])))
+    (is (not (specs/valid-rat? [1 -2]))))
+  (testing "spans require valid rational bounds and start before end"
+    (is (specs/valid-span? (c/span [0 1] [1 1])))
+    (is (not (specs/valid-span? (c/span [1 1] [1 1]))))
+    (is (not (specs/valid-span? {:start [0 2] :end [1 1]}))))
+  (testing "events and patterns match the core constructors"
+    (let [sp (c/span [0 1] [1 1])
+          ev (c/event :bd sp sp)]
+      (is (specs/valid-event? ev))
+      (is (specs/valid-pattern? (c/pure :bd)))
+      (is (not (specs/valid-pattern? ev))))))
 
 (deftest test-pure
   (testing "pure yields one event per cycle"

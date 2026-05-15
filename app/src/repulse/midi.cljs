@@ -1,4 +1,5 @@
-(ns repulse.midi)
+(ns repulse.midi
+  (:require [repulse.specs :as specs]))
 
 ;;; ── State ──────────────────────────────────────────────────────────
 
@@ -53,9 +54,12 @@
   "Map a MIDI CC number to a parameter target.
    on-change-fn is called with (target-kw scaled-value) on each CC message."
   [cc-num target-kw on-change-fn]
-  (swap! cc-mappings assoc cc-num
-         {:target target-kw :min 0.0 :max 1.0 :on-change on-change-fn})
-  (register-cc-listener!))
+  (let [mapping {:target target-kw :min 0.0 :max 1.0 :on-change on-change-fn}]
+    (if (and (integer? cc-num) (<= 0 cc-num 127) (specs/midi-cc-mapping? mapping))
+      (do
+        (swap! cc-mappings assoc cc-num mapping)
+        (register-cc-listener!))
+      (js/console.warn "[REPuLse] Ignoring invalid MIDI CC mapping:" cc-num target-kw))))
 
 ;;; ── Output: Note On/Off ────────────────────────────────────────────
 
@@ -150,7 +154,7 @@
   [events bpm]
   (let [ppqn        480
         us-per-beat (int (/ 60000000.0 bpm))
-        sorted      (sort-by :time-sec events)
+        sorted      (sort-by :time-sec (filter specs/midi-export-event? events))
         sec->tick   (fn [s] (int (* s (/ bpm 60.0) ppqn)))
         ;; Tempo meta event: FF 51 03 tt tt tt
         tempo-evt   (concat [0x00 0xFF 0x51 0x03]
