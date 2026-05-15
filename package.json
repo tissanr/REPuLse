@@ -29,6 +29,6 @@
     "shadow-cljs": "^3.4.10"
   },
   "dependencies": {
-    "@codemirror/lint": "^6.9.5"
+    "@codemirror/lint": "^6.9.6"
   }
 }
