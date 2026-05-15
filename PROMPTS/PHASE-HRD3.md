@@ -42,9 +42,9 @@ Current implementation notes:
 - `app.cljs` has already been split. App built-ins live under
   `app/src/repulse/env/builtins/`; keep new validation near the owning boundary
   namespace rather than re-centralising app logic.
-- AI1 and AI2 are delivered, but AI3 is still planned. There is no
-  `app/src/repulse/ai/tools.cljs`, no agent loop, and no `propose_edit` tool yet.
-  Do not create those as part of HRD3.
+- AI1, AI2, and AI3 are now delivered. HRD3 still does not implement AI tool-call
+  specs; that surface should receive its own follow-up hardening pass so this phase
+  stays focused on plugins, pattern data, sessions, FX, samples, and MIDI.
 - `packages/core/src/repulse/core.cljs` represents rational time as vectors such
   as `[1 4]`. The old wording about CLJS runtime `Ratio` values no longer applies.
 
