@@ -84,12 +84,12 @@ fn ks_preset(name: &str) -> (f32, f32, f32, f32, f32) {
     // Returns (feedback, brightness, pick_pos, vib_depth, vib_rate)
     // T60 formula (at A440, buf_len≈100): -3*100 / (44100 * ln(feedback))
     match name {
-        "harp"     => (0.998, 0.55, 0.25, 0.0,   0.0), // ~3.4s T60, warm
-        "koto"     => (0.994, 0.62, 0.10, 0.015, 5.5), // ~1.5s, subtle vib
-        "pizz"     => (0.975, 0.55, 0.20, 0.0,   0.0), // ~0.27s, staccato
-        "lute"     => (0.996, 0.58, 0.16, 0.0,   0.0), // ~1.7s, warm
+        "harp" => (0.998, 0.55, 0.25, 0.0, 0.0),   // ~3.4s T60, warm
+        "koto" => (0.994, 0.62, 0.10, 0.015, 5.5), // ~1.5s, subtle vib
+        "pizz" => (0.975, 0.55, 0.20, 0.0, 0.0),   // ~0.27s, staccato
+        "lute" => (0.996, 0.58, 0.16, 0.0, 0.0),   // ~1.7s, warm
         "mandolin" => (0.992, 0.68, 0.08, 0.025, 6.5), // ~0.85s, bright
-        _          => (0.997, 0.65, 0.12, 0.0,   0.0), // guitar ~2.3s T60
+        _ => (0.997, 0.65, 0.12, 0.0, 0.0),        // guitar ~2.3s T60
     }
 }
 
