@@ -1,5 +1,6 @@
 (ns repulse.samples
   (:require [repulse.lisp.reader :as reader]
+            [repulse.specs :as specs]
             [clojure.string :as str]))
 
 ;; Sample registry: bank-name (string) -> [full-url ...]
@@ -42,13 +43,21 @@
   [js-data]
   (let [raw  (js->clj js-data)
         base (get raw "_base" "")]
-    (reduce-kv
-     (fn [acc k v]
-       (if (and (not= k "_base") (vector? v) (seq v))
-         (assoc acc k (mapv #(str base %) v))
-         acc))
-     {}
-     raw)))
+    (let [banks (if (map? raw)
+                  (reduce-kv
+                   (fn [acc k v]
+                     (if (and (not= k "_base") (string? k) (vector? v) (seq v))
+                       (let [urls (filterv string? (mapv #(str base %) v))]
+                         (if (seq urls) (assoc acc k urls) acc))
+                       acc))
+                   {}
+                   raw)
+                  {})]
+      (if (specs/sample-registry? banks)
+        banks
+        (do
+          (js/console.warn "[REPuLse] Ignoring malformed sample manifest")
+          {})))))
 
 (defn- fetch-ok!
   "Returns a Promise that rejects with a descriptive error if response.ok is false."
@@ -187,11 +196,17 @@
         (let [raw-map (reduce-kv (fn [acc k v] (assoc acc (unwrap-sv k) v)) {} form)
               base    (unwrap-sv (get raw-map :_base ""))
               banks   (dissoc raw-map :_base)]
-          (reduce-kv
-            (fn [acc k v]
-              (assoc acc (name k) (mapv #(str base (unwrap-sv %)) v)))
-            {}
-            banks))))
+          (let [parsed (reduce-kv
+                        (fn [acc k v]
+                          (let [urls (when (vector? v)
+                                       (filterv string? (mapv #(str base (unwrap-sv %)) v)))]
+                            (if (and (seq urls) (or (keyword? k) (string? k)))
+                              (assoc acc (name k) urls)
+                              acc)))
+                        {}
+                        banks)]
+            (when (specs/sample-registry? parsed)
+              parsed)))))
     (catch :default _ nil)))
 
 (defn load-lisp-manifest!
@@ -244,8 +259,9 @@
                                  {}
                                  grouped)]
                    (swap! registry merge banks)
-                   (swap! loaded-sources conj
-                          {:type :github :id (str owner "/" repo) :banks (count banks)})
+                   (let [source {:type :github :id (str owner "/" repo) :banks (count banks)}]
+                     (when (specs/loaded-source? source)
+                       (swap! loaded-sources conj source)))
                    (js/console.log (str "[REPuLse] loaded " (count banks)
                                         " banks from github:" owner "/" repo)))))
         (.catch (fn [e]
@@ -280,7 +296,11 @@
 (defn register-url!
   "Register a single audio URL as a one-sample bank under bank-name (string or keyword)."
   [bank-name url]
-  (swap! registry assoc (name bank-name) [url]))
+  (let [bank (name bank-name)
+        entry {bank [url]}]
+    (if (specs/sample-registry? entry)
+      (swap! registry assoc bank [url])
+      (js/console.warn "[REPuLse] Ignoring invalid sample URL registration:" bank-name url))))
 
 (defn bank-names
   "Returns a sorted list of all registered bank names."

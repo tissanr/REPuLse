@@ -1,8 +1,28 @@
 (ns repulse.fx
-  (:require [repulse.audio :as audio]))
+  (:require [repulse.audio :as audio]
+            [repulse.specs :as specs]))
 
 ;; Ordered vector of {:name "reverb" :plugin js-obj :input node :output node}
 (defonce chain (atom []))
+
+(defn validate-effect-nodes!
+  [effect-name nodes]
+  (when-not (specs/effect-nodes? nodes)
+    (throw (js/Error. (str "[REPuLse] Effect plugin \"" effect-name
+                           "\" createNodes(ctx) must return "
+                           "{inputNode, outputNode} with connect/disconnect methods"))))
+  nodes)
+
+(defn- make-effect-entry [effect-name plugin ^js nodes]
+  (let [entry {:name      effect-name
+               :plugin    plugin
+               :input     (.-inputNode nodes)
+               :output    (.-outputNode nodes)
+               :bypassed? false
+               :active?   false}]
+    (when-not (specs/fx-entry? entry)
+      (throw (js/Error. (str "[REPuLse] Invalid FX chain entry for \"" effect-name "\""))))
+    entry))
 
 (defn- rewire!
   "Reconnect the chain: masterGain → effect1 → effect2 → ... → analyser.
@@ -24,13 +44,8 @@
 
 (defn add-effect! [^js plugin]
   (let [ac    (audio/get-ctx)
-        nodes (.createNodes plugin ac)]
-    (swap! chain conj {:name      (.-name plugin)
-                       :plugin    plugin
-                       :input     (.-inputNode nodes)
-                       :output    (.-outputNode nodes)
-                       :bypassed? false
-                       :active?   false})
+        nodes (validate-effect-nodes! (.-name plugin) (.createNodes plugin ac))]
+    (swap! chain conj (make-effect-entry (.-name plugin) plugin nodes))
     (rewire!)))
 
 (defn remove-effect! [effect-name]
@@ -91,16 +106,12 @@
           ;; Fall back to Object.create/assign for plain JS object plugins.
           ^js fresh (if (fn? (.-clone p))
                       (.clone p)
-                      (let [o (js/Object.create (.getPrototypeOf js/Object p))]
+                      (let [o (js/Object.create (js/Object.getPrototypeOf p))]
                         (js/Object.assign o p)
                         o))
-          nodes  (.createNodes fresh ac)]
+          nodes  (validate-effect-nodes! effect-name (.createNodes fresh ac))]
       (swap! audio/track-nodes update-in [track-name :fx-chain]
-             conj {:name      effect-name
-                   :plugin    fresh
-                   :input     (.-inputNode nodes)
-                   :output    (.-outputNode nodes)
-                   :bypassed? false})
+             conj (dissoc (make-effect-entry effect-name fresh nodes) :active?))
       (rewire-track! track-name))))
 
 (defn remove-track-effect!
@@ -134,9 +145,12 @@
   [track-name track-fx]
   (clear-track-effects! track-name)
   (doseq [{:keys [name params]} track-fx]
-    (add-track-effect! track-name name)
-    (doseq [[k v] params]
-      (set-track-param! track-name name k v))))
+    (if-not (specs/track-fx-entry? {:name name :params params})
+      (js/console.warn "[REPuLse] Ignoring invalid track FX entry:" (pr-str {:name name :params params}))
+      (do
+        (add-track-effect! track-name name)
+        (doseq [[k v] params]
+          (set-track-param! track-name name k v))))))
 
 (defn bypass-track-effect!
   "Bypass or un-bypass an effect on a specific track."

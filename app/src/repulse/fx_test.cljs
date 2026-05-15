@@ -4,7 +4,57 @@
             [repulse.env.builtins.fx :as b-fx]
             [repulse.fx :as fx]
             [repulse.lisp.core :as lisp]
-            [repulse.lisp.eval :as leval]))
+            [repulse.lisp.eval :as leval]
+            [repulse.plugins :as plugins]))
+
+(defn- node-stub []
+  #js {:connect (fn [_] nil)
+       :disconnect (fn [] nil)})
+
+(defn- thrown-message [f]
+  (try
+    (f)
+    nil
+    (catch :default e
+      (.-message e))))
+
+(deftest plugin-validation-normalizes-optional-methods
+  (testing "documented optional visual and effect methods are installed as defaults"
+    (let [visual #js {:type "visual"
+                      :name "minimal-visual"
+                      :mount (fn [_] nil)
+                      :unmount (fn [] nil)}
+          effect #js {:type "effect"
+                      :name "minimal-effect"
+                      :createNodes (fn [_] #js {:inputNode (node-stub)
+                                                :outputNode (node-stub)})
+                      :setParam (fn [_ _] nil)
+                      :destroy (fn [] nil)}]
+      (plugins/validate-plugin! visual)
+      (plugins/normalize-plugin! visual)
+      (is (fn? (.-init visual)))
+      (is (fn? (.-destroy visual)))
+      (plugins/validate-plugin! effect)
+      (plugins/normalize-plugin! effect)
+      (is (fn? (.-init effect)))
+      (is (fn? (.-bypass effect)))
+      (is (fn? (.-getParams effect))))))
+
+(deftest plugin-validation-rejects-missing-required-methods
+  (testing "invalid plugins fail with clear field names"
+    (let [bad #js {:type "effect" :name "bad-effect" :createNodes (fn [_] #js {})}]
+      (is (re-find #"bad-effect.*setParam.*destroy"
+                   (thrown-message #(plugins/validate-plugin! bad)))))))
+
+(deftest effect-node-validation-rejects-disconnected-contracts
+  (testing "createNodes must return connectable input and output nodes"
+    (is (re-find #"createNodes"
+                 (thrown-message
+                  #(fx/validate-effect-nodes! "bad" #js {:inputNode (node-stub)}))))
+    (is (= "ok"
+           (do (fx/validate-effect-nodes! "ok" #js {:inputNode (node-stub)
+                                                    :outputNode (node-stub)})
+               "ok")))))
 
 (deftest apply-track-effects-replaces-chain-and-applies-params
   (testing "pattern FX metadata is applied as a fresh track chain"
@@ -51,6 +101,28 @@
       (is (= [-1.0 -0.8 -0.3 0 0.3 0.9 1.0]
              (vec (get-in fx-meta [:params "curve"]))))
       (is (= 3 (get-in fx-meta [:params "drive"]))))))
+
+(deftest dattorro-alias-targets-dattorro-reverb
+  (testing "the short :dattorro spelling works for global FX"
+    (let [calls (atom [])]
+      (with-redefs [fx/set-param! (fn [effect-name param-name value]
+                                    (swap! calls conj [effect-name param-name value]))]
+        ((get (b-fx/make-builtins nil) "fx") :dattorro 0.35)
+        ((get (b-fx/make-builtins nil) "fx") :dattorro :wet 0.8 :decay 0.7))
+      (is (= [["dattorro-reverb" "value" 0.35]
+              ["dattorro-reverb" "wet" 0.8]
+              ["dattorro-reverb" "decay" 0.7]]
+             @calls))))
+  (testing "the short :dattorro spelling works for per-track FX metadata"
+    (let [env    (merge (leval/make-env (fn [] nil) (fn [_] nil))
+                        (b-fx/make-builtins nil))
+          result (lisp/eval-string "(->> (seq :bd) (fx :dattorro :wet 0.8))" env)
+          pat    (:result result)
+          fx-meta (first (:track-fx pat))]
+      (is (not (lisp/eval-error? result)) (:message result))
+      (is (core/pattern? pat))
+      (is (= "dattorro-reverb" (:name fx-meta)))
+      (is (= 0.8 (get-in fx-meta [:params "wet"]))))))
 
 (deftest reset-global-effects-resets-plugin-state-and-flags
   (testing "global plugin params do not leak between evaluations"
