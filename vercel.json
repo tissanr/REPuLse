@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "cargo install --locked wasm-pack@0.14.0 && npm run build:wasm && npx shadow-cljs release app",
+  "buildCommand": "bash scripts/vercel-build.sh",
   "outputDirectory": "app/public",
   "installCommand": "npm install",
   "framework": null,

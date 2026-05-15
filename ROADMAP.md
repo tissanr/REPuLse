@@ -1234,24 +1234,36 @@ See full spec: [PROMPTS/PHASE-HRD2.md](PROMPTS/PHASE-HRD2.md)
 
 ---
 
-## Phase HRD3 — Interface Specs 📋 *planned*
+## Phase HRD3 — Interface Specs ✅ *delivered*
 
 Harden REPuLse's runtime boundaries with explicit `cljs.spec` contracts, starting
 with the public plugin API and extending to the data maps that cross persistence,
 network, audio-routing, MIDI, and pattern-engine boundaries.
 
 Prompt note: HRD3 has been adapted for the post-R1/R2 codebase. Core rational specs
-target REPuLse's current `[numerator denominator]` representation, and AI tool-call
-specs are deferred until AI3 introduces the tool registry and agent loop.
+target REPuLse's current `[numerator denominator]` representation. AI tool-call
+specs were kept out of HRD3 and should receive a separate follow-up hardening pass.
 
-**Key additions:**
-- Plugin interface specs for identity, visual/effect methods, host API, optional
-  method normalization, and `createNodes` audio-node return contracts
-- Core pattern specs for vector rational time, spans, events, and tagged Pattern maps
-- Boundary specs for session snapshots, FX chain entries, sample manifests/loaded
-  sources, event payload parameter maps, tween descriptors, and MIDI mappings
-- Tests that invalid plugins, malformed sessions, bad effect nodes, and invalid
-  core data fail early with clear diagnostics
+**Delivered:**
+- Added `repulse.core.specs` for normalized vector rationals, spans, events, and
+  tagged Pattern maps without adding app dependencies to `packages/core`
+- Added `repulse.specs` for app boundary shapes: event payloads, tween descriptors,
+  FX entries, sample registries/loaded sources, session snapshots, MIDI mappings,
+  MIDI export events, and Web Audio node-like effect graph returns
+- Reworked plugin registration around explicit `validate-plugin!` and
+  `normalize-plugin!`: visual plugins now require only `mount`/`unmount`; effect
+  plugins require `createNodes`/`setParam`/`destroy`; documented optional methods
+  get safe defaults
+- Validated `createNodes(ctx)` before global or per-track effects enter an FX chain,
+  including a fix to use `Object.getPrototypeOf` for plain-object per-track clones
+- Sanitized session restore and URL hash decode at the v2 boundary after BPM
+  coercion, filtering malformed sources, mutes, MIDI mappings, and persisted FX
+  state rather than partially applying bad data
+- Added validation at sample manifest/registration and MIDI CC/export boundaries
+- Added focused tests for core specs, plugin validation/normalization, effect-node
+  validation, and malformed persisted session sanitization
+- Updated plugin documentation so required/optional method tables match runtime
+  validation. AI tool-call specs remain out of HRD3 scope per the phase prompt.
 
 See full spec: [PROMPTS/PHASE-HRD3.md](PROMPTS/PHASE-HRD3.md)
 
