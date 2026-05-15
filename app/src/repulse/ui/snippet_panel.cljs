@@ -10,6 +10,7 @@
             [repulse.eval-orchestrator :as eo]
             [repulse.auth :as auth]
             [repulse.api :as api]
+            [repulse.ai.tools :as ai-tools]
             [clojure.string :as cstr]
             [clojure.set :as cset]))
 
@@ -345,6 +346,16 @@
 (defn toggle-panel! []
   (if @visible? (hide-panel!) (show-panel!)))
 
+(defn open-with-search!
+  "Open the snippet panel and pre-fill the search query."
+  [q]
+  (reset! search-query q)
+  (show-panel!)
+  (when @snippets/loaded?
+    (render-cards!)
+    (when-let [input (el "snippet-search")]
+      (set! (.-value input) q))))
+
 ;;; One-time event wiring
 
 (defn- wire-panel! [panel]
@@ -389,6 +400,7 @@
   "Build the panel DOM skeleton and wire events.
    Must be called after the panel element exists in the DOM."
   []
+  (reset! ai-tools/open-snippet-search-fn open-with-search!)
   (preview/init!)
   (when-let [panel (el "snippet-panel")]
     (set! (.-innerHTML panel)

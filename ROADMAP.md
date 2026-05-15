@@ -1409,24 +1409,27 @@ See full spec: [PROMPTS/PHASE-AI2.md](PROMPTS/PHASE-AI2.md)
 
 ---
 
-## Phase AI3 — Tool-Using Agent 📋 *planned*
+## Phase AI3 — Tool-Using Agent ✅ *delivered*
 
 Promote the assistant from chat to agent: it can read the editor buffer, query session
 state, browse snippets, propose unified-diff edits, and silently preview evaluated code
 — all with explicit user confirmation before any change is applied.
 
-**Key additions:**
-- `app/src/repulse/ai/tools.cljs` — typed tool registry: `read_buffer`, `propose_edit`
-  (unified diff), `eval_preview` (silent off-graph audio context), `query_session`,
-  `query_track`, `find_snippet`, `insert_snippet`, `set_bpm_proposal`
-- `app/src/repulse/ai/agent_loop.cljs` — bounded agent loop (max N tool calls per turn)
-  with cancel button; function-calling adapters for OpenAI and Anthropic tool-use schemas
-- Edit-proposal diff overlay in the editor with "Apply / Reject" buttons; rejections fed
-  back as model feedback
-- `eval_preview` runs against an off-graph silent gain node — assistant "listens" without
-  touching the user's session; returns scheduled-event count + duration-bars summary
-- Snippet integration: `find_snippet` searches community library, `insert_snippet` uses
-  the same path as manual insert with usage tracking
+**Delivered:**
+- `app/src/repulse/ai/tools.cljs` — tool registry with 8 executors: `read_buffer`,
+  `propose_edit`, `eval_preview`, `query_session`, `query_track`, `find_snippet`,
+  `insert_snippet`, `set_bpm_proposal`; provider-specific schema builders for OpenAI,
+  Anthropic, and Google; `show-diff-overlay!` renders an Apply/Reject card in the editor area
+- `app/src/repulse/ai/agent_loop.cljs` — Promise-based bounded loop (max 8 tool calls/turn),
+  Cancel button, per-tool status lines in panel, conversation history management
+- `app/src/repulse/ai/client.cljs` — new `complete!` function (non-streaming, supports tools),
+  normalised message format with provider-specific conversion for tool-calls and tool results
+- `app/src/repulse/eval_orchestrator.cljs` — `evaluate-in-context!` for silent pattern
+  evaluation: parses code with the full Lisp env, queries the pattern for events, returns
+  `{:ok true :event-count N :duration-bars 1}` with no audio side-effects
+- `app/src/repulse/ui/assistant_panel.cljs` — `add-message!` / `set-pending!` public API,
+  Cancel button replaces Send during agent turns; `send!` delegates to agent loop
+- No tool can modify the session without explicit user click (Apply button or confirm dialog)
 
 See full spec: [PROMPTS/PHASE-AI3.md](PROMPTS/PHASE-AI3.md)
 

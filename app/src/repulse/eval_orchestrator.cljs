@@ -2,7 +2,7 @@
   "Evaluation entry point, diagnostics, and live slider patching.
    Responsibility: own evaluate!, set-diagnostics!, pending-mutes, and all
    editor code-patching logic for slider updates.
-   Exports: evaluate!, set-diagnostics!, pending-mutes,
+   Exports: evaluate!, evaluate-in-context!, set-diagnostics!, pending-mutes,
             slider-patch-and-eval!, fx-slider-patch-and-eval!,
             fx-select-patch-and-eval!, per-track-fx-slider-patch-and-eval!,
             per-track-fx-select-patch-and-eval!"
@@ -14,6 +14,7 @@
             [repulse.ui.editor :as editor]
             [repulse.ui.context-panel :as ctx-panel]
             [repulse.lisp-patcher :as patcher]
+            [repulse.ai.tools :as ai-tools]
             ["@codemirror/lint" :refer [setDiagnostics]]))
 
 ;;; Owned atoms
@@ -27,6 +28,26 @@
 
 (defonce ^:private cbs (atom {}))
 
+;;; Silent evaluation for AI agent preview
+
+(defn evaluate-in-context!
+  "Evaluate REPuLse-Lisp code silently (no audio, no UI side-effects).
+   Returns {:ok true :event-count N :duration-bars 1} or {:ok false :error msg}."
+  [code]
+  (try
+    (builtins/ensure-env!)
+    (let [env    @builtins/env-atom
+          result (lisp/eval-string code env)]
+      (if (lisp/eval-error? result)
+        {:ok false :error (:message result)}
+        (let [val (:result result)]
+          (if (core/pattern? val)
+            (let [events (core/query val (core/cycle-span 0))]
+              {:ok true :event-count (count events) :duration-bars 1})
+            {:ok true :event-count 0 :duration-bars 0 :value (pr-str val)}))))
+    (catch :default e
+      {:ok false :error (.-message e)})))
+
 (defn init!
   "Wire app-level callback fns into this module.
    Must be called during app init before the first evaluation.
@@ -35,7 +56,9 @@
   (reset! cbs {:on-beat      on-beat-fn
                :make-stop-fn make-stop-fn-fn
                :set-playing! set-playing!-fn
-               :set-output!  set-output!-fn}))
+               :set-output!  set-output!-fn})
+  ;; Wire the silent eval function for the AI agent eval_preview tool.
+  (reset! ai-tools/eval-preview-fn evaluate-in-context!))
 
 ;;; Diagnostics
 
