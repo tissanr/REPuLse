@@ -133,15 +133,25 @@
     {:ok true :text (.. view -state -doc (toString))}
     {:ok false :error "Editor not initialized"}))
 
+(defn- clamp-range
+  "Clamp from/to to the actual document length so CodeMirror never rejects the range."
+  [view from to]
+  (let [doc-len (.. view -state -doc -length)]
+    [(min (max 0 from) doc-len)
+     (min (max 0 to)   doc-len)]))
+
 (defn- exec-propose-edit [{:keys [from to replacement]}]
   (if @settings/auto-apply?
     (do
-      ;; Snapshot editor state before applying so the user can revert.
       (undo/record-pre-edit!)
       (when-let [v @editor/editor-view]
-        (.dispatch v #js {:changes #js {:from from :to to :insert replacement}}))
+        (let [[f t] (clamp-range v from to)]
+          (.dispatch v #js {:changes #js {:from f :to t :insert replacement}})))
       (js/Promise.resolve {:ok true :applied true :auto-applied true}))
-    (show-diff-overlay! from to replacement)))
+    (if-let [v @editor/editor-view]
+      (let [[f t] (clamp-range v from to)]
+        (show-diff-overlay! f t replacement))
+      (show-diff-overlay! from to replacement))))
 
 (defn- exec-eval-preview [{:keys [code]}]
   (js/Promise.
