@@ -9,6 +9,12 @@ Four capabilities that expand where REPuLse runs and who can use it:
 3. **Collaborative sessions** — real-time multi-user editing via WebRTC
 4. **Mobile layout** — touch-optimised editor and controls for tablets/phones
 
+Current status note: the embeddable component was delivered separately as Phase O1
+(`app/src/repulse/embed.cljs`, `app/src/repulse/embed_css.cljs`, `:embed` Shadow build,
+and `app/public/embed-test.html`). Do not reimplement the embed target as part of O.
+Treat the remaining O work as independent slices: PWA/offline, collaboration, and
+mobile layout.
+
 ```html
 <!-- Embeddable component in any website: -->
 <repulse-editor code='(seq :bd :sd :bd :sd)' autoplay></repulse-editor>
@@ -37,7 +43,7 @@ host. All assets are loaded on demand:
 - Samples — fetched from Strudel CDN on demand via `samples!`
 
 There is no service worker, no manifest, no offline capability. The app cannot be
-installed. It cannot be embedded in other pages. There is no multi-user support.
+installed. Embedding exists via O1. There is no multi-user support.
 
 ### CodeMirror 6 features
 
@@ -112,7 +118,12 @@ In `app/src/repulse/app.cljs`, after DOM mount:
 - `(download-bank! :AkaiLinn)` — fetches all sample URLs for a bank and caches them
 - The sample registry (`samples.cljs`) checks the service worker cache before network
 
-### 2. Embeddable web component
+### 2. Embeddable web component — already delivered in O1
+
+This section is historical context only. Use the existing O1 implementation as the
+baseline for any future embed improvements.
+
+### 2a. Embeddable web component
 
 #### Architecture
 

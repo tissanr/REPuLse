@@ -139,6 +139,10 @@ should add a follow-up spec pass covering:
 Leave these bullets in this prompt as design continuity only. They are not HRD3
 acceptance criteria until AI3 exists.
 
+If HRD3 is implemented before AI3, skip this subsection and note in the delivered
+roadmap entry that AI tool specs move into AI3 or a follow-up hardening phase. Do not
+create placeholder AI tool namespaces just to satisfy this section.
+
 ---
 
 ## Files to change

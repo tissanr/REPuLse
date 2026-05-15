@@ -27,7 +27,7 @@ no user-defined colour editors.
 
 ### CSS custom properties
 
-`app/public/css/main.css` lines 3–13 declare nine CSS variables on `:root`:
+`app/public/css/main.css` declares CSS variables on `:root`:
 
 ```css
 :root {
@@ -43,10 +43,11 @@ no user-defined colour editors.
 }
 ```
 
-Every rule in the 1,389-line stylesheet references these variables consistently — there
-are no stray hard-coded hex colours in layout or component rules. Calling
-`document.documentElement.style.setProperty("--bg", value)` repaints every element
-using that variable in one browser frame.
+The original UI1 sketch assumed the stylesheet already routed nearly every color
+through these variables. That is no longer true: later phases added snippets, the
+timeline, AI panel, dashboard controls, and modals with many hard-coded colors.
+UI1 must start with a scoped token cleanup pass before theme switching can cover
+the full host app.
 
 ### CodeMirror editor theme
 
@@ -81,6 +82,17 @@ existing play/stop controls and auth button.
 ---
 
 ## Implementation
+
+### 0. CSS token cleanup
+
+Before adding the settings UI, audit `app/public/css/main.css`,
+`app/src/repulse/embed_css.cljs`, and canvas-drawn colors in
+`app/src/repulse/ui/timeline.cljs`.
+
+- Keep product/semantic colors as named tokens (`--accent`, `--cyan`, `--yellow`, etc.).
+- Replace repeated component hard-coded colors with variables.
+- Do not attempt to theme generated parser files or third-party plugin JS.
+- Decide whether the embeddable component follows the host theme or keeps its own compact palette.
 
 ### 1. New file: `app/src/repulse/themes.cljs`
 

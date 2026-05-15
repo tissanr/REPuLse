@@ -597,18 +597,61 @@ See full spec: [PROMPTS/PHASE-O1.md](PROMPTS/PHASE-O1.md)
 
 ---
 
-## Phase O — Platform & Deployment 📋 *planned*
+## Phase O — Platform & Deployment 🧭 *split*
 
-Expand where REPuLse runs and who can use it.
+Umbrella phase split into focused implementation phases. O1 is already delivered;
+the remaining platform work is tracked as O2/O3/O4.
 
-**Key additions:**
-- **PWA / offline** — service worker (cache-first), web app manifest, install prompt; `(download-bank! :Name)` caches samples for offline use
-- **Embeddable component** — `<repulse-editor code='...' autoplay>` custom element via Shadow DOM; separate `repulse-embed.js` bundle
-- **Collaborative sessions** — `(collab-start!)` / `(collab-join! "code")` via Yjs + WebRTC; peer-to-peer, no server required; synced code = synced audio
-- **Mobile layout** — CSS media queries for ≤768px; ≥44px touch targets; command bar font-size prevents iOS auto-zoom
-- New dependencies: `yjs`, `y-webrtc`, `y-codemirror.next` (collab only)
+**Split phases:**
+- O1 — embeddable component, delivered
+- O2 — PWA/offline app shell and offline sample caching
+- O3 — collaborative editor sessions
+- O4 — mobile responsive/touch layout
 
 See full spec: [PROMPTS/phase-o-platform.md](PROMPTS/phase-o-platform.md)
+
+---
+
+## Phase O2 — PWA & Offline Mode 📋 *planned*
+
+Installable/offline REPuLse app shell.
+
+**Key additions:**
+- Web app manifest and installable app metadata
+- Service worker with versioned app-shell caching for HTML, JS, CSS, WASM, worklet,
+  built-in plugins, fonts, and icons
+- Cache-on-use sample strategy and explicit offline bank download command
+- Clear cache/update behaviour so stale WASM/worklet assets do not linger
+
+See full spec: [PROMPTS/PHASE-O2-PWA-OFFLINE.md](PROMPTS/PHASE-O2-PWA-OFFLINE.md)
+
+---
+
+## Phase O3 — Collaborative Sessions 📋 *planned*
+
+Shared live-coding editor sessions.
+
+**Key additions:**
+- CRDT-backed shared editor buffer
+- Session start/join UI and Lisp commands
+- Presence/connection state in the UI
+- Explicit handling for audio ownership: code syncs, local audio remains local
+
+See full spec: [PROMPTS/PHASE-O3-COLLAB.md](PROMPTS/PHASE-O3-COLLAB.md)
+
+---
+
+## Phase O4 — Mobile Layout 📋 *planned*
+
+Touch-friendly responsive layout for phones and tablets.
+
+**Key additions:**
+- Responsive app shell and panels for narrow viewports
+- Touch target sizing and keyboard-safe editor/command-bar behaviour
+- Mobile transport controls and context/timeline adjustments
+- Manual browser smoke test checklist for iOS Safari and Android Chrome
+
+See full spec: [PROMPTS/PHASE-O4-MOBILE.md](PROMPTS/PHASE-O4-MOBILE.md)
 
 ---
 
@@ -1189,18 +1232,17 @@ See full spec: [PROMPTS/PHASE-R3.md](PROMPTS/PHASE-R3.md)
 
 ---
 
-## Phase PLUG1 — Drop-In Plugin Packages 📋 *planned*
+## Phase PLUG1 — Drop-In Local JS Plugins 📋 *planned*
 
-Let users install trusted third-party plugins by dragging local `.js` files or
-`.repulse-plugin.zip` packages onto the app.
+Let users install trusted third-party plugins by dragging local single-file `.js`
+plugins onto the app. Zip/package support is deferred.
 
 **Key additions:**
-- Plugin package manifest format with `id`, `name`, `version`, `apiVersion`,
-  `type`, `entry`, permissions, and assets
+- Single-file plugin loading through the existing plugin registry and consent model
 - Drag/drop install flow with explicit trust dialog before executing code
 - IndexedDB persistence plus enable, disable, reload, and remove controls
-- Host APIs for packaged assets and AudioWorklet modules while preserving the
-  existing effect/visual plugin protocols
+- Clear "not supported yet" handling for zip/package plugin drops
+- Preserve the existing effect/visual plugin protocols
 
 See full spec: [PROMPTS/PHASE-PLUG1.md](PROMPTS/PHASE-PLUG1.md)
 
@@ -1314,8 +1356,8 @@ See full spec: [PROMPTS/PHASE-AI3b.md](PROMPTS/PHASE-AI3b.md)
 ## Phase AI4 — Assistant Safety & Limits 📋 *planned*
 
 The trust and economics layer: hard token + tool-call budgets, prompt-injection guards
-for untrusted content the assistant reads, auto-apply toggle with full undo, and an
-optional Supabase server-relay for users who want encrypted key storage.
+for untrusted content the assistant reads, auto-apply toggle with full undo, retry
+handling, and activity logging.
 
 **Key additions:**
 - Hard token + tool-call budget per session; soft warning at 50%, hard stop at 100%
@@ -1325,11 +1367,25 @@ optional Supabase server-relay for users who want encrypted key storage.
 - Auto-apply toggle (default off) — when on, every `propose_edit` lands immediately and
   records to an undo stack with a "revert assistant turn" button
 - Per-provider rate limiting + retry-with-backoff; provider errors surfaced inline
-- Optional server-relay — keys stored in Supabase encrypted user settings (S2 backend)
-  instead of localStorage; toggled in settings modal
 - Activity log panel — last 50 tool calls with payloads, exportable as JSON for debugging
 
 See full spec: [PROMPTS/PHASE-AI4.md](PROMPTS/PHASE-AI4.md)
+
+---
+
+## Phase AI4b — Encrypted AI Key Relay 📋 *planned*
+
+Optional backend-backed AI provider key storage and request relay for users who do not
+want provider keys stored in browser localStorage.
+
+**Key additions:**
+- Supabase-backed encrypted provider key storage per authenticated user
+- AI settings UI for enabling server-relay mode
+- `/api/ai-stream` extension or dedicated proxy route that retrieves the server-side key
+- Server-side budget/rate guard as a second safety layer
+- BYO localStorage key mode remains fully supported
+
+See full spec: [PROMPTS/PHASE-AI4B-KEY-RELAY.md](PROMPTS/PHASE-AI4B-KEY-RELAY.md)
 
 ---
 
