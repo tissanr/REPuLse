@@ -80,16 +80,17 @@ fn lcg_next(state: &mut u32) -> f32 {
     (*state as f32 / u32::MAX as f32).mul_add(2.0, -1.0)
 }
 
-fn ks_preset(name: &str) -> (f32, f32, f32, f32, f32) {
-    // Returns (feedback, brightness, pick_pos, vib_depth, vib_rate)
+fn ks_preset(name: &str) -> (f32, f32, f32, f32, f32, f32) {
+    // Returns (feedback, brightness, pick_pos, vib_depth, vib_rate, excitation)
+    // excitation scales the initial noise fill — lower = softer attack transient
     // T60 formula (at A440, buf_len≈100): -3*100 / (44100 * ln(feedback))
     match name {
-        "harp" => (0.998, 0.55, 0.25, 0.0, 0.0),   // ~3.4s T60, warm
-        "koto" => (0.994, 0.62, 0.10, 0.015, 5.5), // ~1.5s, subtle vib
-        "pizz" => (0.975, 0.40, 0.42, 0.0, 0.0),   // ~0.27s, soft finger pluck
-        "lute" => (0.996, 0.58, 0.16, 0.0, 0.0),   // ~1.7s, warm
-        "mandolin" => (0.992, 0.68, 0.08, 0.025, 6.5), // ~0.85s, bright
-        _ => (0.997, 0.60, 0.12, 0.0, 0.0),        // guitar ~2.3s T60
+        "harp" => (0.998, 0.55, 0.25, 0.0, 0.0, 1.0),   // ~3.4s T60, warm
+        "koto" => (0.994, 0.62, 0.10, 0.015, 5.5, 1.0), // ~1.5s, subtle vib
+        "pizz" => (0.975, 0.40, 0.42, 0.0, 0.0, 0.18),  // ~0.27s, gentle finger pluck
+        "lute" => (0.996, 0.58, 0.16, 0.0, 0.0, 1.0),   // ~1.7s, warm
+        "mandolin" => (0.992, 0.68, 0.08, 0.025, 6.5, 1.0), // ~0.85s, bright
+        _ => (0.997, 0.60, 0.12, 0.0, 0.0, 1.0),        // guitar ~2.3s T60
     }
 }
 
@@ -766,12 +767,14 @@ impl AudioEngine {
             let parts: Vec<&str> = rest.splitn(2, ':').collect();
             let preset = parts.first().copied().unwrap_or("guitar");
             let freq: f32 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(440.0);
-            let (feedback, brightness, pick_pos, vib_depth, vib_rate) = ks_preset(preset);
+            let (feedback, brightness, pick_pos, vib_depth, vib_rate, excitation) =
+                ks_preset(preset);
             let buf_len = ((sr / freq).floor() as usize).clamp(2, 2205);
             let peak = amp * 0.5;
+            let fill = peak * excitation;
             let mut buf = vec![0.0f32; 2205];
             for slot in buf.iter_mut().take(buf_len) {
-                *slot = lcg_next(&mut self.noise_seed) * peak;
+                *slot = lcg_next(&mut self.noise_seed) * fill;
             }
             let comb = (buf_len as f32 * pick_pos).floor() as usize;
             if comb > 0 {
@@ -787,7 +790,7 @@ impl AudioEngine {
                     lp_prev: 0.0,
                     feedback,
                     brightness,
-                    gain: peak,
+                    gain: fill,
                     vib_phase: 0.0,
                     vib_depth,
                     vib_rate,
