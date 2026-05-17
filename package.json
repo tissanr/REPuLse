@@ -29,6 +29,7 @@
     "shadow-cljs": "^3.4.10"
   },
   "dependencies": {
-    "@codemirror/lint": "^6.9.6"
+    "@codemirror/lint": "^6.9.6",
+    "@vercel/speed-insights": "^2.0.0"
   }
 }
