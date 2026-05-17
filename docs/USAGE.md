@@ -1286,6 +1286,11 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 | `find_snippet` | Searches the community snippet library |
 | `insert_snippet` | Inserts a snippet by ID at the end of the buffer |
 | `set_bpm_proposal` | Shows a confirm dialog before updating BPM |
+| `freesound_search` | Searches Freesound for samples; returns id, name, duration, tags (requires Freesound API key) |
+| `freesound_load` | Registers a Freesound sample by ID as `:freesound-<id>`; proposes a `(seq :freesound-<id>)` edit |
+| `list_banks` | Lists all registered sample bank names in the current session |
+| `list_samples_in_bank` | Lists sample keywords available in a named bank |
+| `web_search` | Searches the web via Brave Search for music theory / genre context (only shown when a Brave API key is set) |
 
 **Proposed edits:** When the agent calls `propose_edit`, a card appears below the editor showing the before and after text. Click **Apply** to commit the change, or **Reject** to tell the agent the suggestion was declined (it will try again with a revised proposal).
 
@@ -1298,6 +1303,8 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 - **API key** — stored in `repulse:ai:key` in localStorage; never relayed through any REPuLse backend
 - **Model override** — override the default model (e.g. `claude-opus-4-7`, `grok-3-mini`); leave blank for the provider default
 - **Share editor code with AI** — when enabled, the current editor buffer is included in the system prompt; disabled by default
+- **Freesound API key** — enables `freesound_search` and `freesound_load`; get a key at [freesound.org/apiv2/](https://freesound.org/apiv2/); stored in `repulse:ai:freesound-key`
+- **Web Search API key** (optional) — enables `web_search` via Brave Search; get a key at [brave.com/search/api/](https://brave.com/search/api/); stored in `repulse:ai:search-key`; omit to hide the tool from the model entirely
 
 **Default models:** `claude-sonnet-4-6` (Anthropic), `gpt-4o` (OpenAI), `gemini-2.0-flash` (Google), `llama-3.3-70b-versatile` (Groq), `grok-3` (xAI).
 
