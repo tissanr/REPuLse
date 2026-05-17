@@ -25,10 +25,12 @@
   "devDependencies": {
     "@lezer/generator": "^1.8.0",
     "@playwright/test": "^1.59.1",
+    "@types/node": "^20.0.0",
     "@vercel/node": "^5.7.12",
     "shadow-cljs": "^3.4.10"
   },
   "dependencies": {
-    "@codemirror/lint": "^6.9.6"
+    "@codemirror/lint": "^6.9.6",
+    "@vercel/speed-insights": "^2.0.0"
   }
 }
