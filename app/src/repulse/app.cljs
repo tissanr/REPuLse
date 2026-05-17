@@ -23,7 +23,8 @@
             [repulse.ui.assistant-panel :as assistant-panel]
             [clojure.string :as str]
             ["./lisp-lang/providers.js" :refer [setBankNamesProvider setFxNamesProvider]]
-            ["@codemirror/commands" :refer [selectAll]]))
+            ["@codemirror/commands" :refer [selectAll]]
+            ["@vercel/speed-insights" :refer [injectSpeedInsights]]))
 
 ;;; DOM helpers
 
@@ -292,6 +293,7 @@
                 (eo/fx-select-patch-and-eval! fx-name param-name new-val)))))))))
 
 (defn init []
+  (injectSpeedInsights)
   ;; Wire module-level callbacks before anything else runs
   (builtins/init! {:on-beat-fn      on-beat
                    :set-playing!-fn set-playing!
