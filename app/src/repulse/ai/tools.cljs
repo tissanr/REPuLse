@@ -5,6 +5,8 @@
             [repulse.audio :as audio]
             [repulse.fx :as fx]
             [repulse.snippets :as snippets]
+            [repulse.samples :as samples]
+            [repulse.ai.settings :as settings]
             [clojure.string :as str]))
 
 ;;; eval-preview dependency injected from eval-orchestrator to avoid circular deps
@@ -189,51 +191,143 @@
         (do (audio/set-bpm! bpm) (resolve {:ok true :applied true}))
         (resolve {:ok true :applied false :reason "user rejected"})))))
 
+;; ── Freesound + bank executors ────────────────────────────────────────────────
+
+(defn- freesound-search! [{:keys [query tags page_size]}]
+  (let [key @settings/freesound-api-key]
+    (if-not (seq key)
+      (js/Promise.resolve {:error "Freesound API key not set — add it in AI Settings."})
+      (-> (js/fetch (str "https://freesound.org/apiv2/search/text/"
+                         "?query=" (js/encodeURIComponent (str query (when (seq tags) (str " " tags))))
+                         "&token=" key
+                         "&fields=id,name,duration,tags"
+                         "&page_size=" (or page_size 5)))
+          (.then #(.json %))
+          (.then (fn [data]
+                   (let [results (js->clj (.-results data) :keywordize-keys true)]
+                     {:results (mapv #(select-keys % [:id :name :duration :tags]) results)})))
+          (.catch (fn [e] {:error (str "Freesound error: " (.-message e))}))))))
+
+(defn- freesound-load! [{:keys [id]}]
+  (let [key @settings/freesound-api-key]
+    (if-not (seq key)
+      (js/Promise.resolve {:error "Freesound API key not set."})
+      (-> (js/fetch (str "https://freesound.org/apiv2/sounds/" id
+                         "/?token=" key "&fields=id,name,previews"))
+          (.then #(.json %))
+          (.then (fn [data]
+                   (let [d       (js->clj data :keywordize-keys true)
+                         url     (get-in d [:previews :preview-hq-mp3])
+                         kw-name (str "freesound-" id)]
+                     (if url
+                       (do (samples/register-url! kw-name url)
+                           (swap! samples/loaded-sources conj
+                                  {:type :freesound :query (str "id:" id) :count 1})
+                           {:ok true :keyword (str ":" kw-name)
+                            :hint (str "Use (seq :" kw-name ") in your pattern")})
+                       {:error (str "No HQ preview for sound " id)}))))
+          (.catch (fn [e] {:error (str "Freesound error: " (.-message e))}))))))
+
+(defn- list-banks! [_]
+  {:banks (samples/format-banks)})
+
+(defn- list-samples-in-bank! [{:keys [bank]}]
+  (if-let [urls (get @samples/registry bank)]
+    {:bank bank :count (count urls)
+     :keywords (mapv #(str ":" bank "-" %) (range (count urls)))}
+    {:error (str "Unknown bank: " bank)}))
+
+(defn- web-search! [{:keys [query]}]
+  (let [key @settings/search-api-key]
+    (if-not (seq key)
+      (js/Promise.resolve {:error "Web search API key not set."})
+      (-> (js/fetch (str "https://api.search.brave.com/res/v1/web/search"
+                         "?q=" (js/encodeURIComponent query))
+                    #js {:headers #js {"Accept"               "application/json"
+                                       "Accept-Encoding"      "gzip"
+                                       "X-Subscription-Token" key}})
+          (.then #(.json %))
+          (.then (fn [data]
+                   (let [results (js->clj (.. ^js data -web -results) :keywordize-keys true)]
+                     {:results (mapv #(select-keys % [:title :url :description])
+                                     (take 5 results))})))
+          (.catch (fn [e] {:error (str "Search error: " (.-message e))}))))))
+
+(def ^:private freesound-tools
+  {:freesound_search
+   {:description "Search Freesound for audio samples. Returns up to page_size results with id, name, duration, and tags."
+    :params      {:query     {:type "string"  :description "Search keywords, e.g. \"analog kick 808\""}
+                  :tags      {:type "string"  :description "Optional tag filter, e.g. \"kick bass\""}
+                  :page_size {:type "integer" :description "Number of results (1–10, default 5)"}}
+    :execute     freesound-search!}
+
+   :freesound_load
+   {:description "Register a Freesound sample by ID so it can be used as :freesound-<id> in patterns."
+    :params      {:id {:type "integer" :description "Freesound sound ID from freesound_search"}}
+    :execute     freesound-load!}
+
+   :list_banks
+   {:description "List all registered sample banks grouped by manufacturer. Returns a formatted string — report it verbatim to the user without adding examples."
+    :params      {}
+    :execute     list-banks!}
+
+   :list_samples_in_bank
+   {:description "List sample keywords available in a named bank."
+    :params      {:bank {:type "string" :description "Bank name from list_banks"}}
+    :execute     list-samples-in-bank!}
+
+   :web_search
+   {:description "Search the web for music theory, scales, rhythm patterns, or genre context."
+    :params      {:query {:type "string" :description "Search query"}}
+    :execute     web-search!}})
+
 ;; ── Tool registry ─────────────────────────────────────────────────────────────
 
 (def registry
-  {:read_buffer
-   {:description "Read the current editor buffer text."
-    :params      {}
-    :execute     exec-read-buffer}
+  (merge
+   {:read_buffer
+    {:description "Read the current editor buffer text."
+     :params      {}
+     :execute     exec-read-buffer}
 
-   :propose_edit
-   {:description "Propose a text edit to the editor buffer. Shows a diff overlay; the user must click Apply."
-    :params      {:from        {:type "integer" :description "Start character offset (inclusive)"}
-                  :to          {:type "integer" :description "End character offset (exclusive)"}
-                  :replacement {:type "string"  :description "Replacement text"}}
-    :execute     exec-propose-edit}
+    :propose_edit
+    {:description "Propose a text edit to the editor buffer. Shows a diff overlay; the user must click Apply."
+     :params      {:from        {:type "integer" :description "Start character offset (inclusive)"}
+                   :to          {:type "integer" :description "End character offset (exclusive)"}
+                   :replacement {:type "string"  :description "Replacement text"}}
+     :execute     exec-propose-edit}
 
-   :eval_preview
-   {:description "Evaluate REPuLse-Lisp code silently and return event count and duration."
-    :params      {:code {:type "string" :description "REPuLse-Lisp expression to evaluate"}}
-    :execute     exec-eval-preview}
+    :eval_preview
+    {:description "Evaluate REPuLse-Lisp code silently and return event count and duration."
+     :params      {:code {:type "string" :description "REPuLse-Lisp expression to evaluate"}}
+     :execute     exec-eval-preview}
 
-   :query_session
-   {:description "Return current session state: BPM, track names, muted tracks, active FX."
-    :params      {}
-    :execute     exec-query-session}
+    :query_session
+    {:description "Return current session state: BPM, track names, muted tracks, active FX."
+     :params      {}
+     :execute     exec-query-session}
 
-   :query_track
-   {:description "Return details for one track: activity, mute state, FX chain."
-    :params      {:name {:type "string" :description "Track name (without leading colon)"}}
-    :execute     exec-query-track}
+    :query_track
+    {:description "Return details for one track: activity, mute state, FX chain."
+     :params      {:name {:type "string" :description "Track name (without leading colon)"}}
+     :execute     exec-query-track}
 
-   :find_snippet
-   {:description "Search the snippet library by text query. Returns up to `limit` results."
-    :params      {:q     {:type "string"  :description "Search query"}
-                  :limit {:type "integer" :description "Max results (default 5)"}}
-    :execute     exec-find-snippet}
+    :find_snippet
+    {:description "Search the snippet library by text query. Returns up to `limit` results."
+     :params      {:q     {:type "string"  :description "Search query"}
+                   :limit {:type "integer" :description "Max results (default 5)"}}
+     :execute     exec-find-snippet}
 
-   :insert_snippet
-   {:description "Insert a snippet by ID into the editor at the end of the buffer."
-    :params      {:id {:type "string" :description "Snippet ID"}}
-    :execute     exec-insert-snippet}
+    :insert_snippet
+    {:description "Insert a snippet by ID into the editor at the end of the buffer."
+     :params      {:id {:type "string" :description "Snippet ID"}}
+     :execute     exec-insert-snippet}
 
-   :set_bpm_proposal
-   {:description "Propose a BPM change. Shows a confirm dialog; the user must approve."
-    :params      {:bpm {:type "number" :description "Desired BPM"}}
-    :execute     exec-set-bpm-proposal}})
+    :set_bpm_proposal
+    {:description "Propose a BPM change. Shows a confirm dialog; the user must approve."
+     :params      {:bpm {:type "number" :description "Desired BPM"}}
+     :execute     exec-set-bpm-proposal}}
+   freesound-tools))
 
 ;; ── Provider schema builders ──────────────────────────────────────────────────
 
@@ -243,39 +337,44 @@
                               description (assoc :description description))])
                 params)))
 
-(defn ->openai-tools []
+(defn- reg->openai [reg]
   (mapv (fn [[k {:keys [description params]}]]
           {:type     "function"
            :function {:name        (name k)
                       :description description
                       :parameters  {:type       "object"
                                     :properties (params->properties params)}}})
-        registry))
+        reg))
 
-(defn ->anthropic-tools []
+(defn- reg->anthropic [reg]
   (mapv (fn [[k {:keys [description params]}]]
           {:name         (name k)
            :description  description
            :input_schema {:type       "object"
                           :properties (params->properties params)}})
-        registry))
+        reg))
 
-(defn ->google-tools []
+(defn- reg->google [reg]
   [{:functionDeclarations
     (mapv (fn [[k {:keys [description params]}]]
             {:name        (name k)
              :description description
              :parameters  {:type       "object"
                            :properties (params->properties params)}})
-          registry)}])
+          reg)}])
+
+(defn- active-registry []
+  (cond-> registry
+    (not (seq @settings/search-api-key)) (dissoc :web_search)))
 
 (defn tool-descriptors
-  "Return tool list in the correct schema for the current provider."
+  "Return tool list for the current provider, omitting web_search when no key is set."
   [provider]
-  (case provider
-    "anthropic" (->anthropic-tools)
-    "google"    (->google-tools)
-    (->openai-tools)))  ; openai, groq, xai
+  (let [reg (active-registry)]
+    (case provider
+      "anthropic" (reg->anthropic reg)
+      "google"    (reg->google reg)
+      (reg->openai reg))))  ; openai, groq, xai
 
 ;; ── Dispatch ─────────────────────────────────────────────────────────────────
 

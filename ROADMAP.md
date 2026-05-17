@@ -1447,7 +1447,7 @@ See full spec: [PROMPTS/PHASE-AI3.md](PROMPTS/PHASE-AI3.md)
 
 ---
 
-## Phase AI3b — AI Sample Discovery & Web Search Tools 📋 *planned*
+## Phase AI3b — AI Sample Discovery & Web Search Tools ✅ *delivered*
 
 Extend the AI3 tool registry so the assistant can find Freesound samples, list available
 banks, and optionally search the web — all without the user leaving the editor.
@@ -1458,9 +1458,18 @@ banks, and optionally search the web — all without the user leaving the editor
 - `app/src/repulse/ai/settings.cljs` — `freesound-api-key` and `search-api-key` atoms,
   persisted under `repulse:ai:freesound-key` / `repulse:ai:search-key` in localStorage
 - `app/src/repulse/ui/assistant_panel.cljs` — "Sample & Search" settings section with
-  API key inputs; Freesound and Brave Search key registration links
+  API key inputs; show/hide toggles and clear buttons for both keys
 - `freesound_load` calls `samples/register-url!` and returns `{:keyword ":freesound-<id>"}`;
   the agent then calls `propose_edit` so the user confirms before the sample plays
+- `web_search` is omitted from the tool descriptor list when no Brave Search key is set
+
+**Delivered:**
+- `freesound_search` — fetches from Freesound API using BYO key; returns `[:id :name :duration :tags]`
+- `freesound_load` — fetches HQ MP3 preview URL by ID, registers with `samples/register-url!`
+- `list_banks` — returns all registered bank names from `@samples/registry`
+- `list_samples_in_bank` — returns count and `:bank-N` keyword list for a named bank
+- `web_search` — Brave Search API integration; conditionally exposed based on stored key
+- Settings modal "Sample & Search" section with password inputs, show/hide, and clear controls
 
 See full spec: [PROMPTS/PHASE-AI3b.md](PROMPTS/PHASE-AI3b.md)
 
