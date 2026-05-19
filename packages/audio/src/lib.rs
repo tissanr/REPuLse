@@ -61,6 +61,38 @@ impl Biquad {
         }
     }
 
+    fn peaking_eq(freq: f32, gain_db: f32, q: f32, sr: f32) -> Self {
+        let a = 10.0_f32.powf(gain_db / 40.0);
+        let w0 = 2.0 * std::f32::consts::PI * freq / sr;
+        let alpha = w0.sin() / (2.0 * q);
+        let cos_w0 = w0.cos();
+        let a0 = 1.0 + alpha / a;
+        Biquad {
+            b0: (1.0 + alpha * a) / a0,
+            b1: -2.0 * cos_w0 / a0,
+            b2: (1.0 - alpha * a) / a0,
+            a1: -2.0 * cos_w0 / a0,
+            a2: (1.0 - alpha / a) / a0,
+            x1: 0.0, x2: 0.0, y1: 0.0, y2: 0.0,
+        }
+    }
+
+    fn highshelf(freq: f32, gain_db: f32, sr: f32) -> Self {
+        let a = 10.0_f32.powf(gain_db / 40.0);
+        let w0 = 2.0 * std::f32::consts::PI * freq / sr;
+        let cos_w0 = w0.cos();
+        let alpha = w0.sin() / 2.0 * ((a + 1.0 / a) * (1.0 / 0.9 - 1.0) + 2.0).sqrt();
+        let a0 = (a + 1.0) - (a - 1.0) * cos_w0 + 2.0 * a.sqrt() * alpha;
+        Biquad {
+            b0: a * ((a + 1.0) + (a - 1.0) * cos_w0 + 2.0 * a.sqrt() * alpha) / a0,
+            b1: -2.0 * a * ((a - 1.0) + (a + 1.0) * cos_w0) / a0,
+            b2: a * ((a + 1.0) + (a - 1.0) * cos_w0 - 2.0 * a.sqrt() * alpha) / a0,
+            a1: 2.0 * ((a - 1.0) - (a + 1.0) * cos_w0) / a0,
+            a2: ((a + 1.0) - (a - 1.0) * cos_w0 - 2.0 * a.sqrt() * alpha) / a0,
+            x1: 0.0, x2: 0.0, y1: 0.0, y2: 0.0,
+        }
+    }
+
     fn tick(&mut self, x: f32) -> f32 {
         let y = self.b0 * x + self.b1 * self.x1 + self.b2 * self.x2
             - self.a1 * self.y1
@@ -91,6 +123,47 @@ fn ks_preset(name: &str) -> (f32, f32, f32, f32, f32, f32) {
         "lute" => (0.996, 0.58, 0.16, 0.0, 0.0, 1.0),   // ~1.7s, warm
         "mandolin" => (0.992, 0.68, 0.08, 0.025, 6.5, 1.0), // ~0.85s, bright
         _ => (0.997, 0.60, 0.12, 0.0, 0.0, 1.0),        // guitar ~2.3s T60
+    }
+}
+
+fn ks_body_filters(name: &str, sr: f32) -> Vec<Biquad> {
+    // Per-instrument body resonance EQ chain applied post-KS.
+    // Models the acoustic cavity + top-plate resonances that make each
+    // instrument recognisably itself throughout the sustain, not just at attack.
+    // SYN3 (bowed strings) uses the same Biquad primitives for its body chain.
+    match name {
+        "guitar" => vec![
+            Biquad::peaking_eq(90.0,   5.0, 2.5, sr), // Helmholtz air resonance
+            Biquad::peaking_eq(200.0,  2.0, 1.5, sr), // top-plate main mode
+            Biquad::highshelf(4500.0, -4.0,      sr), // natural HF rolloff
+        ],
+        "harp" => vec![
+            Biquad::peaking_eq(110.0,  4.0, 1.5, sr), // large open soundboard
+            Biquad::peaking_eq(800.0,  1.0, 1.0, sr), // mild presence
+            Biquad::highshelf(5000.0, -3.0,      sr), // silky rolloff
+        ],
+        "koto" => vec![
+            Biquad::peaking_eq(220.0,  6.0, 2.5, sr), // characteristic thud/buzz
+            Biquad::highshelf(3000.0, -5.0,      sr), // dark silk-string rolloff
+        ],
+        "pizz" => vec![
+            Biquad::peaking_eq(270.0,  4.0, 3.5, sr), // violin air resonance (narrow)
+            Biquad::peaking_eq(520.0,  3.0, 3.0, sr), // main wood mode
+            Biquad::highshelf(4000.0,  2.0,      sr), // violin brightness
+        ],
+        "lute" => vec![
+            Biquad::peaking_eq(120.0,  4.0, 2.0, sr), // rounded bowl resonance
+            Biquad::highshelf(2500.0, -5.0,      sr), // gut-string warmth, dark top
+        ],
+        "mandolin" => vec![
+            Biquad::peaking_eq(300.0,  4.0, 2.0, sr), // small archtop body
+            Biquad::peaking_eq(2000.0, 3.0, 1.5, sr), // steel-string presence
+        ],
+        _ => vec![
+            Biquad::peaking_eq(90.0,   5.0, 2.5, sr),
+            Biquad::peaking_eq(200.0,  2.0, 1.5, sr),
+            Biquad::highshelf(4500.0, -4.0,      sr),
+        ],
     }
 }
 
@@ -184,6 +257,7 @@ enum Voice {
         vib_phase: f32,
         vib_depth: f32,
         vib_rate: f32,
+        body_filters: Vec<Biquad>,
     },
 }
 
@@ -349,6 +423,7 @@ impl Voice {
                 vib_phase,
                 vib_depth,
                 vib_rate,
+                body_filters,
             } => {
                 let vib_offset = (*vib_depth * (*vib_phase).sin()) as isize;
                 let read_pos = (*write_pos + 1 + *buf_len) % *buf_len;
@@ -361,8 +436,9 @@ impl Voice {
                 *write_pos = (*write_pos + 1) % *buf_len;
                 *lp_prev = y;
                 *vib_phase += 2.0 * std::f32::consts::PI * *vib_rate / sr;
-                *gain = y_fb.abs().max(*gain * 0.9999);
-                y_fb
+                let out = body_filters.iter_mut().fold(y_fb, |s, f| f.tick(s));
+                *gain = out.abs().max(*gain * 0.9999);
+                out
             }
         }
     }
@@ -794,6 +870,7 @@ impl AudioEngine {
                     vib_phase: 0.0,
                     vib_depth,
                     vib_rate,
+                    body_filters: ks_body_filters(preset, sr),
                 },
                 pan: p.pan.clamp(-1.0, 1.0),
             });
