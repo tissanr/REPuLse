@@ -73,7 +73,10 @@ impl Biquad {
             b2: (1.0 - alpha * a) / a0,
             a1: -2.0 * cos_w0 / a0,
             a2: (1.0 - alpha / a) / a0,
-            x1: 0.0, x2: 0.0, y1: 0.0, y2: 0.0,
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
         }
     }
 
@@ -89,7 +92,10 @@ impl Biquad {
             b2: a * ((a + 1.0) + (a - 1.0) * cos_w0 - 2.0 * a.sqrt() * alpha) / a0,
             a1: 2.0 * ((a - 1.0) - (a + 1.0) * cos_w0) / a0,
             a2: ((a + 1.0) - (a - 1.0) * cos_w0 - 2.0 * a.sqrt() * alpha) / a0,
-            x1: 0.0, x2: 0.0, y1: 0.0, y2: 0.0,
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
         }
     }
 
@@ -117,12 +123,12 @@ fn ks_preset(name: &str) -> (f32, f32, f32, f32, f32, f32) {
     // excitation scales the initial noise fill — lower = softer attack transient
     // T60 formula (at A440, buf_len≈100): -3*100 / (44100 * ln(feedback))
     match name {
-        "harp" => (0.998, 0.55, 0.25, 0.0, 0.0, 1.0),   // ~3.4s T60, warm
+        "harp" => (0.998, 0.55, 0.25, 0.0, 0.0, 1.0), // ~3.4s T60, warm
         "koto" => (0.994, 0.62, 0.10, 0.015, 5.5, 1.0), // ~1.5s, subtle vib
-        "pizz" => (0.975, 0.40, 0.42, 0.0, 0.0, 0.18),  // ~0.27s, gentle finger pluck
-        "lute" => (0.996, 0.58, 0.16, 0.0, 0.0, 1.0),   // ~1.7s, warm
+        "pizz" => (0.975, 0.40, 0.42, 0.0, 0.0, 0.18), // ~0.27s, gentle finger pluck
+        "lute" => (0.996, 0.58, 0.16, 0.0, 0.0, 1.0), // ~1.7s, warm
         "mandolin" => (0.992, 0.68, 0.08, 0.025, 6.5, 1.0), // ~0.85s, bright
-        _ => (0.997, 0.60, 0.12, 0.0, 0.0, 1.0),        // guitar ~2.3s T60
+        _ => (0.997, 0.60, 0.12, 0.0, 0.0, 1.0),      // guitar ~2.3s T60
     }
 }
 
@@ -133,36 +139,36 @@ fn ks_body_filters(name: &str, sr: f32) -> Vec<Biquad> {
     // SYN3 (bowed strings) uses the same Biquad primitives for its body chain.
     match name {
         "guitar" => vec![
-            Biquad::peaking_eq(90.0,   5.0, 2.5, sr), // Helmholtz air resonance
-            Biquad::peaking_eq(200.0,  2.0, 1.5, sr), // top-plate main mode
-            Biquad::highshelf(4500.0, -4.0,      sr), // natural HF rolloff
+            Biquad::peaking_eq(90.0, 5.0, 2.5, sr), // Helmholtz air resonance
+            Biquad::peaking_eq(200.0, 2.0, 1.5, sr), // top-plate main mode
+            Biquad::highshelf(4500.0, -4.0, sr),    // natural HF rolloff
         ],
         "harp" => vec![
-            Biquad::peaking_eq(110.0,  4.0, 1.5, sr), // large open soundboard
-            Biquad::peaking_eq(800.0,  1.0, 1.0, sr), // mild presence
-            Biquad::highshelf(5000.0, -3.0,      sr), // silky rolloff
+            Biquad::peaking_eq(110.0, 4.0, 1.5, sr), // large open soundboard
+            Biquad::peaking_eq(800.0, 1.0, 1.0, sr), // mild presence
+            Biquad::highshelf(5000.0, -3.0, sr),     // silky rolloff
         ],
         "koto" => vec![
-            Biquad::peaking_eq(220.0,  6.0, 2.5, sr), // characteristic thud/buzz
-            Biquad::highshelf(3000.0, -5.0,      sr), // dark silk-string rolloff
+            Biquad::peaking_eq(220.0, 6.0, 2.5, sr), // characteristic thud/buzz
+            Biquad::highshelf(3000.0, -5.0, sr),     // dark silk-string rolloff
         ],
         "pizz" => vec![
-            Biquad::peaking_eq(270.0,  4.0, 3.5, sr), // violin air resonance (narrow)
-            Biquad::peaking_eq(520.0,  3.0, 3.0, sr), // main wood mode
-            Biquad::highshelf(4000.0,  2.0,      sr), // violin brightness
+            Biquad::peaking_eq(270.0, 4.0, 3.5, sr), // violin air resonance (narrow)
+            Biquad::peaking_eq(520.0, 3.0, 3.0, sr), // main wood mode
+            Biquad::highshelf(4000.0, 2.0, sr),      // violin brightness
         ],
         "lute" => vec![
-            Biquad::peaking_eq(120.0,  4.0, 2.0, sr), // rounded bowl resonance
-            Biquad::highshelf(2500.0, -5.0,      sr), // gut-string warmth, dark top
+            Biquad::peaking_eq(120.0, 4.0, 2.0, sr), // rounded bowl resonance
+            Biquad::highshelf(2500.0, -5.0, sr),     // gut-string warmth, dark top
         ],
         "mandolin" => vec![
-            Biquad::peaking_eq(300.0,  4.0, 2.0, sr), // small archtop body
+            Biquad::peaking_eq(300.0, 4.0, 2.0, sr), // small archtop body
             Biquad::peaking_eq(2000.0, 3.0, 1.5, sr), // steel-string presence
         ],
         _ => vec![
-            Biquad::peaking_eq(90.0,   5.0, 2.5, sr),
-            Biquad::peaking_eq(200.0,  2.0, 1.5, sr),
-            Biquad::highshelf(4500.0, -4.0,      sr),
+            Biquad::peaking_eq(90.0, 5.0, 2.5, sr),
+            Biquad::peaking_eq(200.0, 2.0, 1.5, sr),
+            Biquad::highshelf(4500.0, -4.0, sr),
         ],
     }
 }
