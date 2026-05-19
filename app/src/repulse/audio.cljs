@@ -418,7 +418,7 @@
                  ;; JS fallback: sine (FM needs two connected oscillators — WASM only)
                  (make-sine ac t hz decay-v amp-v attack-v pan-v dest)))
 
-           (#{:guitar :harp :koto :pizz :lute :mandolin} synth)
+           (#{:western :nylon :guitar :harp :koto :pizz :lute :mandolin} synth)
            (let [hz     (if (theory/note-keyword? note) (theory/note->hz note) (double note))
                  preset (clojure.core/name synth)]
              (or (when-not offline?

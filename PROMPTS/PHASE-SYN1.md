@@ -55,14 +55,15 @@ infrastructure; they differ only in excitation model and waveguide structure.
 
 Returns `(feedback, brightness, pick_pos, vib_depth, vib_rate, excitation)`.
 
-| preset   | feedback | brightness | pick_pos | vib_depth | vib_rate | excitation | T60 @A440 |
-|----------|----------|------------|----------|-----------|----------|------------|-----------|
-| guitar   | 0.997    | 0.60       | 0.12     | 0.0       | 0.0      | 1.00       | ~2.3 s    |
-| harp     | 0.998    | 0.55       | 0.25     | 0.0       | 0.0      | 1.00       | ~3.4 s    |
-| koto     | 0.994    | 0.62       | 0.10     | 0.015     | 5.5      | 1.00       | ~1.5 s    |
-| pizz     | 0.975    | 0.40       | 0.42     | 0.0       | 0.0      | 0.18       | ~0.27 s   |
-| lute     | 0.996    | 0.58       | 0.16     | 0.0       | 0.0      | 1.00       | ~1.7 s    |
-| mandolin | 0.992    | 0.68       | 0.08     | 0.025     | 6.5      | 1.00       | ~0.85 s   |
+| preset          | feedback | brightness | pick_pos | vib_depth | vib_rate | excitation | T60 @A440 |
+|-----------------|----------|------------|----------|-----------|----------|------------|-----------|
+| western / guitar| 0.997    | 0.60       | 0.12     | 0.0       | 0.0      | 1.00       | ~2.3 s    |
+| nylon           | 0.996    | 0.50       | 0.16     | 0.0       | 0.0      | 0.60       | ~2.0 s    |
+| harp            | 0.998    | 0.55       | 0.25     | 0.0       | 0.0      | 1.00       | ~3.4 s    |
+| koto            | 0.994    | 0.62       | 0.10     | 0.015     | 5.5      | 1.00       | ~1.5 s    |
+| pizz            | 0.975    | 0.40       | 0.42     | 0.0       | 0.0      | 0.18       | ~0.27 s   |
+| lute            | 0.996    | 0.58       | 0.16     | 0.0       | 0.0      | 1.00       | ~1.7 s    |
+| mandolin        | 0.992    | 0.68       | 0.08     | 0.025     | 6.5      | 1.00       | ~0.85 s   |
 
 **`excitation`** scales the initial noise fill amplitude (`fill = amp * 0.5 * excitation`).
 `:pizz` uses `0.18` because a violin fingertip pluck is much softer than a guitar pick
@@ -77,10 +78,11 @@ sample after the KS feedback loop. Models acoustic cavity and top-plate resonanc
 distinguish the instruments throughout their sustain — not just at the attack transient
 shaped by `pick_pos`.
 
-| preset   | filters |
-|----------|---------|
-| guitar   | peak(90 Hz, +5 dB, Q=2.5) · peak(200 Hz, +2 dB, Q=1.5) · highshelf(4500 Hz, -4 dB) |
-| harp     | peak(110 Hz, +4 dB, Q=1.5) · peak(800 Hz, +1 dB, Q=1.0) · highshelf(5000 Hz, -3 dB) |
+| preset          | filters |
+|-----------------|---------|
+| western / guitar| peak(90 Hz, +5 dB, Q=2.5) · peak(200 Hz, +2 dB, Q=1.5) · highshelf(4500 Hz, -4 dB) |
+| nylon           | peak(110 Hz, +4 dB, Q=2.0) · peak(230 Hz, +2 dB, Q=1.5) · highshelf(3500 Hz, -5 dB) |
+| harp            | peak(110 Hz, +4 dB, Q=1.5) · peak(800 Hz, +1 dB, Q=1.0) · highshelf(5000 Hz, -3 dB) |
 | koto     | peak(220 Hz, +6 dB, Q=2.5) · highshelf(3000 Hz, -5 dB) |
 | pizz     | peak(270 Hz, +4 dB, Q=3.5) · peak(520 Hz, +3 dB, Q=3.0) · highshelf(4000 Hz, +2 dB) |
 | lute     | peak(120 Hz, +4 dB, Q=2.0) · highshelf(2500 Hz, -5 dB) |
@@ -169,7 +171,7 @@ out
 KS branch in `play-event`, after the FM branch:
 
 ```clojure
-(#{:guitar :harp :koto :pizz :lute :mandolin} synth)
+(#{:western :nylon :guitar :harp :koto :pizz :lute :mandolin} synth)
 (let [hz     (if (theory/note-keyword? note) (theory/note->hz note) (double note))
       preset (clojure.core/name synth)]
   (or (when-not offline?

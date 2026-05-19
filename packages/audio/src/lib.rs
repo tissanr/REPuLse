@@ -123,12 +123,14 @@ fn ks_preset(name: &str) -> (f32, f32, f32, f32, f32, f32) {
     // excitation scales the initial noise fill — lower = softer attack transient
     // T60 formula (at A440, buf_len≈100): -3*100 / (44100 * ln(feedback))
     match name {
-        "harp" => (0.998, 0.55, 0.25, 0.0, 0.0, 1.0), // ~3.4s T60, warm
-        "koto" => (0.994, 0.62, 0.10, 0.015, 5.5, 1.0), // ~1.5s, subtle vib
-        "pizz" => (0.975, 0.40, 0.42, 0.0, 0.0, 0.18), // ~0.27s, gentle finger pluck
-        "lute" => (0.996, 0.58, 0.16, 0.0, 0.0, 1.0), // ~1.7s, warm
-        "mandolin" => (0.992, 0.68, 0.08, 0.025, 6.5, 1.0), // ~0.85s, bright
-        _ => (0.997, 0.60, 0.12, 0.0, 0.0, 1.0),      // guitar ~2.3s T60
+        "western" | "guitar" => (0.997, 0.60, 0.12, 0.0, 0.0, 1.0), // ~2.3s, steel pick
+        "nylon" => (0.996, 0.50, 0.16, 0.0, 0.0, 0.60),             // ~2.0s, soft fingertip
+        "harp" => (0.998, 0.55, 0.25, 0.0, 0.0, 1.0),               // ~3.4s T60, warm
+        "koto" => (0.994, 0.62, 0.10, 0.015, 5.5, 1.0),             // ~1.5s, subtle vib
+        "pizz" => (0.975, 0.40, 0.42, 0.0, 0.0, 0.18),              // ~0.27s, gentle finger pluck
+        "lute" => (0.996, 0.58, 0.16, 0.0, 0.0, 1.0),               // ~1.7s, warm
+        "mandolin" => (0.992, 0.68, 0.08, 0.025, 6.5, 1.0),         // ~0.85s, bright
+        _ => (0.997, 0.60, 0.12, 0.0, 0.0, 1.0),
     }
 }
 
@@ -138,10 +140,15 @@ fn ks_body_filters(name: &str, sr: f32) -> Vec<Biquad> {
     // instrument recognisably itself throughout the sustain, not just at attack.
     // SYN3 (bowed strings) uses the same Biquad primitives for its body chain.
     match name {
-        "guitar" => vec![
-            Biquad::peaking_eq(90.0, 5.0, 2.5, sr), // Helmholtz air resonance
+        "western" | "guitar" => vec![
+            Biquad::peaking_eq(90.0, 5.0, 2.5, sr), // Helmholtz air resonance (dreadnought)
             Biquad::peaking_eq(200.0, 2.0, 1.5, sr), // top-plate main mode
-            Biquad::highshelf(4500.0, -4.0, sr),    // natural HF rolloff
+            Biquad::highshelf(4500.0, -4.0, sr),    // steel-string HF rolloff
+        ],
+        "nylon" => vec![
+            Biquad::peaking_eq(110.0, 4.0, 2.0, sr), // cedar/spruce top, higher air resonance
+            Biquad::peaking_eq(230.0, 2.0, 1.5, sr), // top-plate mode
+            Biquad::highshelf(3500.0, -5.0, sr),     // nylon rolls off treble sharply
         ],
         "harp" => vec![
             Biquad::peaking_eq(110.0, 4.0, 1.5, sr), // large open soundboard

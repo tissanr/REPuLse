@@ -889,8 +889,10 @@ Available voices:
 | Pulse/square         | `:square`    | `:pw` 0.0–1.0 — duty cycle (default `0.5` = square wave)                        |
 | FM synthesis         | `:fm`        | `:index` modulation depth (default `1.0`), `:ratio` mod/carrier ratio (default `2.0`) |
 | White noise          | `:noise`     | —                                                                                 |
-| Acoustic guitar      | `:guitar`    | Karplus-Strong; `decay` shortens feedback                                         |
-| Harp                 | `:harp`      | Bright, long-decay pluck (feedback 0.995)                                         |
+| Steel-string guitar  | `:western`   | Karplus-Strong; hard pick attack, dreadnought body resonances                     |
+| Classical guitar     | `:nylon`     | Soft fingertip attack, darker timbre, treble rolloff above 3.5 kHz                |
+| Guitar (alias)       | `:guitar`    | Alias for `:western`                                                              |
+| Harp                 | `:harp`      | Bright, long-decay pluck (feedback 0.998)                                         |
 | Pizzicato string     | `:pizz`      | Short staccato pluck (feedback 0.972)                                             |
 | Lute                 | `:lute`      | Warm plucked lute                                                                 |
 | Koto                 | `:koto`      | Japanese koto with subtle vibrato (5.5 Hz)                                        |

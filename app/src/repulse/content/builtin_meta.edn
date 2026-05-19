@@ -303,8 +303,8 @@
               :side-effects []
               :examples ["(->> (seq :c4 :eb4) (synth :saw))"
                          "(->> (scale :minor :c3 (seq 0 2 4)) (synth :fm :index 3))"
-                         "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :guitar))"]
-              :see-also ["saw" "square" "noise" "fm" "guitar" "harp" "koto" "pizz" "lute" "mandolin" "defsynth"]}
+                         "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :western))"]
+              :see-also ["saw" "square" "noise" "fm" "western" "nylon" "harp" "koto" "pizz" "lute" "mandolin" "defsynth"]}
 
  :saw        {:category "source"
               :returns "Pattern"
@@ -332,47 +332,63 @@
               :see-also ["saw" "synth" "defsynth"]}
 
  ;; ── Karplus-Strong plucked strings ──────────────────────────────────────────
+ :western    {:category "synth"
+              :returns "event-param-map"
+              :side-effects []
+              :description "Steel-string acoustic guitar (dreadnought). Hard pick attack, bright presence, body resonances at 90 Hz and 200 Hz."
+              :examples ["(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :western))"
+                         "(->> (pure :e2) (synth :western) (decay 0.4))"]
+              :see-also ["nylon" "harp" "pizz" "lute" "koto" "mandolin" "synth"]}
+
+ :nylon      {:category "synth"
+              :returns "event-param-map"
+              :side-effects []
+              :description "Classical nylon-string guitar. Soft fingertip attack (excitation 0.60), darker timbre, treble rolloff above 3.5 kHz."
+              :examples ["(->> (scale :major :c4 (seq 0 2 4 5)) (synth :nylon))"
+                         "(->> (chord :minor :a3 (slow 2 (seq 0 2 4))) (synth :nylon) (amp 0.7))"]
+              :see-also ["western" "lute" "harp" "synth"]}
+
  :guitar     {:category "synth"
               :returns "event-param-map"
               :side-effects []
-              :examples ["(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :guitar))"
-                         "(->> (pure :e2) (synth :guitar) (decay 0.4))"]
-              :see-also ["harp" "pizz" "lute" "koto" "mandolin" "synth"]}
+              :description "Alias for :western (steel-string acoustic guitar)."
+              :examples ["(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :guitar))"]
+              :see-also ["western" "nylon" "synth"]}
 
  :harp       {:category "synth"
               :returns "event-param-map"
               :side-effects []
               :examples ["(->> (chord :major :c4 (slow 2 (seq 0 2 4 7 4 2))) (synth :harp))"
                          "(->> (scale :major :c5 (seq 0 2 4 5)) (synth :harp) (amp 0.7))"]
-              :see-also ["guitar" "pizz" "lute" "koto" "mandolin" "synth"]}
+              :see-also ["western" "pizz" "lute" "koto" "mandolin" "synth"]}
 
  :koto       {:category "synth"
               :returns "event-param-map"
               :side-effects []
               :examples ["(->> (scale :pentatonic :d4 (fast 4 (seq 0 2 4 7))) (synth :koto))"
                          "(->> (seq :d4 :f4 :a4) (synth :koto) (amp 0.8))"]
-              :see-also ["guitar" "harp" "mandolin" "synth"]}
+              :see-also ["western" "harp" "mandolin" "synth"]}
 
  :pizz       {:category "synth"
               :returns "event-param-map"
               :side-effects []
               :examples ["(->> (scale :minor :c2 (seq 0 :_ 5 :_)) (synth :pizz) (amp 0.6))"
                          "(->> (seq :c3 :g3 :c4) (synth :pizz) (decay 0.3))"]
-              :see-also ["guitar" "harp" "lute" "synth"]}
+              :see-also ["western" "harp" "lute" "synth"]}
 
  :lute       {:category "synth"
               :returns "event-param-map"
               :side-effects []
               :examples ["(->> (scale :major :c4 (seq 0 2 4 5)) (synth :lute))"
                          "(->> (seq :g3 :b3 :d4) (synth :lute) (amp 0.6))"]
-              :see-also ["guitar" "pizz" "mandolin" "synth"]}
+              :see-also ["nylon" "pizz" "mandolin" "synth"]}
 
  :mandolin   {:category "synth"
               :returns "event-param-map"
               :side-effects []
               :examples ["(->> (fast 2 (scale :major :c5 (seq 0 2 4 7))) (synth :mandolin))"
                          "(->> (seq :e5 :d5 :c5) (synth :mandolin) (amp 0.7))"]
-              :see-also ["guitar" "koto" "lute" "synth"]}
+              :see-also ["western" "koto" "lute" "synth"]}
 
  ;; ── UGens (inside defsynth) ─────────────────────────────────────────────────
  :sin        {:category "ugen"

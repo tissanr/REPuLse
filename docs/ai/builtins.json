@@ -1707,14 +1707,15 @@
     "examples": [
       "(->> (seq :c4 :eb4) (synth :saw))",
       "(->> (scale :minor :c3 (seq 0 2 4)) (synth :fm :index 3))",
-      "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :guitar))"
+      "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :western))"
     ],
     "see-also": [
       "saw",
       "square",
       "noise",
       "fm",
-      "guitar",
+      "western",
+      "nylon",
       "harp",
       "koto",
       "pizz",
@@ -1725,16 +1726,17 @@
     "detail": "(->> (seq :c4 :eb4) (synth :saw)) — apply voice to note pattern; opts: :pw :index :ratio",
     "description": ""
   },
-  "guitar": {
+  "western": {
     "category": "synth",
-    "signature": "(synth :guitar) — plucked acoustic guitar (Karplus-Strong)",
+    "signature": "(synth :western) — steel-string acoustic guitar, pick attack",
     "returns": "event-param-map",
     "side-effects": [],
     "examples": [
-      "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :guitar))",
-      "(->> (pure :e2) (synth :guitar) (decay 0.4))"
+      "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :western))",
+      "(->> (pure :e2) (synth :western) (decay 0.4))"
     ],
     "see-also": [
+      "nylon",
       "harp",
       "pizz",
       "lute",
@@ -1742,7 +1744,41 @@
       "mandolin",
       "synth"
     ],
-    "detail": "(synth :guitar) — plucked acoustic guitar (Karplus-Strong)",
+    "detail": "(synth :western) — steel-string acoustic guitar, pick attack",
+    "description": ""
+  },
+  "nylon": {
+    "category": "synth",
+    "signature": "(synth :nylon) — classical nylon-string guitar, soft fingertip",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :major :c4 (seq 0 2 4 5)) (synth :nylon))",
+      "(->> (chord :minor :a3 (slow 2 (seq 0 2 4))) (synth :nylon) (amp 0.7))"
+    ],
+    "see-also": [
+      "western",
+      "lute",
+      "harp",
+      "synth"
+    ],
+    "detail": "(synth :nylon) — classical nylon-string guitar, soft fingertip",
+    "description": ""
+  },
+  "guitar": {
+    "category": "synth",
+    "signature": "(synth :guitar) — alias for :western",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :guitar))"
+    ],
+    "see-also": [
+      "western",
+      "nylon",
+      "synth"
+    ],
+    "detail": "(synth :guitar) — alias for :western",
     "description": ""
   },
   "harp": {
@@ -1755,7 +1791,7 @@
       "(->> (scale :major :c5 (seq 0 2 4 5)) (synth :harp) (amp 0.7))"
     ],
     "see-also": [
-      "guitar",
+      "western",
       "pizz",
       "lute",
       "koto",
@@ -1775,7 +1811,7 @@
       "(->> (seq :d4 :f4 :a4) (synth :koto) (amp 0.8))"
     ],
     "see-also": [
-      "guitar",
+      "western",
       "harp",
       "mandolin",
       "synth"
@@ -1793,7 +1829,7 @@
       "(->> (seq :c3 :g3 :c4) (synth :pizz) (decay 0.3))"
     ],
     "see-also": [
-      "guitar",
+      "western",
       "harp",
       "lute",
       "synth"
@@ -1811,7 +1847,7 @@
       "(->> (seq :g3 :b3 :d4) (synth :lute) (amp 0.6))"
     ],
     "see-also": [
-      "guitar",
+      "nylon",
       "pizz",
       "mandolin",
       "synth"
@@ -1829,7 +1865,7 @@
       "(->> (seq :e5 :d5 :c5) (synth :mandolin) (amp 0.7))"
     ],
     "see-also": [
-      "guitar",
+      "western",
       "koto",
       "lute",
       "synth"

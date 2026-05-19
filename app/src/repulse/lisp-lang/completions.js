@@ -59,7 +59,9 @@ export const BUILTINS = [
   { label: "noise",       type: "function", detail: "(noise) — white noise burst; works with amp/decay/pan" },
   { label: "fm",          type: "function", detail: "(fm :c4 :index 3 :ratio 2) — FM synthesis pair" },
   // --- Karplus-Strong plucked strings ---
-  { label: "guitar",    type: "keyword", detail: "(synth :guitar) — plucked acoustic guitar (Karplus-Strong)" },
+  { label: "western",   type: "keyword", detail: "(synth :western) — steel-string acoustic guitar, pick attack" },
+  { label: "nylon",     type: "keyword", detail: "(synth :nylon) — classical nylon-string guitar, soft fingertip" },
+  { label: "guitar",    type: "keyword", detail: "(synth :guitar) — alias for :western" },
   { label: "harp",      type: "keyword", detail: "(synth :harp) — bright plucked harp (long decay)" },
   { label: "koto",      type: "keyword", detail: "(synth :koto) — Japanese koto with subtle vibrato" },
   { label: "pizz",      type: "keyword", detail: "(synth :pizz) — pizzicato string (short decay)" },
