@@ -901,21 +901,26 @@ See full spec: [PROMPTS/PHASE-SYN1.md](PROMPTS/PHASE-SYN1.md)
 
 ---
 
-## Phase SYN2 — FM Instrument Presets 📋 *planned*
+## Phase SYN2 — FM Instrument Presets ✅ *delivered*
 
 Extend the existing WASM FM voice with a full ADSR envelope and a hard-coded preset
 table, unlocking nine named instruments — `(synth :sax)`, `(synth :trumpet)`,
 `(synth :trumpet-muted)`, `(synth :epiano)`, `(synth :bell)`, and more — without any
 new synthesis algorithm.
 
-**Key additions:**
-- `packages/audio/src/lib.rs` — `Voice::FM` gains `attack`/`decay`/`sustain`/`release`/
-  `env_phase` fields; `fm_preset()` table returns tuned coefficients for nine instruments;
-  `trigger_v2` gains a preset dispatch path `"fm:{preset}:{freq}:{amp}"` alongside the
-  legacy manual path
-- `app/src/repulse/synth.cljs` — nine preset entries in builtin-voice-map
+**Delivered:**
+- `packages/audio/src/lib.rs` — `Voice::FM` struct replaced `gain_decay`/`attack_inc`/
+  `in_attack` with full ADSR (`attack_time`, `decay_time`, `sustain`, `release_time`,
+  `env_phase`, `peak_gain`); `fm_preset()` table returns tuned coefficients for nine
+  instruments; `trigger_v2` dispatches `"fm:{preset}:{freq}"` (letter-first) alongside
+  the legacy `"fm:{freq}:{index}:{ratio}"` (digit-first)
+- `app/src/repulse/audio.cljs` — nine-preset `#{:sax :trumpet …}` branch added to
+  `play-event` cond, producing `"fm:{preset}:{freq}"` worklet messages
+- Zero-sustain voices (`:bell`, `:marimba`, `:epiano`) use the decay phase for ring-out;
+  `:bell` rings for 1.2s, `:epiano` for 0.8s, `:marimba` for 0.35s
 - Grammar, completions, `builtin_meta.edn`, and `docs/ai/builtins.json` updated for
-  all nine names
+  all nine names; legacy `(synth :fm :index … :ratio …)` unchanged
+- 3 new Rust tests: `fm_presets_all_produce_output`, `fm_bell_rings_for_one_second`
 
 See full spec: [PROMPTS/PHASE-SYN2.md](PROMPTS/PHASE-SYN2.md)
 

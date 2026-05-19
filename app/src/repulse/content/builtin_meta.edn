@@ -390,6 +390,79 @@
                          "(->> (seq :e5 :d5 :c5) (synth :mandolin) (amp 0.7))"]
               :see-also ["western" "koto" "lute" "synth"]}
 
+ ;; ── FM instrument presets ───────────────────────────────────────────────────
+
+ :sax        {:category "synth"
+              :description "FM saxophone preset — reed-like tone with index=3, soft 20ms attack, sustained body."
+              :returns "event-param-map"
+              :side-effects []
+              :examples ["(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :sax))"
+                         "(->> (seq :c3 :eb3 :g3 :bb3) (synth :sax) (amp 0.7))"]
+              :see-also ["trumpet" "flute" "fm" "synth"]}
+
+ :trumpet    {:category "synth"
+              :description "FM trumpet preset — bright brass, high modulation index for harmonic grit."
+              :returns "event-param-map"
+              :side-effects []
+              :examples ["(->> (scale :major :c4 (seq 0 2 4 7)) (synth :trumpet))"
+                         "(->> (pure :c4) (synth :trumpet) (amp 0.6))"]
+              :see-also ["trumpet-muted" "trumpet-cup" "trombone" "sax" "synth"]}
+
+ :trumpet-muted {:category "synth"
+                 :description "FM muted trumpet — inharmonic ratio (√2) and high index produce lo-fi nasal brass grit."
+                 :returns "event-param-map"
+                 :side-effects []
+                 :examples ["(->> (scale :major :c4 (seq 0 2 4)) (synth :trumpet-muted))"
+                            "(->> (pure :g4) (synth :trumpet-muted) (amp 0.5))"]
+                 :see-also ["trumpet" "trumpet-cup" "trombone" "synth"]}
+
+ :trumpet-cup {:category "synth"
+               :description "FM cup-muted trumpet — darker than open, brighter than harmon mute."
+               :returns "event-param-map"
+               :side-effects []
+               :examples ["(->> (scale :major :c4 (seq 0 4 7)) (synth :trumpet-cup))"]
+               :see-also ["trumpet" "trumpet-muted" "synth"]}
+
+ :trombone   {:category "synth"
+              :description "FM trombone — warm brass with a slower 40ms attack and rounder decay."
+              :returns "event-param-map"
+              :side-effects []
+              :examples ["(->> (scale :minor :c2 (slow 2 (seq 0 3 5 7))) (synth :trombone))"
+                         "(->> (pure :c3) (synth :trombone) (amp 0.7))"]
+              :see-also ["trumpet" "sax" "synth"]}
+
+ :epiano     {:category "synth"
+              :description "FM electric piano (Rhodes-style) — high modulator ratio (14×) gives metallic shimmer; zero sustain means it fades naturally after the transient."
+              :returns "event-param-map"
+              :side-effects []
+              :examples ["(->> (chord :maj7 :c4 (slow 2 (seq 0 4 7 11))) (synth :epiano))"
+                         "(->> (scale :major :c4 (seq 0 2 4 5)) (synth :epiano) (amp 0.5))"]
+              :see-also ["bell" "marimba" "fm" "synth"]}
+
+ :bell       {:category "synth"
+              :description "FM bell — inharmonic ratio (√2) with a slow 1.2s ring; zero sustain, long decay."
+              :returns "event-param-map"
+              :side-effects []
+              :examples ["(->> (fast 2 (scale :major :c5 (seq 0 2 4 5))) (synth :bell))"
+                         "(->> (seq :c5 :e5 :g5 :b5) (synth :bell) (slow 2))"]
+              :see-also ["marimba" "epiano" "fm" "synth"]}
+
+ :marimba    {:category "synth"
+              :description "FM marimba — high modulator ratio (3.5×), percussive 0.35s decay to silence."
+              :returns "event-param-map"
+              :side-effects []
+              :examples ["(->> (scale :major :c4 (fast 2 (seq 0 2 4 5 7))) (synth :marimba))"
+                         "(->> (seq :c4 :g4 :c5) (synth :marimba) (amp 0.6))"]
+              :see-also ["bell" "epiano" "fm" "synth"]}
+
+ :flute      {:category "synth"
+              :description "FM flute — low modulation index, slow 60ms attack, high sustained level."
+              :returns "event-param-map"
+              :side-effects []
+              :examples ["(->> (scale :major :c5 (seq 0 2 4 5)) (synth :flute))"
+                         "(->> (pure :g5) (synth :flute) (slow 2) (amp 0.6))"]
+              :see-also ["sax" "fm" "synth"]}
+
  ;; ── UGens (inside defsynth) ─────────────────────────────────────────────────
  :sin        {:category "ugen"
               :returns "UGen"

@@ -58,6 +58,16 @@ export const BUILTINS = [
   { label: "square",      type: "function", detail: "(square :c4) — square wave; (square :c4 :pw 0.25) — pulse width" },
   { label: "noise",       type: "function", detail: "(noise) — white noise burst; works with amp/decay/pan" },
   { label: "fm",          type: "function", detail: "(fm :c4 :index 3 :ratio 2) — FM synthesis pair" },
+  // --- FM instrument presets ---
+  { label: "sax",           type: "keyword", detail: "(synth :sax) — FM saxophone, reed-like tone with soft attack" },
+  { label: "trumpet",       type: "keyword", detail: "(synth :trumpet) — FM trumpet, bright brass tone" },
+  { label: "trumpet-muted", type: "keyword", detail: "(synth :trumpet-muted) — FM muted trumpet, gritty lo-fi brass" },
+  { label: "trumpet-cup",   type: "keyword", detail: "(synth :trumpet-cup) — FM cup-muted trumpet" },
+  { label: "trombone",      type: "keyword", detail: "(synth :trombone) — FM trombone, warm slow attack" },
+  { label: "epiano",        type: "keyword", detail: "(synth :epiano) — FM electric piano, Rhodes-style metallic shimmer" },
+  { label: "bell",          type: "keyword", detail: "(synth :bell) — FM bell, inharmonic ring over 1s" },
+  { label: "marimba",       type: "keyword", detail: "(synth :marimba) — FM marimba, percussive woody attack" },
+  { label: "flute",         type: "keyword", detail: "(synth :flute) — FM flute, breathy with slow attack" },
   // --- Karplus-Strong plucked strings ---
   { label: "western",   type: "keyword", detail: "(synth :western) — steel-string acoustic guitar, pick attack" },
   { label: "nylon",     type: "keyword", detail: "(synth :nylon) — classical nylon-string guitar, soft fingertip" },

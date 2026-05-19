@@ -898,6 +898,44 @@ Available voices:
 | Koto                 | `:koto`      | Japanese koto with subtle vibrato (5.5 Hz)                                        |
 | Mandolin             | `:mandolin`  | Bright mandolin with faster vibrato (6.0 Hz)                                      |
 
+#### FM instrument presets (Phase SYN2)
+
+These voices use 2-operator FM synthesis with per-preset ADSR envelopes. No manual
+tuning needed — just name the instrument:
+
+| Voice                | Keyword          | Character                                                                         |
+|----------------------|------------------|-----------------------------------------------------------------------------------|
+| Saxophone            | `:sax`           | Reed-like; index 3, 20ms attack, sustained body                                   |
+| Trumpet              | `:trumpet`       | Bright brass; high index for harmonic grit                                        |
+| Muted trumpet        | `:trumpet-muted` | Inharmonic ratio (√2), high index — lo-fi nasal grit                             |
+| Cup-muted trumpet    | `:trumpet-cup`   | Darker than open, brighter than harmon                                            |
+| Trombone             | `:trombone`      | Warm brass with slower 40ms attack                                                |
+| Electric piano       | `:epiano`        | Rhodes-style; mod ratio 14×, metallic shimmer, fades naturally                   |
+| Bell                 | `:bell`          | Inharmonic ring (√2 ratio), 1.2s decay to silence                                |
+| Marimba              | `:marimba`       | Percussive; mod ratio 3.5×, 0.35s ring                                            |
+| Flute                | `:flute`         | Low index, breathy, 60ms soft attack                                              |
+
+```lisp
+;; Sax melody
+(->> (scale :minor :c3 (seq 0 3 5 7))
+     (synth :sax)
+     (amp 0.7))
+
+;; Rhodes electric piano chord
+(->> (chord :maj7 :c4 (slow 2 (seq 0 4 7 11)))
+     (synth :epiano)
+     (amp 0.5))
+
+;; Bell melody — rings for over a second
+(->> (fast 2 (scale :major :c5 (seq 0 2 4 5)))
+     (synth :bell))
+
+;; Lo-fi muted trumpet
+(->> (scale :major :c4 (seq 0 2 4 7))
+     (synth :trumpet-muted)
+     (amp 0.6))
+```
+
 ```lisp
 ;; Plucked string melody
 (->> (scale :minor :c3 (seq 0 3 5 7))
