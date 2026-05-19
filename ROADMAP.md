@@ -868,20 +868,34 @@ See full spec: [PROMPTS/PHASE-DST6.md](PROMPTS/PHASE-DST6.md)
 
 ---
 
-## Phase SYN1 — Karplus-Strong Plucked String 📋 *planned*
+## Phase SYN1 — Karplus-Strong Plucked String ✅ *delivered*
 
 Add a Karplus-Strong delay-line voice to the WASM engine, giving REPuLse its first
 melodic instrument tier: six plucked-string presets callable as `(synth :guitar)`,
 `(synth :harp)`, `(synth :koto)`, `(synth :pizz)`, `(synth :lute)`, `(synth :mandolin)`.
 
 **Key additions:**
-- `packages/audio/src/lib.rs` — `Voice::KarplusStrong` variant with pre-allocated
-  2205-sample ring buffer, `ks_preset()` table, feedback/brightness/pick-pos/vibrato
-  coefficients per preset, `tick` and `is_silent` implementations
-- Trigger dispatch via `"ks:{preset}:{freq}:{amp}"` value string in `trigger_v2`
-- `app/src/repulse/synth.cljs` — six preset entries in builtin-voice-map
-- Grammar, completions, `builtin_meta.edn`, and `docs/ai/builtins.json` updated for
-  all six names; `npm run gen:grammar` and `npm run gen:ai-docs` required
+- `packages/audio/src/lib.rs` — `Voice::KarplusStrong` with pre-allocated 2205-sample
+  ring buffer, `ks_preset()` 6-tuple table (feedback/brightness/pick-pos/vibrato/excitation),
+  `ks_body_filters()` per-instrument EQ chain, `tick` and `is_silent` implementations
+- `Biquad::peaking_eq` and `Biquad::highshelf` added — shared with SYN3 body filters
+- Trigger dispatch via `"ks:{preset}:{freq}"` value string; amp/attack/decay/pan from `p`
+- `app/src/repulse/audio.cljs` — KS branch in `play-event` after FM dispatch; JS offline
+  fallback uses `make-sine`
+- Grammar, completions, `builtin_meta.edn`, and `docs/ai/builtins.json` updated for all
+  six names
+
+**Delivered:**
+- All six presets produce distinct timbres shaped by decay time, pick position, vibrato,
+  per-preset excitation amplitude, and a 2–3 biquad body resonance EQ chain
+- `:pizz` uses `excitation = 0.18` — soft fingertip pluck energy vs. full pick stroke
+- `:koto` and `:mandolin` include subtle vibrato via LFO-modulated read position
+- Body filters model acoustic cavity + top-plate resonances throughout the sustain
+  (not just at the attack transient): guitar Helmholtz air ~90 Hz, harp open soundboard
+  ~110 Hz, koto thud ~220 Hz, pizz violin air ~270 Hz + wood ~520 Hz, lute gut warmth
+- `Biquad::peaking_eq` / `highshelf` are the shared primitive SYN3 will reuse — MECE
+  boundary documented in CLAUDE.md
+- 28 Rust tests pass; app compiles clean
 
 See full spec: [PROMPTS/PHASE-SYN1.md](PROMPTS/PHASE-SYN1.md)
 

@@ -61,6 +61,44 @@ impl Biquad {
         }
     }
 
+    fn peaking_eq(freq: f32, gain_db: f32, q: f32, sr: f32) -> Self {
+        let a = 10.0_f32.powf(gain_db / 40.0);
+        let w0 = 2.0 * std::f32::consts::PI * freq / sr;
+        let alpha = w0.sin() / (2.0 * q);
+        let cos_w0 = w0.cos();
+        let a0 = 1.0 + alpha / a;
+        Biquad {
+            b0: (1.0 + alpha * a) / a0,
+            b1: -2.0 * cos_w0 / a0,
+            b2: (1.0 - alpha * a) / a0,
+            a1: -2.0 * cos_w0 / a0,
+            a2: (1.0 - alpha / a) / a0,
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
+        }
+    }
+
+    fn highshelf(freq: f32, gain_db: f32, sr: f32) -> Self {
+        let a = 10.0_f32.powf(gain_db / 40.0);
+        let w0 = 2.0 * std::f32::consts::PI * freq / sr;
+        let cos_w0 = w0.cos();
+        let alpha = w0.sin() / 2.0 * ((a + 1.0 / a) * (1.0 / 0.9 - 1.0) + 2.0).sqrt();
+        let a0 = (a + 1.0) - (a - 1.0) * cos_w0 + 2.0 * a.sqrt() * alpha;
+        Biquad {
+            b0: a * ((a + 1.0) + (a - 1.0) * cos_w0 + 2.0 * a.sqrt() * alpha) / a0,
+            b1: -2.0 * a * ((a - 1.0) + (a + 1.0) * cos_w0) / a0,
+            b2: a * ((a + 1.0) + (a - 1.0) * cos_w0 - 2.0 * a.sqrt() * alpha) / a0,
+            a1: 2.0 * ((a - 1.0) - (a + 1.0) * cos_w0) / a0,
+            a2: ((a + 1.0) - (a - 1.0) * cos_w0 - 2.0 * a.sqrt() * alpha) / a0,
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
+        }
+    }
+
     fn tick(&mut self, x: f32) -> f32 {
         let y = self.b0 * x + self.b1 * self.x1 + self.b2 * self.x2
             - self.a1 * self.y1
@@ -78,6 +116,68 @@ impl Biquad {
 fn lcg_next(state: &mut u32) -> f32 {
     *state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
     (*state as f32 / u32::MAX as f32).mul_add(2.0, -1.0)
+}
+
+fn ks_preset(name: &str) -> (f32, f32, f32, f32, f32, f32) {
+    // Returns (feedback, brightness, pick_pos, vib_depth, vib_rate, excitation)
+    // excitation scales the initial noise fill — lower = softer attack transient
+    // T60 formula (at A440, buf_len≈100): -3*100 / (44100 * ln(feedback))
+    match name {
+        "western" | "guitar" => (0.997, 0.60, 0.12, 0.0, 0.0, 1.0), // ~2.3s, steel pick
+        "nylon" => (0.996, 0.50, 0.16, 0.0, 0.0, 0.60),             // ~2.0s, soft fingertip
+        "harp" => (0.998, 0.55, 0.25, 0.0, 0.0, 1.0),               // ~3.4s T60, warm
+        "koto" => (0.994, 0.62, 0.10, 0.015, 5.5, 1.0),             // ~1.5s, subtle vib
+        "pizz" => (0.975, 0.40, 0.42, 0.0, 0.0, 0.18),              // ~0.27s, gentle finger pluck
+        "lute" => (0.996, 0.58, 0.16, 0.0, 0.0, 1.0),               // ~1.7s, warm
+        "mandolin" => (0.992, 0.68, 0.08, 0.025, 6.5, 1.0),         // ~0.85s, bright
+        _ => (0.997, 0.60, 0.12, 0.0, 0.0, 1.0),
+    }
+}
+
+fn ks_body_filters(name: &str, sr: f32) -> Vec<Biquad> {
+    // Per-instrument body resonance EQ chain applied post-KS.
+    // Models the acoustic cavity + top-plate resonances that make each
+    // instrument recognisably itself throughout the sustain, not just at attack.
+    // SYN3 (bowed strings) uses the same Biquad primitives for its body chain.
+    match name {
+        "western" | "guitar" => vec![
+            Biquad::peaking_eq(90.0, 5.0, 2.5, sr), // Helmholtz air resonance (dreadnought)
+            Biquad::peaking_eq(200.0, 2.0, 1.5, sr), // top-plate main mode
+            Biquad::highshelf(4500.0, -4.0, sr),    // steel-string HF rolloff
+        ],
+        "nylon" => vec![
+            Biquad::peaking_eq(110.0, 4.0, 2.0, sr), // cedar/spruce top, higher air resonance
+            Biquad::peaking_eq(230.0, 2.0, 1.5, sr), // top-plate mode
+            Biquad::highshelf(3500.0, -5.0, sr),     // nylon rolls off treble sharply
+        ],
+        "harp" => vec![
+            Biquad::peaking_eq(110.0, 4.0, 1.5, sr), // large open soundboard
+            Biquad::peaking_eq(800.0, 1.0, 1.0, sr), // mild presence
+            Biquad::highshelf(5000.0, -3.0, sr),     // silky rolloff
+        ],
+        "koto" => vec![
+            Biquad::peaking_eq(220.0, 6.0, 2.5, sr), // characteristic thud/buzz
+            Biquad::highshelf(3000.0, -5.0, sr),     // dark silk-string rolloff
+        ],
+        "pizz" => vec![
+            Biquad::peaking_eq(270.0, 4.0, 3.5, sr), // violin air resonance (narrow)
+            Biquad::peaking_eq(520.0, 3.0, 3.0, sr), // main wood mode
+            Biquad::highshelf(4000.0, 2.0, sr),      // violin brightness
+        ],
+        "lute" => vec![
+            Biquad::peaking_eq(120.0, 4.0, 2.0, sr), // rounded bowl resonance
+            Biquad::highshelf(2500.0, -5.0, sr),     // gut-string warmth, dark top
+        ],
+        "mandolin" => vec![
+            Biquad::peaking_eq(300.0, 4.0, 2.0, sr), // small archtop body
+            Biquad::peaking_eq(2000.0, 3.0, 1.5, sr), // steel-string presence
+        ],
+        _ => vec![
+            Biquad::peaking_eq(90.0, 5.0, 2.5, sr),
+            Biquad::peaking_eq(200.0, 2.0, 1.5, sr),
+            Biquad::highshelf(4500.0, -4.0, sr),
+        ],
+    }
 }
 
 // ── Decay rate: reach 1e-5 from 1.0 over `dur_secs` ──────────────────────
@@ -158,6 +258,19 @@ enum Voice {
         gain_decay: f32,
         attack_inc: f32,
         in_attack: bool,
+    },
+    KarplusStrong {
+        buf: Vec<f32>,
+        buf_len: usize,
+        write_pos: usize,
+        lp_prev: f32,
+        feedback: f32,
+        brightness: f32,
+        gain: f32,
+        vib_phase: f32,
+        vib_depth: f32,
+        vib_rate: f32,
+        body_filters: Vec<Biquad>,
     },
 }
 
@@ -312,6 +425,34 @@ impl Voice {
                 *mod_phase += *mod_freq / sr as f64;
                 carrier_sig * *gain
             }
+            Voice::KarplusStrong {
+                buf,
+                buf_len,
+                write_pos,
+                lp_prev,
+                feedback,
+                brightness,
+                gain,
+                vib_phase,
+                vib_depth,
+                vib_rate,
+                body_filters,
+            } => {
+                let vib_offset = (*vib_depth * (*vib_phase).sin()) as isize;
+                let read_pos = (*write_pos + 1 + *buf_len) % *buf_len;
+                let vib_pos =
+                    ((read_pos as isize + vib_offset).rem_euclid(*buf_len as isize)) as usize;
+                let x = buf[vib_pos];
+                let y = *brightness * x + (1.0 - *brightness) * *lp_prev;
+                let y_fb = y * *feedback;
+                buf[*write_pos] = y_fb;
+                *write_pos = (*write_pos + 1) % *buf_len;
+                *lp_prev = y;
+                *vib_phase += 2.0 * std::f32::consts::PI * *vib_rate / sr;
+                let out = body_filters.iter_mut().fold(y_fb, |s, f| f.tick(s));
+                *gain = out.abs().max(*gain * 0.9999);
+                out
+            }
         }
     }
 
@@ -333,6 +474,7 @@ impl Voice {
             | Voice::Snare { gain, .. }
             | Voice::Hihat { gain, .. }
             | Voice::Noise { gain, .. } => *gain < 1e-5,
+            Voice::KarplusStrong { gain, .. } => *gain < 1e-4,
         }
     }
 }
@@ -710,6 +852,42 @@ impl AudioEngine {
                 attack_inc: peak / attack_samples,
                 in_attack: true,
             }
+        } else if let Some(rest) = value.strip_prefix("ks:") {
+            let parts: Vec<&str> = rest.splitn(2, ':').collect();
+            let preset = parts.first().copied().unwrap_or("guitar");
+            let freq: f32 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(440.0);
+            let (feedback, brightness, pick_pos, vib_depth, vib_rate, excitation) =
+                ks_preset(preset);
+            let buf_len = ((sr / freq).floor() as usize).clamp(2, 2205);
+            let peak = amp * 0.5;
+            let fill = peak * excitation;
+            let mut buf = vec![0.0f32; 2205];
+            for slot in buf.iter_mut().take(buf_len) {
+                *slot = lcg_next(&mut self.noise_seed) * fill;
+            }
+            let comb = (buf_len as f32 * pick_pos).floor() as usize;
+            if comb > 0 {
+                for i in (0..buf_len).step_by(comb) {
+                    buf[i] = 0.0;
+                }
+            }
+            self.voices.push(ActiveVoice {
+                voice: Voice::KarplusStrong {
+                    buf,
+                    buf_len,
+                    write_pos: 0,
+                    lp_prev: 0.0,
+                    feedback,
+                    brightness,
+                    gain: fill,
+                    vib_phase: 0.0,
+                    vib_depth,
+                    vib_rate,
+                    body_filters: ks_body_filters(preset, sr),
+                },
+                pan: p.pan.clamp(-1.0, 1.0),
+            });
+            return;
         } else {
             match value {
                 "bd" => {
@@ -929,6 +1107,38 @@ mod engine_tests {
         eng.trigger_raw("fm:440:2.0:3.0", 0.0);
         let buf = eng.process_block_raw(4410, 0.0);
         assert!(rms(&buf) > 0.001, "fm should produce audible output");
+    }
+
+    #[test]
+    fn karplus_strong_guitar_produces_nonsilent_output() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw("ks:guitar:440", 0.0);
+        let buf = eng.process_block_raw(4410, 0.0);
+        assert!(rms(&buf) > 0.001, "guitar KS should produce audible output");
+    }
+
+    #[test]
+    fn karplus_strong_all_presets_produce_output() {
+        for preset in &["guitar", "harp", "koto", "pizz", "lute", "mandolin"] {
+            let mut eng = AudioEngine::new_for_test(44100.0);
+            eng.trigger_raw(&format!("ks:{}:440", preset), 0.0);
+            let buf = eng.process_block_raw(4410, 0.0);
+            assert!(
+                rms(&buf) > 0.001,
+                "preset '{}' should produce audible output",
+                preset
+            );
+        }
+    }
+
+    #[test]
+    fn karplus_strong_decays_to_silence() {
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_raw("ks:pizz:440", 0.0);
+        // Render 5s — pizz has low feedback so should die out
+        let buf = eng.process_block_raw(220500, 0.0);
+        let tail: Vec<f32> = buf[buf.len() - 2000..].to_vec();
+        assert!(rms(&tail) < 1e-3, "pizz KS should decay to silence");
     }
 
     #[test]

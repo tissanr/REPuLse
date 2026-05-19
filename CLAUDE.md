@@ -174,13 +174,24 @@ notes (440 Hz only uses ~100 slots) but keeps the AudioWorklet render callback
 allocation-free. If memory pressure becomes a problem with many simultaneous voices,
 revisit — but do not move buffer allocation into the render path without profiling first.
 
+**SYN1 plucked strings: body resonance EQ chain per instrument.**
+`Voice::KarplusStrong` carries a `body_filters: Vec<Biquad>` allocated at trigger time
+and applied to every output sample. The chain is built by `ks_body_filters(preset, sr)`
+using `Biquad::peaking_eq` and `Biquad::highshelf` (Audio EQ Cookbook formulas). Each
+preset models the acoustic cavity + top-plate resonances that make the instrument
+recognisable throughout the sustain — not just at the attack transient shaped by
+`pick_pos` and `brightness`. Allocation happens in the trigger path, never in the render
+callback. SYN3 (bowed strings) uses the same `Biquad` primitives for its own body chain,
+keeping plucked and bowed instruments MECE: shared filter infrastructure, separate
+excitation and waveguide models.
+
 **SYN3 bowed string: full bi-directional waveguide, not Karplus approximation.**
-`Voice::BowedString` uses two delay lines (nut→bridge, bridge→nut), a piecewise-linear
-bow friction table, and per-instrument body resonance IIR filters. A Karplus bow
-approximation (slow-attack + high feedback) was considered and rejected: it sounds
-plucked, not bowed, and re-triggers every note instead of sustaining continuously.
-The waveguide is more Rust code but the realism delta for violin/cello is large enough
-to justify it.
+`Voice::BowedString` will use two delay lines (nut→bridge, bridge→nut), a
+piecewise-linear bow friction table, and per-instrument body resonance IIR filters
+(same `Biquad::peaking_eq` / `Biquad::highshelf` as SYN1). A Karplus bow approximation
+(slow-attack + high feedback) was considered and rejected: it sounds plucked, not bowed,
+and re-triggers every note instead of sustaining continuously. The waveguide is more
+Rust code but the realism delta for violin/cello is large enough to justify it.
 
 ---
 
@@ -307,7 +318,7 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | DST4  | Distortion — oversampling wrapper (:oversample 1/2/4)          | ✓ delivered  |
 | DST5  | Distortion — waveshaper LUT (:waveshape, chebyshev/fold/bitcrush) | ✓ delivered  |
 | DST6  | Distortion — cabinet simulation (:cab, ConvolverNode + IRs)    | ✓ delivered  |
-| SYN1  | Plucked strings — :guitar :harp :koto :pizz :lute :mandolin    | planned      |
+| SYN1  | Plucked strings — :guitar :harp :koto :pizz :lute :mandolin    | ✓ delivered  |
 | SYN2  | FM presets — :sax :trumpet :epiano :bell :marimba :flute       | planned      |
 | SYN3  | Bowed strings — :violin :viola :cello :bass-arco (waveguide)   | planned      |
 | SYN4  | Electric guitars — :strat :tele :es335 :sg :lp (KS + body IIR) | planned      |

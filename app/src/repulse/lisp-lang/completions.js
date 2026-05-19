@@ -58,6 +58,15 @@ export const BUILTINS = [
   { label: "square",      type: "function", detail: "(square :c4) — square wave; (square :c4 :pw 0.25) — pulse width" },
   { label: "noise",       type: "function", detail: "(noise) — white noise burst; works with amp/decay/pan" },
   { label: "fm",          type: "function", detail: "(fm :c4 :index 3 :ratio 2) — FM synthesis pair" },
+  // --- Karplus-Strong plucked strings ---
+  { label: "western",   type: "keyword", detail: "(synth :western) — steel-string acoustic guitar, pick attack" },
+  { label: "nylon",     type: "keyword", detail: "(synth :nylon) — classical nylon-string guitar, soft fingertip" },
+  { label: "guitar",    type: "keyword", detail: "(synth :guitar) — alias for :western" },
+  { label: "harp",      type: "keyword", detail: "(synth :harp) — bright plucked harp (long decay)" },
+  { label: "koto",      type: "keyword", detail: "(synth :koto) — Japanese koto with subtle vibrato" },
+  { label: "pizz",      type: "keyword", detail: "(synth :pizz) — pizzicato string (short decay)" },
+  { label: "lute",      type: "keyword", detail: "(synth :lute) — warm plucked lute" },
+  { label: "mandolin",  type: "keyword", detail: "(synth :mandolin) — bright mandolin with tremolo vibrato" },
   // --- Sound ---
   { label: "sound",        type: "function", detail: "(sound bank n) — select sample n from bank" },
   { label: "bpm",          type: "function", detail: "(bpm n) — set tempo in beats per minute" },
