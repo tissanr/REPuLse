@@ -50,8 +50,8 @@ Map    { OpenBrace expr* CloseBrace }
     "rate" | "begin" | "end" | "loop-sample" |
     "saw" | "square" | "noise" | "fm" | "synth" |
     "western" | "nylon" | "guitar" | "harp" | "koto" | "pizz" | "lute" | "mandolin" |
-    "sax" | "trumpet" | "trumpet-muted" | "trumpet-cup" | "trombone" |
-    "epiano" | "bell" | "marimba" | "flute" |
+    "sax" | "trumpet" | "trumpet-muted" | "trombone" | "synth-brass" |
+    "harmon-out" | "harmon-in" | "epiano" | "bell" | "marimba" | "flute" |
     "sin" | "tri" | "lpf" | "hpf" | "bpf" | "mix" | "gain" | "delay-node" |
     "env-perc" | "env-asr" | "env-gen" | "env" |
     "bus" | "out" | "in" | "kr" |

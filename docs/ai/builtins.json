@@ -1873,6 +1873,202 @@
     "detail": "(synth :mandolin) — bright mandolin with tremolo vibrato",
     "description": ""
   },
+  "sax": {
+    "category": "synth",
+    "signature": "(synth :sax) — FM saxophone, reed-like with bore formant shaping and breath noise",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :sax))",
+      "(->> (seq :c3 :eb3 :g3 :bb3) (synth :sax) (amp 0.7))"
+    ],
+    "see-also": [
+      "trumpet",
+      "flute",
+      "fm",
+      "synth"
+    ],
+    "detail": "(synth :sax) — FM saxophone, reed-like with bore formant shaping and breath noise",
+    "description": ""
+  },
+  "trumpet": {
+    "category": "synth",
+    "signature": "(synth :trumpet) — FM trumpet, bright brass with bell resonance filters and air noise",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :major :c4 (seq 0 2 4 7)) (synth :trumpet))",
+      "(->> (pure :c4) (synth :trumpet) (amp 0.6))"
+    ],
+    "see-also": [
+      "trumpet-muted",
+      "trombone",
+      "harmon-out",
+      "harmon-in",
+      "sax",
+      "synth"
+    ],
+    "detail": "(synth :trumpet) — FM trumpet, bright brass with bell resonance filters and air noise",
+    "description": ""
+  },
+  "trumpet-muted": {
+    "category": "synth",
+    "signature": "(synth :trumpet-muted) — FM straight-muted trumpet, nasal mid peak, cuts lows and highs",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :major :c4 (seq 0 2 4)) (synth :trumpet-muted))",
+      "(->> (pure :g4) (synth :trumpet-muted) (amp 0.5))"
+    ],
+    "see-also": [
+      "trumpet",
+      "harmon-out",
+      "harmon-in",
+      "synth-brass",
+      "synth"
+    ],
+    "detail": "(synth :trumpet-muted) — FM straight-muted trumpet, nasal mid peak, cuts lows and highs",
+    "description": ""
+  },
+  "trombone": {
+    "category": "synth",
+    "signature": "(synth :trombone) — FM trombone, warm with 120ms attack setup time",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :minor :c2 (slow 2 (seq 0 3 5 7))) (synth :trombone))",
+      "(->> (pure :c3) (synth :trombone) (amp 0.7))"
+    ],
+    "see-also": [
+      "trumpet",
+      "sax",
+      "synth"
+    ],
+    "detail": "(synth :trombone) — FM trombone, warm with 120ms attack setup time",
+    "description": ""
+  },
+  "synth-brass": {
+    "category": "synth",
+    "signature": "(synth :synth-brass) — synthetic lo-fi brass texture, inharmonic ratio for grit",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :major :c4 (seq 0 2 4)) (synth :synth-brass))",
+      "(->> (pure :g4) (synth :synth-brass) (amp 0.5))"
+    ],
+    "see-also": [
+      "trumpet-muted",
+      "harmon-out",
+      "synth"
+    ],
+    "detail": "(synth :synth-brass) — synthetic lo-fi brass texture, inharmonic ratio for grit",
+    "description": ""
+  },
+  "harmon-out": {
+    "category": "synth",
+    "signature": "(synth :harmon-out) — harmon mute stem out, Miles Davis nasal peak around 1.1kHz",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :minor :c4 (seq 0 3 5 7)) (synth :harmon-out))",
+      "(->> (pure :d4) (synth :harmon-out) (slow 2) (amp 0.6))"
+    ],
+    "see-also": [
+      "harmon-in",
+      "trumpet-muted",
+      "synth"
+    ],
+    "detail": "(synth :harmon-out) — harmon mute stem out, Miles Davis nasal peak around 1.1kHz",
+    "description": ""
+  },
+  "harmon-in": {
+    "category": "synth",
+    "signature": "(synth :harmon-in) — harmon mute stem in, more closed and buzzy than stem-out",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :minor :c4 (seq 0 3 5 7)) (synth :harmon-in))",
+      "(->> (pure :d4) (synth :harmon-in) (slow 2) (amp 0.6))"
+    ],
+    "see-also": [
+      "harmon-out",
+      "trumpet-muted",
+      "synth"
+    ],
+    "detail": "(synth :harmon-in) — harmon mute stem in, more closed and buzzy than stem-out",
+    "description": ""
+  },
+  "epiano": {
+    "category": "synth",
+    "signature": "(synth :epiano) — FM electric piano, Rhodes-style metallic shimmer",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (chord :maj7 :c4 (slow 2 (seq 0 4 7 11))) (synth :epiano))",
+      "(->> (scale :major :c4 (seq 0 2 4 5)) (synth :epiano) (amp 0.5))"
+    ],
+    "see-also": [
+      "bell",
+      "marimba",
+      "fm",
+      "synth"
+    ],
+    "detail": "(synth :epiano) — FM electric piano, Rhodes-style metallic shimmer",
+    "description": ""
+  },
+  "bell": {
+    "category": "synth",
+    "signature": "(synth :bell) — FM bell, inharmonic ring over 1s",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (fast 2 (scale :major :c5 (seq 0 2 4 5))) (synth :bell))",
+      "(->> (seq :c5 :e5 :g5 :b5) (synth :bell) (slow 2))"
+    ],
+    "see-also": [
+      "marimba",
+      "epiano",
+      "fm",
+      "synth"
+    ],
+    "detail": "(synth :bell) — FM bell, inharmonic ring over 1s",
+    "description": ""
+  },
+  "marimba": {
+    "category": "synth",
+    "signature": "(synth :marimba) — FM marimba, percussive woody attack",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :major :c4 (fast 2 (seq 0 2 4 5 7))) (synth :marimba))",
+      "(->> (seq :c4 :g4 :c5) (synth :marimba) (amp 0.6))"
+    ],
+    "see-also": [
+      "bell",
+      "epiano",
+      "fm",
+      "synth"
+    ],
+    "detail": "(synth :marimba) — FM marimba, percussive woody attack",
+    "description": ""
+  },
+  "flute": {
+    "category": "synth",
+    "signature": "(synth :flute) — FM flute, breathy with slow attack",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :major :c5 (seq 0 2 4 5)) (synth :flute))",
+      "(->> (pure :g5) (synth :flute) (slow 2) (amp 0.6))"
+    ],
+    "see-also": [
+      "sax",
+      "fm",
+      "synth"
+    ],
+    "detail": "(synth :flute) — FM flute, breathy with slow attack",
+    "description": ""
+  },
   "sin": {
     "category": "ugen",
     "signature": "(sin freq) — sine oscillator UGen",
@@ -2967,165 +3163,6 @@
       "get"
     ],
     "detail": "(vals m) — list of map values",
-    "description": ""
-  },
-  "sax": {
-    "category": "synth",
-    "signature": "(synth :sax) — FM saxophone, reed-like tone with soft attack",
-    "returns": "event-param-map",
-    "side-effects": [],
-    "examples": [
-      "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :sax))",
-      "(->> (seq :c3 :eb3 :g3 :bb3) (synth :sax) (amp 0.7))"
-    ],
-    "see-also": [
-      "trumpet",
-      "flute",
-      "fm",
-      "synth"
-    ],
-    "detail": "(synth :sax) — FM saxophone, reed-like tone with soft attack",
-    "description": ""
-  },
-  "trumpet": {
-    "category": "synth",
-    "signature": "(synth :trumpet) — FM trumpet, bright brass tone",
-    "returns": "event-param-map",
-    "side-effects": [],
-    "examples": [
-      "(->> (scale :major :c4 (seq 0 2 4 7)) (synth :trumpet))",
-      "(->> (pure :c4) (synth :trumpet) (amp 0.6))"
-    ],
-    "see-also": [
-      "trumpet-muted",
-      "trumpet-cup",
-      "trombone",
-      "sax",
-      "synth"
-    ],
-    "detail": "(synth :trumpet) — FM trumpet, bright brass tone",
-    "description": ""
-  },
-  "trumpet-muted": {
-    "category": "synth",
-    "signature": "(synth :trumpet-muted) — FM muted trumpet, gritty lo-fi brass",
-    "returns": "event-param-map",
-    "side-effects": [],
-    "examples": [
-      "(->> (scale :major :c4 (seq 0 2 4)) (synth :trumpet-muted))",
-      "(->> (pure :g4) (synth :trumpet-muted) (amp 0.5))"
-    ],
-    "see-also": [
-      "trumpet",
-      "trumpet-cup",
-      "trombone",
-      "synth"
-    ],
-    "detail": "(synth :trumpet-muted) — FM muted trumpet, gritty lo-fi brass",
-    "description": ""
-  },
-  "trumpet-cup": {
-    "category": "synth",
-    "signature": "(synth :trumpet-cup) — FM cup-muted trumpet",
-    "returns": "event-param-map",
-    "side-effects": [],
-    "examples": [
-      "(->> (scale :major :c4 (seq 0 4 7)) (synth :trumpet-cup))"
-    ],
-    "see-also": [
-      "trumpet",
-      "trumpet-muted",
-      "synth"
-    ],
-    "detail": "(synth :trumpet-cup) — FM cup-muted trumpet",
-    "description": ""
-  },
-  "trombone": {
-    "category": "synth",
-    "signature": "(synth :trombone) — FM trombone, warm slow attack",
-    "returns": "event-param-map",
-    "side-effects": [],
-    "examples": [
-      "(->> (scale :minor :c2 (slow 2 (seq 0 3 5 7))) (synth :trombone))",
-      "(->> (pure :c3) (synth :trombone) (amp 0.7))"
-    ],
-    "see-also": [
-      "trumpet",
-      "sax",
-      "synth"
-    ],
-    "detail": "(synth :trombone) — FM trombone, warm slow attack",
-    "description": ""
-  },
-  "epiano": {
-    "category": "synth",
-    "signature": "(synth :epiano) — FM electric piano, Rhodes-style metallic shimmer",
-    "returns": "event-param-map",
-    "side-effects": [],
-    "examples": [
-      "(->> (chord :maj7 :c4 (slow 2 (seq 0 4 7 11))) (synth :epiano))",
-      "(->> (scale :major :c4 (seq 0 2 4 5)) (synth :epiano) (amp 0.5))"
-    ],
-    "see-also": [
-      "bell",
-      "marimba",
-      "fm",
-      "synth"
-    ],
-    "detail": "(synth :epiano) — FM electric piano, Rhodes-style metallic shimmer",
-    "description": ""
-  },
-  "bell": {
-    "category": "synth",
-    "signature": "(synth :bell) — FM bell, inharmonic ring over 1s",
-    "returns": "event-param-map",
-    "side-effects": [],
-    "examples": [
-      "(->> (fast 2 (scale :major :c5 (seq 0 2 4 5))) (synth :bell))",
-      "(->> (seq :c5 :e5 :g5 :b5) (synth :bell) (slow 2))"
-    ],
-    "see-also": [
-      "marimba",
-      "epiano",
-      "fm",
-      "synth"
-    ],
-    "detail": "(synth :bell) — FM bell, inharmonic ring over 1s",
-    "description": ""
-  },
-  "marimba": {
-    "category": "synth",
-    "signature": "(synth :marimba) — FM marimba, percussive woody attack",
-    "returns": "event-param-map",
-    "side-effects": [],
-    "examples": [
-      "(->> (scale :major :c4 (fast 2 (seq 0 2 4 5 7))) (synth :marimba))",
-      "(->> (seq :c4 :g4 :c5) (synth :marimba) (amp 0.6))"
-    ],
-    "see-also": [
-      "bell",
-      "epiano",
-      "fm",
-      "synth"
-    ],
-    "detail": "(synth :marimba) — FM marimba, percussive woody attack",
-    "description": ""
-  },
-  "flute": {
-    "category": "synth",
-    "signature": "(synth :flute) — FM flute, breathy with slow attack",
-    "returns": "event-param-map",
-    "side-effects": [],
-    "examples": [
-      "(->> (scale :major :c5 (seq 0 2 4 5)) (synth :flute))",
-      "(->> (pure :g5) (synth :flute) (slow 2) (amp 0.6))"
-    ],
-    "see-also": [
-      "sax",
-      "fm",
-      "synth"
-    ],
-    "detail": "(synth :flute) — FM flute, breathy with slow attack",
     "description": ""
   }
 }

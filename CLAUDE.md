@@ -185,6 +185,15 @@ callback. SYN3 (bowed strings) uses the same `Biquad` primitives for its own bod
 keeping plucked and bowed instruments MECE: shared filter infrastructure, separate
 excitation and waveguide models.
 
+**FM synth preset tests: "produces non-silent output" is the right and complete scope.**
+Each `Voice::FM` preset has one test: trigger at 440 Hz, render 0.1 s, assert RMS > 0.001.
+That is intentionally the full test suite for preset quality. Automated tests cannot
+verify that a sound *sounds like* a saxophone — that requires a human listen loop, and
+that loop is inherent to DSP tuning work, not a process failure. Do not add tests that
+claim to verify spectral shape or tonal character unless they use a concrete FFT
+assertion (e.g. peak frequency within ±5%). A test that passes even when the sound is
+wrong is worse than no test.
+
 **SYN3 bowed string: full bi-directional waveguide, not Karplus approximation.**
 `Voice::BowedString` will use two delay lines (nut→bridge, bridge→nut), a
 piecewise-linear bow friction table, and per-instrument body resonance IIR filters
@@ -416,6 +425,24 @@ When adding a new built-in name that should be highlighted and autocompleted in 
 
 Skipping steps 4–5 means the AI knowledge base drifts from the real surface and CI
 will fail on the `ai-docs` drift check.
+
+### Rule 6 — Verify build tooling at session start
+
+Before writing any code for a phase, run the completion-checklist scripts once on
+the unmodified branch to confirm they work:
+
+```bash
+npm run gen:grammar    # must exit cleanly
+npm run gen:ai-docs    # must exit cleanly and update builtins.json
+npm run test           # must pass
+```
+
+A broken script masquerades as a data problem and generates useless fix loops.
+If a script hangs silently or exits with code 1 and no output, **the script is
+broken — do not try to fix the input data first.** Isolate each step with explicit
+print statements and a subprocess wrapper that captures stderr and the exit code.
+Note: `setTimeout` cannot detect synchronous infinite loops — use an iteration
+counter guard inside the suspicious loop instead.
 
 ---
 
