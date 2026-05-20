@@ -123,18 +123,18 @@ fn fm_preset(name: &str) -> (f32, f64, f32, f32, f32, f32) {
     // For zero-sustain voices (bell, marimba, epiano), decay_time carries the full ring-out;
     // release_time is minimal because the envelope is already at zero after decay.
     match name {
-        "sax"          => (5.0, 1.0,   0.020, 0.10, 0.70, 0.15),
-        "trumpet"      => (5.5, 1.0,   0.010, 0.05, 0.80, 0.10),
-        "trumpet-muted"=> (4.0, 1.0,   0.015, 0.08, 0.70, 0.12),
-        "trombone"     => (3.5, 1.0,   0.120, 0.08, 0.75, 0.20),
-        "synth-brass"  => (7.0, 1.414, 0.010, 0.04, 0.60, 0.08),
-        "harmon-out"   => (3.5, 1.0,   0.015, 0.06, 0.75, 0.15),
-        "harmon-in"    => (5.0, 1.0,   0.010, 0.05, 0.70, 0.12),
-        "epiano"       => (1.5, 14.0,  0.005, 0.80, 0.0,  0.01),
-        "bell"         => (5.0, 1.414, 0.001, 1.20, 0.0,  0.01),
-        "marimba"      => (2.0, 3.5,   0.001, 0.35, 0.0,  0.01),
-        "flute"        => (1.8, 1.0,   0.060, 0.05, 0.85, 0.10),
-        _              => (3.0, 1.0,   0.010, 0.10, 0.70, 0.15),
+        "sax" => (5.0, 1.0, 0.020, 0.10, 0.70, 0.15),
+        "trumpet" => (5.5, 1.0, 0.010, 0.05, 0.80, 0.10),
+        "trumpet-muted" => (4.0, 1.0, 0.015, 0.08, 0.70, 0.12),
+        "trombone" => (3.5, 1.0, 0.120, 0.08, 0.75, 0.20),
+        "synth-brass" => (7.0, 1.414, 0.010, 0.04, 0.60, 0.08),
+        "harmon-out" => (3.5, 1.0, 0.015, 0.06, 0.75, 0.15),
+        "harmon-in" => (5.0, 1.0, 0.010, 0.05, 0.70, 0.12),
+        "epiano" => (1.5, 14.0, 0.005, 0.80, 0.0, 0.01),
+        "bell" => (5.0, 1.414, 0.001, 1.20, 0.0, 0.01),
+        "marimba" => (2.0, 3.5, 0.001, 0.35, 0.0, 0.01),
+        "flute" => (1.8, 1.0, 0.060, 0.05, 0.85, 0.10),
+        _ => (3.0, 1.0, 0.010, 0.10, 0.70, 0.15),
     }
 }
 
@@ -143,9 +143,9 @@ fn fm_body_filters(name: &str, sr: f32) -> Vec<Biquad> {
     // Empty vec = no shaping (epiano, bell, marimba, flute, synth-brass are fine as-is).
     match name {
         "sax" => vec![
-            Biquad::peaking_eq(900.0,  6.0, 2.0, sr), // reed + body formant
+            Biquad::peaking_eq(900.0, 6.0, 2.0, sr), // reed + body formant
             Biquad::peaking_eq(2200.0, 4.0, 2.5, sr), // bore resonance
-            Biquad::highshelf(5000.0, -5.0, sr),       // soften top
+            Biquad::highshelf(5000.0, -5.0, sr),     // soften top
         ],
         "trumpet" => vec![
             Biquad::peaking_eq(1200.0, 5.0, 1.5, sr), // bell throat
@@ -153,24 +153,24 @@ fn fm_body_filters(name: &str, sr: f32) -> Vec<Biquad> {
             Biquad::peaking_eq(3500.0, 3.0, 2.5, sr), // high partial emphasis
         ],
         "trumpet-muted" => vec![
-            Biquad::highpass(250.0,    0.7, sr),       // mute blocks lows
+            Biquad::highpass(250.0, 0.7, sr),         // mute blocks lows
             Biquad::peaking_eq(1700.0, 7.0, 2.5, sr), // nasal mid peak
-            Biquad::highshelf(4000.0, -8.0, sr),       // mute cuts highs
+            Biquad::highshelf(4000.0, -8.0, sr),      // mute cuts highs
         ],
         "trombone" => vec![
-            Biquad::peaking_eq(350.0,  4.0, 2.0, sr), // fundamental warmth
+            Biquad::peaking_eq(350.0, 4.0, 2.0, sr), // fundamental warmth
             Biquad::peaking_eq(1100.0, 3.0, 1.5, sr), // mid body
-            Biquad::highshelf(3500.0, -5.0, sr),       // dark rolloff
+            Biquad::highshelf(3500.0, -5.0, sr),     // dark rolloff
         ],
         "harmon-out" => vec![
-            Biquad::highpass(350.0,     0.7, sr),       // cut lows (stem-out is open)
+            Biquad::highpass(350.0, 0.7, sr), // cut lows (stem-out is open)
             Biquad::peaking_eq(1100.0, 10.0, 3.0, sr), // the harmon nasal peak
-            Biquad::highshelf(2800.0, -12.0, sr),       // heavy hi-cut
+            Biquad::highshelf(2800.0, -12.0, sr), // heavy hi-cut
         ],
         "harmon-in" => vec![
-            Biquad::highpass(400.0,    0.7, sr),        // more lows cut (stem closed)
-            Biquad::peaking_eq(850.0,  9.0, 3.5, sr),  // lower/tighter peak than stem-out
-            Biquad::highshelf(2500.0, -12.0, sr),       // even heavier hi-cut
+            Biquad::highpass(400.0, 0.7, sr), // more lows cut (stem closed)
+            Biquad::peaking_eq(850.0, 9.0, 3.5, sr), // lower/tighter peak than stem-out
+            Biquad::highshelf(2500.0, -12.0, sr), // even heavier hi-cut
         ],
         _ => vec![],
     }
@@ -180,13 +180,13 @@ fn fm_noise_amp(name: &str) -> f32 {
     // Breath/air noise amplitude relative to the FM signal (pre-envelope).
     // 0.0 = no noise. Applied through a 3 kHz highpass in the tick path.
     match name {
-        "sax"           => 0.025, // subtle reed hiss
-        "trumpet"       => 0.040, // air through bell
+        "sax" => 0.025,     // subtle reed hiss
+        "trumpet" => 0.040, // air through bell
         "trumpet-muted" => 0.030,
-        "trombone"      => 0.010,
-        "harmon-out"    => 0.030,
-        "harmon-in"     => 0.040,
-        _               => 0.0,
+        "trombone" => 0.010,
+        "harmon-out" => 0.030,
+        "harmon-in" => 0.040,
+        _ => 0.0,
     }
 }
 
@@ -951,8 +951,7 @@ impl AudioEngine {
                 // Preset format: "fm:<preset>:<freq>"
                 let parts: Vec<&str> = rest.splitn(2, ':').collect();
                 let preset = parts[0];
-                let carrier_freq: f64 =
-                    parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(440.0);
+                let carrier_freq: f64 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(440.0);
                 let (index, ratio, attack_time, decay_time, sustain, release_time) =
                     fm_preset(preset);
                 let peak = amp * 0.7;
@@ -1235,8 +1234,17 @@ mod engine_tests {
     #[test]
     fn fm_presets_all_produce_output() {
         let presets = [
-            "sax", "trumpet", "trumpet-muted", "trombone", "synth-brass",
-            "harmon-out", "harmon-in", "epiano", "bell", "marimba", "flute",
+            "sax",
+            "trumpet",
+            "trumpet-muted",
+            "trombone",
+            "synth-brass",
+            "harmon-out",
+            "harmon-in",
+            "epiano",
+            "bell",
+            "marimba",
+            "flute",
         ];
         for preset in &presets {
             let mut eng = AudioEngine::new_for_test(44100.0);
