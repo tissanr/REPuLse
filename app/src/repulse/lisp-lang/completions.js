@@ -58,6 +58,18 @@ export const BUILTINS = [
   { label: "square",      type: "function", detail: "(square :c4) — square wave; (square :c4 :pw 0.25) — pulse width" },
   { label: "noise",       type: "function", detail: "(noise) — white noise burst; works with amp/decay/pan" },
   { label: "fm",          type: "function", detail: "(fm :c4 :index 3 :ratio 2) — FM synthesis pair" },
+  // --- FM instrument presets ---
+  { label: "sax",           type: "keyword", detail: "(synth :sax) — FM saxophone, reed-like with bore formant shaping and breath noise" },
+  { label: "trumpet",       type: "keyword", detail: "(synth :trumpet) — FM trumpet, bright brass with bell resonance filters and air noise" },
+  { label: "trumpet-muted", type: "keyword", detail: "(synth :trumpet-muted) — FM straight-muted trumpet, nasal mid peak, cuts lows and highs" },
+  { label: "trombone",      type: "keyword", detail: "(synth :trombone) — FM trombone, warm with 120ms attack setup time" },
+  { label: "synth-brass",   type: "keyword", detail: "(synth :synth-brass) — synthetic lo-fi brass texture, inharmonic ratio for grit" },
+  { label: "harmon-out",    type: "keyword", detail: "(synth :harmon-out) — harmon mute stem out, Miles Davis nasal peak around 1.1kHz" },
+  { label: "harmon-in",     type: "keyword", detail: "(synth :harmon-in) — harmon mute stem in, more closed and buzzy than stem-out" },
+  { label: "epiano",        type: "keyword", detail: "(synth :epiano) — FM electric piano, Rhodes-style metallic shimmer" },
+  { label: "bell",          type: "keyword", detail: "(synth :bell) — FM bell, inharmonic ring over 1s" },
+  { label: "marimba",       type: "keyword", detail: "(synth :marimba) — FM marimba, percussive woody attack" },
+  { label: "flute",         type: "keyword", detail: "(synth :flute) — FM flute, breathy with slow attack" },
   // --- Karplus-Strong plucked strings ---
   { label: "western",   type: "keyword", detail: "(synth :western) — steel-string acoustic guitar, pick attack" },
   { label: "nylon",     type: "keyword", detail: "(synth :nylon) — classical nylon-string guitar, soft fingertip" },
