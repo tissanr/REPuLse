@@ -393,7 +393,7 @@
  ;; ── FM instrument presets ───────────────────────────────────────────────────
 
  :sax        {:category "synth"
-              :description "FM saxophone preset — reed-like tone with index=3, soft 20ms attack, sustained body."
+              :description "FM saxophone — index=5, bore formant peaks at ~900 Hz and ~2.2 kHz, subtle breath noise."
               :returns "event-param-map"
               :side-effects []
               :examples ["(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :sax))"
@@ -401,35 +401,52 @@
               :see-also ["trumpet" "flute" "fm" "synth"]}
 
  :trumpet    {:category "synth"
-              :description "FM trumpet preset — bright brass, high modulation index for harmonic grit."
+              :description "FM trumpet — index=5.5, bell resonance filters at 1.2/2.4/3.5 kHz, breath air noise."
               :returns "event-param-map"
               :side-effects []
               :examples ["(->> (scale :major :c4 (seq 0 2 4 7)) (synth :trumpet))"
                          "(->> (pure :c4) (synth :trumpet) (amp 0.6))"]
-              :see-also ["trumpet-muted" "trumpet-cup" "trombone" "sax" "synth"]}
+              :see-also ["trumpet-muted" "trombone" "harmon-out" "harmon-in" "sax" "synth"]}
 
  :trumpet-muted {:category "synth"
-                 :description "FM muted trumpet — inharmonic ratio (√2) and high index produce lo-fi nasal brass grit."
+                 :description "FM straight-muted trumpet — cuts lows (<250 Hz), nasal peak at 1.7 kHz, heavy hi-cut above 4 kHz."
                  :returns "event-param-map"
                  :side-effects []
                  :examples ["(->> (scale :major :c4 (seq 0 2 4)) (synth :trumpet-muted))"
                             "(->> (pure :g4) (synth :trumpet-muted) (amp 0.5))"]
-                 :see-also ["trumpet" "trumpet-cup" "trombone" "synth"]}
-
- :trumpet-cup {:category "synth"
-               :description "FM cup-muted trumpet — darker than open, brighter than harmon mute."
-               :returns "event-param-map"
-               :side-effects []
-               :examples ["(->> (scale :major :c4 (seq 0 4 7)) (synth :trumpet-cup))"]
-               :see-also ["trumpet" "trumpet-muted" "synth"]}
+                 :see-also ["trumpet" "harmon-out" "harmon-in" "synth-brass" "synth"]}
 
  :trombone   {:category "synth"
-              :description "FM trombone — warm brass with a slower 40ms attack and rounder decay."
+              :description "FM trombone — 120ms attack for the characteristic 'setup' time, warm body filters, low breath noise."
               :returns "event-param-map"
               :side-effects []
               :examples ["(->> (scale :minor :c2 (slow 2 (seq 0 3 5 7))) (synth :trombone))"
                          "(->> (pure :c3) (synth :trombone) (amp 0.7))"]
               :see-also ["trumpet" "sax" "synth"]}
+
+ :synth-brass {:category "synth"
+               :description "Synthetic lo-fi brass — inharmonic ratio (√2) and high index=7 produce gritty nasal texture. Formerly :trumpet-muted."
+               :returns "event-param-map"
+               :side-effects []
+               :examples ["(->> (scale :major :c4 (seq 0 2 4)) (synth :synth-brass))"
+                          "(->> (pure :g4) (synth :synth-brass) (amp 0.5))"]
+               :see-also ["trumpet-muted" "harmon-out" "synth"]}
+
+ :harmon-out  {:category "synth"
+               :description "Harmon mute stem out — heavy bandpass around 1.1 kHz, cuts lows and everything above 2.8 kHz. Classic Miles Davis sound."
+               :returns "event-param-map"
+               :side-effects []
+               :examples ["(->> (scale :minor :c4 (seq 0 3 5 7)) (synth :harmon-out))"
+                          "(->> (pure :d4) (synth :harmon-out) (slow 2) (amp 0.6))"]
+               :see-also ["harmon-in" "trumpet-muted" "synth"]}
+
+ :harmon-in   {:category "synth"
+               :description "Harmon mute stem in — tighter peak at ~850 Hz, heavier hi-cut than stem-out. More closed, buzzier character."
+               :returns "event-param-map"
+               :side-effects []
+               :examples ["(->> (scale :minor :c4 (seq 0 3 5 7)) (synth :harmon-in))"
+                          "(->> (pure :d4) (synth :harmon-in) (slow 2) (amp 0.6))"]
+               :see-also ["harmon-out" "trumpet-muted" "synth"]}
 
  :epiano     {:category "synth"
               :description "FM electric piano (Rhodes-style) — high modulator ratio (14×) gives metallic shimmer; zero sustain means it fades naturally after the transient."

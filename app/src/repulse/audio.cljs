@@ -418,8 +418,8 @@
                  ;; JS fallback: sine (FM needs two connected oscillators — WASM only)
                  (make-sine ac t hz decay-v amp-v attack-v pan-v dest)))
 
-           (#{:sax :trumpet :trumpet-muted :trumpet-cup :trombone
-              :epiano :bell :marimba :flute} synth)
+           (#{:sax :trumpet :trumpet-muted :trombone :synth-brass
+              :harmon-out :harmon-in :epiano :bell :marimba :flute} synth)
            (let [hz     (if (theory/note-keyword? note) (theory/note->hz note) (double note))
                  preset (clojure.core/name synth)]
              (or (when-not offline?

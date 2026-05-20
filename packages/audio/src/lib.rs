@@ -123,16 +123,70 @@ fn fm_preset(name: &str) -> (f32, f64, f32, f32, f32, f32) {
     // For zero-sustain voices (bell, marimba, epiano), decay_time carries the full ring-out;
     // release_time is minimal because the envelope is already at zero after decay.
     match name {
-        "sax" => (3.0, 1.0, 0.02, 0.10, 0.70, 0.15),
-        "trumpet" => (4.5, 1.0, 0.01, 0.05, 0.80, 0.10),
-        "trumpet-muted" => (7.0, 1.414, 0.01, 0.04, 0.60, 0.08),
-        "trumpet-cup" => (5.5, 1.0, 0.02, 0.06, 0.70, 0.10),
-        "trombone" => (3.5, 1.0, 0.04, 0.08, 0.75, 0.20),
-        "epiano" => (1.5, 14.0, 0.005, 0.80, 0.0, 0.01),
-        "bell" => (5.0, 1.414, 0.001, 1.20, 0.0, 0.01),
-        "marimba" => (2.0, 3.5, 0.001, 0.35, 0.0, 0.01),
-        "flute" => (1.8, 1.0, 0.06, 0.05, 0.85, 0.10),
-        _ => (3.0, 1.0, 0.01, 0.10, 0.70, 0.15),
+        "sax"          => (5.0, 1.0,   0.020, 0.10, 0.70, 0.15),
+        "trumpet"      => (5.5, 1.0,   0.010, 0.05, 0.80, 0.10),
+        "trumpet-muted"=> (4.0, 1.0,   0.015, 0.08, 0.70, 0.12),
+        "trombone"     => (3.5, 1.0,   0.120, 0.08, 0.75, 0.20),
+        "synth-brass"  => (7.0, 1.414, 0.010, 0.04, 0.60, 0.08),
+        "harmon-out"   => (3.5, 1.0,   0.015, 0.06, 0.75, 0.15),
+        "harmon-in"    => (5.0, 1.0,   0.010, 0.05, 0.70, 0.12),
+        "epiano"       => (1.5, 14.0,  0.005, 0.80, 0.0,  0.01),
+        "bell"         => (5.0, 1.414, 0.001, 1.20, 0.0,  0.01),
+        "marimba"      => (2.0, 3.5,   0.001, 0.35, 0.0,  0.01),
+        "flute"        => (1.8, 1.0,   0.060, 0.05, 0.85, 0.10),
+        _              => (3.0, 1.0,   0.010, 0.10, 0.70, 0.15),
+    }
+}
+
+fn fm_body_filters(name: &str, sr: f32) -> Vec<Biquad> {
+    // Per-preset formant chain applied post-FM to shape bore/bell resonances.
+    // Empty vec = no shaping (epiano, bell, marimba, flute, synth-brass are fine as-is).
+    match name {
+        "sax" => vec![
+            Biquad::peaking_eq(900.0,  6.0, 2.0, sr), // reed + body formant
+            Biquad::peaking_eq(2200.0, 4.0, 2.5, sr), // bore resonance
+            Biquad::highshelf(5000.0, -5.0, sr),       // soften top
+        ],
+        "trumpet" => vec![
+            Biquad::peaking_eq(1200.0, 5.0, 1.5, sr), // bell throat
+            Biquad::peaking_eq(2400.0, 6.0, 2.0, sr), // bell mouth resonance
+            Biquad::peaking_eq(3500.0, 3.0, 2.5, sr), // high partial emphasis
+        ],
+        "trumpet-muted" => vec![
+            Biquad::highpass(250.0,    0.7, sr),       // mute blocks lows
+            Biquad::peaking_eq(1700.0, 7.0, 2.5, sr), // nasal mid peak
+            Biquad::highshelf(4000.0, -8.0, sr),       // mute cuts highs
+        ],
+        "trombone" => vec![
+            Biquad::peaking_eq(350.0,  4.0, 2.0, sr), // fundamental warmth
+            Biquad::peaking_eq(1100.0, 3.0, 1.5, sr), // mid body
+            Biquad::highshelf(3500.0, -5.0, sr),       // dark rolloff
+        ],
+        "harmon-out" => vec![
+            Biquad::highpass(350.0,     0.7, sr),       // cut lows (stem-out is open)
+            Biquad::peaking_eq(1100.0, 10.0, 3.0, sr), // the harmon nasal peak
+            Biquad::highshelf(2800.0, -12.0, sr),       // heavy hi-cut
+        ],
+        "harmon-in" => vec![
+            Biquad::highpass(400.0,    0.7, sr),        // more lows cut (stem closed)
+            Biquad::peaking_eq(850.0,  9.0, 3.5, sr),  // lower/tighter peak than stem-out
+            Biquad::highshelf(2500.0, -12.0, sr),       // even heavier hi-cut
+        ],
+        _ => vec![],
+    }
+}
+
+fn fm_noise_amp(name: &str) -> f32 {
+    // Breath/air noise amplitude relative to the FM signal (pre-envelope).
+    // 0.0 = no noise. Applied through a 3 kHz highpass in the tick path.
+    match name {
+        "sax"           => 0.025, // subtle reed hiss
+        "trumpet"       => 0.040, // air through bell
+        "trumpet-muted" => 0.030,
+        "trombone"      => 0.010,
+        "harmon-out"    => 0.030,
+        "harmon-in"     => 0.040,
+        _               => 0.0,
     }
 }
 
@@ -278,6 +332,10 @@ enum Voice {
         sustain: f32,
         release_time: f32,
         env_phase: f32,
+        body_filters: Vec<Biquad>,
+        noise_amp: f32,
+        noise_state: u32,
+        noise_hpf: Biquad,
     },
     KarplusStrong {
         buf: Vec<f32>,
@@ -431,6 +489,10 @@ impl Voice {
                 sustain,
                 release_time,
                 env_phase,
+                body_filters,
+                noise_amp,
+                noise_state,
+                noise_hpf,
             } => {
                 let dt = 1.0 / sr;
                 let ep = *env_phase;
@@ -449,10 +511,12 @@ impl Voice {
                 };
                 *env_phase += dt;
                 let mod_sig = (*mod_phase * TAU).sin() as f32;
-                let carrier_sig = (*carrier_phase * TAU + (*index * mod_sig) as f64).sin() as f32;
+                let carrier_raw = (*carrier_phase * TAU + (*index * mod_sig) as f64).sin() as f32;
                 *carrier_phase += *carrier_freq / sr as f64;
                 *mod_phase += *mod_freq / sr as f64;
-                carrier_sig * *gain
+                let tonal = body_filters.iter_mut().fold(carrier_raw, |s, f| f.tick(s));
+                let noise_out = noise_hpf.tick(lcg_next(noise_state)) * *noise_amp;
+                (tonal + noise_out) * *gain
             }
             Voice::KarplusStrong {
                 buf,
@@ -878,6 +942,10 @@ impl AudioEngine {
                     sustain: 0.5,
                     release_time: p.decay * 0.6,
                     env_phase: 0.0,
+                    body_filters: vec![],
+                    noise_amp: 0.0,
+                    noise_state: seed,
+                    noise_hpf: Biquad::highpass(3000.0, 0.7, sr),
                 }
             } else {
                 // Preset format: "fm:<preset>:<freq>"
@@ -901,6 +969,10 @@ impl AudioEngine {
                     sustain,
                     release_time,
                     env_phase: 0.0,
+                    body_filters: fm_body_filters(preset, sr),
+                    noise_amp: fm_noise_amp(preset),
+                    noise_state: seed,
+                    noise_hpf: Biquad::highpass(3000.0, 0.7, sr),
                 }
             }
         } else if let Some(rest) = value.strip_prefix("ks:") {
@@ -1163,8 +1235,8 @@ mod engine_tests {
     #[test]
     fn fm_presets_all_produce_output() {
         let presets = [
-            "sax", "trumpet", "trumpet-muted", "trumpet-cup", "trombone", "epiano", "bell",
-            "marimba", "flute",
+            "sax", "trumpet", "trumpet-muted", "trombone", "synth-brass",
+            "harmon-out", "harmon-in", "epiano", "bell", "marimba", "flute",
         ];
         for preset in &presets {
             let mut eng = AudioEngine::new_for_test(44100.0);

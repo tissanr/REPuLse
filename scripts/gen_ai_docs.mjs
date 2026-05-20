@@ -63,8 +63,26 @@ const completionsByLabel = new Map(BUILTINS.map((b) => [b.label, b]));
 
 // ── 3. Load builtin_meta.edn — hand-rolled parser for the subset we use ──────
 function parseEdn(src) {
-  // Strip line comments
-  src = src.replace(/;[^\n]*/g, "");
+  // Strip line comments — must skip string contents to avoid stripping `;` inside strings
+  {
+    let out = "", inStr = false;
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i];
+      if (inStr) {
+        out += c;
+        if (c === "\\") out += src[++i];
+        else if (c === '"') inStr = false;
+      } else if (c === '"') {
+        inStr = true; out += c;
+      } else if (c === ";") {
+        while (i < src.length && src[i] !== "\n") i++;
+        i--;
+      } else {
+        out += c;
+      }
+    }
+    src = out;
+  }
 
   let pos = 0;
 
@@ -166,7 +184,7 @@ const hoverSrc = readFileSync(hoverPath, "utf8");
 // Strip CM6 imports + exports, extract DOCS map
 const hoverStripped = hoverSrc
   .replace(/^import.*?;?\s*$/gm, "")
-  .replace(/^export\s+const\s+lispHoverTooltip.*[\s\S]*$/m, "")
+  .replace(/\nexport\s+const\s+lispHoverTooltip[\s\S]*/, "")
   .replace(/^export\s+/gm, "");
 
 let DOCS;
