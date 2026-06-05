@@ -26,8 +26,8 @@
     "@lezer/generator": "^1.8.0",
     "@playwright/test": "^1.59.1",
     "@types/node": "^20.0.0",
-    "@vercel/node": "^5.7.12",
-    "shadow-cljs": "^3.4.10"
+    "@vercel/node": "^5.8.12",
+    "shadow-cljs": "^3.4.11"
   },
   "dependencies": {
     "@codemirror/lint": "^6.9.6",
