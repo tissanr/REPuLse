@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { originAllowed } from "./_lib";
 
 /**
  * /api/ai-stream — thin server-side proxy for AI provider streaming requests.
@@ -47,6 +48,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  // Browsers always send an Origin header on POST. Requiring an allowlisted
+  // origin stops third-party websites from relaying their users' traffic
+  // through this proxy. (Non-browser callers can reach the providers
+  // directly, so this loses nothing.)
+  const origin = req.headers.origin;
+  if (!origin || !originAllowed(origin)) {
+    return res.status(403).json({ error: "Origin not allowed" });
   }
 
   const body = req.body as Record<string, unknown> | undefined;

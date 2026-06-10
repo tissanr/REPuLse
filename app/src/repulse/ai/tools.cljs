@@ -9,7 +9,7 @@
             [repulse.ai.settings :as settings]
             [repulse.ai.injection-guard :as injection-guard]
             [repulse.ai.undo :as undo]
-            [clojure.string :as str]))
+            [repulse.ui.html :refer [escape-html]]))
 
 ;;; eval-preview dependency injected from eval-orchestrator to avoid circular deps
 (defonce eval-preview-fn (atom nil))
@@ -52,16 +52,10 @@
               (str "<div class=\"ai-proposal-header\">AI proposed edit</div>"
                    "<div class=\"ai-proposal-diff\">"
                    "<div class=\"ai-proposal-before\"><span class=\"ai-diff-label\">before</span><pre>"
-                   (-> before
-                       (str/replace "&" "&amp;")
-                       (str/replace "<" "&lt;")
-                       (str/replace ">" "&gt;"))
+                   (escape-html before)
                    "</pre></div>"
                    "<div class=\"ai-proposal-after\"><span class=\"ai-diff-label\">after</span><pre>"
-                   (-> after
-                       (str/replace "&" "&amp;")
-                       (str/replace "<" "&lt;")
-                       (str/replace ">" "&gt;"))
+                   (escape-html after)
                    "</pre></div>"
                    "</div>"
                    "<div class=\"ai-proposal-btns\">"
@@ -167,8 +161,9 @@
 (defn- exec-query-track [{:keys [name]}]
   {:ok true :track (query-track (keyword name))})
 
-(defn- snippets-ready []
+(defn- snippets-ready
   "Return a Promise that resolves once the snippet library is loaded."
+  []
   (if @snippets/loaded?
     (js/Promise.resolve nil)
     (js/Promise.

@@ -1,34 +1,24 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createClient } from "@supabase/supabase-js";
+import { extractBearer, isUuid, setCors, userClient } from "../../_lib";
 
-function userClient(jwt: string) {
-  return createClient(
-    new URL(process.env.SUPABASE_URL!).origin,
-    process.env.SUPABASE_ANON_KEY!,
-    { global: { headers: { Authorization: `Bearer ${jwt}` } } }
-  );
-}
+const MAX_REASON = 500;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  setCors(req, res, "POST, OPTIONS");
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
   }
 
-  const auth = req.headers["authorization"];
-  if (!auth?.startsWith("Bearer ")) {
+  const jwt = extractBearer(req);
+  if (!jwt) {
     res.status(401).json({ error: "Authentication required" });
     return;
   }
-  const jwt = auth.slice(7);
 
-  const snippetId = req.query.id as string;
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!snippetId || !UUID_RE.test(snippetId)) {
+  const snippetId = req.query.id;
+  if (!isUuid(snippetId)) {
     res.status(400).json({ error: "Invalid snippet id (must be a UUID)" });
     return;
   }
@@ -41,6 +31,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { reason } = req.body ?? {};
+  if (reason != null && (typeof reason !== "string" || reason.length > MAX_REASON)) {
+    res.status(400).json({ error: `reason must be a string of ≤ ${MAX_REASON} characters` });
+    return;
+  }
 
   const { error } = await sb
     .from("reports")

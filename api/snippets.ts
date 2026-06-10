@@ -1,25 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createClient } from "@supabase/supabase-js";
-
-// ── CORS ──────────────────────────────────────────────────────────────────────
-
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-
-function setCors(req: VercelRequest, res: VercelResponse) {
-  const origin = req.headers.origin ?? "";
-  const allowed =
-    ALLOWED_ORIGINS.includes(origin) ||
-    /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
-    /^https:\/\/[a-z0-9-]+-tissanr\.vercel\.app$/.test(origin);
-
-  res.setHeader("Access-Control-Allow-Origin", allowed ? origin : "null");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
-  res.setHeader("Vary", "Origin");
-}
+import { anonClient, extractBearer, setCors, userClient } from "./_lib";
 
 // ── Input limits ──────────────────────────────────────────────────────────────
 
@@ -29,31 +9,6 @@ const MAX_CODE        = 32_000;
 const MAX_TAG_LEN     = 40;
 const MAX_TAGS        = 20;
 const MAX_SEARCH_LEN  = 200;
-
-// ── Supabase clients ──────────────────────────────────────────────────────────
-
-// Strip any accidental path suffix (e.g. /rest/v1) — createClient needs the bare origin.
-function supabaseOrigin() {
-  return new URL(process.env.SUPABASE_URL!).origin;
-}
-
-function serviceClient() {
-  return createClient(supabaseOrigin(), process.env.SUPABASE_SERVICE_ROLE_KEY!);
-}
-
-function userClient(jwt: string) {
-  return createClient(
-    supabaseOrigin(),
-    process.env.SUPABASE_ANON_KEY!,
-    { global: { headers: { Authorization: `Bearer ${jwt}` } } }
-  );
-}
-
-function extractBearer(req: VercelRequest): string | null {
-  const auth = req.headers["authorization"];
-  if (!auth || !auth.startsWith("Bearer ")) return null;
-  return auth.slice(7);
-}
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
@@ -65,8 +20,17 @@ function trendingScore(row: { weighted_rating: number; usage_count: number; crea
   return row.weighted_rating * Math.exp(-ageDays / 7) + row.usage_count * 0.1 * Math.exp(-ageDays / 14);
 }
 
+// PostgREST .or() filter strings are comma/paren-delimited; strip those
+// structural characters (plus quotes and backslashes) from user input so it
+// cannot alter the filter expression.
+function sanitizeFilterValue(s: string): string {
+  return s.replace(/[,()"\\]/g, " ").trim();
+}
+
 async function handleGet(req: VercelRequest, res: VercelResponse) {
-  const sb = serviceClient();
+  // Anon client: snippets/profiles are publicly readable under RLS, and not
+  // using the service role means a filter-injection bug cannot bypass RLS.
+  const sb = anonClient();
   const rawTag = typeof req.query.tag    === "string" ? req.query.tag    : undefined;
   const rawQ   = typeof req.query.q      === "string" ? req.query.q      : undefined;
   const author = typeof req.query.author === "string" ? req.query.author : undefined;
@@ -95,7 +59,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
     .order("created_at",      { ascending: false });
 
   if (tag) query = query.contains("tags", [tag]);
-  if (q)   query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
+  const safeQ = q ? sanitizeFilterValue(q) : "";
+  if (safeQ) query = query.or(`title.ilike.%${safeQ}%,description.ilike.%${safeQ}%`);
 
   // Author filter: find profile IDs matching display_name
   if (author) {
@@ -194,7 +159,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setCors(req, res);
+  setCors(req, res, "GET, POST, OPTIONS");
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
 
   if (req.method === "GET")  return handleGet(req, res);

@@ -7,6 +7,7 @@
             [repulse.ai.budget :as budget]
             [repulse.ai.undo :as undo]
             [repulse.ui.editor :as editor]
+            [repulse.ui.html :refer [escape-html]]
             [clojure.string :as str]))
 
 ;;; Forward declarations
@@ -43,15 +44,6 @@
 ;; ── DOM helper ────────────────────────────────────────────────────────────────
 
 (defn- el [id] (.getElementById js/document id))
-
-;; ── Escape helper ─────────────────────────────────────────────────────────────
-
-(defn- escape-html [s]
-  (-> (str s)
-      (str/replace "&" "&amp;")
-      (str/replace "<" "&lt;")
-      (str/replace ">" "&gt;")
-      (str/replace "\"" "&quot;")))
 
 ;; ── Insert code into editor ───────────────────────────────────────────────────
 
