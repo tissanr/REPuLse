@@ -331,9 +331,9 @@
                      "</div>"
                      ;; Undo button — only shown when auto-apply is on and stack has entries
                      (when (and @settings/auto-apply? (pos? (undo/stack-size)))
-                       "<div class=\"ai-undo-bar\">"
-                       "<button id=\"ai-revert-btn\" class=\"ai-btn ai-btn--secondary\">&#8617; Revert last turn</button>"
-                       "</div>")
+                       (str "<div class=\"ai-undo-bar\">"
+                            "<button id=\"ai-revert-btn\" class=\"ai-btn ai-btn--secondary\">&#8617; Revert last turn</button>"
+                            "</div>"))
                      "<div id=\"ai-messages\" class=\"ai-messages\">"
                      (str/join "" (map render-message @messages))
                      (when @pending
@@ -356,7 +356,7 @@
                             (when @log-expanded?
                               (str "<div class=\"ai-log-entries\">"
                                    (str/join ""
-                                     (map (fn [{:keys [tool ts]}]
+                                     (map (fn [{:keys [tool]}]
                                             (str "<div class=\"ai-log-entry\">"
                                                  (escape-html (str tool)) "</div>"))
                                           (take-last 10 @activity-log)))
