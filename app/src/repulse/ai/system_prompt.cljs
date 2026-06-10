@@ -3,8 +3,7 @@
             [repulse.fx :as fx]
             [repulse.samples :as samples]
             [repulse.session :as session]
-            [repulse.ai.settings :as settings]
-            [clojure.string :as str]))
+            [repulse.ai.settings :as settings]))
 
 (defn build
   "Build the system prompt string. builtins-summary is a compact preloaded string

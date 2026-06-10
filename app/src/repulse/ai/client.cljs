@@ -25,7 +25,7 @@
       (cond
         (= role "tool")
         (conj acc {:role    "user"
-                   :content (mapv (fn [{:keys [id name result]}]
+                   :content (mapv (fn [{:keys [id result]}]
                                     {:type        "tool_result"
                                      :tool_use_id id
                                      :content     (if (string? result) result (js/JSON.stringify (clj->js result)))})
@@ -54,7 +54,7 @@
     (fn [acc {:keys [role content tool-calls results]}]
       (cond
         (= role "tool")
-        (into acc (mapv (fn [{:keys [id name result]}]
+        (into acc (mapv (fn [{:keys [id result]}]
                           {:role         "tool"
                            :tool_call_id id
                            :content      (if (string? result) result (js/JSON.stringify (clj->js result)))})
