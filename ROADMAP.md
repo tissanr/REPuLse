@@ -1440,6 +1440,28 @@ See full spec: [PROMPTS/PHASE-AI2.md](PROMPTS/PHASE-AI2.md)
 
 ---
 
+## Phase AI2b — More AI Providers 📋 *planned*
+
+Extend the assistant panel's bring-your-own-key provider list with OpenRouter
+(multi-model aggregator — one key for every major model family, including free-tier
+models) and Venice.ai (privacy-focused inference). Both are OpenAI-compatible — no new
+wire format, no new dependencies.
+
+**Key additions:**
+- `app/src/repulse/ai/client.cljs` — `"openrouter"` and `"venice"` branches in
+  `make-request` reusing `openai-like-request`; both added to the openai-like provider
+  groups in `text-from-json`; OpenRouter `HTTP-Referer`/`X-Title` attribution headers
+- `app/src/repulse/ai/settings.cljs` — `default-models` entries (`openrouter/auto`,
+  Venice default verified against their live model list)
+- `app/src/repulse/ui/assistant_panel.cljs` — provider dropdown gains both entries
+- `api/ai-stream.ts` — `openrouter.ai` and `api.venice.ai` added to `ALLOWED_HOSTS`
+- `docs/USAGE.md` — provider table, default models, key-signup links, Venice
+  tool-support caveat
+
+See full spec: [PROMPTS/PHASE-AI2b.md](PROMPTS/PHASE-AI2b.md)
+
+---
+
 ## Phase AI3 — Tool-Using Agent ✅ *delivered*
 
 Promote the assistant from chat to agent: it can read the editor buffer, query session
