@@ -55,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // through this proxy. (Non-browser callers can reach the providers
   // directly, so this loses nothing.)
   const origin = req.headers.origin;
-  if (!origin || !originAllowed(origin)) {
+  if (!origin || !originAllowed(origin, req)) {
     return res.status(403).json({ error: "Origin not allowed" });
   }
 
