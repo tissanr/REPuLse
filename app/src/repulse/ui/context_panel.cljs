@@ -11,7 +11,8 @@
             [repulse.midi :as midi]
             [repulse.samples :as samples]
             [repulse.bus :as bus]
-            [repulse.env.builtins :as builtins]))
+            [repulse.env.builtins :as builtins]
+            [repulse.ui.html :refer [escape-html]]))
 
 (defn- el [id] (.getElementById js/document id))
 
@@ -30,13 +31,6 @@
   (if (number? v)
     (if (== v (Math/round v)) (str (int v)) (.toFixed v 2))
     (str v)))
-
-(defn- escape-html [s]
-  (-> (str s)
-      (str/replace "&" "&amp;")
-      (str/replace "<" "&lt;")
-      (str/replace ">" "&gt;")
-      (str/replace "\"" "&quot;")))
 
 ;;; Slider configuration constants
 

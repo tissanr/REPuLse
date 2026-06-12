@@ -25,7 +25,7 @@
       (cond
         (= role "tool")
         (conj acc {:role    "user"
-                   :content (mapv (fn [{:keys [id name result]}]
+                   :content (mapv (fn [{:keys [id result]}]
                                     {:type        "tool_result"
                                      :tool_use_id id
                                      :content     (if (string? result) result (js/JSON.stringify (clj->js result)))})
@@ -54,7 +54,7 @@
     (fn [acc {:keys [role content tool-calls results]}]
       (cond
         (= role "tool")
-        (into acc (mapv (fn [{:keys [id name result]}]
+        (into acc (mapv (fn [{:keys [id result]}]
                           {:role         "tool"
                            :tool_call_id id
                            :content      (if (string? result) result (js/JSON.stringify (clj->js result)))})
@@ -221,6 +221,19 @@
       :else (when-let [content (text-from-json provider obj)]
               {:type :delta :text content}))))
 
+;; ── HTTP error helpers ────────────────────────────────────────────────────────
+
+(defn- http-error-text
+  "Format a non-2xx response as a user-facing error string, appending an
+   actionable hint for known rejections."
+  [status body-text]
+  (str "HTTP " status " — " body-text
+       (when (and (= 403 status)
+                  (str/includes? (str body-text) "Origin not allowed"))
+         (str "\nHint: the AI proxy rejected this site's origin. "
+              "If the app runs on a new domain, add it to the ALLOWED_ORIGINS "
+              "environment variable of the Vercel deployment."))))
+
 ;; ── Streaming fetch ───────────────────────────────────────────────────────────
 
 (defn stream!
@@ -300,7 +313,7 @@
             ;; Non-2xx: read body text for a useful error message
             (-> (.text resp)
                 (.then (fn [body-text]
-                         (on-error (str "HTTP " (.-status resp) " — " body-text))))))))
+                         (on-error (http-error-text (.-status resp) body-text))))))))
       (.catch
         (fn [err]
           (when-not (= "AbortError" (.-name err))
@@ -399,11 +412,32 @@
                        :headers #js {"content-type" "application/json"}
                        :body    proxy-body})
         (.then (fn [resp]
-                 (if (.-ok resp)
-                   (.json resp)
+                 (cond
+                   (.-ok resp)
+                   (-> (.json resp) (.then #(parse-complete-response provider %)))
+                   ;; Return a CLJS map so complete-with-retry! can detect 429.
+                   (= 429 (.-status resp))
+                   (js/Promise.resolve {:rate-limited true})
+                   :else
                    (-> (.text resp)
-                       (.then (fn [t] (js/Promise.reject (str "HTTP " (.-status resp) " — " t))))))))
-        (.then (fn [obj]
-                 (parse-complete-response provider obj)))
+                       (.then (fn [t] (js/Promise.reject (http-error-text (.-status resp) t))))))))
         (.catch (fn [err]
                   {:content (str "Error: " (if (string? err) err (or (.-message err) "unknown error")))})))))
+
+(defn complete-with-retry!
+  "Like complete! but retries on HTTP 429 with exponential back-off.
+   Max 3 attempts total. Surfaces an inline error after all retries are exhausted."
+  [system messages tools]
+  (letfn [(attempt [n]
+            (-> (complete! system messages tools)
+                (.then (fn [result]
+                         (if (and (:rate-limited result) (< n 3))
+                           (js/Promise.
+                             (fn [resolve _reject]
+                               (js/setTimeout
+                                 (fn [] (.then (attempt (inc n)) resolve))
+                                 (* 1000 (js/Math.pow 2 n)))))
+                           (if (:rate-limited result)
+                             {:content "Rate limited — all retry attempts exhausted. Try again shortly."}
+                             result))))))]
+    (attempt 0)))

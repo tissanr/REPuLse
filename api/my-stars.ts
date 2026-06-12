@@ -1,9 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createClient } from "@supabase/supabase-js";
-
-function supabaseOrigin() {
-  return new URL(process.env.SUPABASE_URL!).origin;
-}
+import { extractBearer, setCors, userClient } from "./_lib";
 
 /** Extract the `sub` (user UUID) from a JWT payload without verifying the
  *  signature.  Security: the JWT is forwarded to PostgREST in the Authorization
@@ -20,30 +16,19 @@ function subFromJwt(token: string): string | null {
   }
 }
 
-function userClient(jwt: string) {
-  return createClient(
-    supabaseOrigin(),
-    process.env.SUPABASE_ANON_KEY!,
-    { global: { headers: { Authorization: `Bearer ${jwt}` } } }
-  );
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  setCors(req, res, "GET, OPTIONS");
   if (req.method === "OPTIONS") { res.status(204).end(); return; }
   if (req.method !== "GET") {
     res.status(405).json({ error: "Method not allowed" });
     return;
   }
 
-  const authHeader = req.headers["authorization"];
-  if (!authHeader?.startsWith("Bearer ")) {
+  const jwt = extractBearer(req);
+  if (!jwt) {
     res.status(401).json({ error: "Authentication required" });
     return;
   }
-  const jwt = authHeader.slice(7);
 
   const userId = subFromJwt(jwt);
   if (!userId) {

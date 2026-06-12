@@ -7,6 +7,9 @@
             [repulse.snippets :as snippets]
             [repulse.samples :as samples]
             [repulse.ai.settings :as settings]
+            [repulse.ai.injection-guard :as injection-guard]
+            [repulse.ai.undo :as undo]
+            [repulse.ui.html :refer [escape-html]]
             [clojure.string :as str]))
 
 ;;; eval-preview dependency injected from eval-orchestrator to avoid circular deps
@@ -50,16 +53,10 @@
               (str "<div class=\"ai-proposal-header\">AI proposed edit</div>"
                    "<div class=\"ai-proposal-diff\">"
                    "<div class=\"ai-proposal-before\"><span class=\"ai-diff-label\">before</span><pre>"
-                   (-> before
-                       (str/replace "&" "&amp;")
-                       (str/replace "<" "&lt;")
-                       (str/replace ">" "&gt;"))
+                   (escape-html before)
                    "</pre></div>"
                    "<div class=\"ai-proposal-after\"><span class=\"ai-diff-label\">after</span><pre>"
-                   (-> after
-                       (str/replace "&" "&amp;")
-                       (str/replace "<" "&lt;")
-                       (str/replace ">" "&gt;"))
+                   (escape-html after)
                    "</pre></div>"
                    "</div>"
                    "<div class=\"ai-proposal-btns\">"
@@ -131,8 +128,58 @@
     {:ok true :text (.. view -state -doc (toString))}
     {:ok false :error "Editor not initialized"}))
 
-(defn- exec-propose-edit [{:keys [from to replacement]}]
-  (show-diff-overlay! from to replacement))
+(defn- count-occurrences [doc match]
+  (loop [idx 0 n 0]
+    (let [i (.indexOf doc match idx)]
+      (if (neg? i) n (recur (+ i (count match)) (inc n))))))
+
+(defn- line-at
+  "1-based line number of character index `idx` in doc."
+  [doc idx]
+  (inc (count (re-seq #"\n" (subs doc 0 idx)))))
+
+(defn- apply-or-overlay!
+  "Apply the edit immediately (auto-apply) or show the diff overlay.
+   Returns the tool result (or a Promise of it)."
+  [view from to replacement]
+  (let [line (line-at (.. view -state -doc (toString)) from)]
+    (if @settings/auto-apply?
+      (do
+        (undo/record-pre-edit!)
+        (.dispatch view #js {:changes #js {:from from :to to :insert replacement}})
+        (js/Promise.resolve {:ok true :applied true :auto-applied true :line line}))
+      (show-diff-overlay! from to replacement))))
+
+(defn- exec-propose-edit
+  "Edits are anchored by exact text match, never by character offsets or line
+   numbers — models cannot compute those reliably against a buffer they saw
+   once as plain text (and the <untrusted> wrapper would skew any count)."
+  [{:keys [match replacement]}]
+  (if-let [v @editor/editor-view]
+    (let [doc   (.. v -state -doc (toString))
+          match (str match)]
+      (if (str/blank? match)
+        ;; Empty match — append to the end of the buffer
+        (apply-or-overlay! v (count doc) (count doc)
+                           (str (when (seq doc) "\n\n") replacement))
+        (let [n (count-occurrences doc match)]
+          (cond
+            (zero? n)
+            {:ok false
+             :error (str "match not found in buffer — call read_buffer and copy the text "
+                         "to replace exactly, including whitespace and newlines "
+                         "(without the <untrusted> wrapper)")}
+
+            (> n 1)
+            {:ok false
+             :error (str "match is ambiguous — found " n " occurrences; "
+                         "include more surrounding lines so it matches exactly once")}
+
+            :else
+            (let [from (.indexOf doc match)
+                  to   (+ from (count match))]
+              (apply-or-overlay! v from to replacement))))))
+    {:ok false :error "Editor not initialized"}))
 
 (defn- exec-eval-preview [{:keys [code]}]
   (js/Promise.
@@ -148,8 +195,9 @@
 (defn- exec-query-track [{:keys [name]}]
   {:ok true :track (query-track (keyword name))})
 
-(defn- snippets-ready []
+(defn- snippets-ready
   "Return a Promise that resolves once the snippet library is loaded."
+  []
   (if @snippets/loaded?
     (js/Promise.resolve nil)
     (js/Promise.
@@ -291,10 +339,17 @@
      :execute     exec-read-buffer}
 
     :propose_edit
-    {:description "Propose a text edit to the editor buffer. Shows a diff overlay; the user must click Apply."
-     :params      {:from        {:type "integer" :description "Start character offset (inclusive)"}
-                   :to          {:type "integer" :description "End character offset (exclusive)"}
-                   :replacement {:type "string"  :description "Replacement text"}}
+    {:description (str "Propose a text edit to the editor buffer, anchored by exact text match. "
+                       "Replaces `match` (text copied verbatim from read_buffer) with `replacement`. "
+                       "Fails if `match` is missing or appears more than once. "
+                       "An empty `match` appends `replacement` at the end of the buffer.")
+     :params      {:match       {:type "string"
+                                 :description (str "Exact text currently in the buffer to replace — copy it "
+                                                   "verbatim from read_buffer including whitespace and newlines, "
+                                                   "without the <untrusted> wrapper. Must be unique in the buffer; "
+                                                   "include surrounding lines if needed. "
+                                                   "Empty string appends instead of replacing.")}
+                   :replacement {:type "string" :description "Replacement text"}}
      :execute     exec-propose-edit}
 
     :eval_preview
@@ -379,13 +434,13 @@
 ;; ── Dispatch ─────────────────────────────────────────────────────────────────
 
 (defn execute!
-  "Execute a tool call. Returns a Promise resolving to the result map."
+  "Execute a tool call. Returns a Promise resolving to the result map.
+   All results are passed through the injection guard before returning."
   [{:keys [name args]}]
   (let [k   (keyword name)
         {:keys [execute]} (get registry k)]
     (if execute
       (let [result (execute (or args {}))]
-        (if (instance? js/Promise result)
-          result
-          (js/Promise.resolve result)))
+        (-> (if (instance? js/Promise result) result (js/Promise.resolve result))
+            (.then (fn [r] (injection-guard/guard-tool-result k r)))))
       (js/Promise.resolve {:ok false :error (str "Unknown tool: " name)}))))

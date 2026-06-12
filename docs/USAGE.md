@@ -1319,7 +1319,7 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 | Tool | What it does |
 |---|---|
 | `read_buffer` | Reads the full editor text |
-| `propose_edit` | Shows a before/after diff card with **Apply** / **Reject** buttons |
+| `propose_edit` | Replaces an exact-text match in the buffer (or appends when the match is empty); shows a before/after diff card with **Apply** / **Reject** buttons |
 | `eval_preview` | Evaluates code silently and returns event count + duration (no audio) |
 | `query_session` | Returns BPM, track names, muted tracks, global FX |
 | `query_track` | Returns details for one track (mute state, FX chain) |
@@ -1334,15 +1334,28 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 
 **Proposed edits:** When the agent calls `propose_edit`, a card appears below the editor showing the before and after text. Click **Apply** to commit the change, or **Reject** to tell the agent the suggestion was declined (it will try again with a revised proposal).
 
+**Auto-apply edits:** Enable **Auto-apply edits** in settings to have `propose_edit` apply immediately without the overlay. When auto-apply is on, a **↩ Revert last turn** bar appears; clicking it restores the editor to exactly what it was before the most recent assistant turn. The undo stack holds up to 20 turns.
+
 **Cancel:** A **cancel** button replaces the **send** button while an agent turn is in progress. Clicking it stops the loop immediately and dismisses any pending overlay.
 
 **Code blocks** in assistant responses include an **↓ insert** button that appends the code to the editor without replacing existing content.
+
+**Budget:** The assistant tracks token and tool-call usage across all turns in the session. A usage badge in the panel header shows `used/limit tok · used/limit calls`. A soft warning appears at 50%; the agent stops at 100% with a message prompting you to raise the limit.
+
+**Rate limiting:** HTTP 429 responses from any provider trigger automatic exponential back-off retry (up to 3 attempts). If all retries fail, an error message is shown inline.
+
+**Prompt-injection protection:** Text from community snippets and the editor buffer is wrapped in `<untrusted>` tags before reaching the model. The system prompt instructs the model never to follow commands inside those tags.
+
+**Activity log:** Once tool calls have been made, a collapsible **🔍 tool log** section appears at the bottom of the panel showing the last 50 calls. An **Export log** button downloads the log as JSON. **Reset session** clears both the log and the session budget counters.
 
 **Settings** (accessible via the ⚙ button):
 - **Provider** — `anthropic`, `openai`, `google`, `groq`, `xai`
 - **API key** — stored in `repulse:ai:key` in localStorage; never relayed through any REPuLse backend
 - **Model override** — override the default model (e.g. `claude-opus-4-7`, `grok-3-mini`); leave blank for the provider default
 - **Share editor code with AI** — when enabled, the current editor buffer is included in the system prompt; disabled by default
+- **Auto-apply edits** — apply `propose_edit` immediately and show the Revert button; default off
+- **Token limit** — session token budget (default 50 000); remaining count shown next to the input
+- **Tool-call limit** — session tool-call budget (default 100); remaining count shown next to the input
 - **Freesound API key** — enables `freesound_search` and `freesound_load`; get a key at [freesound.org/apiv2/](https://freesound.org/apiv2/); stored in `repulse:ai:freesound-key`
 - **Web Search API key** (optional) — enables `web_search` via Brave Search; get a key at [brave.com/search/api/](https://brave.com/search/api/); stored in `repulse:ai:search-key`; omit to hide the tool from the model entirely
 

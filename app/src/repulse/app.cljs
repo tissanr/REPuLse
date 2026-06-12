@@ -330,7 +330,7 @@
   (setBankNamesProvider (fn [] (clj->js (samples/bank-names))))
   (setFxNamesProvider   (fn [] (clj->js (mapv :name @fx/chain))))
 
-  ;; Register global mute-toggle for track panel onclick
+  ;; Register global mute-toggle for the track panel's button click handlers
   (set! (.-_repulseMuteToggle js/window)
         (fn [track-name-str]
           (let [kw (keyword track-name-str)]
