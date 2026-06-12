@@ -221,6 +221,19 @@
       :else (when-let [content (text-from-json provider obj)]
               {:type :delta :text content}))))
 
+;; ── HTTP error helpers ────────────────────────────────────────────────────────
+
+(defn- http-error-text
+  "Format a non-2xx response as a user-facing error string, appending an
+   actionable hint for known rejections."
+  [status body-text]
+  (str "HTTP " status " — " body-text
+       (when (and (= 403 status)
+                  (str/includes? (str body-text) "Origin not allowed"))
+         (str "\nHint: the AI proxy rejected this site's origin. "
+              "If the app runs on a new domain, add it to the ALLOWED_ORIGINS "
+              "environment variable of the Vercel deployment."))))
+
 ;; ── Streaming fetch ───────────────────────────────────────────────────────────
 
 (defn stream!
@@ -300,7 +313,7 @@
             ;; Non-2xx: read body text for a useful error message
             (-> (.text resp)
                 (.then (fn [body-text]
-                         (on-error (str "HTTP " (.-status resp) " — " body-text))))))))
+                         (on-error (http-error-text (.-status resp) body-text))))))))
       (.catch
         (fn [err]
           (when-not (= "AbortError" (.-name err))
@@ -407,7 +420,7 @@
                    (js/Promise.resolve {:rate-limited true})
                    :else
                    (-> (.text resp)
-                       (.then (fn [t] (js/Promise.reject (str "HTTP " (.-status resp) " — " t))))))))
+                       (.then (fn [t] (js/Promise.reject (http-error-text (.-status resp) t))))))))
         (.catch (fn [err]
                   {:content (str "Error: " (if (string? err) err (or (.-message err) "unknown error")))})))))
 

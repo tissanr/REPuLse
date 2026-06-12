@@ -8,17 +8,27 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "")
   .map((s) => s.trim())
   .filter(Boolean);
 
-export function originAllowed(origin: string): boolean {
+export function originAllowed(origin: string, req?: VercelRequest): boolean {
+  // Same-origin requests are always allowed: the SPA calls /api/* on the
+  // deployment that served it, whatever its URL (preview, production alias,
+  // custom domain). Vercel routes by Host, so x-forwarded-host/host is the
+  // hostname the browser actually navigated to — a third-party page's Origin
+  // can never match it.
+  if (req) {
+    const fwd = req.headers["x-forwarded-host"];
+    const host = (typeof fwd === "string" && fwd) || req.headers.host;
+    if (host && origin === `https://${host}`) return true;
+  }
   return (
     ALLOWED_ORIGINS.includes(origin) ||
     /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
-    /^https:\/\/[a-z0-9-]+-tissanr\.vercel\.app$/.test(origin)
+    /^https:\/\/[a-z0-9-]+-(tissanr|tissanrs-projects)\.vercel\.app$/.test(origin)
   );
 }
 
 export function setCors(req: VercelRequest, res: VercelResponse, methods: string) {
   const origin = req.headers.origin ?? "";
-  res.setHeader("Access-Control-Allow-Origin", originAllowed(origin) ? origin : "null");
+  res.setHeader("Access-Control-Allow-Origin", originAllowed(origin, req) ? origin : "null");
   res.setHeader("Access-Control-Allow-Methods", methods);
   res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
   res.setHeader("Vary", "Origin");
