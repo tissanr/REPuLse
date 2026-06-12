@@ -9,7 +9,8 @@
             [repulse.ai.settings :as settings]
             [repulse.ai.injection-guard :as injection-guard]
             [repulse.ai.undo :as undo]
-            [repulse.ui.html :refer [escape-html]]))
+            [repulse.ui.html :refer [escape-html]]
+            [clojure.string :as str]))
 
 ;;; eval-preview dependency injected from eval-orchestrator to avoid circular deps
 (defonce eval-preview-fn (atom nil))
@@ -127,25 +128,58 @@
     {:ok true :text (.. view -state -doc (toString))}
     {:ok false :error "Editor not initialized"}))
 
-(defn- clamp-range
-  "Clamp from/to to the actual document length so CodeMirror never rejects the range."
-  [view from to]
-  (let [doc-len (.. view -state -doc -length)]
-    [(min (max 0 from) doc-len)
-     (min (max 0 to)   doc-len)]))
+(defn- count-occurrences [doc match]
+  (loop [idx 0 n 0]
+    (let [i (.indexOf doc match idx)]
+      (if (neg? i) n (recur (+ i (count match)) (inc n))))))
 
-(defn- exec-propose-edit [{:keys [from to replacement]}]
-  (if @settings/auto-apply?
-    (do
-      (undo/record-pre-edit!)
-      (when-let [v @editor/editor-view]
-        (let [[f t] (clamp-range v from to)]
-          (.dispatch v #js {:changes #js {:from f :to t :insert replacement}})))
-      (js/Promise.resolve {:ok true :applied true :auto-applied true}))
-    (if-let [v @editor/editor-view]
-      (let [[f t] (clamp-range v from to)]
-        (show-diff-overlay! f t replacement))
+(defn- line-at
+  "1-based line number of character index `idx` in doc."
+  [doc idx]
+  (inc (count (re-seq #"\n" (subs doc 0 idx)))))
+
+(defn- apply-or-overlay!
+  "Apply the edit immediately (auto-apply) or show the diff overlay.
+   Returns the tool result (or a Promise of it)."
+  [view from to replacement]
+  (let [line (line-at (.. view -state -doc (toString)) from)]
+    (if @settings/auto-apply?
+      (do
+        (undo/record-pre-edit!)
+        (.dispatch view #js {:changes #js {:from from :to to :insert replacement}})
+        (js/Promise.resolve {:ok true :applied true :auto-applied true :line line}))
       (show-diff-overlay! from to replacement))))
+
+(defn- exec-propose-edit
+  "Edits are anchored by exact text match, never by character offsets or line
+   numbers — models cannot compute those reliably against a buffer they saw
+   once as plain text (and the <untrusted> wrapper would skew any count)."
+  [{:keys [match replacement]}]
+  (if-let [v @editor/editor-view]
+    (let [doc   (.. v -state -doc (toString))
+          match (str match)]
+      (if (str/blank? match)
+        ;; Empty match — append to the end of the buffer
+        (apply-or-overlay! v (count doc) (count doc)
+                           (str (when (seq doc) "\n\n") replacement))
+        (let [n (count-occurrences doc match)]
+          (cond
+            (zero? n)
+            {:ok false
+             :error (str "match not found in buffer — call read_buffer and copy the text "
+                         "to replace exactly, including whitespace and newlines "
+                         "(without the <untrusted> wrapper)")}
+
+            (> n 1)
+            {:ok false
+             :error (str "match is ambiguous — found " n " occurrences; "
+                         "include more surrounding lines so it matches exactly once")}
+
+            :else
+            (let [from (.indexOf doc match)
+                  to   (+ from (count match))]
+              (apply-or-overlay! v from to replacement))))))
+    {:ok false :error "Editor not initialized"}))
 
 (defn- exec-eval-preview [{:keys [code]}]
   (js/Promise.
@@ -305,10 +339,17 @@
      :execute     exec-read-buffer}
 
     :propose_edit
-    {:description "Propose a text edit to the editor buffer. Shows a diff overlay; the user must click Apply."
-     :params      {:from        {:type "integer" :description "Start character offset (inclusive)"}
-                   :to          {:type "integer" :description "End character offset (exclusive)"}
-                   :replacement {:type "string"  :description "Replacement text"}}
+    {:description (str "Propose a text edit to the editor buffer, anchored by exact text match. "
+                       "Replaces `match` (text copied verbatim from read_buffer) with `replacement`. "
+                       "Fails if `match` is missing or appears more than once. "
+                       "An empty `match` appends `replacement` at the end of the buffer.")
+     :params      {:match       {:type "string"
+                                 :description (str "Exact text currently in the buffer to replace — copy it "
+                                                   "verbatim from read_buffer including whitespace and newlines, "
+                                                   "without the <untrusted> wrapper. Must be unique in the buffer; "
+                                                   "include surrounding lines if needed. "
+                                                   "Empty string appends instead of replacing.")}
+                   :replacement {:type "string" :description "Replacement text"}}
      :execute     exec-propose-edit}
 
     :eval_preview

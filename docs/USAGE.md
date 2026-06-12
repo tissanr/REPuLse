@@ -1319,7 +1319,7 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** â€
 | Tool | What it does |
 |---|---|
 | `read_buffer` | Reads the full editor text |
-| `propose_edit` | Shows a before/after diff card with **Apply** / **Reject** buttons |
+| `propose_edit` | Replaces an exact-text match in the buffer (or appends when the match is empty); shows a before/after diff card with **Apply** / **Reject** buttons |
 | `eval_preview` | Evaluates code silently and returns event count + duration (no audio) |
 | `query_session` | Returns BPM, track names, muted tracks, global FX |
 | `query_track` | Returns details for one track (mute state, FX chain) |

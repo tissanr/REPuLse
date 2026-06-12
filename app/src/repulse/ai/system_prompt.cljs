@@ -40,6 +40,12 @@
       "- Rests are :_ not nil or 0\n"
       "- (scale :minor :c4 (seq 0 2 4 7)) maps degree integers to Hz\n"
       "- (euclidean k n :sample) — Bjorklund rhythms\n\n"
+      "Editing rules (propose_edit):\n"
+      "- First call read_buffer, then pass the exact text to replace as `match` — "
+      "copy it verbatim, including whitespace and newlines, without the <untrusted> wrapper\n"
+      "- `match` must appear exactly once in the buffer; include surrounding lines to disambiguate\n"
+      "- To add new code (e.g. a new track) at the end of the buffer, pass an empty `match`\n"
+      "- Make one propose_edit call per logical change; chain several calls for multi-step edits\n\n"
       "Current session:\n"
       snap
       (or code-ctx "")

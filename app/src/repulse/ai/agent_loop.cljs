@@ -71,9 +71,9 @@
        (summarise-args (:args call))
        " → "
        (cond
-         (:error result)   (str "error: " (:error result))
-         (:applied result) (if (:applied result) "applied" "rejected")
-         :else             "done")))
+         (:error result)             (str "error: " (:error result))
+         (contains? result :applied) (if (:applied result) "applied" "rejected")
+         :else                       "done")))
 
 ;; ── Token estimation ─────────────────────────────────────────────────────────
 
