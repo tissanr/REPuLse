@@ -10,7 +10,7 @@ jobs:
     name: Test (cljs.test)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v4
         with:
@@ -36,7 +36,7 @@ jobs:
     name: Rust audio tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Cache Cargo
         uses: actions/cache@v5
@@ -56,7 +56,7 @@ jobs:
     name: Browser audio tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v4
         with:
@@ -83,7 +83,7 @@ jobs:
     name: AI docs drift check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
@@ -97,7 +97,7 @@ jobs:
     name: Release build (shadow-cljs release app)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v4
         with:
