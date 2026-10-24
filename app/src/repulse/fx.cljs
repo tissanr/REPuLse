@@ -114,16 +114,6 @@
              conj (dissoc (make-effect-entry effect-name fresh nodes) :active?))
       (rewire-track! track-name))))
 
-(defn remove-track-effect!
-  "Remove a specific effect from a track's FX chain."
-  [track-name effect-name]
-  (when-let [tn (get @audio/track-nodes track-name)]
-    (when-let [entry (some #(when (= effect-name (:name %)) %) (:fx-chain tn))]
-      (try (.destroy ^js (:plugin entry)) (catch :default _))
-      (swap! audio/track-nodes update-in [track-name :fx-chain]
-             (fn [c] (filterv #(not= effect-name (:name %)) c)))
-      (rewire-track! track-name))))
-
 (defn clear-track-effects!
   "Remove all effects from a track's FX chain."
   [track-name]
@@ -151,16 +141,6 @@
         (add-track-effect! track-name name)
         (doseq [[k v] params]
           (set-track-param! track-name name k v))))))
-
-(defn bypass-track-effect!
-  "Bypass or un-bypass an effect on a specific track."
-  [track-name effect-name enabled]
-  (when-let [tn (get @audio/track-nodes track-name)]
-    (when-let [entry (some #(when (= effect-name (:name %)) %) (:fx-chain tn))]
-      (try (.bypass ^js (:plugin entry) enabled) (catch :default _))
-      (swap! audio/track-nodes update-in [track-name :fx-chain]
-             (fn [c] (mapv #(if (= effect-name (:name %))
-                               (assoc % :bypassed? enabled) %) c))))))
 
 ;;; ── Sidechain event notification ─────────────────────────────────────────
 
