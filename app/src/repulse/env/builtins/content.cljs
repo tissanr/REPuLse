@@ -4,7 +4,13 @@
             [repulse.content.demos :as demos]
             [repulse.content.tutorial :as tutorial]
             [repulse.ui.editor :as editor]
+            [repulse.lisp.core :as lisp]
             [repulse.lisp.eval :as leval]))
+
+(defn- url-hostname [url]
+  (try
+    (.-hostname (js/URL. url))
+    (catch :default _ nil)))
 
 (defn make-builtins
   "ctx — {:set-output! f :evaluate-ref atom}"
@@ -20,38 +26,50 @@
 
    "load-gist"
    (fn [url]
-     (let [url'    (leval/unwrap url)
-           raw-url (if (re-find #"gist\.githubusercontent\.com" url')
-                     url'
-                     ;; Convert gist.github.com/user/id → API URL
-                     (let [[_ gist-id] (re-find #"/([a-f0-9]+)/?$" url')]
-                       (str "https://api.github.com/gists/" gist-id)))]
-       (if (re-find #"api\.github\.com" raw-url)
-         ;; API path — fetch JSON, extract first file's content
-         (-> (js/fetch raw-url)
-             (.then #(.json %))
-             (.then (fn [data]
-                      (let [files      (js->clj (.-files data))
-                            first-file (second (first files))
-                            content    (get first-file "content")]
-                        (when-let [view @editor/editor-view]
-                          (.dispatch view
-                                     #js {:changes #js {:from   0
-                                                        :to     (.. view -state -doc -length)
-                                                        :insert content}})
-                          (when-let [f @evaluate-ref] (f content))))))
-             (.catch (fn [e]
-                       (set-output! (str "Gist load failed: " e) :error))))
-         ;; Raw URL — fetch text directly
-         (-> (js/fetch raw-url)
-             (.then #(.text %))
-             (.then (fn [text]
-                      (when-let [view @editor/editor-view]
-                        (.dispatch view
-                                   #js {:changes #js {:from   0
-                                                      :to     (.. view -state -doc -length)
-                                                      :insert text}})
-                        (when-let [f @evaluate-ref] (f text)))))
-             (.catch (fn [e]
-                       (set-output! (str "Gist load failed: " e) :error)))))
-       (str "loading gist…")))})
+     (let [url'     (leval/unwrap url)
+           ;; Validate the actual hostname — the fetched content is evaluated,
+           ;; so substring matching would let any URL mentioning a gist host pass.
+           hostname (url-hostname url')
+           raw-url  (case hostname
+                      "gist.githubusercontent.com" url'
+                      "api.github.com"             url'
+                      "gist.github.com"
+                      ;; Convert gist.github.com/user/id → API URL
+                      (let [[_ gist-id] (re-find #"/([a-f0-9]+)/?$" url')]
+                        (when gist-id
+                          (str "https://api.github.com/gists/" gist-id)))
+                      nil)]
+       (if (nil? raw-url)
+         (lisp/eval-error
+          (str "load-gist: not a GitHub gist URL: " url'
+               " (expected gist.github.com or gist.githubusercontent.com)"))
+         (do
+           (if (= "api.github.com" (url-hostname raw-url))
+             ;; API path — fetch JSON, extract first file's content
+             (-> (js/fetch raw-url)
+                 (.then #(.json %))
+                 (.then (fn [data]
+                          (let [files      (js->clj (.-files data))
+                                first-file (second (first files))
+                                content    (get first-file "content")]
+                            (when-let [view @editor/editor-view]
+                              (.dispatch view
+                                         #js {:changes #js {:from   0
+                                                            :to     (.. view -state -doc -length)
+                                                            :insert content}})
+                              (when-let [f @evaluate-ref] (f content))))))
+                 (.catch (fn [e]
+                           (set-output! (str "Gist load failed: " e) :error))))
+             ;; Raw URL — fetch text directly
+             (-> (js/fetch raw-url)
+                 (.then #(.text %))
+                 (.then (fn [text]
+                          (when-let [view @editor/editor-view]
+                            (.dispatch view
+                                       #js {:changes #js {:from   0
+                                                          :to     (.. view -state -doc -length)
+                                                          :insert text}})
+                            (when-let [f @evaluate-ref] (f text)))))
+                 (.catch (fn [e]
+                           (set-output! (str "Gist load failed: " e) :error)))))
+           (str "loading gist…")))))})
