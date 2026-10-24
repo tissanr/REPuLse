@@ -99,15 +99,18 @@
 
 (declare stop-clock!)
 
+(defn- start-pulses! [bpm]
+  (let [interval-ms (* (/ 60.0 bpm 24.0) 1000)]
+    (reset! clock-interval-id
+            (js/setInterval #(send-clock-byte! 0xF8) interval-ms))))
+
 (defn start-clock!
   "Start sending 24ppqn MIDI clock at the given BPM.
    Sends MIDI Start (0xFA) then begins 24ppqn pulse interval."
   [bpm]
   (stop-clock!)
   (send-clock-byte! 0xFA)   ; MIDI Start
-  (let [interval-ms (* (/ 60.0 bpm 24.0) 1000)]
-    (reset! clock-interval-id
-            (js/setInterval #(send-clock-byte! 0xF8) interval-ms))))
+  (start-pulses! bpm))
 
 (defn stop-clock!
   "Stop MIDI clock output, sending MIDI Stop (0xFC)."
@@ -118,10 +121,12 @@
     (send-clock-byte! 0xFC)))   ; MIDI Stop
 
 (defn update-clock-bpm!
-  "Update clock tempo in-place (restarts the interval)."
+  "Change the tempo of a running clock. Only the pulse interval is restarted —
+   no MIDI Stop/Start, so downstream sequencers keep their song position."
   [bpm]
-  (when @clock-interval-id
-    (start-clock! bpm)))
+  (when-let [id @clock-interval-id]
+    (js/clearInterval id)
+    (start-pulses! bpm)))
 
 ;;; ── MIDI file export ───────────────────────────────────────────────
 

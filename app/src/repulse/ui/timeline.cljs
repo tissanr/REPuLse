@@ -5,7 +5,7 @@
    Exports: render-track-panel!, start-playhead-raf!"
   (:require [repulse.core :as core]
             [repulse.audio :as audio]
-            [clojure.string :as str]))
+            [repulse.ui.html :refer [escape-html]]))
 
 (defn- el [id] (.getElementById js/document id))
 
@@ -25,13 +25,6 @@
 
 (def ^:private track-colors ["#e94560" "#56b6c2" "#e5c07b" "#c678dd" "#98c379" "#d19a66"])
 (def ^:private energy-resolution 512)
-
-(defn- escape-html [s]
-  (-> (str s)
-      (str/replace "&" "&amp;")
-      (str/replace "<" "&lt;")
-      (str/replace ">" "&gt;")
-      (str/replace "\"" "&quot;")))
 
 (defn track-events [track-name pattern cycle color muted?]
   (let [sp {:start [cycle 1] :end [(inc cycle) 1]}
@@ -302,9 +295,8 @@
                                  (str "<button class=\"viz-track-btn"
                                       (when muted? " muted")
                                       "\" style=\"--track-color:" color "\""
-                                      " onclick=\"window._repulseMuteToggle('"
-                                      (escape-html (cljs.core/name name))
-                                      "')\">:" (escape-html (cljs.core/name name)) "</button>"))
+                                      " data-name=\"" (escape-html (cljs.core/name name))
+                                      "\">:" (escape-html (cljs.core/name name)) "</button>"))
                                data))
                         "</div>"))
                  "</div>"
@@ -314,6 +306,12 @@
           (fn []
             (reset! viz-mode (.. btn -dataset -mode))
             (render-track-panel!))))
+      ;; Inline onclick handlers are blocked by the CSP (no unsafe-inline),
+      ;; so mute buttons are wired here like the viz-mode buttons above.
+      (doseq [btn (array-seq (.querySelectorAll panel ".viz-track-btn"))]
+        (.addEventListener btn "click"
+          (fn []
+            (js/window._repulseMuteToggle (.. btn -dataset -name)))))
       (draw-viz!))))
 
 (defn start-playhead-raf! []
