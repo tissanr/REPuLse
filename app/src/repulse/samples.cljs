@@ -80,11 +80,35 @@
       (.catch (fn [e]
                 (js/console.warn (str "[REPuLse] manifest load failed: " url) e)))))
 
+;; Number of manifest / repo loads still in flight, and callbacks waiting for
+;; the registry to settle (see when-loaded!).
+(defonce pending-loads (atom 0))
+(defonce ^:private on-loaded (atom []))
+
+(defn- track-load!
+  "Count promise p as an in-flight load until it settles. Returns p."
+  [p]
+  (swap! pending-loads inc)
+  (.finally p (fn []
+                (when (zero? (swap! pending-loads dec))
+                  (let [fs @on-loaded]
+                    (reset! on-loaded [])
+                    (doseq [f fs] (f))))))
+  p)
+
+(defn when-loaded!
+  "Call f now if no sample loads are in flight, otherwise once they all settle.
+   Lets callers inspect the registry without seeing a half-loaded state."
+  [f]
+  (if (zero? @pending-loads)
+    (f)
+    (swap! on-loaded conj f)))
+
 (defn init!
   "Load all default sample manifests. Call once on app startup."
   []
   (doseq [url DEFAULT-MANIFESTS]
-    (load-manifest! url)))
+    (track-load! (load-manifest! url))))
 
 (defn has-bank?
   "Returns true if the named bank is registered."
@@ -275,25 +299,26 @@
      'https://…/samples.edn'     — REPuLse Lisp manifest
      anything else               — Strudel-compatible JSON manifest"
   [url]
-  (cond
-    (str/starts-with? url "github:")
-    (let [parts  (str/split (subs url 7) #"/")
-          owner  (first parts)
-          repo   (second parts)
-          branch (nth parts 2 nil)]
-      (-> (if branch
-            (load-github! owner repo branch)
-            (-> (load-github! owner repo "main")
-                (.catch (fn [_] (load-github! owner repo "master")))))
-          (.catch (fn [e]
-                    (js/console.warn "[REPuLse] GitHub load failed:"
-                                     (str owner "/" repo) e)))))
+  (track-load!
+   (cond
+     (str/starts-with? url "github:")
+     (let [parts  (str/split (subs url 7) #"/")
+           owner  (first parts)
+           repo   (second parts)
+           branch (nth parts 2 nil)]
+       (-> (if branch
+             (load-github! owner repo branch)
+             (-> (load-github! owner repo "main")
+                 (.catch (fn [_] (load-github! owner repo "master")))))
+           (.catch (fn [e]
+                     (js/console.warn "[REPuLse] GitHub load failed:"
+                                      (str owner "/" repo) e)))))
 
-    (str/ends-with? (str/lower-case url) ".edn")
-    (load-lisp-manifest! url)
+     (str/ends-with? (str/lower-case url) ".edn")
+     (load-lisp-manifest! url)
 
-    :else
-    (load-manifest! url)))
+     :else
+     (load-manifest! url))))
 
 (defn register-url!
   "Register a single audio URL as a one-sample bank under bank-name (string or keyword)."

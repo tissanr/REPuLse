@@ -10,6 +10,7 @@
             [repulse.fx-test]
             [repulse.session-test]
             [repulse.samples-test]
+            [repulse.sound-check-test]
             [repulse.ui.timeline-test]
             [repulse.ai.safety-test]
             [repulse.ai.edit-test]
@@ -29,6 +30,7 @@
                   'repulse.lisp.integration-test
                   'repulse.fx-test 'repulse.session-test
                   'repulse.samples-test
+                  'repulse.sound-check-test
                   'repulse.ui.timeline-test
                   'repulse.ai.safety-test
                   'repulse.ai.edit-test
