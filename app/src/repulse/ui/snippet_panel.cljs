@@ -11,6 +11,7 @@
             [repulse.auth :as auth]
             [repulse.api :as api]
             [repulse.ai.tools :as ai-tools]
+            [repulse.ui.html :refer [escape-html]]
             [clojure.string :as cstr]
             [clojure.set :as cset]))
 
@@ -87,13 +88,6 @@
             (api/track-usage! id)))))))
 
 ;;; Rendering
-
-(defn- escape-html [s]
-  (-> s
-      (cstr/replace "&" "&amp;")
-      (cstr/replace "<" "&lt;")
-      (cstr/replace ">" "&gt;")
-      (cstr/replace "\"" "&quot;")))
 
 (defn- tag-pill [t]
   (str "<span class=\"snippet-tag\">" (escape-html t) "</span>"))

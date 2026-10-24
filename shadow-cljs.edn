@@ -1,4 +1,6 @@
-{:source-paths ["app/src" "packages/core/src" "packages/lisp/src"]
+{:source-paths ["app/src" "packages/core/src" "packages/lisp/src"
+                ;; docs/ai/*.json are inlined into the app by repulse.ai.knowledge
+                "docs"]
 
  :dependencies []
 

@@ -6,20 +6,22 @@
             [repulse.ai.settings :as settings]
             [repulse.ai.system-prompt :as sys-prompt]
             [repulse.ai.tools :as tools]
+            [repulse.ai.budget :as budget]
+            [repulse.ai.undo :as undo]
             [clojure.string :as str]))
 
 ;;; Forward reference to panel functions — set via set-panel-fns! to avoid
 ;;; circular dependency: agent-loop ← assistant-panel ← agent-loop.
 (defonce ^:private panel-add-message!  (atom nil))
 (defonce ^:private panel-set-pending!  (atom nil))
-(defonce ^:private panel-get-summary   (atom nil))
+(defonce ^:private panel-log-tool-call! (atom nil))
 
 (defn set-panel-fns!
   "Wire assistant-panel callbacks. Called from assistant-panel init!."
-  [{:keys [add-message! set-pending! get-builtins-summary]}]
-  (reset! panel-add-message!  add-message!)
-  (reset! panel-set-pending!  set-pending!)
-  (reset! panel-get-summary   get-builtins-summary))
+  [{:keys [add-message! set-pending! log-tool-call!]}]
+  (reset! panel-add-message!   add-message!)
+  (reset! panel-set-pending!   set-pending!)
+  (reset! panel-log-tool-call! log-tool-call!))
 
 ;;; Conversation history — shared with panel for display
 (defonce history (atom []))
@@ -49,6 +51,10 @@
   (when-let [f @panel-set-pending!]
     (f v)))
 
+(defn- log-tool-call! [tool-name args result]
+  (when-let [f @panel-log-tool-call!]
+    (f tool-name args result)))
+
 (defn- truncate-arg [v]
   (if (and (string? v) (> (count v) 60))
     (str (subs v 0 57) "…")
@@ -63,9 +69,21 @@
        (summarise-args (:args call))
        " → "
        (cond
-         (:error result)   (str "error: " (:error result))
-         (:applied result) (if (:applied result) "applied" "rejected")
-         :else             "done")))
+         (:error result)             (str "error: " (:error result))
+         (contains? result :applied) (if (:applied result) "applied" "rejected")
+         :else                       "done")))
+
+;; ── Token accounting ─────────────────────────────────────────────────────────
+
+(defn- estimate-tokens
+  "Fallback when the provider reports no usage: ~4 characters per token over
+   everything sent (system prompt + history) and received."
+  [system messages response]
+  (js/Math.ceil (/ (+ (count system)
+                      (count (pr-str messages))
+                      (count (str (:content response)))
+                      (count (pr-str (:tool-calls response))))
+                   4)))
 
 ;; ── Tool execution ────────────────────────────────────────────────────────────
 
@@ -76,6 +94,7 @@
              (fn [results]
                (-> (tools/execute! call)
                    (.then (fn [result]
+                            (log-tool-call! (:name call) (:args call) result)
                             (conj results
                                   {:id     (:id call)
                                    :name   (:name call)
@@ -85,46 +104,78 @@
 
 ;; ── Agent loop ────────────────────────────────────────────────────────────────
 
-(defn- run-loop! [messages call-count user-msg]
-  (if (or @cancelled? (>= call-count max-tool-calls))
-    (do
-      (when (and (not @cancelled?) (>= call-count max-tool-calls))
-        (add-msg! "assistant" (str "I've reached the tool-call limit (" max-tool-calls ") for this turn.")))
-      (set-pending! false)
-      (swap! history conj {:role "user"    :content user-msg}
-                          {:role "assistant" :content "(tool-call limit reached)"}))
-    (let [provider @settings/provider
+(def ^:private budget-exhausted-msg
+  "🛑 AI budget exhausted. Raise the limit in AI settings or reset the session from the tool log.")
+
+(defn- finish!
+  "End the turn: show `content` (when given), record the exchange in history
+   so the next turn keeps context, and clear the pending indicator."
+  [user-msg content]
+  (when content (add-msg! "assistant" content))
+  (swap! history conj {:role "user"      :content user-msg}
+                      {:role "assistant" :content (or content "(stopped)")})
+  (set-pending! false))
+
+(defn- run-loop! [messages call-count user-msg turn-id]
+  (cond
+    @cancelled?
+    (set-pending! false)
+
+    (>= call-count max-tool-calls)
+    (finish! user-msg (str "I've reached the tool-call limit (" max-tool-calls ") for this turn."))
+
+    ;; Checked before the request so an exhausted budget never costs another call.
+    (budget/exhausted?)
+    (do (add-msg! "system" budget-exhausted-msg)
+        (finish! user-msg nil))
+
+    :else
+    (let [provider  @settings/provider
           tool-desc (tools/tool-descriptors provider)
-          system    (str (sys-prompt/build (if-let [f @panel-get-summary] (f) "")))]
-      (-> (client/complete! system messages tool-desc)
+          system    (sys-prompt/build)]
+      (-> (client/complete-with-retry! system messages tool-desc)
           (.then
             (fn [response]
-              (if @cancelled?
+              (cond
+                @cancelled?
                 (set-pending! false)
-                (if-let [tc (:tool-calls response)]
-                  ;; Model wants to call tools
-                  (do
-                    (add-msg! "assistant"
-                               (str "Calling tools: " (str/join ", " (map :name tc)) "…"))
-                    (-> (execute-tools! tc)
-                        (.then
-                          (fn [results]
-                            (when-not @cancelled?
-                              ;; Show per-tool status
-                              (doseq [[call result] (map vector tc results)]
-                                (add-msg! "tool" (tool-status-line call result)))
-                              (let [next-msgs (conj messages
-                                                    {:role "assistant" :tool-calls tc}
-                                                    {:role "tool"      :results results})]
-                                (run-loop! next-msgs
+
+                (:error response)
+                (do (add-msg! "assistant" (str "Error: " (:error response)))
+                    (set-pending! false))
+
+                :else
+                (let [tc     (:tool-calls response)
+                      tokens (or (:usage response) (estimate-tokens system messages response))
+                      status (budget/record-usage! {:tokens tokens :calls (count tc)})]
+                  (when (= status :warn)
+                    (add-msg! "system" "⚠️ 50% of your AI budget used this session."))
+                  (cond
+                    ;; Text reply — already paid for, so always show it.
+                    (not tc)
+                    (finish! user-msg (:content response "(no response)"))
+
+                    (= status :hard-stop)
+                    (do (add-msg! "system" budget-exhausted-msg)
+                        (finish! user-msg nil))
+
+                    :else
+                    (do
+                      (undo/begin-turn! turn-id)
+                      (add-msg! "assistant"
+                                (str "Calling tools: " (str/join ", " (map :name tc)) "…"))
+                      (-> (execute-tools! tc)
+                          (.then
+                            (fn [results]
+                              (when-not @cancelled?
+                                (doseq [[call {:keys [result]}] (map vector tc results)]
+                                  (add-msg! "tool" (tool-status-line call result)))
+                                (run-loop! (conj messages
+                                                 {:role "assistant" :tool-calls tc}
+                                                 {:role "tool"      :results results})
                                            (+ call-count (count tc))
-                                           user-msg)))))))
-                  ;; Model returned a text reply — done
-                  (let [content (:content response "(no response)")]
-                    (add-msg! "assistant" content)
-                    (swap! history conj {:role "user"      :content user-msg}
-                                        {:role "assistant" :content content})
-                    (set-pending! false))))))
+                                           user-msg
+                                           turn-id)))))))))))
           (.catch
             (fn [err]
               (add-msg! "assistant" (str "Error: " (if (string? err) err (or (.-message err) "unknown"))))
@@ -137,9 +188,10 @@
    Adds user message to the panel, then enters the tool-call loop."
   [user-message]
   (when (seq (str/trim user-message))
-    (reset! cancelled? false)
-    (add-msg! "user" user-message)
-    (set-pending! true)
-    (let [messages (conj (mapv #(select-keys % [:role :content :tool-calls :results]) @history)
-                         {:role "user" :content user-message})]
-      (run-loop! messages 0 user-message))))
+    (let [turn-id (str (gensym "turn_"))]
+      (reset! cancelled? false)
+      (add-msg! "user" user-message)
+      (set-pending! true)
+      (let [messages (conj (mapv #(select-keys % [:role :content :tool-calls :results]) @history)
+                           {:role "user" :content user-message})]
+        (run-loop! messages 0 user-message turn-id)))))
