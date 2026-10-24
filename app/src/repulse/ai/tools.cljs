@@ -7,7 +7,10 @@
             [repulse.snippets :as snippets]
             [repulse.samples :as samples]
             [repulse.ai.settings :as settings]
-            [clojure.string :as str]))
+            [repulse.ai.injection-guard :as injection-guard]
+            [repulse.ai.undo :as undo]
+            [repulse.ai.edit :as edit]
+            [repulse.ui.html :refer [escape-html]]))
 
 ;;; eval-preview dependency injected from eval-orchestrator to avoid circular deps
 (defonce eval-preview-fn (atom nil))
@@ -50,16 +53,10 @@
               (str "<div class=\"ai-proposal-header\">AI proposed edit</div>"
                    "<div class=\"ai-proposal-diff\">"
                    "<div class=\"ai-proposal-before\"><span class=\"ai-diff-label\">before</span><pre>"
-                   (-> before
-                       (str/replace "&" "&amp;")
-                       (str/replace "<" "&lt;")
-                       (str/replace ">" "&gt;"))
+                   (escape-html before)
                    "</pre></div>"
                    "<div class=\"ai-proposal-after\"><span class=\"ai-diff-label\">after</span><pre>"
-                   (-> after
-                       (str/replace "&" "&amp;")
-                       (str/replace "<" "&lt;")
-                       (str/replace ">" "&gt;"))
+                   (escape-html after)
                    "</pre></div>"
                    "</div>"
                    "<div class=\"ai-proposal-btns\">"
@@ -131,8 +128,26 @@
     {:ok true :text (.. view -state -doc (toString))}
     {:ok false :error "Editor not initialized"}))
 
-(defn- exec-propose-edit [{:keys [from to replacement]}]
-  (show-diff-overlay! from to replacement))
+(defn- apply-or-overlay!
+  "Apply a located change {:from :to :insert} immediately (auto-apply, with an
+   undo snapshot) or show the diff overlay for the user to approve.
+   Returns a Promise of the tool result."
+  [view {:keys [from to insert]}]
+  (let [line (edit/line-at (.. view -state -doc (toString)) from)]
+    (if @settings/auto-apply?
+      (do
+        (undo/record-pre-edit!)
+        (.dispatch view #js {:changes #js {:from from :to to :insert insert}})
+        (js/Promise.resolve {:ok true :applied true :auto-applied true :line line}))
+      (show-diff-overlay! from to insert))))
+
+(defn- exec-propose-edit [{:keys [match replacement]}]
+  (if-let [v @editor/editor-view]
+    (let [change (edit/locate (.. v -state -doc (toString)) match replacement)]
+      (if (:error change)
+        {:ok false :error (:error change)}
+        (apply-or-overlay! v change)))
+    {:ok false :error "Editor not initialized"}))
 
 (defn- exec-eval-preview [{:keys [code]}]
   (js/Promise.
@@ -148,8 +163,9 @@
 (defn- exec-query-track [{:keys [name]}]
   {:ok true :track (query-track (keyword name))})
 
-(defn- snippets-ready []
+(defn- snippets-ready
   "Return a Promise that resolves once the snippet library is loaded."
+  []
   (if @snippets/loaded?
     (js/Promise.resolve nil)
     (js/Promise.
@@ -173,16 +189,19 @@
                   :results (mapv #(select-keys % [:id :title :description :tags])
                                  trimmed)})))))
 
-(defn- exec-insert-snippet [{:keys [id]}]
-  (if-let [snippet (snippets/by-id id)]
-    (do
-      (when-let [view @editor/editor-view]
-        (let [code    (:code snippet)
-              doc-len (.. view -state -doc -length)]
-          (.dispatch view #js {:changes #js {:from doc-len :to doc-len
-                                             :insert (str "\n\n" code)}})))
-      {:ok true :inserted id})
-    {:ok false :error (str "Unknown snippet: " id)}))
+(defn- exec-insert-snippet
+  "Append a library snippet to the buffer. Snippet code may come from the
+   community library, so it goes through the same approval path as
+   propose_edit: diff overlay, or auto-apply with an undo snapshot."
+  [{:keys [id]}]
+  (-> (snippets-ready)
+      (.then (fn [_]
+               (if-let [snippet (snippets/by-id id)]
+                 (if-let [v @editor/editor-view]
+                   (-> (apply-or-overlay! v (edit/append (.. v -state -doc (toString)) (:code snippet)))
+                       (.then #(cond-> % (:applied %) (assoc :inserted id))))
+                   {:ok false :error "Editor not initialized"})
+                 {:ok false :error (str "Unknown snippet: " id)})))))
 
 (defn- exec-set-bpm-proposal [{:keys [bpm]}]
   (js/Promise.
@@ -291,10 +310,17 @@
      :execute     exec-read-buffer}
 
     :propose_edit
-    {:description "Propose a text edit to the editor buffer. Shows a diff overlay; the user must click Apply."
-     :params      {:from        {:type "integer" :description "Start character offset (inclusive)"}
-                   :to          {:type "integer" :description "End character offset (exclusive)"}
-                   :replacement {:type "string"  :description "Replacement text"}}
+    {:description (str "Propose a text edit to the editor buffer, anchored by exact text match. "
+                       "Replaces `match` (text copied verbatim from read_buffer) with `replacement`. "
+                       "Fails if `match` is missing or appears more than once. "
+                       "An empty `match` appends `replacement` at the end of the buffer.")
+     :params      {:match       {:type "string"
+                                 :description (str "Exact text currently in the buffer to replace — copy it "
+                                                   "verbatim from read_buffer including whitespace and newlines, "
+                                                   "without the <untrusted> wrapper. Must be unique in the buffer; "
+                                                   "include surrounding lines if needed. "
+                                                   "Empty string appends instead of replacing.")}
+                   :replacement {:type "string" :description "Replacement text"}}
      :execute     exec-propose-edit}
 
     :eval_preview
@@ -319,7 +345,7 @@
      :execute     exec-find-snippet}
 
     :insert_snippet
-    {:description "Insert a snippet by ID into the editor at the end of the buffer."
+    {:description "Append a snippet by ID to the end of the buffer. Shows a diff overlay; the user must click Apply (unless auto-apply is on)."
      :params      {:id {:type "string" :description "Snippet ID"}}
      :execute     exec-insert-snippet}
 
@@ -379,13 +405,13 @@
 ;; ── Dispatch ─────────────────────────────────────────────────────────────────
 
 (defn execute!
-  "Execute a tool call. Returns a Promise resolving to the result map."
+  "Execute a tool call. Returns a Promise resolving to the result map.
+   All results are passed through the injection guard before returning."
   [{:keys [name args]}]
   (let [k   (keyword name)
         {:keys [execute]} (get registry k)]
     (if execute
       (let [result (execute (or args {}))]
-        (if (instance? js/Promise result)
-          result
-          (js/Promise.resolve result)))
+        (-> (if (instance? js/Promise result) result (js/Promise.resolve result))
+            (.then (fn [r] (injection-guard/guard-tool-result k r)))))
       (js/Promise.resolve {:ok false :error (str "Unknown tool: " name)}))))

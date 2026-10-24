@@ -48,10 +48,16 @@
        (if on
          (-> (midi/ensure-access!)
              (.then (fn [_]
-                      (midi/start-clock! (audio/get-bpm))))
+                      (midi/start-clock! (audio/get-bpm))
+                      ;; Follow later (bpm …) changes while the clock runs
+                      (add-watch audio/scheduler-state ::clock-bpm
+                                 (fn [_ _ old new]
+                                   (when (not= (:cycle-dur old) (:cycle-dur new))
+                                     (midi/update-clock-bpm! (audio/get-bpm)))))))
              (.catch (fn [e]
                        (set-output! (str "MIDI error: " e) :error))))
-         (midi/stop-clock!))
+         (do (remove-watch audio/scheduler-state ::clock-bpm)
+             (midi/stop-clock!)))
        nil))
 
    "midi-export"
