@@ -136,6 +136,7 @@ footer {
 
 .output.success { color: var(--green); }
 .output.error   { color: var(--red); }
+.output.warning { color: #e5c07b; }
 
 .hint {
   font-size: 0.75rem;
@@ -1869,6 +1870,7 @@ header h1 {
 .output.error { color: var(--accent); }
 .output.success { color: var(--cyan); }
 .output.idle { color: var(--mid); }
+.output.warning { color: var(--yellow); }
 
 .status-bar,
 footer {
