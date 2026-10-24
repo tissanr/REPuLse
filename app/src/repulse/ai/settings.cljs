@@ -2,9 +2,11 @@
 
 (def ^:private key-prefix "repulse:ai:")
 
-(defn- ls-get [k]    (.getItem    js/localStorage (str key-prefix k)))
-(defn- ls-set! [k v] (.setItem    js/localStorage (str key-prefix k) v))
-(defn- ls-del! [k]   (.removeItem js/localStorage (str key-prefix k)))
+;; localStorage can be missing (Node test runner) or throw (private mode,
+;; blocked storage); settings then live in memory only.
+(defn- ls-get [k]    (try (.getItem    js/localStorage (str key-prefix k)) (catch :default _ nil)))
+(defn- ls-set! [k v] (try (.setItem    js/localStorage (str key-prefix k) v) (catch :default _ nil)))
+(defn- ls-del! [k]   (try (.removeItem js/localStorage (str key-prefix k)) (catch :default _ nil)))
 
 (defonce enabled?          (atom (= "true" (ls-get "enabled"))))
 (defonce provider          (atom (or (ls-get "provider") "anthropic")))

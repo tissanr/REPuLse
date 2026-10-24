@@ -1324,7 +1324,7 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 | `query_session` | Returns BPM, track names, muted tracks, global FX |
 | `query_track` | Returns details for one track (mute state, FX chain) |
 | `find_snippet` | Searches the community snippet library |
-| `insert_snippet` | Inserts a snippet by ID at the end of the buffer |
+| `insert_snippet` | Appends a snippet by ID to the end of the buffer — same **Apply** / **Reject** card as `propose_edit` (or applied immediately, with Revert, when auto-apply is on) |
 | `set_bpm_proposal` | Shows a confirm dialog before updating BPM |
 | `freesound_search` | Searches Freesound for samples; returns id, name, duration, tags (requires Freesound API key) |
 | `freesound_load` | Registers a Freesound sample by ID as `:freesound-<id>`; proposes a `(seq :freesound-<id>)` edit |
@@ -1334,7 +1334,7 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 
 **Proposed edits:** When the agent calls `propose_edit`, a card appears below the editor showing the before and after text. Click **Apply** to commit the change, or **Reject** to tell the agent the suggestion was declined (it will try again with a revised proposal).
 
-**Auto-apply edits:** Enable **Auto-apply edits** in settings to have `propose_edit` apply immediately without the overlay. When auto-apply is on, a **↩ Revert last turn** bar appears; clicking it restores the editor to exactly what it was before the most recent assistant turn — all of that turn's edits are undone together. Click again to step further back; the undo stack holds up to 20 turns.
+**Auto-apply edits:** Enable **Auto-apply edits** in settings to have `propose_edit` and `insert_snippet` apply immediately without the overlay. When auto-apply is on, a **↩ Revert last turn** bar appears; clicking it restores the editor to exactly what it was before the most recent assistant turn — all of that turn's edits are undone together. Click again to step further back; the undo stack holds up to 20 turns.
 
 **Cancel:** A **cancel** button replaces the **send** button while an agent turn is in progress. Clicking it stops the loop immediately and dismisses any pending overlay.
 

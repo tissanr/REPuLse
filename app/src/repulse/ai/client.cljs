@@ -132,22 +132,26 @@
                                 :contents (google-messages messages)}
                           (seq tools) (assoc :tools tools))))})
 
-(defn- make-request
-  ([system messages] (make-request system messages nil))
-  ([system messages tools]
-   (let [provider @settings/provider
-         key      @settings/api-key
-         model    (settings/effective-model)]
-     (case provider
-       "anthropic" (anthropic-request  system messages model key tools)
-       "openai"    (openai-like-request "https://api.openai.com/v1/chat/completions"
-                                        system messages model key tools)
-       "groq"      (openai-like-request "https://api.groq.com/openai/v1/chat/completions"
-                                        system messages model key tools)
-       "xai"       (openai-like-request "https://api.x.ai/v1/chat/completions"
-                                        system messages model key tools)
-       "google"    (google-request      system messages model key tools)
-       (throw (ex-info "Unknown provider" {:provider provider}))))))
+(defn build-request
+  "Provider request envelope {:url :headers :body} for one completion.
+   Pure — the caller supplies provider, key and model."
+  [{:keys [provider key model]} system messages tools]
+  (case provider
+    "anthropic" (anthropic-request  system messages model key tools)
+    "openai"    (openai-like-request "https://api.openai.com/v1/chat/completions"
+                                     system messages model key tools)
+    "groq"      (openai-like-request "https://api.groq.com/openai/v1/chat/completions"
+                                     system messages model key tools)
+    "xai"       (openai-like-request "https://api.x.ai/v1/chat/completions"
+                                     system messages model key tools)
+    "google"    (google-request      system messages model key tools)
+    (throw (ex-info "Unknown provider" {:provider provider}))))
+
+(defn- make-request [system messages tools]
+  (build-request {:provider @settings/provider
+                  :key      @settings/api-key
+                  :model    (settings/effective-model)}
+                 system messages tools))
 
 ;; ── Response parsers ─────────────────────────────────────────────────────────
 
@@ -232,7 +236,10 @@
     "google"    (some-> (jget obj "usageMetadata") (jget "totalTokenCount"))
     (some-> (jget obj "usage") (jget "total_tokens"))))
 
-(defn- parse-complete-response [provider obj]
+(defn parse-complete-response
+  "Normalise a provider's JSON response (a JS object) to {:content text} or
+   {:tool-calls [...]}, plus :usage (billed tokens) when reported."
+  [provider obj]
   (let [tool-calls (case provider
                      "anthropic" (extract-tool-calls-anthropic obj)
                      "google"    (extract-tool-calls-google obj)
