@@ -1093,6 +1093,20 @@ Any keyword is looked up as a sample bank name:
 ```
 
 If the sample bank doesn't exist, REPuLse falls back to the synthesis engine (a sine tone at 440 Hz).
+Because that fallback is easy to mistake for silence, evaluating code that plays an unknown
+sound name shows a warning in the output line and a yellow underline on each occurrence:
+
+```lisp
+(track :boom (seq :kick :_ :snare :_))
+;; => track :boom playing — Warning: unknown sound :kick — did you mean :bd?;
+;;    unknown sound :snare — did you mean :sd?
+```
+
+The built-in drums are `:bd :sd :hh :oh`; common names from other tools (`:kick`, `:snare`,
+`:hat`/`:hihat`, `:openhat`) are suggested as their REPuLse equivalent, and other typos are
+matched against the loaded sample banks (`(sample-banks)` lists them). The check runs once per
+evaluation over the first four cycles of each track, and waits for sample manifests that are
+still loading so banks are not reported as unknown before they arrive.
 
 ### Silence / rest
 
@@ -2429,6 +2443,14 @@ Error: seq is not a function  (when called wrong)
 
 Typo detection uses Levenshtein distance — if your symbol is within 3 edits of a known
 name, a suggestion is shown.
+
+Unknown sound names are reported as warnings rather than errors — the code still plays:
+
+```
+track :boom playing — Warning: unknown sound :kick — did you mean :bd?
+```
+
+See [Keywords as sounds](#keywords-as-sounds).
 
 ---
 
