@@ -50,11 +50,6 @@
   [name]
   (:node (get @bus-nodes name)))
 
-(defn get-bus-type
-  "Return :audio or :control for a named bus, or nil if it does not exist."
-  [name]
-  (:type (get @bus-nodes name)))
-
 (defn connect-to-bus!
   "Connect `writer-node` to the named bus.
    For control buses, connects to the ConstantSourceNode's .offset AudioParam.

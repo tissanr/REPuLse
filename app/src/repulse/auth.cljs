@@ -1,6 +1,5 @@
 (ns repulse.auth
-  "GitHub OAuth via Supabase. Exports: auth-atom, supabase-client,
-   init-auth!, login!, logout!, session, user-display-name."
+  "GitHub OAuth via Supabase. Exports: auth-atom, init-auth!, login!, logout!, session, user-display-name."
   (:require ["@supabase/supabase-js" :refer [createClient]]
             [goog.object :as gobj]))
 
@@ -12,9 +11,6 @@
 (defonce ^:private site-url-atom (atom nil))  ; set from /api/env on init
 
 ;;; Helpers
-
-(defn supabase-client []
-  @client-atom)
 
 (defn session []
   (:session @auth-atom))

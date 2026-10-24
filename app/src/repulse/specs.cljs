@@ -23,9 +23,6 @@
   [x]
   (and (integer? x) (<= 1 x 16)))
 
-(def param-keys
-  #{:amp :attack :decay :release :pan :rate :begin :end :loop})
-
 (defn tween-descriptor?
   [x]
   (and (map? x)
@@ -150,7 +147,3 @@
                                   (or (:midi data) {}))}]
       (when (s/valid? ::session session)
         session))))
-
-(defn explain-str
-  [spec value]
-  (with-out-str (s/explain spec value)))

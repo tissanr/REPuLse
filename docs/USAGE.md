@@ -1311,7 +1311,7 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 
 1. Click the **ai** button in the header, or run `(ai)` in the REPL
 2. Click **Enable AI assistant**
-3. Choose a provider and paste your API key (stored in localStorage only — never sent to REPuLse servers)
+3. Choose a provider and paste your API key (stored in localStorage; each request is relayed through the `/api/ai-stream` proxy, which never logs or stores the key)
 4. Type a question and press **Send** or **Cmd/Ctrl+Enter**
 
 **Agent tools** (the assistant calls these automatically — you never invoke them directly):
@@ -1319,12 +1319,12 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 | Tool | What it does |
 |---|---|
 | `read_buffer` | Reads the full editor text |
-| `propose_edit` | Shows a before/after diff card with **Apply** / **Reject** buttons |
+| `propose_edit` | Replaces an exact-text match in the buffer (or appends when the match is empty); shows a before/after diff card with **Apply** / **Reject** buttons |
 | `eval_preview` | Evaluates code silently and returns event count + duration (no audio) |
 | `query_session` | Returns BPM, track names, muted tracks, global FX |
 | `query_track` | Returns details for one track (mute state, FX chain) |
 | `find_snippet` | Searches the community snippet library |
-| `insert_snippet` | Inserts a snippet by ID at the end of the buffer |
+| `insert_snippet` | Appends a snippet by ID to the end of the buffer — same **Apply** / **Reject** card as `propose_edit` (or applied immediately, with Revert, when auto-apply is on) |
 | `set_bpm_proposal` | Shows a confirm dialog before updating BPM |
 | `freesound_search` | Searches Freesound for samples; returns id, name, duration, tags (requires Freesound API key) |
 | `freesound_load` | Registers a Freesound sample by ID as `:freesound-<id>`; proposes a `(seq :freesound-<id>)` edit |
@@ -1334,15 +1334,28 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 
 **Proposed edits:** When the agent calls `propose_edit`, a card appears below the editor showing the before and after text. Click **Apply** to commit the change, or **Reject** to tell the agent the suggestion was declined (it will try again with a revised proposal).
 
+**Auto-apply edits:** Enable **Auto-apply edits** in settings to have `propose_edit` and `insert_snippet` apply immediately without the overlay. When auto-apply is on, a **↩ Revert last turn** bar appears; clicking it restores the editor to exactly what it was before the most recent assistant turn — all of that turn's edits are undone together. Click again to step further back; the undo stack holds up to 20 turns.
+
 **Cancel:** A **cancel** button replaces the **send** button while an agent turn is in progress. Clicking it stops the loop immediately and dismisses any pending overlay.
 
 **Code blocks** in assistant responses include an **↓ insert** button that appends the code to the editor without replacing existing content.
+
+**Budget:** The assistant tracks token and tool-call usage across all turns in the session. Token counts come from the provider's reported usage (input + output, so the system prompt and history are included); when a provider reports none, a 4-characters-per-token estimate is used. A usage badge in the panel header shows `used/limit tok · used/limit tools`. A soft warning appears at 50%. Once either limit is reached the assistant refuses to send further requests until you raise the limit in settings or click **Reset session** in the tool log.
+
+**Rate limiting:** HTTP 429 responses from any provider trigger automatic exponential back-off (1 s, then 2 s; at most 3 requests in total). If all attempts are rate-limited, an error message is shown inline.
+
+**Prompt-injection protection:** Everything the model reads from outside sources is wrapped in `<untrusted>` tags: the editor buffer and session snapshot in the system prompt, and the results of `read_buffer`, `query_session`, `query_track`, `find_snippet`, `web_search`, `freesound_search`, and `list_banks`. Any `<untrusted>` tags inside that content are escaped so it cannot break out of the wrapper. The system prompt instructs the model never to follow commands inside those tags.
+
+**Activity log:** Once tool calls have been made, a collapsible **🔍 tool log** section appears above the input box showing the last 50 calls (time, tool, and any error). An **Export log** button downloads the log as JSON. **Reset session** clears both the log and the session budget counters.
 
 **Settings** (accessible via the ⚙ button):
 - **Provider** — `anthropic`, `openai`, `google`, `groq`, `xai`
 - **API key** — stored in `repulse:ai:key` in localStorage; never relayed through any REPuLse backend
 - **Model override** — override the default model (e.g. `claude-opus-4-7`, `grok-3-mini`); leave blank for the provider default
 - **Share editor code with AI** — when enabled, the current editor buffer is included in the system prompt; disabled by default
+- **Auto-apply edits** — apply `propose_edit` immediately and show the Revert button; default off
+- **Token limit** — session token budget (default 50 000); remaining count shown next to the input
+- **Tool-call limit** — session budget of tool calls the assistant may make (default 100); remaining count shown next to the input
 - **Freesound API key** — enables `freesound_search` and `freesound_load`; get a key at [freesound.org/apiv2/](https://freesound.org/apiv2/); stored in `repulse:ai:freesound-key`
 - **Web Search API key** (optional) — enables `web_search` via Brave Search; get a key at [brave.com/search/api/](https://brave.com/search/api/); stored in `repulse:ai:search-key`; omit to hide the tool from the model entirely
 
