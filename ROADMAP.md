@@ -1547,7 +1547,8 @@ handling, and activity logging.
 - `app/src/repulse/ai/client.cljs` — provider-reported token usage, 429 detection + `complete-with-retry!` (3 attempts); unused SSE `stream!` path removed
 - `app/src/repulse/ai/agent_loop.cljs` — pre-request budget check, usage recording, undo turn begin, activity log callback
 - `app/src/repulse/ai/tools.cljs` — injection guard on all results; `propose_edit` and `insert_snippet` share the overlay / auto-apply + undo path
-- `app/src/repulse/ai/system_prompt.cljs` — `<untrusted>` instruction block; session snapshot and editor code wrapped
+- `app/src/repulse/ai/system_prompt.cljs` — `<untrusted>` instruction block; session snapshot and editor code wrapped; sound-name rules (`:bd :sd :hh :oh`, no invented `:kick`/`:snare`/`:hat`)
+- `app/src/repulse/ai/knowledge.cljs` — `docs/ai/builtins.json` and `cookbook.json` inlined at build time; the prompt gets the full built-in vocabulary and six cookbook examples (the panel previously fetched `/docs/ai/builtins.json`, which 404s because only `app/public` is served, so the assistant never saw the knowledge base)
 - `app/src/repulse/ui/assistant_panel.cljs` + `main.css` — budget badge, undo bar, activity log panel, budget settings fields
 - Tests: `safety_test` (budget, injection guard), `edit_test` (edit matching, undo snapshots), `client_test` (request building and response/usage parsing for all providers); the CLJS test runner now exits non-zero on failure
 

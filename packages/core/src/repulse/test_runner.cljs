@@ -12,7 +12,8 @@
             [repulse.ui.timeline-test]
             [repulse.ai.safety-test]
             [repulse.ai.edit-test]
-            [repulse.ai.client-test]))
+            [repulse.ai.client-test]
+            [repulse.ai.knowledge-test]))
 
 ;; Without this the process exits 0 even when tests fail, so `npm test` (and CI)
 ;; would pass regardless of the result.
@@ -29,4 +30,5 @@
                   'repulse.ui.timeline-test
                   'repulse.ai.safety-test
                   'repulse.ai.edit-test
-                  'repulse.ai.client-test))
+                  'repulse.ai.client-test
+                  'repulse.ai.knowledge-test))

@@ -4,12 +4,25 @@
             [repulse.samples :as samples]
             [repulse.session :as session]
             [repulse.ai.settings :as settings]
-            [repulse.ai.injection-guard :as guard]))
+            [repulse.ai.injection-guard :as guard]
+            [repulse.ai.knowledge :as knowledge]))
+
+(def ^:private sound-rules
+  (str "Sound rules:\n"
+       "- Drum sounds are :bd (kick), :sd (snare), :hh (closed hihat), :oh (open hihat). "
+       "There is NO :kick, :snare, :hat, :hihat or :clap sound — unknown keywords silently "
+       "play a plain 440 Hz beep instead of a drum\n"
+       "- Track names are free-form: (track :kick (seq :bd :_ :bd :_)) is fine; "
+       "sound keywords inside patterns are not\n"
+       "- Pitched notes are note keywords (:c4 :eb3 :fs5) or Hz numbers; "
+       "(chord :minor7 :a3) and (scale :minor :a4 (seq 0 2 4)) produce them\n"
+       "- Any other sample (claps, percussion, drum machines) must come from list_banks / "
+       "list_samples_in_bank or freesound_load — never guess a sample name\n\n"))
 
 (defn build
-  "Build the system prompt string. builtins-summary is a compact preloaded string
-   (empty string is fine — the prompt degrades gracefully without it)."
-  [builtins-summary]
+  "Build the system prompt string from the live session plus the compiled-in
+   knowledge base (built-in vocabulary and cookbook examples)."
+  []
   (let [bpm      (audio/get-bpm)
         state    @audio/scheduler-state
         tracks   (mapv name (keys (:tracks state)))
@@ -42,6 +55,7 @@
       "- Rests are :_ not nil or 0\n"
       "- (scale :minor :c4 (seq 0 2 4 7)) maps degree integers to Hz\n"
       "- (euclidean k n :sample) — Bjorklund rhythms\n\n"
+      sound-rules
       "Editing rules (propose_edit):\n"
       "- First call read_buffer, then pass the exact text to replace as `match` — "
       "copy it verbatim, including whitespace and newlines, without the <untrusted> wrapper\n"
@@ -51,5 +65,9 @@
       "Current session:\n"
       snap
       (or code-ctx "")
-      (when (seq builtins-summary)
-        (str "\n\nBuilt-in vocabulary (partial):\n" builtins-summary)))))
+      (let [vocab (knowledge/builtins-summary)]
+        (when (seq vocab)
+          (str "\n\nBuilt-in vocabulary (all built-in names, by category):\n" vocab)))
+      (let [ex (knowledge/examples)]
+        (when (seq ex)
+          (str "\n\nWorking examples (correct sound names and idioms):\n```lisp\n" ex "\n```"))))))

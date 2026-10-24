@@ -14,15 +14,13 @@
 ;;; circular dependency: agent-loop ← assistant-panel ← agent-loop.
 (defonce ^:private panel-add-message!  (atom nil))
 (defonce ^:private panel-set-pending!  (atom nil))
-(defonce ^:private panel-get-summary   (atom nil))
 (defonce ^:private panel-log-tool-call! (atom nil))
 
 (defn set-panel-fns!
   "Wire assistant-panel callbacks. Called from assistant-panel init!."
-  [{:keys [add-message! set-pending! get-builtins-summary log-tool-call!]}]
+  [{:keys [add-message! set-pending! log-tool-call!]}]
   (reset! panel-add-message!   add-message!)
   (reset! panel-set-pending!   set-pending!)
-  (reset! panel-get-summary    get-builtins-summary)
   (reset! panel-log-tool-call! log-tool-call!))
 
 ;;; Conversation history — shared with panel for display
@@ -134,7 +132,7 @@
     :else
     (let [provider  @settings/provider
           tool-desc (tools/tool-descriptors provider)
-          system    (str (sys-prompt/build (if-let [f @panel-get-summary] (f) "")))]
+          system    (sys-prompt/build)]
       (-> (client/complete-with-retry! system messages tool-desc)
           (.then
             (fn [response]

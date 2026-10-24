@@ -1,7 +1,7 @@
 (ns repulse.ui.assistant-panel
   "AI assistant chat panel — BYO API key, tool-using agent, code insert.
    Exports: init!, show-panel!, hide-panel!, toggle-panel!, send!, visible?,
-            add-message!, set-pending!, get-builtins-summary, log-tool-call!"
+            add-message!, set-pending!, log-tool-call!"
   (:require [repulse.ai.settings :as settings]
             [repulse.ai.agent-loop :as agent-loop]
             [repulse.ai.budget :as budget]
@@ -37,7 +37,6 @@
 (defonce visible?                   (atom false))
 (defonce messages                   (atom (or (load-history) [])))
 (defonce ^:private pending          (atom false))
-(defonce ^:private builtins-summary (atom ""))
 (defonce ^:private activity-log     (atom []))
 (defonce ^:private log-expanded?    (atom false))
 
@@ -71,11 +70,6 @@
   [v]
   (reset! pending v)
   (render-panel!))
-
-(defn get-builtins-summary
-  "Return the current built-ins vocabulary summary string."
-  []
-  @builtins-summary)
 
 (defn log-tool-call!
   "Append a tool call record to the activity log (max 50 entries)."
@@ -411,29 +405,12 @@
 ;; ── Init ──────────────────────────────────────────────────────────────────────
 
 (defn init!
-  "Wire panel events and preload the builtins summary. Must be called after DOM exists."
+  "Wire panel events. Must be called after DOM exists."
   []
-  ;; Preload builtins vocabulary summary async (silent fail — panel still works without it)
-  (-> (js/fetch "/docs/ai/builtins.json")
-      (.then #(.json %))
-      (.then (fn [data]
-               (let [clj-data (js->clj data)
-                     by-cat   (group-by #(get % "category")
-                                        (map (fn [[k v]]
-                                               (assoc (js->clj v) "name" k))
-                                             clj-data))]
-                 (reset! builtins-summary
-                   (str/join "\n"
-                     (for [[cat entries] by-cat]
-                       (str cat ": "
-                            (str/join ", " (map #(get % "name") entries)))))))))
-      (.catch (fn [_] nil)))
-
   ;; Wire agent-loop callbacks (avoids circular require — agent-loop holds atoms)
   (agent-loop/set-panel-fns!
     {:add-message!         add-message!
      :set-pending!         set-pending!
-     :get-builtins-summary get-builtins-summary
      :log-tool-call!       log-tool-call!})
 
   (when-let [panel (el "ai-panel")]
