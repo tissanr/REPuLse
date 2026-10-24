@@ -9,6 +9,7 @@
             [repulse.lisp.integration-test]
             [repulse.fx-test]
             [repulse.session-test]
+            [repulse.samples-test]
             [repulse.ui.timeline-test]))
 
 (defn main []
@@ -16,5 +17,5 @@
                   'repulse.envelope-test
                   'repulse.lisp.eval-test 'repulse.lisp.mini-test
                   'repulse.lisp.integration-test
-                  'repulse.fx-test 'repulse.session-test
+                  'repulse.fx-test 'repulse.session-test 'repulse.samples-test
                   'repulse.ui.timeline-test))
