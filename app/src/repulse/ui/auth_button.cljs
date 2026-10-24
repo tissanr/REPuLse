@@ -1,7 +1,8 @@
 (ns repulse.ui.auth-button
   "Login / logout button rendered into the header.
    Reads from repulse.auth/auth-atom; calls login!/logout! on click."
-  (:require [repulse.auth :as auth]))
+  (:require [repulse.auth :as auth]
+            [repulse.ui.html :refer [escape-html]]))
 
 (defn- el [id] (.getElementById js/document id))
 
@@ -13,9 +14,9 @@
       (let [avatar (auth/avatar-url)]
         (set! (.-innerHTML btn)
               (if avatar
-                (str "<img class=\"auth-avatar\" src=\"" avatar "\" alt=\"\" />"
-                     "<span class=\"auth-name\">" name "</span>")
-                (str "<span class=\"auth-name\">" name "</span>")))
+                (str "<img class=\"auth-avatar\" src=\"" (escape-html avatar) "\" alt=\"\" />"
+                     "<span class=\"auth-name\">" (escape-html name) "</span>")
+                (str "<span class=\"auth-name\">" (escape-html name) "</span>")))
         (set! (.-title btn) "Sign out")
         (set! (.-dataset.action btn) "logout"))
       (do

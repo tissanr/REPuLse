@@ -11,6 +11,14 @@ Machine-readable files for AI assistants, IDE agents, and CI-based tools working
 | `session-schema.json` | JSON Schema (Draft 2020-12) for the output of `(help-export)` | Hand-authored |
 | `cookbook.json` | 28+ playable recipes with id, title, tags, BPM, and code | Hand-authored |
 
+## Used by the in-app assistant
+
+`builtins.json` and `cookbook.json` are compiled into the app (`repulse.ai.knowledge`
+inlines them at build time; `docs` is on the shadow-cljs source path). The assistant's
+system prompt lists every built-in name by category and a handful of cookbook recipes,
+so a change here reaches the assistant on the next build — no fetch, nothing to deploy
+separately. The recipe ids shown to the model are `repulse.ai.knowledge/example-ids`.
+
 ## Quick start for agents
 
 ```js
