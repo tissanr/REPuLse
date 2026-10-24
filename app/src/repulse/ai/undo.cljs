@@ -1,6 +1,7 @@
 (ns repulse.ai.undo
-  "Auto-apply undo stack — saves pre-edit editor state so the user can
-   revert the last assistant turn after an auto-applied propose_edit."
+  "Auto-apply undo stack — saves the pre-turn editor state so the user can
+   revert the last assistant turn after auto-applied propose_edit calls.
+   One entry per turn: the snapshot taken before that turn's first edit."
   (:require [repulse.ui.editor :as editor]))
 
 (def max-stack 20)
@@ -13,19 +14,25 @@
   [id]
   (reset! current-turn id))
 
+(defn push-snapshot
+  "Pure stack update: add {:turn-id :text} unless this turn already has a
+   snapshot (later edits in the same turn must not overwrite the pre-turn
+   text). Keeps at most max-stack turns."
+  [s turn-id text]
+  (if (= turn-id (:turn-id (peek s)))
+    s
+    (let [s (conj s {:turn-id turn-id :text text})]
+      (if (> (count s) max-stack) (subvec s 1) s))))
+
 (defn record-pre-edit!
   "Snapshot the editor text before an auto-applied edit.
    Called by propose_edit when auto-apply is on."
   []
   (when-let [view @editor/editor-view]
-    (let [text (.. view -state -doc toString)]
-      (swap! stack
-             (fn [s]
-               (let [s (conj s {:turn-id @current-turn :text text})]
-                 (if (> (count s) max-stack) (subvec s 1) s)))))))
+    (swap! stack push-snapshot @current-turn (.. view -state -doc toString))))
 
 (defn revert-last-turn!
-  "Restore the editor to the snapshot at the top of the stack.
+  "Restore the editor to the text it had before the most recent assistant turn.
    Returns true if a revert happened, nil if the stack was empty."
   []
   (when-let [entry (peek @stack)]

@@ -1,5 +1,5 @@
 (ns repulse.ui.assistant-panel
-  "AI assistant chat panel — BYO API key, streaming responses, code insert.
+  "AI assistant chat panel — BYO API key, tool-using agent, code insert.
    Exports: init!, show-panel!, hide-panel!, toggle-panel!, send!, visible?,
             add-message!, set-pending!, get-builtins-summary, log-tool-call!"
   (:require [repulse.ai.settings :as settings]
@@ -85,6 +85,20 @@
            (let [entry {:ts (.now js/Date) :tool tool-name :args args :result result}
                  log   (conj log entry)]
              (if (> (count log) 50) (subvec log 1) log)))))
+
+(defn- compact-num
+  "12345 → \"12.3k\" for the header badge."
+  [n]
+  (if (>= n 1000) (str (.toFixed (/ n 1000) 1) "k") (str n)))
+
+(defn- render-log-entry [{:keys [ts tool result]}]
+  (let [t (.toLocaleTimeString (js/Date. ts) [] #js {:hour "2-digit" :minute "2-digit" :second "2-digit"})]
+    (str "<div class=\"ai-log-entry" (when (:error result) " ai-log-entry--error") "\">"
+         "<span class=\"ai-log-ts\">" t "</span> "
+         (escape-html (str tool))
+         (when-let [e (:error result)]
+           (str " — " (escape-html e)))
+         "</div>")))
 
 (defn- export-activity-log! []
   (let [json (js/JSON.stringify (clj->js @activity-log) nil 2)
@@ -231,7 +245,7 @@
                "</div>"
                "<div class=\"ai-field\">"
                "  <label for=\"ai-key-input\" class=\"ai-label\">API key</label>"
-               "  <span class=\"ai-key-hint\">Stored in localStorage only — never sent to REPuLse servers</span>"
+               "  <span class=\"ai-key-hint\">Stored in localStorage; relayed per request via the /api/ai-stream proxy, never logged or stored server-side</span>"
                "  <input id=\"ai-key-input\" class=\"ai-input-text\" type=\"password\""
                "   autocomplete=\"new-password\""
                "   value=\"" (escape-html @settings/api-key) "\">"
@@ -257,7 +271,7 @@
                "> Auto-apply edits (adds Revert button)"
                "  </label>"
                "</div>"
-               "<h4 class=\"ai-settings-section\">Budget (this session)</h4>"
+               "<h3 class=\"ai-settings-title ai-settings-subtitle\">Budget (this session)</h3>"
                (let [{:keys [tokens-used calls-used]} (budget/get-state)
                      lims (budget/limits)]
                  (str
@@ -323,8 +337,12 @@
                      "<span class=\"ai-provider-badge\">"
                      (escape-html @settings/provider) " &middot; " (escape-html (settings/effective-model))
                      "</span>"
-                     "<span class=\"ai-budget-badge\" title=\"Session token / call usage\">"
-                     tokens-used "/" tokens " tok &middot; " calls-used "/" calls " calls"
+                     "<span class=\"ai-budget-badge"
+                     (when (budget/exhausted?) " ai-budget-badge--exhausted")
+                     "\" title=\"Session usage: " tokens-used " / " tokens " tokens, "
+                     calls-used " / " calls " tool calls\">"
+                     (compact-num tokens-used) "/" (compact-num tokens) " tok &middot; "
+                     calls-used "/" calls " tools"
                      "</span>"
                      "<button id=\"ai-settings-btn\" class=\"ai-icon-btn\" title=\"AI settings\" aria-label=\"AI settings\">&#9881;</button>"
                      "<button id=\"ai-clear-btn\" class=\"ai-clear-btn\" type=\"button\" title=\"Clear chat\" aria-label=\"Clear chat\">clear</button>"
@@ -339,33 +357,29 @@
                      (when @pending
                        "<div class=\"ai-msg ai-msg--assistant ai-thinking\">&#8230;</div>")
                      "</div>"
+                     ;; Activity log section — only shown when there are entries
+                     (when (pos? log-count)
+                       (str "<div class=\"ai-log-section\">"
+                            "<button id=\"ai-log-toggle-btn\" class=\"ai-log-toggle\" type=\"button\">"
+                            "&#128269; tool log (" log-count ")"
+                            (if @log-expanded? " &#9650;" " &#9660;")
+                            "</button>"
+                            (when @log-expanded?
+                              (str "<div class=\"ai-log-entries\">"
+                                   (str/join "" (map render-log-entry (rseq @activity-log)))
+                                   "</div>"
+                                   "<div class=\"ai-log-btns\">"
+                                   "<button id=\"ai-log-export-btn\" class=\"ai-btn ai-btn--secondary\">Export log</button>"
+                                   "<button id=\"ai-log-reset-btn\" class=\"ai-btn ai-btn--secondary\">Reset session</button>"
+                                   "</div>"))
+                            "</div>"))
                      "<div class=\"ai-input-row\">"
                      "<textarea id=\"ai-input\" class=\"ai-textarea\""
                      " placeholder=\"Describe a pattern, ask for help…\" rows=\"2\"></textarea>"
                      (if @pending
                        "<button id=\"ai-cancel-btn\" class=\"ai-btn ai-btn--secondary\">cancel</button>"
                        "<button id=\"ai-send-btn\" class=\"ai-btn\">send</button>")
-                     "</div>"
-                     ;; Activity log section — only shown when there are entries
-                     (when (pos? log-count)
-                       (str "<div class=\"ai-log-section\">"
-                            "<button id=\"ai-log-toggle-btn\" class=\"ai-log-toggle\">"
-                            "&#128269; tool log (" log-count ")"
-                            (if @log-expanded? " &#9650;" " &#9660;")
-                            "</button>"
-                            (when @log-expanded?
-                              (str "<div class=\"ai-log-entries\">"
-                                   (str/join ""
-                                     (map (fn [{:keys [tool]}]
-                                            (str "<div class=\"ai-log-entry\">"
-                                                 (escape-html (str tool)) "</div>"))
-                                          (take-last 10 @activity-log)))
-                                   "</div>"
-                                   "<div class=\"ai-log-btns\">"
-                                   "<button id=\"ai-log-export-btn\" class=\"ai-btn ai-btn--secondary\">Export log</button>"
-                                   "<button id=\"ai-log-reset-btn\" class=\"ai-btn ai-btn--secondary\">Reset session</button>"
-                                   "</div>"))
-                            "</div>")))))
+                     "</div>")))
         ;; Scroll messages to bottom
         (when-let [msgs-el (el "ai-messages")]
           (set! (.-scrollTop msgs-el) (.-scrollHeight msgs-el)))))))

@@ -9,7 +9,8 @@
             [repulse.lisp.integration-test]
             [repulse.fx-test]
             [repulse.session-test]
-            [repulse.ui.timeline-test]))
+            [repulse.ui.timeline-test]
+            [repulse.ai.safety-test]))
 
 (defn main []
   (test/run-tests 'repulse.core-test 'repulse.theory-test 'repulse.params-test
@@ -17,4 +18,5 @@
                   'repulse.lisp.eval-test 'repulse.lisp.mini-test
                   'repulse.lisp.integration-test
                   'repulse.fx-test 'repulse.session-test
-                  'repulse.ui.timeline-test))
+                  'repulse.ui.timeline-test
+                  'repulse.ai.safety-test))
