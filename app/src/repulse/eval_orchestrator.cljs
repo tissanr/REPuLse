@@ -9,12 +9,15 @@
   (:require [repulse.lisp.core :as lisp]
             [repulse.core :as core]
             [repulse.audio :as audio]
+            [repulse.samples :as samples]
+            [repulse.sound-check :as sound-check]
             [repulse.fx :as fx]
             [repulse.env.builtins :as builtins]
             [repulse.ui.editor :as editor]
             [repulse.ui.context-panel :as ctx-panel]
             [repulse.lisp-patcher :as patcher]
             [repulse.ai.tools :as ai-tools]
+            [clojure.string :as cstr]
             ["@codemirror/lint" :refer [setDiagnostics]]))
 
 ;;; Owned atoms
@@ -23,6 +26,10 @@
 (defonce pending-mutes (atom #{}))
 
 (defonce ^:private slider-timeout (atom nil))
+
+;; Incremented on every evaluate! — a deferred unknown-sound report is dropped
+;; when a newer evaluation has happened in the meantime.
+(defonce ^:private eval-generation (atom 0))
 
 ;;; Callbacks from app.cljs — populated via init! before evaluate! is called.
 
@@ -71,10 +78,53 @@
                 #js [])]
     (.dispatch view (setDiagnostics (.-state view) diags))))
 
+(defn- set-warning-diagnostics!
+  "Replace editor diagnostics with warning-severity entries [{:from :to :message}]."
+  [view diags]
+  (.dispatch view (setDiagnostics (.-state view)
+                                  (clj->js (mapv #(assoc % :severity "warning") diags)))))
+
+;;; Unknown sound names
+
+(defn- report-unknown-sounds!
+  "Warn about sound keywords in the tracks just evaluated that nothing can play
+   (they fall back to a quiet 440 Hz sine). Waits for in-flight sample manifest
+   loads so banks that are still loading are not reported. Appends the warning
+   to base-msg in the output line and marks each occurrence in the editor."
+  [track-names code base-msg set-output!]
+  (let [gen @eval-generation]
+    (samples/when-loaded!
+     (fn []
+       (when (= gen @eval-generation)
+         (let [tracks   (:tracks @audio/scheduler-state)
+               pats     (keep #(get tracks %) track-names)
+               unknown  (sound-check/unknown-sounds
+                         pats
+                         #(samples/has-bank? (samples/resolve-keyword %))
+                         (samples/bank-names))]
+           (when (seq unknown)
+             (let [msgs (map sound-check/warning-message unknown)]
+               (set-output! (str (when base-msg (str base-msg " — "))
+                                 "Warning: " (cstr/join "; " msgs))
+                            :warning)
+               (when-let [view @editor/editor-view]
+                 (set-warning-diagnostics!
+                  view
+                  (for [[entry msg] (map vector unknown msgs)
+                        r           (sound-check/keyword-ranges code (:name entry))]
+                    (assoc r :message msg))))))))))))
+
 ;;; Evaluation
 
 (defn evaluate! [code]
-  (let [{:keys [on-beat make-stop-fn set-playing! set-output!]} @cbs]
+  (let [{:keys [on-beat make-stop-fn set-playing!]} @cbs
+        ;; Remember the last output message so an unknown-sound warning can be
+        ;; appended to it rather than replacing it.
+        last-output (volatile! nil)
+        set-output! (fn [msg status]
+                      (vreset! last-output msg)
+                      ((:set-output! @cbs) msg status))]
+    (swap! eval-generation inc)
     (builtins/ensure-env!)
     ;; Reset global FX so removed or partial (fx ...) calls cannot inherit
     ;; parameter values from an earlier evaluation.
@@ -157,7 +207,12 @@
                 (doseq [tk @pending-mutes]
                   (when (contains? tracks tk)
                     (audio/mute-track! tk)))
-                (reset! pending-mutes #{})))))))))
+                (reset! pending-mutes #{}))))
+
+          ;; ── Unknown sound names ───────────────────────────────────────────
+          ;; Tracks defined by this evaluation, plus the anonymous :_ track.
+          (report-unknown-sounds! (conj @builtins/seen-tracks :_)
+                                  code @last-output set-output!))))))
 
 ;;; Code patching for live slider updates
 

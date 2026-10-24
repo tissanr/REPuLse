@@ -9,6 +9,7 @@
             [repulse.lisp.integration-test]
             [repulse.fx-test]
             [repulse.session-test]
+            [repulse.sound-check-test]
             [repulse.ui.timeline-test]))
 
 (defn main []
@@ -17,4 +18,5 @@
                   'repulse.lisp.eval-test 'repulse.lisp.mini-test
                   'repulse.lisp.integration-test
                   'repulse.fx-test 'repulse.session-test
+                  'repulse.sound-check-test
                   'repulse.ui.timeline-test))
