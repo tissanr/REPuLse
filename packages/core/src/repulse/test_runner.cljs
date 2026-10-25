@@ -9,11 +9,14 @@
             [repulse.lisp.integration-test]
             [repulse.fx-test]
             [repulse.session-test]
+            [repulse.samples-test]
+            [repulse.sound-check-test]
             [repulse.ui.timeline-test]
             [repulse.ai.safety-test]
             [repulse.ai.edit-test]
             [repulse.ai.client-test]
-            [repulse.ai.knowledge-test]))
+            [repulse.ai.knowledge-test]
+            [repulse.audio-clock-test]))
 
 ;; Without this the process exits 0 even when tests fail, so `npm test` (and CI)
 ;; would pass regardless of the result.
@@ -27,8 +30,11 @@
                   'repulse.lisp.eval-test 'repulse.lisp.mini-test
                   'repulse.lisp.integration-test
                   'repulse.fx-test 'repulse.session-test
+                  'repulse.samples-test
+                  'repulse.sound-check-test
                   'repulse.ui.timeline-test
                   'repulse.ai.safety-test
                   'repulse.ai.edit-test
                   'repulse.ai.client-test
-                  'repulse.ai.knowledge-test))
+                  'repulse.ai.knowledge-test
+                  'repulse.audio-clock-test))

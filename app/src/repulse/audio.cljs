@@ -6,7 +6,8 @@
             [repulse.synth :as synth]
             [repulse.bus :as bus]
             [repulse.midi :as midi]
-            [repulse.preview-track :as preview-track]))
+            [repulse.preview-track :as preview-track]
+            [repulse.audio-clock :as clock]))
 
 ;; Web Audio API scheduler
 ;; Based on Chris Wilson's "A Tale of Two Clocks"
@@ -563,9 +564,57 @@
 (defn get-bpm []
   (/ 240.0 (:cycle-dur @scheduler-state)))
 
+;;; Visual sync — fire highlight / beat callbacks when the sound is heard
+
+(defn- clock-snapshot
+  "Sample the AudioContext and performance.now() clocks together for
+   repulse.audio-clock/audible-perf-ms."
+  [^js ac]
+  (let [ots (when (.-getOutputTimestamp ac)
+              (try (.getOutputTimestamp ac) (catch :default _ nil)))]
+    {:current-time   (.-currentTime ac)
+     :perf-now       (.now js/performance)
+     :output-ts      (when ots
+                       {:context-time     (.-contextTime ots)
+                        :performance-time (.-performanceTime ots)})
+     :output-latency (.-outputLatency ac)
+     :base-latency   (.-baseLatency ac)}))
+
+;; Pending visual callbacks [{:at perf-ms :f fn}], drained by one rAF loop.
+(defonce ^:private visual-queue (atom []))
+(defonce ^:private visual-raf-id (atom nil))
+
+(def ^:private frame-slack-ms 8)    ; half a 60 Hz frame
+(def ^:private visual-stale-ms 250) ; drop callbacks this late (tab was hidden)
+
+(defn- drain-visuals! [now]
+  (let [{:keys [due pending]} (clock/split-due @visual-queue now
+                                               frame-slack-ms visual-stale-ms)]
+    (reset! visual-queue pending)
+    (doseq [{:keys [f]} due]
+      (try (f) (catch :default e (js/console.warn "[REPuLse] visual callback:" e))))
+    (reset! visual-raf-id
+            (when (seq pending)
+              (js/requestAnimationFrame drain-visuals!)))))
+
+(defn- schedule-visual!
+  "Run f on the animation frame closest to performance.now() time at-ms."
+  [at-ms f]
+  (when-not (.-hidden js/document)
+    (swap! visual-queue clock/enqueue {:at at-ms :f f})
+    (when-not @visual-raf-id
+      (reset! visual-raf-id (js/requestAnimationFrame drain-visuals!)))))
+
+(defn- clear-visuals! []
+  (when-let [id @visual-raf-id]
+    (js/cancelAnimationFrame id))
+  (reset! visual-raf-id nil)
+  (reset! visual-queue []))
+
 (defn schedule-cycle! [ac state cycle]
   (let [{:keys [tracks muted cycle-dur on-beat on-event on-fx-event]} state
-        sp {:start [cycle 1] :end [(inc cycle) 1]}]
+        sp   {:start [cycle 1] :end [(inc cycle) 1]}
+        snap (clock-snapshot ac)]
     (doseq [[track-name pattern] tracks]
       (when (and pattern (not (contains? muted track-name)))
         (let [evs (core/query pattern sp)]
@@ -601,9 +650,7 @@
                         note-num (when hz (midi/hz->midi (double hz)))
                         amp-v    (float (:amp value 1.0))
                         velocity (min 127 (max 0 (Math/round (* amp-v 127))))
-                        ac-now   (.-currentTime ac)
-                        perf-now (.now js/performance)
-                        ts-on    (+ perf-now (* (- t ac-now) 1000))
+                        ts-on    (clock/audible-perf-ms snap t)
                         ts-off   (+ ts-on (* dur 1000))]
                     (when note-num
                       (midi/send-note-on!  midi-ch note-num velocity ts-on)
@@ -611,11 +658,10 @@
                 (when on-fx-event
                   (on-fx-event (:value ev) t))
                 (when (and on-event (:source ev) (not (preview-track/preview-track? track-name)))
-                  (let [delay-ms (max 0 (* 1000 (- t (.-currentTime ac))))]
-                    (js/setTimeout #(on-event (:source ev)) delay-ms)))
+                  (let [src (:source ev)]
+                    (schedule-visual! (clock/audible-perf-ms snap t) #(on-event src))))
                 (when on-beat
-                  (let [delay-ms (* 1000 (- t (.-currentTime ac)))]
-                    (js/setTimeout on-beat delay-ms))))))))))))
+                  (schedule-visual! (clock/audible-perf-ms snap t) on-beat)))))))))))
 
 (defn tick! []
   (let [ac    (get-ctx)
@@ -649,6 +695,7 @@
     (.. node -port (postMessage #js {:type "stop"})))
   (when-let [id (:interval-id @scheduler-state)]
     (js/clearInterval id))
+  (clear-visuals!)
   ;; Disconnect and clean up all per-track nodes
   (doseq [[_ {:keys [gain-node fx-chain]}] @track-nodes]
     (try (.disconnect gain-node) (catch :default _))

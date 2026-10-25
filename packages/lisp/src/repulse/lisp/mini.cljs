@@ -242,9 +242,11 @@
   (let [n (count pats)]
     (core/pattern
       (fn [sp]
-        (let [cycle (int (Math/floor (core/rat->float (:start sp))))
-              idx   (mod cycle n)]
-          (core/query (nth pats idx) sp))))))
+        (mapcat (fn [piece]
+                  (let [cycle (int (Math/floor (core/rat->float (:start piece))))
+                        idx   (mod cycle n)]
+                    (core/query (nth pats idx) piece)))
+                (core/split-cycles sp))))))
 
 (defn- scale-events
   "Query pat within [0,1) and scale/shift event times into [slot-sf, slot-ef).
