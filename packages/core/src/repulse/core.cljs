@@ -59,6 +59,20 @@
 (defn query [pat sp]
   ((:query pat) sp))
 
+(defn split-cycles
+  "Split a span at cycle boundaries: [0, 5/2) → ([0,1) [1,2) [2,5/2))."
+  [{:keys [start end]}]
+  (let [start-c (int (Math/floor (rat->float start)))
+        end-c   (int (Math/ceil  (rat->float end)))]
+    (keep #(span-intersect (cycle-span %) (span start end))
+          (range start-c end-c))))
+
+(defn- per-cycle
+  "Lift a query fn that decides by the cycle its span starts in, so it also
+   answers spans covering several cycles — as (fast 2 …) asks of its input."
+  [f]
+  (fn [sp] (mapcat f (split-cycles sp))))
+
 ;;; Core combinators
 
 (defn pure
@@ -144,25 +158,28 @@
 
 (defn rev [pat]
   (pattern
-   (fn [sp]
-     (map (fn [e]
-            (let [mirror (fn [{:keys [start end]}]
-                           (let [c (int (Math/floor (rat->float start)))
-                                 c1 (int->rat (inc c))]
-                             (span (rat- c1 (rat- end (int->rat c)))
-                                   (rat- c1 (rat- start (int->rat c))))))]
-              (-> e
-                  (update :whole mirror)
-                  (update :part  mirror))))
-          (query pat sp)))))
+   (per-cycle
+    (fn [{:keys [start end]}]
+      ;; Reflect time within the queried cycle c: t ↦ c + (c+1) − t.
+      ;; Query the reflected span so partial spans return the right events.
+      (let [c       (int (Math/floor (rat->float start)))
+            axis    (int->rat (inc (* 2 c)))
+            reflect (fn [t] (rat- axis t))
+            mirror  (fn [{s :start e :end}] (span (reflect e) (reflect s)))]
+        (map (fn [e]
+               (-> e
+                   (update :whole mirror)
+                   (update :part  mirror)))
+             (query pat (span (reflect end) (reflect start)))))))))
 
 (defn every [n transform pat]
   (pattern
-   (fn [sp]
-     (let [cycle (int (Math/floor (rat->float (:start sp))))]
-       (if (zero? (mod cycle n))
-         (query (transform pat) sp)
-         (query pat sp))))))
+   (per-cycle
+    (fn [sp]
+      (let [cycle (int (Math/floor (rat->float (:start sp))))]
+        (if (zero? (mod cycle n))
+          (query (transform pat) sp)
+          (query pat sp)))))))
 
 (defn arrange*
   "plan: [[pattern cycles] …]
@@ -175,24 +192,25 @@
                    [] plan)
         total    (or (:to (last timeline)) 1)]
     (pattern
-     (fn [{:keys [start end]}]
-       (let [g-cycle  (int (Math/floor (rat->float start)))
-             lc       (mod g-cycle total)
-             loop-off (- g-cycle lc)
-             entry    (some #(when (and (>= lc (:from %)) (< lc (:to %))) %) timeline)]
-         (when entry
-           (let [sec-off     (:from entry)
-                 offset      (+ loop-off sec-off)
-                 local-start (rat+ start [(- offset) 1])
-                 local-end   (rat+ end   [(- offset) 1])
-                 evs         (query (:pat entry) {:start local-start :end local-end})]
-             (map (fn [e]
-                    (-> e
-                        (update :whole #(span (rat+ (:start %) [offset 1])
-                                              (rat+ (:end   %) [offset 1])))
-                        (update :part  #(span (rat+ (:start %) [offset 1])
-                                              (rat+ (:end   %) [offset 1])))))
-                  evs))))))))
+     (per-cycle
+      (fn [{:keys [start end]}]
+        (let [g-cycle  (int (Math/floor (rat->float start)))
+              lc       (mod g-cycle total)
+              loop-off (- g-cycle lc)
+              entry    (some #(when (and (>= lc (:from %)) (< lc (:to %))) %) timeline)]
+          (when entry
+            (let [sec-off     (:from entry)
+                  offset      (+ loop-off sec-off)
+                  local-start (rat+ start [(- offset) 1])
+                  local-end   (rat+ end   [(- offset) 1])
+                  evs         (query (:pat entry) {:start local-start :end local-end})]
+              (map (fn [e]
+                     (-> e
+                         (update :whole #(span (rat+ (:start %) [offset 1])
+                                               (rat+ (:end   %) [offset 1])))
+                         (update :part  #(span (rat+ (:start %) [offset 1])
+                                               (rat+ (:end   %) [offset 1])))))
+                   evs)))))))))
 
 ;;; ── Phase I: Pattern Combinators ───────────────────────────────────
 
@@ -235,11 +253,12 @@
     (if (zero? n)
       (pattern (fn [_] []))
       (pattern
-       (fn [{:keys [start] :as sp}]
-         (let [cycle  (int (Math/floor (rat->float start)))
-               idx    (mod cycle n)
-               pat    (nth pats idx)]
-           (query pat sp)))))))
+       (per-cycle
+        (fn [{:keys [start] :as sp}]
+          (let [cycle  (int (Math/floor (rat->float start)))
+                idx    (mod cycle n)
+                pat    (nth pats idx)]
+            (query pat sp))))))))
 
 (defn late
   "Shift all events forward in time by amount (fraction of a cycle).
@@ -283,11 +302,12 @@
   [prob f pat]
   (let [threshold (int (* prob 100))]
     (pattern
-     (fn [sp]
-       (let [cycle (int (Math/floor (rat->float (:start sp))))]
-         (if (< (cycle-hash cycle) threshold)
-           (query (f pat) sp)
-           (query pat sp)))))))
+     (per-cycle
+      (fn [sp]
+        (let [cycle (int (Math/floor (rat->float (:start sp))))]
+          (if (< (cycle-hash cycle) threshold)
+            (query (f pat) sp)
+            (query pat sp))))))))
 
 (defn sometimes
   "Apply transform on ~50% of cycles.
