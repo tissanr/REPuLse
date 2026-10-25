@@ -192,3 +192,9 @@ returns void language sql security definer as $$
   set usage_count = usage_count + 1
   where id = p_snippet_id;
 $$;
+
+-- Postgres grants EXECUTE on functions to PUBLIC by default, which would let
+-- anyone with the anon key call this security-definer function directly via
+-- PostgREST RPC and inflate usage counts. Only the service role (used by
+-- /api/snippets/[id]/use) may call it.
+revoke execute on function public.increment_snippet_usage(uuid) from public, anon, authenticated;
