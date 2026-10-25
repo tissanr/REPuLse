@@ -79,6 +79,10 @@
   (let [evs (core/query (mini/parse "<bd sd>") (core/span [1 1] [2 1]))]
     (is (= [:sd] (mapv :value evs)))))
 
+(deftest alternation-multi-cycle-span
+  ;; (fast 2 "<bd sd>") asks for two cycles at once → bd then sd
+  (is (= [:bd :sd] (values (core/fast 2 (mini/parse "<bd sd>"))))))
+
 (deftest alternation-wraps
   ;; "<bd sd cp>" on cycle 3 → wraps back to bd
   (let [evs (core/query (mini/parse "<bd sd cp>") (core/span [3 1] [4 1]))]

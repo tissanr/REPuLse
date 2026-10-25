@@ -255,7 +255,9 @@
 
 (defn load-github!
   "Discover audio files in a public GitHub repo and register them as sample banks.
-   Groups by immediate parent folder; files in the repo root go under repo-name."
+   Groups by immediate parent folder; files in the repo root go under repo-name.
+   Returns a Promise that rejects when the branch's tree cannot be fetched, so
+   callers can fall back to another branch."
   [owner repo branch]
   (let [api-url  (str "https://api.github.com/repos/" owner "/" repo
                       "/git/trees/" branch "?recursive=1")
@@ -287,10 +289,7 @@
                      (when (specs/loaded-source? source)
                        (swap! loaded-sources conj source)))
                    (js/console.log (str "[REPuLse] loaded " (count banks)
-                                        " banks from github:" owner "/" repo)))))
-        (.catch (fn [e]
-                  (js/console.warn "[REPuLse] GitHub load failed:"
-                                   (str owner "/" repo) e))))))
+                                        " banks from github:" owner "/" repo))))))))
 
 (defn load-external!
   "Load samples from url.
@@ -307,10 +306,13 @@
            owner  (first parts)
            repo   (second parts)
            branch (nth parts 2 nil)]
-       (if branch
-         (load-github! owner repo branch)
-         (-> (load-github! owner repo "main")
-             (.catch (fn [_] (load-github! owner repo "master"))))))
+       (-> (if branch
+             (load-github! owner repo branch)
+             (-> (load-github! owner repo "main")
+                 (.catch (fn [_] (load-github! owner repo "master")))))
+           (.catch (fn [e]
+                     (js/console.warn "[REPuLse] GitHub load failed:"
+                                      (str owner "/" repo) e)))))
 
      (str/ends-with? (str/lower-case url) ".edn")
      (load-lisp-manifest! url)
