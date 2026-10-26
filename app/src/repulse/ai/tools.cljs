@@ -393,6 +393,11 @@
   (cond-> registry
     (not (seq @settings/search-api-key)) (dissoc :web_search)))
 
+(defn known-names
+  "Names of the tools currently offered to the model."
+  []
+  (set (map name (keys (active-registry)))))
+
 (defn tool-descriptors
   "Return tool list for the current provider, omitting web_search when no key is set."
   [provider]
