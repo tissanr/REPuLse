@@ -34,7 +34,7 @@ without a human:
 |---|---|---|---|---|---|
 | **M1** | | **Tidal-Lisp core** | | | |
 | 1 | TL1 | Patterned arguments & pattern arithmetic | 🤖 | full | opus |
-| 2 | TL2 | Continuous signals | 🤖 | outline | sonnet |
+| 2 | TL2 | Continuous signals | 🤖 | full | sonnet |
 | 3 | TL3 | Time & structure combinators | 🤖 | outline | sonnet |
 | 4 | TL4 | Randomness & conditionals | 🤖 | outline | sonnet |
 | 5 | TL5 | Layering, pitch & harmony | 🤖 | outline | sonnet |
