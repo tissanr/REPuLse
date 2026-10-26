@@ -1,5 +1,74 @@
 # REPuLse — Roadmap
 
+## Direction & milestones (from 2026-10-26)
+
+REPuLse is a **Tidal-style Lisp** for writing **full songs in code**, which can also
+**play alongside other gear** and works as a **sketchpad** that hands ideas on to a DAW.
+The four goals form layers, each depending on the one below, so the implementation
+order follows the layers:
+
+```
+M4  Sketchpad          capture ideas (incl. MIDI keyboard → code), export, snapshots
+M3  Plays with others  MIDI CC, Ableton Link, OSC, latency, outputs
+M2  Full songs         sections, song form, automation, navigation, multi-buffer projects
+M1  Tidal-Lisp core    the pattern language: Strudel/Tidal parity, effects, drum kits
+```
+
+Strudel parity is tracked function by function in
+[docs/STRUDEL-PARITY.md](docs/STRUDEL-PARITY.md) and is the yardstick for M1.
+
+### Automation markers
+
+Every planned phase carries one marker saying how far it can be implemented and verified
+without a human:
+
+| Marker | Meaning |
+|---|---|
+| 🤖 **auto** | Claude can implement it and verify it end to end with unit tests, offline-render tests and Playwright. Safe to run unattended. |
+| 🤖👂 **auto + human check** | Implementable and mostly testable automatically, but final acceptance needs a human listen or real hardware (MIDI keyboard). |
+| 🧑 **human-in-loop** | Needs hardware or external software (Ableton, other apps, audio interfaces) in the loop throughout. |
+
+### Implementation order
+
+| # | Phase | Title | Marker | Spec |
+|---|---|---|---|---|
+| **M1** | | **Tidal-Lisp core** | | |
+| 1 | TL1 | Patterned arguments & pattern arithmetic | 🤖 | full |
+| 2 | TL2 | Continuous signals | 🤖 | outline |
+| 3 | TL3 | Time & structure combinators | 🤖 | outline |
+| 4 | TL4 | Randomness & conditionals | 🤖 | outline |
+| 5 | TL5 | Layering, pitch & harmony | 🤖 | outline |
+| 6 | TL6 | Sample slicing & playback control | 🤖👂 | outline |
+| 7 | TL7 | Per-event effects & control parameters | 🤖👂 | outline |
+| 8 | KIT1 | High-quality drum kits | 🤖👂 | outline |
+| **M2** | | **Full songs** | | |
+| 9 | SONG1 | Sections, song form & full-song render | 🤖 | outline |
+| 10 | SONG2 | Song-time automation & transitions | 🤖 | outline |
+| 11 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | outline |
+| 12 | SONG4 | Multi-buffer projects | 🤖 | outline |
+| **M3** | | **Plays with others** | | |
+| 13 | N1 | MIDI CC → parameter mapping | 🤖👂 | full |
+| 14 | LIVE1 | Companion bridge: Ableton Link & OSC | 🧑 | outline |
+| 15 | LIVE2 | Latency compensation, nudge & per-track outputs | 🧑 | outline |
+| **M4** | | **Sketchpad** | | |
+| 16 | SK1 | Stem export & full-song MIDI export | 🤖 | outline |
+| 17 | SK2 | Session snapshots & eval history | 🤖 | outline |
+| 18 | SK3 | MIDI capture 1: click, fixed grid, velocity → code | 🤖👂 | outline |
+| 19 | SK4 | MIDI capture 2: always-on capture | 🤖👂 | outline |
+| 20 | SK5 | MIDI capture 3: grid & feel detection | 🤖👂 | outline |
+
+**Outline** specs settle goal, scope, open questions and acceptance criteria. Expand an
+outline into a full spec (exact code paths, step-by-step implementation, files to change)
+before implementing it. Dependencies are listed at the top of each spec.
+
+**Side track** (not on the critical path, can run any time): DOC1, TEST2, UI1, R3,
+PLUG1, O2.
+
+**Deferred** (⏸, outside the four milestones; revisit after M2): AI2c, AI4b, AI5,
+SYN3, SYN4, SYN5, P2, O3, O4.
+
+---
+
 ## Phase 1 — First Sound ✅ *delivered*
 
 Browser REPL with ClojureScript pattern engine and Web Audio synthesis.
@@ -559,6 +628,8 @@ See full spec: [PROMPTS/phase-n-midi-io.md](PROMPTS/phase-n-midi-io.md)
 
 ## Phase N1 — MIDI CC → Parameter Mapping 📋 *planned*
 
+> **Milestone 3** · **Automation:** 🤖👂 auto + human check — CC handling is testable with synthetic MIDI messages; a real controller check is needed for acceptance.
+
 Bind any MIDI controller knob or fader to any numeric parameter in REPuLse for
 hands-on live performance control.
 
@@ -627,7 +698,9 @@ See full spec: [PROMPTS/PHASE-O2-PWA-OFFLINE.md](PROMPTS/PHASE-O2-PWA-OFFLINE.md
 
 ---
 
-## Phase O3 — Collaborative Sessions 📋 *planned*
+## Phase O3 — Collaborative Sessions ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Shared live-coding editor sessions.
 
@@ -641,7 +714,9 @@ See full spec: [PROMPTS/PHASE-O3-COLLAB.md](PROMPTS/PHASE-O3-COLLAB.md)
 
 ---
 
-## Phase O4 — Mobile Layout 📋 *planned*
+## Phase O4 — Mobile Layout ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Touch-friendly responsive layout for phones and tablets.
 
@@ -735,7 +810,9 @@ See full spec: [PROMPTS/phase-p-modular-routing.md](PROMPTS/phase-p-modular-rout
 
 ---
 
-## Phase P2 — Modular Effect Routing 📋 *planned*
+## Phase P2 — Modular Effect Routing ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Advanced routing for the global and per-track effect chains: reorderable master
 bus, parallel effect paths, and "Aux Sends" that route audio to named busses.
@@ -926,7 +1003,9 @@ See full spec: [PROMPTS/PHASE-SYN2.md](PROMPTS/PHASE-SYN2.md)
 
 ---
 
-## Phase SYN3 — Bowed String Waveguide 📋 *planned*
+## Phase SYN3 — Bowed String Waveguide ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Add a full bi-directional digital waveguide bowed-string voice to the WASM engine,
 unlocking `:violin`, `:viola`, `:cello`, and `:bass-arco` as continuously sustaining
@@ -946,7 +1025,9 @@ See full spec: [PROMPTS/PHASE-SYN3.md](PROMPTS/PHASE-SYN3.md)
 
 ---
 
-## Phase SYN4 — Electric Guitar Voices 📋 *planned*
+## Phase SYN4 — Electric Guitar Voices ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Add five electric guitar presets — `:strat`, `:tele`, `:es335`, `:sg`, `:lp` — to the
 SYN1 Karplus-Strong engine with per-instrument body resonance IIR filters and two new
@@ -966,7 +1047,9 @@ See full spec: [PROMPTS/PHASE-SYN4.md](PROMPTS/PHASE-SYN4.md)
 
 ---
 
-## Phase SYN5 — Lo-Fi Piano 📋 *planned*
+## Phase SYN5 — Lo-Fi Piano ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Add `(synth :piano)` and `(synth :piano-felt)` using an extended Karplus-Strong model
 with a bi-linear decay filter that approximates hammer-struck string character — bright
@@ -1472,7 +1555,9 @@ See full spec: [PROMPTS/PHASE-AI2b.md](PROMPTS/PHASE-AI2b.md)
 
 ---
 
-## Phase AI2c — Custom & Local AI Endpoints 📋 *planned*
+## Phase AI2c — Custom & Local AI Endpoints ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 A `custom` provider for any OpenAI-compatible endpoint — local servers (LM Studio,
 Ollama, llama.cpp, vLLM), self-hosted gateways (LiteLLM), or unlisted hosted providers.
@@ -1584,7 +1669,9 @@ See full spec: [PROMPTS/PHASE-AI4.md](PROMPTS/PHASE-AI4.md)
 
 ---
 
-## Phase AI4b — Encrypted AI Key Relay 📋 *planned*
+## Phase AI4b — Encrypted AI Key Relay ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Optional backend-backed AI provider key storage and request relay for users who do not
 want provider keys stored in browser localStorage.
@@ -1600,7 +1687,9 @@ See full spec: [PROMPTS/PHASE-AI4B-KEY-RELAY.md](PROMPTS/PHASE-AI4B-KEY-RELAY.md
 
 ---
 
-## Phase AI5 — Variation Workflows & Live Audition 📋 *planned*
+## Phase AI5 — Variation Workflows & Live Audition ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Extend the AI3 agent so it can generate multiple code variants for any named def (or
 the full buffer), then let the user hear each one live before committing — turning AI
@@ -1639,6 +1728,297 @@ entire application — chrome, panels, and CodeMirror editor — instantly on se
 - Gear button (⚙) added to the header in `app/src/repulse/app.cljs`
 
 See full spec: [PROMPTS/PHASE-UI1.md](PROMPTS/PHASE-UI1.md)
+
+---
+
+## Phase TL1 — Patterned Arguments & Pattern Arithmetic 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖 auto
+
+Make every numeric argument patternable and add arithmetic on patterns with an explicit
+choice of rhythm source; fix onset retriggering and rational precision on the way.
+
+**Key additions:**
+- Scheduler, export and MIDI paths trigger only onsets (fixes events that cross a cycle
+  boundary firing twice, e.g. `(slow 4 …)`)
+- `->rat` float → rational coercion; `1/3` stays exact through `fast`/`slow`/`late`; dev overflow guard
+- `app-left` / `app-right` / `app-both`, `inner-join` / `outer-join` / `squeeze-join`, `patternify`
+- Patterned args for `fast slow late early every euclidean sometimes-by degrade-by off jux-by`;
+  mini-notation strings accepted as pattern arguments (`(fast "<1 2>" pat)`)
+- `add sub mul div set` with modes `:in` (default) / `:out` / `:mix` / `:squeeze`
+
+See full spec: [PROMPTS/PHASE-TL1.md](PROMPTS/PHASE-TL1.md)
+
+---
+
+## Phase TL2 — Continuous Signals 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖 auto
+
+Continuous patterns sampled by rhythmic structure, for smooth movement and randomness.
+
+**Key additions:**
+- Analog (whole-less) events in `core.cljs`
+- `sine cosine saw isaw tri square rand irand perlin`, `range rangex segment`
+- Tidal-compatible deterministic `time->rand` (reused by TL4 and KIT1)
+
+See full spec: [PROMPTS/PHASE-TL2.md](PROMPTS/PHASE-TL2.md)
+
+---
+
+## Phase TL3 — Time & Structure Combinators 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖 auto
+
+Tidal's rhythmic vocabulary, function list from `docs/STRUDEL-PARITY.md`.
+
+**Key additions:**
+- `struct mask ply chunk iter palindrome linger inside outside compress zoom fastgap hurry rot`
+- `swing swing-by nudge`, euclid variants, `polymeter`, `first-of`/`last-of`, `when-mod`
+- Mini-notation extensions (`!`, `.`, `,`, `{}%n`, `(k,n)`) where missing
+
+See full spec: [PROMPTS/PHASE-TL3.md](PROMPTS/PHASE-TL3.md)
+
+---
+
+## Phase TL4 — Randomness & Conditionals 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖 auto
+
+Controlled unpredictability with Tidal semantics; replaces the coarse `cycle-hash`.
+
+**Key additions:**
+- Existing random functions re-based on `time->rand` (probabilities preserved)
+- `some-cycles-by randcat wrandcat shuffle scramble when when-mod almost-always almost-never`, seeds
+- Mini-notation `?p` and `|` random choice where missing
+
+See full spec: [PROMPTS/PHASE-TL4.md](PROMPTS/PHASE-TL4.md)
+
+---
+
+## Phase TL5 — Layering, Pitch & Harmony 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖 auto
+
+Layer a pattern on itself and work with harmony musically.
+
+**Key additions:**
+- `superimpose layer echo echo-with`
+- Chord-symbol parser (`"Cm7"`, `"F#7b9"`), `arp` modes, `voicing`, `root-notes`, `scale-transpose`
+
+See full spec: [PROMPTS/PHASE-TL5.md](PROMPTS/PHASE-TL5.md)
+
+---
+
+## Phase TL6 — Sample Slicing & Playback Control 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+
+Cut, rearrange and fit samples, the core of breakbeat live coding.
+
+**Key additions:**
+- `chop striate slice splice fit loop-at legato clip n speed unit`
+- `cut` choke groups in the playback path (identical in offline render)
+
+See full spec: [PROMPTS/PHASE-TL6.md](PROMPTS/PHASE-TL6.md)
+
+---
+
+## Phase TL7 — Per-Event Effects & Control Parameters 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+
+Effects become part of the pattern: per-event filter and distortion, and send-based
+reverb/delay per orbit, all patternable.
+
+**Key additions:**
+- Per-voice inserts in WASM (allocation-free): `lpf hpf bpf resonance shape crush coarse vowel`
+- Send effects per `orbit`: `room size delay delay-time delay-feedback`
+- Same behaviour for samples and synth voices, and in offline render
+
+See full spec: [PROMPTS/PHASE-TL7.md](PROMPTS/PHASE-TL7.md)
+
+---
+
+## Phase KIT1 — High-Quality Drum Kits 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+
+Studio-quality multisampled drum kits with velocity layers and round-robin, from
+openly licensed sources only (no proprietary Roland module samples).
+
+**Key additions:**
+- Manifest extension for velocity layers and round-robin groups (backwards compatible)
+- `velocity` per-event parameter (layer selection + gain); `(kit :name)`
+- One or two curated kits with documented licences, lazily loaded
+
+See full spec: [PROMPTS/PHASE-KIT1.md](PROMPTS/PHASE-KIT1.md)
+
+---
+
+## Phase SONG1 — Sections, Song Form & Full-Song Render 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖 auto
+
+Songs with a beginning and an end: tracks defined top to bottom, one arrangement block
+at the bottom with named sections.
+
+**Key additions:**
+- `song` / `section` form: named sections with bar lengths and per-section track selection
+- Song position in the scheduler; end behaviour `:stop` / `:loop`; start from a section
+- Full-song WAV render sized from the song form; progress in the context panel
+- `arrange` and `play-scenes` keep working unchanged
+
+See full spec: [PROMPTS/PHASE-SONG1.md](PROMPTS/PHASE-SONG1.md)
+
+---
+
+## Phase SONG2 — Song-Time Automation & Transitions 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖 auto
+
+Parameters that follow curves over the song timeline, plus fills, risers and drops.
+
+**Key additions:**
+- Automation lanes scoped to sections or bar ranges; linear/exp/hold curves or TL2 signals
+- Deterministic in song time (seeking gives the same values as playing through)
+- Fill/riser/drop helpers built from ordinary patterns; works in full-song render
+
+See full spec: [PROMPTS/PHASE-SONG2.md](PROMPTS/PHASE-SONG2.md)
+
+---
+
+## Phase SONG3 — Editor Navigation: Outline & Go-to-Definition 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖 auto
+
+Make define-before-use songs navigable: the arrangement sits at the bottom, one click
+away from every definition.
+
+**Key additions:**
+- Pure outline extraction of `def defn defsynth track song section` (tolerates invalid code)
+- Outline panel with click-to-jump and current-entry highlight
+- Cmd/Ctrl-click go-to-definition for symbols and track keywords, with "back"
+
+See full spec: [PROMPTS/PHASE-SONG3.md](PROMPTS/PHASE-SONG3.md)
+
+---
+
+## Phase SONG4 — Multi-Buffer Projects 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖 auto
+
+Projects with several named buffers; a one-file song is a project with only `main`.
+
+**Key additions:**
+- Buffer tabs; one `main` buffer; `(use :drums :bass)` evaluates buffers top to bottom (cycle detection)
+- Project-wide duplicate-track check and buffer-aware error locations
+- Session schema v3 with migration from v2; outline/go-to-definition across buffers
+
+See full spec: [PROMPTS/PHASE-SONG4.md](PROMPTS/PHASE-SONG4.md)
+
+---
+
+## Phase LIVE1 — Companion Bridge: Ableton Link & OSC 📋 *planned*
+
+> **Milestone 3** · **Automation:** 🧑 human-in-loop
+
+A small local helper app so REPuLse can sync with DAWs and drive other tools.
+
+**Key additions:**
+- Localhost WebSocket bridge with Ableton Link (tempo, phase, start/stop) and OSC UDP send
+- `osc-out` with timestamped OSC bundles; connection status in the context panel
+- REPuLse stays fully usable without the bridge
+
+See full spec: [PROMPTS/PHASE-LIVE1.md](PROMPTS/PHASE-LIVE1.md)
+
+---
+
+## Phase LIVE2 — Latency Compensation, Nudge & Per-Track Outputs 📋 *planned*
+
+> **Milestone 3** · **Automation:** 🧑 human-in-loop
+
+Sit tight with external gear and route tracks to separate outputs where browsers allow.
+
+**Key additions:**
+- Per-path offsets (audio, MIDI, clock, OSC/Link), live nudge (key/command/MIDI CC), calibration helper
+- Per-track output routing on multi-channel devices with clear fallback; latency readout
+
+See full spec: [PROMPTS/PHASE-LIVE2.md](PROMPTS/PHASE-LIVE2.md)
+
+---
+
+## Phase SK1 — Stem Export & Full-Song MIDI Export 📋 *planned*
+
+> **Milestone 4** · **Automation:** 🤖 auto
+
+Hand a song to a DAW: one WAV per track and one multi-track MIDI file.
+
+**Key additions:**
+- Fix `midi-export` (events from every cycle are currently stacked on cycle 0)
+- Stems for the full song length with identical frame counts; FX included if feasible
+- Format-1 MIDI with one track per REPuLse track, velocity, tempo and section markers; drums on channel 10
+
+See full spec: [PROMPTS/PHASE-SK1.md](PROMPTS/PHASE-SK1.md)
+
+---
+
+## Phase SK2 — Session Snapshots & Eval History 📋 *planned*
+
+> **Milestone 4** · **Automation:** 🤖 auto
+
+Never lose an idea: every evaluation is kept, and named takes can be restored.
+
+**Key additions:**
+- Append-only eval history (deduplicated, bounded) with preview, restore and diff
+- Named project snapshots ("take A / take B"); restore auto-snapshots the current state
+
+See full spec: [PROMPTS/PHASE-SK2.md](PROMPTS/PHASE-SK2.md)
+
+---
+
+## Phase SK3 — MIDI Capture 1: Click, Fixed Grid, Velocity → Code 📋 *planned*
+
+> **Milestone 4** · **Automation:** 🤖👂 auto + human check
+
+Play a part on a MIDI keyboard and get REPuLse code.
+
+**Key additions:**
+- MIDI Note On/Off input (today only CC is handled)
+- Capture dialog / `capture!`: tempo, bars, grid, count-in, click, target (cursor or new buffer)
+- Pure fixed-grid quantiser and code generator: mini-notation, scale degrees when a scale is active,
+  optional `velocity` pattern; preview before insert
+
+See full spec: [PROMPTS/PHASE-SK3.md](PROMPTS/PHASE-SK3.md)
+
+---
+
+## Phase SK4 — MIDI Capture 2: Always-On Capture 📋 *planned*
+
+> **Milestone 4** · **Automation:** 🤖👂 auto + human check
+
+Keep listening; turn the last N bars you played into code after the fact.
+
+**Key additions:**
+- Bar-aligned ring buffer of note events while capture mode is on
+- `grab!` (command, key, button or MIDI trigger) → SK3 quantiser + generator → insert
+
+See full spec: [PROMPTS/PHASE-SK4.md](PROMPTS/PHASE-SK4.md)
+
+---
+
+## Phase SK5 — MIDI Capture 3: Grid & Feel Detection 📋 *planned*
+
+> **Milestone 4** · **Automation:** 🤖👂 auto + human check
+
+Detect the grid and keep the human feel as `swing`/`nudge` instead of snapping it away.
+
+**Key additions:**
+- Pure grid detection (8/16/32/triplets) with a complexity penalty
+- Swing ratio and timing offset extraction; optional tempo detection
+- Simplest-code-that-matches generation; "keep feel" toggle and strictness setting
+
+See full spec: [PROMPTS/PHASE-SK5.md](PROMPTS/PHASE-SK5.md)
 
 ---
 

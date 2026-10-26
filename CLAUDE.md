@@ -166,7 +166,14 @@ rejected: it sounds plucked and re-triggers instead of sustaining.
 
 Write `PROMPTS/PHASE-XYZ.md` and add a `## Phase XYZ — Title 📋 *planned*` section to
 `ROADMAP.md` (2–4 bullets + `See full spec: [PROMPTS/PHASE-XYZ.md](PROMPTS/PHASE-XYZ.md)`).
-Commit both together.
+Give every new phase a milestone and an automation marker (🤖 auto · 🤖👂 auto + human
+check · 🧑 human-in-loop, defined at the top of `ROADMAP.md`) in both files, and add it
+to the *Implementation order* table there. Commit both together.
+
+Phases marked 🤖 may be implemented and verified unattended. 🤖👂 phases may be
+implemented unattended but are not marked delivered until a human has done the listen or
+hardware check named in the spec. An *outline* spec must be expanded into a full spec
+before implementation starts.
 
 ### Rule 2 — Definition of done for a phase
 
