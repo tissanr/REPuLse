@@ -159,6 +159,11 @@ rejected: it sounds plucked and re-triggers instead of sustaining.
 
 `main` is protected — all changes go via Pull Request.
 
+**Branches:** `dev` is the integration branch. Phase work, both manual and automated,
+targets `dev`; a human merges `dev` → `main` by PR. The unattended pipeline
+(`.claude/commands/auto-phase.md`, run by a usage-gated scheduled task) implements only
+🤖 phases, one at a time, and its PRs auto-merge into `dev` once CI passes.
+
 **Source of truth:** `ROADMAP.md` holds every phase and its status;
 `PROMPTS/PHASE-*.md` holds each spec. There is no other status table to update.
 
@@ -166,7 +171,14 @@ rejected: it sounds plucked and re-triggers instead of sustaining.
 
 Write `PROMPTS/PHASE-XYZ.md` and add a `## Phase XYZ — Title 📋 *planned*` section to
 `ROADMAP.md` (2–4 bullets + `See full spec: [PROMPTS/PHASE-XYZ.md](PROMPTS/PHASE-XYZ.md)`).
-Commit both together.
+Give every new phase a milestone and an automation marker (🤖 auto · 🤖👂 auto + human
+check · 🧑 human-in-loop, defined at the top of `ROADMAP.md`) in both files, and add it
+to the *Implementation order* table there. Commit both together.
+
+Phases marked 🤖 may be implemented and verified unattended. 🤖👂 phases may be
+implemented unattended but are not marked delivered until a human has done the listen or
+hardware check named in the spec. An *outline* spec must be expanded into a full spec
+before implementation starts.
 
 ### Rule 2 — Definition of done for a phase
 

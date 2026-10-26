@@ -1,6 +1,6 @@
 ---
 allowed-tools: Bash(git *), Bash(gh *), Read, Glob, Grep
-description: Commit all changes, push, and open a PR against main
+description: Commit all changes, push, and open a PR against dev
 ---
 
 ## Context
@@ -9,7 +9,7 @@ description: Commit all changes, push, and open a PR against main
 - Current git diff (staged and unstaged): !`git diff HEAD`
 - Current branch: !`git branch --show-current`
 - Recent commits on this branch: !`git log --oneline -10`
-- Diff from main: !`git diff main...HEAD --stat`
+- Diff from dev: !`git diff origin/dev...HEAD --stat`
 
 ## Your task
 
@@ -19,7 +19,7 @@ Based on the changes above, do all of the following:
 
 2. **Push** the branch to origin (with `-u` if not yet tracking).
 
-3. **Create a PR** against `main` using `gh pr create`. The PR body MUST follow this exact structure:
+3. **Create a PR** against `dev` using `gh pr create --base dev` (only `dev` → `main` release PRs target `main`). The PR body MUST follow this exact structure:
 
 ```
 ## Summary
