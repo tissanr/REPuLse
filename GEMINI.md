@@ -1,8 +1,8 @@
 # REPuLse — Gemini Agent Guide
 
 > The primary project reference is **[CLAUDE.md](CLAUDE.md)** — read it before this file.
-> It contains architecture, core concepts, coding conventions, phase lifecycle rules,
-> syntax highlighting checklist, and the full phase status table.
+> It contains architecture, coding conventions, build commands and the phase workflow
+> rules. Phase status lives in [ROADMAP.md](ROADMAP.md).
 
 ---
 

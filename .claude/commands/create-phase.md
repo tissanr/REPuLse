@@ -1,6 +1,6 @@
 ---
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash(git log *)
-description: Create a new REPuLse phase — write the PROMPTS file, add the row to CLAUDE.md, and add the section to ROADMAP.md
+description: Create a new REPuLse phase — write the PROMPTS file and add the section to ROADMAP.md
 ---
 
 ## Idea
@@ -14,7 +14,7 @@ $ARGUMENTS
 Read these files before writing anything:
 
 1. `ROADMAP.md` — understand all existing phases, the naming/numbering convention, and the style of planned entries
-2. `CLAUDE.md` — phase lifecycle rules (especially **Rule 1**) and project constraints
+2. `CLAUDE.md` — phase workflow rules (especially **Rule 1**) and project constraints
 3. `PROMPTS/phase-m-lisp-superpowers.md` — canonical style reference for PROMPTS files
 4. Scan the source files most relevant to the idea (e.g. `eval.cljs` for Lisp features, `lib.rs` for audio, `fx.cljs` for effects) — enough to write accurate background and file-change sections
 
@@ -59,11 +59,6 @@ A checklist of 8–15 acceptance criteria written as `- [ ] …` items. Each ite
 3–6 bullet points scoping the phase — explicitly name adjacent features that are out of scope and belong to follow-on phases.
 
 ## Step 4 — Register the phase (Rule 1 from CLAUDE.md)
-
-**`CLAUDE.md` phase table** — add a new row in the right position (near related phases):
-```
-| {ID}  | Short description (≤60 chars)                                  | planned      |
-```
 
 **`ROADMAP.md`** — add a new section near related phases:
 ```markdown

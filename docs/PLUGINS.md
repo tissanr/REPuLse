@@ -437,4 +437,4 @@ npm run gen:grammar    # regenerate Lezer parser
 npm run gen:ai-docs    # regenerate docs/ai/builtins.json
 ```
 
-See `docs/ai/README.md` for the full update workflow and `CLAUDE.md` Rule 5 for the complete checklist.
+See `docs/ai/README.md` for the full update workflow and `CLAUDE.md` Rule 3 for the complete checklist.

@@ -329,7 +329,7 @@ Documentation should be verified like code:
 - [ ] In-app help/content model recommendations are documented for a later UI phase
 - [ ] Examples are manually tested in the browser
 - [ ] `npm run test` passes
-- [ ] ROADMAP, CLAUDE.md, and AGENTS.md mark DOC1 delivered only after the docs land
+- [ ] ROADMAP marks DOC1 delivered only after the docs land
 
 ---
 

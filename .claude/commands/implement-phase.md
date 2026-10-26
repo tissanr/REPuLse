@@ -33,21 +33,22 @@ Work through the "Files to change" table. Apply all changes described in the spe
 
 **After Rust changes:** run `npm run build:wasm`
 **After grammar changes:** run `npm run gen:grammar` (overwrites committed `parser.js`)
-**After any change:** run `npm run test:core` to catch regressions
+**After any change:** run `npm run test` (plus `npx shadow-cljs compile app` for app-layer changes) to catch regressions
 
 ### 3. Grammar/completions/hover docs checklist
 
-If the phase adds new Lisp built-in names (see CLAUDE.md "Syntax highlighting + completions checklist"):
+If the phase adds new Lisp built-in names, follow **Rule 3** in `CLAUDE.md`:
 - [ ] Add name to `BuiltinName` in `repulse-lisp.grammar`
 - [ ] Run `npm run gen:grammar`
 - [ ] Add `{ label, type, detail }` entry in `completions.js`
-- [ ] Add hover doc entry in the hover-docs map
+- [ ] Add an entry to `app/src/repulse/content/builtin_meta.edn`
+- [ ] Run `npm run gen:ai-docs`
 
 ### 4. Verify the Definition of Done
 
 Work through the checklist at the bottom of the phase prompt. For browser-verifiable items, use `preview_start` and the preview tools.
 
-### 5. Update `docs/USAGE.md` (Rule 2, step 3)
+### 5. Update `docs/USAGE.md` (Rule 2, step 2)
 
 - Add every new built-in, effect, or parameter to the relevant reference tables
 - Add at least one usage example per new feature
@@ -55,9 +56,7 @@ Work through the checklist at the bottom of the phase prompt. For browser-verifi
 
 Update `README.md` too if the phase adds user-facing syntax or changes the quick-start example.
 
-### 6. Mark as delivered (Rule 2, steps 1–2)
-
-**`CLAUDE.md` phase table** — change `planned` → `✓ delivered` for this phase.
+### 6. Mark as delivered (Rule 2, steps 1 and 3)
 
 **`ROADMAP.md`** — find the `## Phase $ARGUMENTS` section and:
 - Change `📋 *planned*` → `✅ *delivered*` in the heading
@@ -65,7 +64,7 @@ Update `README.md` too if the phase adds user-facing syntax or changes the quick
 
 ### 7. Commit
 
-Commit implementation + docs + CLAUDE.md + ROADMAP.md together. Message format:
+Run `npm run test:all` first (Rule 2, step 1). Commit implementation + docs + ROADMAP.md together. Message format:
 ```
 feat: implement Phase $ARGUMENTS — <short title>
 ```
