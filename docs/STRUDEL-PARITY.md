@@ -41,7 +41,7 @@ Method-chaining (`s("bd").fast(2)`) maps to Lisp application or threading:
 | Family | Phase | ✅ | 🟡 | 📋 | 🔁 | ⛔ | ❓ | Total |
 |---|---|---|---|---|---|---|---|---|
 | Core & pattern arithmetic | TL1 | 15 | 2 | 18 | 7 | 4 | 8 | 54 |
-| Continuous signals | TL2 | 0 | 0 | 31 | 3 | 0 | 2 | 36 |
+| Continuous signals | TL2 | 23 | 0 | 8 | 3 | 0 | 2 | 36 |
 | Time & structure | TL3 | 1 | 2 | 41 | 9 | 2 | 6 | 61 |
 | Randomness & conditionals | TL4 | 3 | 6 | 23 | 8 | 1 | 3 | 44 |
 | Layering, pitch & harmony | TL5 | 4 | 3 | 12 | 5 | 0 | 2 | 26 |
@@ -50,7 +50,7 @@ Method-chaining (`s("bd").fast(2)`) maps to Lisp application or threading:
 | Mini-notation | TL1/TL3/TL4 | 8 | 0 | 9 | 0 | 0 | 0 | 17 |
 | Tidal-only functions | TL3–TL5 | 0 | 0 | 8 | 3 | 0 | 2 | 13 |
 | Visuals, I/O & JS-specific | — | 4 | 2 | 1 | 1 | 13 | 3 | 24 |
-| **Total** | | **42** | **30** | **174** | **42** | **28** | **37** | **353** |
+| **Total** | | **65** | **30** | **151** | **42** | **28** | **37** | **353** |
 
 Rows grouped in one line (e.g. `sine2 / cosine2 / …`) count once.
 
@@ -123,46 +123,46 @@ arithmetic on pattern values.
 
 ## Continuous signals — TL2
 
-None exist yet. **Name clashes, decided (2026-10-26):** UGen names inside `defsynth` live
+Signals are sampled at the **start** of the structure event's whole (`app-left`/`app-right` query the signal over the whole), so `(segment 4 saw)` gives `0 0.25 0.5 0.75`; this follows Strudel and differs from Tidal ≥ 1.9's midpoint rule. `rand` is Tidal's `timeToRand` (64-bit) exactly. **Name clashes, decided (2026-10-26):** UGen names inside `defsynth` live
 in their own environment and are unaffected. At top level, `saw` and `square` become
 signals (the voice shortcuts `(saw :c4)` / `(square :c4)` give way to `(synth :saw …)`),
 `(noise)` stays a voice, and `range` dispatches on whether its last argument is a pattern.
 
 | Strudel | REPuLse | Status | Phase | Notes |
 |---|---|---|---|---|
-| `signal` | `signal` | 📋 | TL2 | Build a signal from a function of time |
-| `steady` | `steady` | 📋 | TL2 | Constant continuous value |
-| `time` | `time` | 📋 | TL2 | Current cycle position as a signal |
-| `sine` | `sine` | 📋 | TL2 | 0..1 |
-| `cosine` | `cosine` | 📋 | TL2 | |
-| `saw` | `saw` (signal) | 📋 | TL2 | **Decided:** top-level `saw` becomes the signal; voice shortcut `(saw :c4)` replaced by `(synth :saw …)` |
-| `isaw` | `isaw` | 📋 | TL2 | |
-| `tri` | `tri` (signal) | 📋 | TL2 | Collides with UGen `tri` |
-| `itri` | `itri` | 📋 | TL2 | |
-| `square` | `square` (signal) | 📋 | TL2 | **Decided:** as `saw` |
-| `isquare` | `isquare` | 📋 | TL2 | |
-| `sine2` / `cosine2` / `saw2` / `isaw2` / `tri2` / `itri2` / `square2` / `isquare2` | same | 📋 | TL2 | Bipolar −1..1 versions |
-| `rand` | `rand` | 📋 | TL2 | Deterministic, seeded by time |
-| `rand2` | `rand2` | 📋 | TL2 | |
-| `irand` | `irand` | 📋 | TL2 | |
-| `brand` | `brand` | 📋 | TL2 | Random booleans |
-| `brandBy` | `brand-by` | 📋 | TL2 | |
-| `perlin` | `perlin` | 📋 | TL2 | |
-| `berlin` | `berlin` | 📋 | TL2 | |
-| `run` | `run` | 📋 | TL2 | `0 1 2 … n-1` — discrete, but defined with the signals |
-| `binary` / `binaryN` | `binary`, `binary-n` | 📋 | TL2 | Number → boolean step pattern |
-| `binaryL` / `binaryNL` | `binary-l` | 📋 | TL2 | List-returning variants |
-| `randL` | `rand-l` | 📋 | TL2 | |
-| `randrun` | `randrun` | 📋 | TL2 | Random permutation of `0..n-1` |
-| `segment` / `seg` | `segment` | 📋 | TL2 | Sample a signal n times per cycle |
+| `signal` | `signal` | ✅ | TL2 | Build a signal from a function of time |
+| `steady` | `steady` | ✅ | TL2 | Constant continuous value |
+| `time` | `time` | ✅ | TL2 | Current cycle position as a signal |
+| `sine` | `sine` | ✅ | TL2 | 0..1 |
+| `cosine` | `cosine` | ✅ | TL2 | Tidal phase (`0.25 ~> sine`, 0 at t = 0); Strudel's is `early 1/4` (1 at t = 0) |
+| `saw` | `saw` (signal) | ✅ | TL2 | Voice shortcut removed; use `(synth :saw …)`; calling `(saw :c4)` is an error with a hint |
+| `isaw` | `isaw` | ✅ | TL2 |  |
+| `tri` | `tri` (signal) | ✅ | TL2 | Tidal `fastAppend saw isaw`; top-level signal (the `defsynth` UGen `tri` is unaffected) |
+| `itri` | `itri` | ✅ | TL2 |  |
+| `square` | `square` (signal) | ✅ | TL2 | Voice shortcut removed; use `(synth :square :pw … )` |
+| `isquare` | `isquare` | ✅ | TL2 |  |
+| `sine2` / `cosine2` / `saw2` / `isaw2` / `tri2` / `itri2` / `square2` / `isquare2` | same | ✅ | TL2 | Bipolar −1..1 versions |
+| `rand` | `rand` | ✅ | TL2 | Tidal `timeToRand` exactly (64-bit); sampled at span start like Strudel |
+| `rand2` | `rand2` | ✅ | TL2 |  |
+| `irand` | `irand` | ✅ | TL2 |  |
+| `brand` | `brand` | 📋 | TL4 | Random booleans; moved from TL2 (TL2 spec) |
+| `brandBy` | `brand-by` | 📋 | TL4 | moved from TL2 (TL2 spec) |
+| `perlin` | `perlin` | ✅ | TL2 |  |
+| `berlin` | `berlin` | 📋 | TL4 | moved from TL2 (TL2 spec) |
+| `run` | `run` | ✅ | TL2 | `0 1 2 … n-1` — discrete, but defined with the signals |
+| `binary` / `binaryN` | `binary`, `binary-n` | 📋 | TL3 | Number → boolean step pattern; moved from TL2 (TL2 spec) |
+| `binaryL` / `binaryNL` | `binary-l` | 📋 | TL3 | List-returning variants; moved from TL2 (TL2 spec) |
+| `randL` | `rand-l` | 📋 | TL4 | moved from TL2 (TL2 spec) |
+| `randrun` | `randrun` | 📋 | TL4 | Random permutation of `0..n-1`; moved from TL2 (TL2 spec) |
+| `segment` / `seg` | `segment` | ✅ | TL2 | Sample a signal n times per cycle |
 | `seg` | `segment` | 🔁 | — | |
-| `range` | `range` | 📋 | TL2 | Collides with Lisp `range`. **Decided:** dispatch on last argument (pattern → Tidal `range`, else collection `range`) |
-| `rangex` | `rangex` | 📋 | TL2 | Exponential range |
-| `range2` | `range2` | 📋 | TL2 | |
-| `toBipolar` | `to-bipolar` | 📋 | TL2 | |
-| `fromBipolar` | `from-bipolar` | 📋 | TL2 | |
+| `range` | `range` | ✅ | TL2 | Dispatches on the last argument: pattern → Tidal `range`, otherwise the Lisp collection `range` |
+| `rangex` | `rangex` | ✅ | TL2 | Exponential range |
+| `range2` | `range2` | ✅ | TL2 |  |
+| `toBipolar` | `to-bipolar` | ✅ | TL2 |  |
+| `fromBipolar` | `from-bipolar` | ✅ | TL2 |  |
 | `mousex` / `mousey` | — | ❓ | — | UI-driven signals; app layer, not `core` |
-| `withSeed` / `seed` | `with-seed` | 📋 | TL2 | Needed so random signals can be varied deterministically |
+| `withSeed` / `seed` | `with-seed` | 📋 | TL4 | moved from TL2 (TL2 spec); until then vary randomness with `(early 7 rand)` |
 | `useRNG` / `getRandsAtTime` | — | ❓ | — | Internal RNG plumbing |
 | `envelope` signals (`lfo`, `env` modulators) | — | 🔁 | — | See TL7 modulators; T1 `tween` covers parameter ramps |
 | `discretise` (Tidal) | `segment` | 🔁 | — | |

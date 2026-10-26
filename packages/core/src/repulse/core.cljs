@@ -1,4 +1,5 @@
-(ns repulse.core)
+(ns repulse.core
+  (:refer-clojure :exclude [rand time]))
 
 ;;; Rational arithmetic — rationals as [numerator denominator]
 
@@ -115,6 +116,13 @@
 (defn query [pat sp]
   ((:query pat) sp))
 
+(defn- map-spans
+  "Apply f (span → span) to the event's :part, and to its :whole when present.
+   Analog events (whole = nil) keep whole = nil."
+  [f ev]
+  (cond-> (update ev :part f)
+    (:whole ev) (update :whole f)))
+
 (defn split-cycles
   "Split a span at cycle boundaries: [0, 5/2) → ([0,1) [1,2) [2,5/2))."
   [{:keys [start end]}]
@@ -186,6 +194,11 @@
   (boolean
    (when-let [w (:whole ev)]
      (= (:start w) (:start (:part ev))))))
+
+(defn analog?
+  "True for a continuous (analog) event: it has no :whole."
+  [ev]
+  (nil? (:whole ev)))
 
 (defn query-onsets
   "Like query, but returns only the onset events — those that should trigger
@@ -351,11 +364,9 @@
          (let [fast-sp (span (rat* (:start sp) fr) (rat* (:end sp) fr))
                evs     (query pat fast-sp)]
            (map (fn [e]
-                  (-> e
-                      (update :whole #(span (rat-div (:start %) fr)
-                                            (rat-div (:end %) fr)))
-                      (update :part  #(span (rat-div (:start %) fr)
-                                            (rat-div (:end %) fr)))))
+                  (map-spans #(span (rat-div (:start %) fr)
+                                    (rat-div (:end %) fr))
+                             e))
                 evs)))))))
 
 (defn- slow* [factor pat]
@@ -386,10 +397,7 @@
             axis    (int->rat (inc (* 2 c)))
             reflect (fn [t] (rat- axis t))
             mirror  (fn [{s :start e :end}] (span (reflect e) (reflect s)))]
-        (map (fn [e]
-               (-> e
-                   (update :whole mirror)
-                   (update :part  mirror)))
+        (map (fn [e] (map-spans mirror e))
              (query pat (span (reflect end) (reflect start)))))))))
 
 (defn- every* [n transform pat]
@@ -431,11 +439,9 @@
                   local-end   (rat+ end   [(- offset) 1])
                   evs         (query (:pat entry) {:start local-start :end local-end})]
               (map (fn [e]
-                     (-> e
-                         (update :whole #(span (rat+ (:start %) [offset 1])
-                                               (rat+ (:end   %) [offset 1])))
-                         (update :part  #(span (rat+ (:start %) [offset 1])
-                                               (rat+ (:end   %) [offset 1])))))
+                     (map-spans #(span (rat+ (:start %) [offset 1])
+                                       (rat+ (:end   %) [offset 1]))
+                                e))
                    evs)))))))))
 
 ;;; ── Phase I: Pattern Combinators ───────────────────────────────────
@@ -501,11 +507,9 @@
              q-end   (rat- end off)
              evs     (query pat (span q-start q-end))]
          (map (fn [e]
-                (-> e
-                    (update :whole #(span (rat+ (:start %) off)
-                                          (rat+ (:end %) off)))
-                    (update :part  #(span (rat+ (:start %) off)
-                                          (rat+ (:end %) off)))))
+                (map-spans #(span (rat+ (:start %) off)
+                                  (rat+ (:end %) off))
+                           e))
               evs))))))
 
 (defn late
@@ -647,3 +651,156 @@
    (off 1/8 (fast 2) pat) — original + 1/8-cycle-shifted double-speed copy"
   [amount f pat]
   (stack* [pat (late amount (f pat))]))
+
+;;; ── Phase TL2: Deterministic RNG (Tidal timeToRand) ─────────────────
+
+(def ^:private two-29 536870912)
+
+(defn- i64 [x] (js/BigInt.asIntN 64 x))
+
+(defn xorwise
+  "Tidal's xorshift step on a 64-bit signed integer (BigInt in, BigInt out).
+   Public: TL4's random combinators reuse it."
+  [x]
+  (let [a (i64 (js* "((~{} << 13n) ^ ~{})" x x))
+        b (i64 (js* "((~{} >> 17n) ^ ~{})" a a))]
+    (i64 (js* "((~{} << 5n) ^ ~{})" b b))))
+
+(defn time->int-seed
+  "Tidal timeToIntSeed' (before xorwise): truncate(frac(t / 300) * 2^29) for an
+   exact rational time [n d] → BigInt, in (-2^29, 2^29)."
+  [[n d]]
+  (let [n   (js/BigInt n)
+        den (js* "(~{} * 300n)" (js/BigInt d))
+        r   (js* "(~{} % ~{})" n den)]               ; truncating remainder = properFraction
+    (js* "((~{} * 536870912n) / ~{})" r den)))       ; BigInt division truncates toward zero
+
+(defn time->rand
+  "Tidal timeToRand: deterministic float in [0, 1) for rational time t."
+  [t]
+  (let [s (xorwise (time->int-seed (->rat t)))
+        m (js* "(((~{} % 536870912n) + 536870912n) % 536870912n)" s)] ; floored mod
+    (/ (js/Number m) two-29)))
+
+;;; ── Phase TL2: Continuous signals ───────────────────────────────────
+
+(defn signal
+  "Continuous pattern from f : rational time → value. A query returns one analog
+   event (whole nil) covering the query span, sampled at the span's start."
+  [f]
+  (pattern
+   (fn [{:keys [start end] :as sp}]
+     (if (rat< start end)
+       [(event (f start) nil sp)]
+       []))))
+
+(defn steady [v] (signal (constantly v)))
+
+(defn- cycle-pos
+  "Exact position within the cycle, as a float in [0, 1): (n mod d) / d."
+  [[n d]]
+  (/ (mod n d) d))
+
+(defn- sine-at [x] (/ (+ (Math/sin (* 2 Math/PI x)) 1) 2))
+
+(def time (signal rat->float))
+(def saw (signal cycle-pos))
+(def isaw (signal #(- 1 (cycle-pos %))))
+(def sine (signal #(sine-at (cycle-pos %))))
+(def cosine (signal #(sine-at (cycle-pos (rat- % [1 4])))))
+(defn- tri-at [x] (if (< x 0.5) (* 2 x) (- 2 (* 2 x))))
+(def tri (signal #(tri-at (cycle-pos %))))
+(def itri (signal #(- 1 (tri-at (cycle-pos %)))))
+(def square (signal #(if (< (cycle-pos %) 0.5) 0 1)))
+(def isquare (signal #(if (< (cycle-pos %) 0.5) 1 0)))
+(def rand (signal time->rand))
+
+(def perlin
+  (signal
+   (fn [[n d :as t]]
+     (let [fl (Math/floor (/ n d))
+           x  (- (rat->float t) fl)
+           a  (time->rand [fl 1])
+           b  (time->rand [(inc fl) 1])
+           sm (+ (* 6 (Math/pow x 5)) (* -15 (Math/pow x 4)) (* 10 (Math/pow x 3)))]
+       (+ a (* sm (- b a)))))))
+
+(defn to-bipolar   [pat] (fmap #(if (number? %) (- (* 2 %) 1) %) pat))
+(defn from-bipolar [pat] (fmap #(if (number? %) (/ (+ % 1) 2) %) pat))
+
+(def sine2 (to-bipolar sine))
+(def cosine2 (to-bipolar cosine))
+(def saw2 (to-bipolar saw))
+(def isaw2 (to-bipolar isaw))
+(def tri2 (to-bipolar tri))
+(def itri2 (to-bipolar itri))
+(def square2 (to-bipolar square))
+(def isquare2 (to-bipolar isquare))
+(def rand2 (to-bipolar rand))
+
+(defn- irand* [n]
+  (fmap #(Math/floor (* % (rat->float (->rat n)))) rand))
+
+(defn irand
+  "Random integers 0 … n-1 as a continuous pattern. n may be a pattern."
+  [n]
+  (if (pattern? n) (inner-join (fmap irand* n)) (irand* n)))
+
+(defn- run* [n]
+  (let [k (int (rat->float (->rat n)))]
+    (if (pos? k) (seq* (vec (range k))) silence)))
+
+(defn run
+  "Discrete pattern 0 … n-1 in one cycle. n may be a pattern."
+  [n]
+  (if (pattern? n) (inner-join (fmap run* n)) (run* n)))
+
+;;; ── Phase TL2: Shaping ──────────────────────────────────────────────
+
+(defn- segment* [n pat]
+  ;; Tidal: _segment n p = _fast n (pure id) <* p
+  (app-left (fn [_ v] v) (fast* n (pure true)) pat))
+
+(defn segment
+  "Sample pat n times per cycle: n discrete events with values taken from pat at
+   each onset. n may be a number, rational or pattern."
+  [n pat]
+  ((patternify segment*) n pat))
+
+(defn- num-val [x] (if (vector? x) (rat->float x) x))
+
+(defn- scale-val [v lo hi]
+  (if (number? v)
+    (let [lo (num-val lo) hi (num-val hi)]
+      (+ lo (* (- hi lo) v)))
+    v))
+
+(defn range-pat
+  "Tidal range: scale numeric values v in [0,1] to lo + (hi - lo)·v.
+   lo/hi: numbers (fast path, fmap) or patterns (app-left, structure from pat).
+   Non-numeric values pass through unchanged."
+  [lo hi pat]
+  (if (or (pattern? lo) (pattern? hi))
+    (app-left (fn [v [l h]] (scale-val v l h))
+              pat
+              (app-both vector (->pat lo) (->pat hi)))
+    (fmap #(scale-val % lo hi) pat)))
+
+(defn rangex-pat
+  "Exponential range: exp(range(log lo, log hi, v)). lo and hi must be > 0,
+   otherwise throw ex-info {:type :eval-error} \"rangex needs positive bounds\"."
+  [lo hi pat]
+  (let [check (fn [x] (when (and (number? (num-val x)) (not (pos? (num-val x))))
+                        (throw (ex-info "rangex needs positive bounds"
+                                        {:type :eval-error}))))]
+    (when-not (pattern? lo) (check lo))
+    (when-not (pattern? hi) (check hi))
+    (let [lg (fn [x] (if (pattern? x) (fmap #(do (check %) (Math/log (num-val %))) x)
+                         (Math/log (num-val x))))]
+      (fmap #(if (number? %) (Math/exp %) %)
+            (range-pat (lg lo) (lg hi) pat)))))
+
+(defn range2-pat
+  "Strudel range2: range over a bipolar input = (range-pat lo hi (from-bipolar pat))."
+  [lo hi pat]
+  (range-pat lo hi (from-bipolar pat)))

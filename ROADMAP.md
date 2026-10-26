@@ -34,7 +34,7 @@ without a human:
 |---|---|---|---|---|---|
 | **M1** | | **Tidal-Lisp core** | | | |
 | 1 | TL1 | Patterned arguments & pattern arithmetic | 🤖 | full | opus |
-| 2 | TL2 | Continuous signals | 🤖 | outline | sonnet |
+| 2 | TL2 | Continuous signals | 🤖 | full | sonnet |
 | 3 | TL3 | Time & structure combinators | 🤖 | outline | sonnet |
 | 4 | TL4 | Randomness & conditionals | 🤖 | outline | sonnet |
 | 5 | TL5 | Layering, pitch & harmony | 🤖 | outline | sonnet |
@@ -1788,7 +1788,7 @@ See full spec: [PROMPTS/PHASE-TL1.md](PROMPTS/PHASE-TL1.md)
 
 ---
 
-## Phase TL2 — Continuous Signals 📋 *planned*
+## Phase TL2 — Continuous Signals ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖 auto
 
@@ -1798,6 +1798,28 @@ Continuous patterns sampled by rhythmic structure, for smooth movement and rando
 - Analog (whole-less) events in `core.cljs`
 - `sine cosine saw isaw tri square rand irand perlin`, `range rangex segment`
 - Tidal-compatible deterministic `time->rand` (reused by TL4 and KIT1)
+
+**Delivered:**
+- `packages/core/src/repulse/core.cljs` — analog (whole-less) events: `analog?`, nil-whole
+  safety in `fast`/`slow`/`rev`/`late`/`early`/`arrange` via `map-spans`; `signal` / `steady`
+  (one event over the query span, sampled at its start); `time saw isaw sine cosine tri itri
+  square isquare perlin`, bipolar `…2` variants, `to-bipolar` / `from-bipolar`; `run`,
+  `segment`, `range-pat` / `rangex-pat` / `range2-pat`; `core/specs` accepts analog events
+- Tidal-exact RNG: `xorwise`, `time->int-seed`, `time->rand` (64-bit semantics via BigInt),
+  `rand`, `rand2`, `irand`; `cycle-hash` untouched (TL4 replaces it)
+- Lisp — new `builtins/signals.cljs` (signals are bare values; `signal steady segment rangex
+  range2 irand run …`); `range` dispatches on a pattern last argument; the `saw`/`square`
+  voice shortcuts are removed in favour of `(synth :saw …)`; calling a pattern gives a
+  helpful eval error
+- App — a track that is a bare signal (no rhythm) plays nothing and shows an output warning
+  plus one `console.warn` per evaluation (`sound_check/has-analog-events?`); test API reports
+  nil whole times for analog events
+- Rule 5 artefacts: grammar + `parser.js`, `completions.js`, `hover.js`, `builtin_meta.edn`
+  (new `"signal"` category), `docs/ai/builtins.json`, `docs/ai/concepts.json`; USAGE "Signals"
+  and "Signals vs. tween" sections; STRUDEL-PARITY TL2 rows (23 done)
+- Tests: core (shape, waveforms, `time->rand` reference table, perlin, range, nil-whole
+  safety), Lisp integration (DoD examples, helpful error, documented examples), sound-check
+  guard, two Playwright offline-render tests (bare `sine` is silent, `pan sine2` has 8 onsets)
 
 See full spec: [PROMPTS/PHASE-TL2.md](PROMPTS/PHASE-TL2.md)
 

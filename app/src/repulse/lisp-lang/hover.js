@@ -172,6 +172,158 @@ const DOCS = {
     example: "(transpose 7 (scale :major :c4 (seq 0 1 2 3)))",
   },
 
+  // --- Continuous signals (TL2) ---
+  "signal": {
+    signature: "(signal f)",
+    description: "Build a continuous pattern from a function of absolute cycle time (a number, e.g. 0.25 for a quarter into cycle 0). Sampled at the start of each structure event.",
+    example: "(segment 4 (signal (fn [t] (* t 2))))",
+  },
+  "steady": {
+    signature: "(steady v)",
+    description: "A continuous pattern that always has the value v.",
+    example: "(segment 4 (steady 3))",
+  },
+  "time": {
+    signature: "time",
+    description: "Continuous signal whose value is the absolute cycle time: 0, 0.25, 0.5, 0.75 in cycle 0 and 1, 1.25, ... in cycle 1.",
+    example: "(segment 4 time)",
+  },
+  "sine": {
+    signature: "sine",
+    description: "Continuous signal: sine wave 0..1, 0.5 at t=0. Values at t = 0, 1/4, 1/2, 3/4: 0.5 1 0.5 0. Has no rhythm of its own: give it structure with (segment n sine) or use it as a parameter, e.g. (pan sine pat).",
+    example: "(segment 8 (range 200 2000 sine))",
+  },
+  "cosine": {
+    signature: "cosine",
+    description: "Continuous signal: cosine wave 0..1 (0 at t=0, Tidal phase). Values at t = 0, 1/4, 1/2, 3/4: 0 0.5 1 0.5. Has no rhythm of its own: give it structure with (segment n cosine) or use it as a parameter, e.g. (pan cosine pat).",
+    example: "(segment 8 cosine)",
+  },
+  "isaw": {
+    signature: "isaw",
+    description: "Continuous signal: inverted saw, 1→0 each cycle. Values at t = 0, 1/4, 1/2, 3/4: 1 0.75 0.5 0.25. Has no rhythm of its own: give it structure with (segment n isaw) or use it as a parameter, e.g. (pan isaw pat).",
+    example: "(segment 4 isaw)",
+  },
+  "itri": {
+    signature: "itri",
+    description: "Continuous signal: inverted triangle wave. Values at t = 0, 1/4, 1/2, 3/4: 1 0.5 0 0.5. Has no rhythm of its own: give it structure with (segment n itri) or use it as a parameter, e.g. (pan itri pat).",
+    example: "(segment 4 itri)",
+  },
+  "isquare": {
+    signature: "isquare",
+    description: "Continuous signal: inverted square wave, 1 then 0. Values at t = 0, 1/4, 1/2, 3/4: 1 1 0 0. Has no rhythm of its own: give it structure with (segment n isquare) or use it as a parameter, e.g. (pan isquare pat).",
+    example: "(segment 4 isquare)",
+  },
+  "sine2": {
+    signature: "sine2",
+    description: "Bipolar (-1..1) version of sine: (to-bipolar sine). Handy for pan and other signed parameters.",
+    example: "(pan sine2 (fast 8 (seq :hh)))",
+  },
+  "cosine2": {
+    signature: "cosine2",
+    description: "Bipolar (-1..1) version of cosine: (to-bipolar cosine). Handy for pan and other signed parameters.",
+    example: "(pan cosine2 (fast 8 (seq :hh)))",
+  },
+  "saw2": {
+    signature: "saw2",
+    description: "Bipolar (-1..1) version of saw: (to-bipolar saw). Handy for pan and other signed parameters.",
+    example: "(pan saw2 (fast 8 (seq :hh)))",
+  },
+  "isaw2": {
+    signature: "isaw2",
+    description: "Bipolar (-1..1) version of isaw: (to-bipolar isaw). Handy for pan and other signed parameters.",
+    example: "(pan isaw2 (fast 8 (seq :hh)))",
+  },
+  "tri2": {
+    signature: "tri2",
+    description: "Bipolar (-1..1) version of tri: (to-bipolar tri). Handy for pan and other signed parameters.",
+    example: "(pan tri2 (fast 8 (seq :hh)))",
+  },
+  "itri2": {
+    signature: "itri2",
+    description: "Bipolar (-1..1) version of itri: (to-bipolar itri). Handy for pan and other signed parameters.",
+    example: "(pan itri2 (fast 8 (seq :hh)))",
+  },
+  "square2": {
+    signature: "square2",
+    description: "Bipolar (-1..1) version of square: (to-bipolar square). Handy for pan and other signed parameters.",
+    example: "(pan square2 (fast 8 (seq :hh)))",
+  },
+  "isquare2": {
+    signature: "isquare2",
+    description: "Bipolar (-1..1) version of isquare: (to-bipolar isquare). Handy for pan and other signed parameters.",
+    example: "(pan isquare2 (fast 8 (seq :hh)))",
+  },
+  "rand2": {
+    signature: "rand2",
+    description: "Bipolar (-1..1) version of rand: (to-bipolar rand). Handy for pan and other signed parameters.",
+    example: "(pan rand2 (fast 8 (seq :hh)))",
+  },
+  "rand": {
+    signature: "rand",
+    description: "Deterministic random signal in [0,1): Tidal's timeToRand of the sampling time, so it is identical on every run. It is exactly 0 at t = 0. Vary it with a time offset: (early 7 rand).",
+    example: "(segment 8 (range 1 8 rand))",
+  },
+  "irand": {
+    signature: "(irand n)",
+    description: "Random integers 0 to n-1 as a continuous signal (floor of rand times n). n may be a pattern.",
+    example: "(segment 8 (irand 8))",
+  },
+  "perlin": {
+    signature: "perlin",
+    description: "Smooth random signal in [0,1): Perlin-style noise that interpolates between one random value per cycle with a smootherstep curve.",
+    example: "(pan (range -0.5 0.5 perlin) (fast 4 (seq :hh)))",
+  },
+  "segment": {
+    signature: "(segment n pat)",
+    description: "Discretise a pattern or signal: n events per cycle, each with the value of pat at its onset. n may be a pattern; one-arg form returns a transformer.",
+    example: "(segment 4 saw)",
+  },
+  "rangex": {
+    signature: "(rangex lo hi pat)",
+    description: "Scale a 0..1 signal exponentially from lo to hi (good for frequencies). lo and hi must be positive. Two-argument form returns a transformer.",
+    example: "(segment 4 (rangex 20 2000 saw))",
+  },
+  "range2": {
+    signature: "(range2 lo hi pat)",
+    description: "Like range but for a bipolar -1..1 input such as sine2. Two-argument form returns a transformer.",
+    example: "(segment 4 (range2 200 2000 sine2))",
+  },
+  "to-bipolar": {
+    signature: "(to-bipolar pat)",
+    description: "Convert numeric values from 0..1 to -1..1.",
+    example: "(segment 4 (to-bipolar saw))",
+  },
+  "from-bipolar": {
+    signature: "(from-bipolar pat)",
+    description: "Convert numeric values from -1..1 to 0..1.",
+    example: "(segment 4 (from-bipolar sine2))",
+  },
+  "run": {
+    signature: "(run n)",
+    description: "Plays the integers 0 to n-1, one per step, in one cycle. n may be a pattern.",
+    example: "(run 4)",
+  },
+  "saw": {
+    signature: "saw",
+    description: "Continuous signal: rising ramp 0→1 each cycle (values 0 0.25 0.5 0.75 at quarter points). Not a function: use it bare. The saw synth voice is (synth :saw pat); inside defsynth, (saw freq) is the sawtooth UGen.",
+    example: "(segment 4 saw)",
+  },
+  "square": {
+    signature: "square",
+    description: "Continuous signal: 0 for the first half of the cycle, 1 for the second. Not a function: use it bare. The square synth voice is (synth :square pat), with :pw for pulse width; inside defsynth, (square freq) is the UGen.",
+    example: "(segment 4 square)",
+  },
+  "tri": {
+    signature: "tri",
+    description: "Continuous signal: triangle wave rising 0→1 in the first half-cycle and falling back in the second. Top-level tri is the signal; inside defsynth bodies (tri freq) is the triangle-wave UGen.",
+    example: "(segment 4 tri)",
+  },
+  "range": {
+    signature: "(range n) / (range a b step) / (range lo hi pat)",
+    description: "With numbers, the Lisp number sequence (range 8), (range 0 8 2). With a pattern or signal as the last argument it is Tidal's range: scale values from 0..1 to lo..hi, e.g. (range 200 2000 saw). lo and hi may be patterns.",
+    example: "(segment 4 (range 200 2000 saw))",
+  },
+
   // --- Per-event parameters ---
   "->>": {
     signature: "(->> pat (f args) ...)",

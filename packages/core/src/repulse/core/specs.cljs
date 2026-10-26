@@ -24,8 +24,13 @@
   [x]
   (and (map? x)
        (contains? x :value)
-       (span? (:whole x))
+       (contains? x :whole)
+       (or (nil? (:whole x)) (span? (:whole x)))
        (span? (:part x))))
+
+(defn analog-event?
+  [x]
+  (and (event? x) (nil? (:whole x))))
 
 (s/def ::rat rational-vector?)
 (s/def ::span span?)
