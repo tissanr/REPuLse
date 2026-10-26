@@ -68,3 +68,7 @@ When adding a feature, update the closest layer:
 
 If a phase adds user-facing syntax, also update README/USAGE docs and keep the
 syntax highlighting/completion/AI-docs workflows in sync.
+
+Every phase also gets a manual test protocol in `docs/test-protocols/<PHASE-ID>.md`:
+snippets a human evaluates in the app, each with its expected sound and display. See
+[test-protocols/README.md](test-protocols/README.md).

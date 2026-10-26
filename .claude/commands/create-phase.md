@@ -55,6 +55,8 @@ A checklist of 8–15 acceptance criteria written as `- [ ] …` items. Each ite
 - Specific to this phase (not generic boilerplate)
 - Include at least 3 REPuLse-Lisp expressions that should produce the described behaviour
 
+Always end the list with `- [ ] Test protocol docs/test-protocols/<ID>.md written (see docs/test-protocols/README.md) and added to its index`.
+
 ### `## What NOT to do`
 3–6 bullet points scoping the phase — explicitly name adjacent features that are out of scope and belong to follow-on phases.
 

@@ -112,8 +112,9 @@ Commit as `docs: expand Phase <id> spec` and push.
 Spawn an **Agent** with the model from the *Build model* column (`sonnet` or `opus`).
 If the PR has the `escalate-opus` label, use `opus`. Tell it to follow
 `.claude/commands/implement-phase.md` for `<id>` exactly, in this worktree. That includes
-the docs and marking the phase `✅ *delivered*` in `ROADMAP.md`. It must not commit with
-failing tests. Commit and push its work.
+the docs, the manual test protocol `docs/test-protocols/<id>.md` (step 7 of
+implement-phase.md) and marking the phase `✅ *delivered*` in `ROADMAP.md`. It must not
+commit with failing tests. Commit and push its work.
 
 ## 8. Verify
 
@@ -128,6 +129,12 @@ npm run gen:grammar && npm run gen:ai-docs && git status --porcelain   # no drif
 Also check the Definition of done in the spec item by item. Every item must be met or
 explicitly explained in the PR body.
 
+Check the test protocol: `docs/test-protocols/<id>.md` exists, is in the index of
+`docs/test-protocols/README.md`, has a test for every new built-in name and every new
+error or warning message, and its expected values match the harness output (spot-check
+at least three pattern snippets with `window.__REPULSE_TEST__.evalToEvents`). A missing
+or incomplete protocol is a verification failure like a failing test.
+
 **On failure:** up to **3 fix attempts per run** (usage gate before each), using the same
 model as step 7. Record each attempt as a PR comment `auto-phase attempt N (<model>): <summary>`.
 If it is still failing:
@@ -138,7 +145,8 @@ If it is still failing:
 ## 9. Hand over to CI
 
 - Fill in the PR body: what was built, decisions taken in spec expansion, how each
-  Definition-of-done item is verified, anything a human should look at.
+  Definition-of-done item is verified, anything a human should look at, and a link to
+  the test protocol (`docs/test-protocols/<id>.md`) as the human acceptance checklist.
 - `gh pr ready <n>`, then `gh pr merge <n> --auto --merge`.
 - Exit. CI on GitHub gates the merge; the next run checks the outcome.
 

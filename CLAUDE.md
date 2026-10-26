@@ -192,7 +192,12 @@ A phase is delivered only when **all** of these hold:
    syntax or the quick-start changed.
 3. **Marked delivered.** In `ROADMAP.md`, `📋 *planned*` → `✅ *delivered*` plus a
    **Delivered:** section matching the existing style.
-4. Docs are committed with (or immediately after) the implementation.
+4. **Test protocol written.** `docs/test-protocols/<PHASE-ID>.md` exists, following
+   [docs/test-protocols/README.md](docs/test-protocols/README.md): snippets to evaluate
+   in the app, each with its concrete expected outcome (what you hear and see), plus
+   regression checks. It is listed in that README's index. This applies to every phase,
+   including those implemented by the auto-phase pipeline.
+5. Docs and the protocol are committed with (or immediately after) the implementation.
 
 "The code works" is necessary but not sufficient.
 
