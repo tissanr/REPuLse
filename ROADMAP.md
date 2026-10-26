@@ -1744,7 +1744,7 @@ See full spec: [PROMPTS/PHASE-UI1.md](PROMPTS/PHASE-UI1.md)
 
 ---
 
-## Phase TL1 — Patterned Arguments & Pattern Arithmetic 📋 *planned*
+## Phase TL1 — Patterned Arguments & Pattern Arithmetic ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖 auto
 
@@ -1759,6 +1759,30 @@ choice of rhythm source; fix onset retriggering and rational precision on the wa
 - Patterned args for `fast slow late early every euclidean sometimes-by degrade-by off jux-by`;
   mini-notation strings accepted as pattern arguments (`(fast "<1 2>" pat)`)
 - `add sub mul div set` with modes `:in` (default) / `:out` / `:mix` / `:squeeze`
+
+**Delivered:**
+- `packages/core/src/repulse/core.cljs` — `onset?` / `query-onsets`; `->rat` (continued
+  fractions, denominator ≤ 1 000 000) used by `fast` `slow` `late` `early`; `goog.DEBUG`-only
+  `:rational-overflow` guard in `rat`; `app-left` / `app-right` / `app-both` ported from
+  Tidal (`combine` is now `app-right`); `inner-join` / `outer-join` / `squeeze-join`;
+  `patternify` / `patternify2` / `patternify3`; patterned arguments for `fast slow late
+  early every euclidean sometimes-by degrade-by off` (scalars keep the old fast path);
+  `silence`; `fast 0` / `slow 0` are silence
+- `params.cljs` — `apply-param` uses `app-right`; `jux-by` width is patternable;
+  `theory/midi->note` for note-keyword arithmetic
+- `app/` — the scheduler, MIDI out, WAV `export`, `midi-export` and the offline test
+  harness trigger only onsets, timed and sized by the event whole (fixes `(slow 4 …)` and
+  `(late 1/2 (pure :bd))` re-triggering at cycle boundaries)
+- Lisp — time arguments pass through raw (`1/3` stays `[1 3]`); strings in patterned
+  positions are mini-notation (with editor highlighting); mini-notation `"1/8"` atoms are
+  exact rationals; new `builtins/arith.cljs` with `add sub mul div set`, mode keywords and
+  curried forms
+- Rule 5 artefacts: grammar + `parser.js`, `completions.js`, `hover.js`,
+  `builtin_meta.edn` (patterned examples), `docs/ai/builtins.json`; USAGE "Patterned
+  arguments" and "Pattern arithmetic" sections; STRUDEL-PARITY TL1 rows updated
+- Tests: core (onsets, `->rat`, overflow guard, `fast 1/3` over 3000 cycles, Tidal
+  `|+` / `+|` / `|+|` event lists, joins, patterned combinators), Lisp integration
+  (all DoD examples), mini-notation rationals, two Playwright offline-render onset tests
 
 See full spec: [PROMPTS/PHASE-TL1.md](PROMPTS/PHASE-TL1.md)
 

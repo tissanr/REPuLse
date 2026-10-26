@@ -386,7 +386,11 @@
                   "(div 2 (seq 440 660))"
                   "(div \"<1 2>\" (seq 440 880))"
                   "(set {:amp 0.5 :pan -0.5} (seq :c4 :e4))"
-                  "(set (seq {:amp 1.0} {:amp 0.4}) (seq :bd :hh :sd :hh))"]]
+                  "(set (seq {:amp 1.0} {:amp 0.4}) (seq :bd :hh :sd :hh))"
+                  "(add :squeeze (seq 0 7) (seq :c3 :g3))"
+                  "(mul 2 (seq 220 330))"
+                  "(fast 1/3 (seq :bd :sd))"
+                  "(~ \"0 1/8 1/4\")"]]
       (let [pat (eval-pat code)]
         (is (core/pattern? pat) code)
         (when (core/pattern? pat)
