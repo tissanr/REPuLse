@@ -9,12 +9,13 @@ set -euo pipefail
 
 cd "$CLAUDE_PROJECT_DIR"
 
-# npm install (not ci): keeps node_modules on resume instead of wiping it.
-npm install --no-audit --no-fund
-
 if command -v wasm-pack >/dev/null 2>&1; then
   npm run build:wasm
 else
   echo "session-start: wasm-pack not found — skipping build:wasm." >&2
   echo "Install wasm-pack, wasm-bindgen-cli and binaryen in the environment setup script." >&2
 fi
+
+# ci, not install: npm install rewrites package-lock.json here (drops the
+# repulse-audio workspace link); ci installs exactly what is committed.
+npm ci --no-audit --no-fund
