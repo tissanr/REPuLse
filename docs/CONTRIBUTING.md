@@ -114,7 +114,7 @@ vercel env pull .env.local     # fetch the Supabase variables (file is gitignore
 vercel dev                     # app + /api functions
 ```
 
-Without access to the Vercel project, copy `.env.example` to `.env.local` and fill in your own
+Without access to the Vercel project, copy `.env.local.example` to `.env.local` and fill in your own
 Supabase project's values — see [DEPLOYMENT.md](DEPLOYMENT.md) for setting one up.
 
 ---

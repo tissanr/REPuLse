@@ -69,6 +69,10 @@ vercel env add SUPABASE_SERVICE_ROLE_KEY
 The `SUPABASE_URL` and `SUPABASE_ANON_KEY` are also exposed to the browser via the
 `/api/env` endpoint (the anon key is designed to be public — RLS enforces access).
 
+Optional: `ALLOWED_ORIGINS` (comma-separated) lists extra origins allowed to call `/api/*`,
+e.g. a custom domain. Same-origin requests, `localhost` and the project's `*.vercel.app`
+previews are always allowed.
+
 ### Production deploy
 
 ```bash
@@ -97,7 +101,7 @@ environment provides Node 20 and Java 21 (needed for shadow-cljs).
 
 ```bash
 # Copy and fill in env vars (.env*.local files are gitignored — never use .env)
-cp .env.example .env.local
+cp .env.local.example .env.local
 
 # Install dependencies
 npm install
