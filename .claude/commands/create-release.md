@@ -1,6 +1,6 @@
 ---
 allowed-tools: Bash(git *), Bash(gh *), Bash(npm *), Read, Glob, Grep, AskUserQuestion
-description: Create a GitHub release — drafts notes from delivered phases, bumps version, prompts for missing info
+description: Create a GitHub release — drafts notes from delivered phases, picks the next version tag, prompts for missing info
 ---
 
 ## Context
@@ -96,3 +96,5 @@ gh release create <tag> --target main --title "<title>" --notes "<notes>"
 ```
 
 Return the release URL when done.
+
+The release only creates a tag on `main`; it does not change files, so no PR is needed. `package.json`'s `version` is not updated by this command — if it should match the tag, bump it in a separate PR before creating the release.

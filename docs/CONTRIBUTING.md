@@ -25,7 +25,7 @@ written spec.
 |---|---|
 | 1. Propose | Open an [issue](https://github.com/tissanr/REPuLse/issues) describing the idea, or comment on an existing one to claim a planned phase. |
 | 2. Spec | For a new phase, write `PROMPTS/PHASE-<ID>.md` and add a `## Phase <ID> — Title 📋 *planned*` section to ROADMAP.md (2–4 bullets and a link to the spec). Commit both together. |
-| 3. Branch | Create a branch off `main`. |
+| 3. Branch | Create a branch off the latest `main`: `feat/phase-<id>` for a phase, `docs/phase-<id>` for a spec, `fix/<slug>` or `docs/<slug>` otherwise. |
 | 4. Implement | Follow the spec's "Files to change" table and the conventions in CLAUDE.md. |
 | 5. Finish | Meet the [definition of done](#definition-of-done) below. |
 | 6. Pull request | Open a PR against `main` (format below). CI must be green before merging. |

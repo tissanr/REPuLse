@@ -1,5 +1,5 @@
 ---
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash(git log *)
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash(git *), Bash(gh *)
 description: Create a new REPuLse phase — write the PROMPTS file and add the section to ROADMAP.md
 ---
 
@@ -75,8 +75,18 @@ See full spec: [PROMPTS/PHASE-{ID}.md](PROMPTS/PHASE-{ID}.md)
 ---
 ```
 
-## Step 5 — Commit
+## Step 5 — Commit and open a PR
 
+`main` is protected — the spec goes in through a pull request like every other change.
+
+```bash
+git fetch origin main
+git switch -c docs/phase-{id} origin/main     # {id} in lowercase, e.g. docs/phase-syn5
+git add PROMPTS/PHASE-{ID}.md ROADMAP.md
+git commit -m "docs: add Phase {ID} prompt — {short title}"
+git push -u origin docs/phase-{id}
 ```
-docs: add Phase {ID} prompt — {short title}
-```
+
+Then open the PR with `gh pr create` against `main`, using the Summary / Test plan structure
+from `.claude/commands/commit-push-pr.md` (docs-only: the test plan is a review checklist for the
+spec). Return the PR URL. The phase can be implemented once this PR is merged.
