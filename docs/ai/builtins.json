@@ -2832,17 +2832,17 @@
   },
   "quote": {
     "category": "special",
-    "signature": "(quote form) or 'form — prevent evaluation of form",
+    "signature": "(quote form) — prevent evaluation of form",
     "returns": "any",
     "side-effects": [],
     "examples": [
-      "'(seq :bd :sd)",
-      "'x"
+      "(quote (seq :bd :sd))",
+      "(quote x)"
     ],
     "see-also": [
       "quasiquote"
     ],
-    "detail": "(quote form) or 'form — prevent evaluation of form",
+    "detail": "(quote form) — prevent evaluation of form",
     "description": ""
   },
   "tween": {
