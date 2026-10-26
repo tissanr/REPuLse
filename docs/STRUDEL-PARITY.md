@@ -42,7 +42,7 @@ Method-chaining (`s("bd").fast(2)`) maps to Lisp application or threading:
 |---|---|---|---|---|---|---|---|---|
 | Core & pattern arithmetic | TL1 | 15 | 2 | 18 | 7 | 4 | 8 | 54 |
 | Continuous signals | TL2 | 23 | 0 | 8 | 3 | 0 | 2 | 36 |
-| Time & structure | TL3 | 1 | 2 | 41 | 9 | 2 | 6 | 61 |
+| Time & structure | TL3/TL3b | 1 | 2 | 41 | 9 | 2 | 6 | 61 |
 | Randomness & conditionals | TL4 | 3 | 6 | 23 | 8 | 1 | 3 | 44 |
 | Layering, pitch & harmony | TL5 | 4 | 3 | 12 | 5 | 0 | 2 | 26 |
 | Sample manipulation | TL6 | 3 | 1 | 11 | 2 | 1 | 2 | 20 |
@@ -150,8 +150,8 @@ signals (the voice shortcuts `(saw :c4)` / `(square :c4)` give way to `(synth :s
 | `perlin` | `perlin` | ✅ | TL2 |  |
 | `berlin` | `berlin` | 📋 | TL4 | moved from TL2 (TL2 spec) |
 | `run` | `run` | ✅ | TL2 | `0 1 2 … n-1` — discrete, but defined with the signals |
-| `binary` / `binaryN` | `binary`, `binary-n` | 📋 | TL3 | Number → boolean step pattern; moved from TL2 (TL2 spec) |
-| `binaryL` / `binaryNL` | `binary-l` | 📋 | TL3 | List-returning variants; moved from TL2 (TL2 spec) |
+| `binary` / `binaryN` | `binary`, `binary-n` | 📋 | TL3b | Number → boolean step pattern; moved from TL2 (TL2 spec) |
+| `binaryL` / `binaryNL` | `binary-l` | 📋 | TL3b | List-returning variants; moved from TL2 (TL2 spec) |
 | `randL` | `rand-l` | 📋 | TL4 | moved from TL2 (TL2 spec) |
 | `randrun` | `randrun` | 📋 | TL4 | Random permutation of `0..n-1`; moved from TL2 (TL2 spec) |
 | `segment` / `seg` | `segment` | ✅ | TL2 | Sample a signal n times per cycle |
@@ -169,7 +169,7 @@ signals (the voice shortcuts `(saw :c4)` / `(square :c4)` give way to `(synth :s
 
 ---
 
-## Time & structure — TL3
+## Time & structure — TL3 / TL3b
 
 | Strudel | REPuLse | Status | Phase | Notes |
 |---|---|---|---|---|
@@ -181,47 +181,47 @@ signals (the voice shortcuts `(saw :c4)` / `(square :c4)` give way to `(synth :s
 | `bjorklund` | — | ⛔ | — | Internal helper |
 | `euclidLegato` | `euclid-legato` | 📋 | TL3 | |
 | `euclidLegatoRot` | `euclid-legato-rot` | 📋 | TL3 | |
-| `euclidish` / `eish` | `euclidish` | 📋 | TL3 | |
+| `euclidish` / `eish` | `euclidish` | 📋 | TL3b | |
 | `ply` | `ply` | 📋 | TL3 | |
 | `plyWith` | `ply-with` | 📋 | TL3 | |
-| `plyForEach` | `ply-for-each` | 📋 | TL3 | |
-| `compress` | `compress` | 📋 | TL3 | |
+| `plyForEach` | `ply-for-each` | 📋 | TL3b | |
+| `compress` | `compress` | 📋 | TL3b | |
 | `compressSpan` | `compress` | 🔁 | — | |
-| `fastGap` / `fastgap` | `fast-gap` | 📋 | TL3 | |
-| `focus` | `focus` | 📋 | TL3 | |
+| `fastGap` / `fastgap` | `fast-gap` | 📋 | TL3b | |
+| `focus` | `focus` | 📋 | TL3b | |
 | `focusSpan` | `focus` | 🔁 | — | |
-| `zoom` | `zoom` | 📋 | TL3 | |
+| `zoom` | `zoom` | 📋 | TL3b | |
 | `zoomArc` | `zoom` | 🔁 | — | |
 | `inside` | `inside` | 📋 | TL3 | |
 | `outside` | `outside` | 📋 | TL3 | |
-| `linger` | `linger` | 📋 | TL3 | |
-| `bite` | `bite` | 📋 | TL3 | |
+| `linger` | `linger` | 📋 | TL3b | |
+| `bite` | `bite` | 📋 | TL3b | |
 | `isobite` / `cycleStruct` | — | ❓ | — | Recent Strudel addition; semantics still moving |
 | `swingBy` | `swing-by` | 📋 | TL3 | Also needed by MIDI capture (keep the played feel) |
 | `swing` | `swing` | 📋 | TL3 | |
 | `invert` / `inv` | `invert` | 📋 | TL3 | Boolean patterns |
 | `inv` | `invert` | 🔁 | — | |
 | `brak` | `brak` | 📋 | TL3 | |
-| `press` | `press` | 📋 | TL3 | |
-| `pressBy` | `press-by` | 📋 | TL3 | |
+| `press` | `press` | 📋 | TL3b | |
+| `pressBy` | `press-by` | 📋 | TL3b | |
 | `rev` | `rev` | ✅ | — | |
-| `revv` | `revv` | 📋 | TL3 | Reverse across cycles, not within |
+| `revv` | `revv` | 📋 | TL3b | Reverse across cycles, not within |
 | `palindrome` | `palindrome` | 📋 | TL3 | |
 | `iter` | `iter` | 📋 | TL3 | |
 | `iterBack` | `iter-back` | 📋 | TL3 | |
-| `repeatCycles` | `repeat-cycles` | 📋 | TL3 | |
+| `repeatCycles` | `repeat-cycles` | 📋 | TL3b | |
 | `chunk` / `slowChunk` | `chunk` | 📋 | TL3 | |
 | `slowChunk` | `chunk` | 🔁 | — | |
 | `chunkBack` | `chunk-back` | 📋 | TL3 | |
 | `fastChunk` | `fast-chunk` | 📋 | TL3 | |
-| `chunkInto` | `chunk-into` | 📋 | TL3 | |
-| `chunkBackInto` | `chunk-back-into` | 📋 | TL3 | |
-| `ribbon` / `rib` | `ribbon` | 📋 | TL3 | Loop a section of the timeline |
+| `chunkInto` | `chunk-into` | 📋 | TL3b | |
+| `chunkBackInto` | `chunk-back-into` | 📋 | TL3b | |
+| `ribbon` / `rib` | `ribbon` | 📋 | TL3b | Loop a section of the timeline |
 | `rib` | `ribbon` | 🔁 | — | |
-| `hurry` | `hurry` | 📋 | TL3 | `fast` + `speed` |
+| `hurry` | `hurry` | 📋 | TL3b | `fast` + `speed` |
 | `within` | `within` | 📋 | TL3 | |
-| `filter` | `filter-events` | 📋 | TL3 | Lisp `filter` already exists for sequences; needs a distinct name |
-| `filterWhen` | `filter-when` | 📋 | TL3 | |
+| `filter` | `filter-events` | 📋 | TL3b | Lisp `filter` already exists for sequences; needs a distinct name |
+| `filterWhen` | `filter-when` | 📋 | TL3b | |
 | `polymeter` | `polymeter` | 📋 | TL3 | |
 | `polymeterSteps` | `polymeter` | 🔁 | — | |
 | `stepcat` / `timecat` / `timeCat` | `timecat` | 📋 | TL3 | Weighted concatenation; mini-notation `@` already covers the string form |
@@ -231,8 +231,8 @@ signals (the voice shortcuts `(saw :c4)` / `(square :c4)` give way to `(synth :s
 | `extend` / `replicate` / `expand` / `contract` | — | ❓ | — | Stepwise API |
 | `shrink` / `grow` / `shrinklist` / `growlist` | — | ❓ | — | Stepwise API |
 | `tour` / `zip` | — | ❓ | — | Stepwise API |
-| `bypass` | `bypass` | 📋 | TL3 | Silence a pattern by a boolean pattern |
-| `beat` | `beat` | 📋 | TL3 | Place hits on numbered steps |
+| `bypass` | `bypass` | 📋 | TL3b | Silence a pattern by a boolean pattern |
+| `beat` | `beat` | 📋 | TL3b | Place hits on numbered steps |
 | `match` (internal `_match`) | — | ⛔ | — | Internal |
 
 ---
@@ -277,7 +277,7 @@ TL2's seeded `rand` should replace it.
 | `when` | `when-pat` | 📋 | TL4 | Lisp `when` would collide if added as a special form |
 | `firstOf` / `every` | `every` | ✅ | — | |
 | `firstOf` | `every` | 🔁 | — | |
-| `lastOf` | `last-of` | 📋 | TL4 | |
+| `lastOf` | `last-of` | 📋 | TL3 | Moved from TL4 (TL3 spec) |
 | `applyN` | `apply-n` | 📋 | TL4 | |
 | `pick` | `pick` | 📋 | TL4 | Select patterns by index/name pattern |
 | `pickmod` | `pick-mod` | 📋 | TL4 | |
@@ -466,10 +466,10 @@ Not in Strudel, but common in Tidal tutorials.
 | `whenmod` | `whenmod` | 📋 | TL4 | |
 | `rot` | `rot` | 📋 | TL3 | Rotate values, keep structure |
 | `stutter` | `stutter` | 📋 | TL5 | |
-| `sew` | `sew` | 📋 | TL3 | |
-| `stitch` | `stitch` | 📋 | TL3 | |
+| `sew` | `sew` | 📋 | TL3b | |
+| `stitch` | `stitch` | 📋 | TL3b | |
 | `fix` | `fix` | 📋 | TL4 | Apply a function to events matching control values |
-| `trunc` | `trunc` | 📋 | TL3 | |
+| `trunc` | `trunc` | 📋 | TL3b | |
 | `rolled` / `rolledBy` | `rolled` | 📋 | TL5 | Strum chords |
 | `toScale` | `scale` | 🔁 | — | |
 | `discretise` | `segment` | 🔁 | — | |

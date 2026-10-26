@@ -35,27 +35,28 @@ without a human:
 | **M1** | | **Tidal-Lisp core** | | | |
 | 1 | TL1 | Patterned arguments & pattern arithmetic | 🤖 | full | opus |
 | 2 | TL2 | Continuous signals | 🤖 | full | sonnet |
-| 3 | TL3 | Time & structure combinators | 🤖 | outline | sonnet |
-| 4 | TL4 | Randomness & conditionals | 🤖 | outline | sonnet |
-| 5 | TL5 | Layering, pitch & harmony | 🤖 | outline | sonnet |
-| 6 | TL6 | Sample slicing & playback control | 🤖👂 | outline | opus |
-| 7 | TL7 | Per-event effects & control parameters | 🤖👂 | outline | opus |
-| 8 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
+| 3 | TL3 | Time & structure combinators | 🤖 | full | sonnet |
+| 4 | TL3b | Zoom, compress & structure extras | 🤖 | outline | sonnet |
+| 5 | TL4 | Randomness & conditionals | 🤖 | outline | sonnet |
+| 6 | TL5 | Layering, pitch & harmony | 🤖 | outline | sonnet |
+| 7 | TL6 | Sample slicing & playback control | 🤖👂 | outline | opus |
+| 8 | TL7 | Per-event effects & control parameters | 🤖👂 | outline | opus |
+| 9 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
 | **M2** | | **Full songs** | | | |
-| 9 | SONG1 | Sections, song form & full-song render | 🤖 | outline | opus |
-| 10 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
-| 11 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | outline | sonnet |
-| 12 | SONG4 | Multi-buffer projects | 🤖 | outline | opus |
+| 10 | SONG1 | Sections, song form & full-song render | 🤖 | outline | opus |
+| 11 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
+| 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | outline | sonnet |
+| 13 | SONG4 | Multi-buffer projects | 🤖 | outline | opus |
 | **M3** | | **Plays with others** | | | |
-| 13 | N1 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
-| 14 | LIVE1 | Companion bridge: Ableton Link & OSC | 🧑 | outline | opus |
-| 15 | LIVE2 | Latency compensation, nudge & per-track outputs | 🧑 | outline | sonnet |
+| 14 | N1 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
+| 15 | LIVE1 | Companion bridge: Ableton Link & OSC | 🧑 | outline | opus |
+| 16 | LIVE2 | Latency compensation, nudge & per-track outputs | 🧑 | outline | sonnet |
 | **M4** | | **Sketchpad** | | | |
-| 16 | SK1 | Stem export & full-song MIDI export | 🤖 | outline | sonnet |
-| 17 | SK2 | Session snapshots & eval history | 🤖 | outline | sonnet |
-| 18 | SK3 | MIDI capture 1: click, fixed grid, velocity → code | 🤖👂 | outline | sonnet |
-| 19 | SK4 | MIDI capture 2: always-on capture | 🤖👂 | outline | sonnet |
-| 20 | SK5 | MIDI capture 3: grid & feel detection | 🤖👂 | outline | opus |
+| 17 | SK1 | Stem export & full-song MIDI export | 🤖 | outline | sonnet |
+| 18 | SK2 | Session snapshots & eval history | 🤖 | outline | sonnet |
+| 19 | SK3 | MIDI capture 1: click, fixed grid, velocity → code | 🤖👂 | outline | sonnet |
+| 20 | SK4 | MIDI capture 2: always-on capture | 🤖👂 | outline | sonnet |
+| 21 | SK5 | MIDI capture 3: grid & feel detection | 🤖👂 | outline | opus |
 
 **Models.** Expanding an outline into a full spec is always done with **Opus**: it makes
 the design decisions and writes reference test cases. The *Build model* column is the
@@ -1829,14 +1830,34 @@ See full spec: [PROMPTS/PHASE-TL2.md](PROMPTS/PHASE-TL2.md)
 
 > **Milestone 1** · **Automation:** 🤖 auto
 
-Tidal's rhythmic vocabulary, function list from `docs/STRUDEL-PARITY.md`.
+Tidal's core rhythmic vocabulary (25 functions from `docs/STRUDEL-PARITY.md`); the
+zoom/compress family moved to TL3b.
 
 **Key additions:**
-- `struct mask ply chunk iter palindrome linger inside outside compress zoom fastgap hurry rot`
-- `swing swing-by nudge`, euclid variants, `polymeter`, `first-of`/`last-of`, `when-mod`
-- Mini-notation extensions (`!`, `.`, `,`, `{}%n`, `(k,n)`) where missing
+- `struct mask invert ply ply-with inside outside within swing swing-by brak`
+- `iter iter-back palindrome rot chunk chunk-back fast-chunk polymeter timecat first-of last-of`
+- `euclidean` fixed to Tidal's `bjorklund` (today all hits bunch at the start), struct form
+  `(euclidean 3 8 pat)`, `euclid-legato` / `euclid-legato-rot`
+- Mini-notation `!`, `.`, `,`, `{ }%n`, `(k,n,r)`; sub-sequences via exact `timecat`
+  (fixes `"<a b> c"` never alternating)
 
 See full spec: [PROMPTS/PHASE-TL3.md](PROMPTS/PHASE-TL3.md)
+
+---
+
+## Phase TL3b — Zoom, Compress & Structure Extras 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖 auto
+
+The time & structure functions deferred from TL3: windows of a cycle and the remaining
+structure helpers.
+
+**Key additions:**
+- `compress zoom focus fast-gap linger bite ribbon trunc` on TL3's private `compress*`
+- `hurry revv repeat-cycles press press-by chunk-into chunk-back-into euclidish ply-for-each`
+- `filter-events filter-when bypass beat sew stitch binary binary-n binary-l`
+
+See full spec: [PROMPTS/PHASE-TL3b.md](PROMPTS/PHASE-TL3b.md)
 
 ---
 
