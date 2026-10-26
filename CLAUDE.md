@@ -343,7 +343,8 @@ pattern engine, and editor work entirely client-side with no env vars needed.
 | PLUG1 | Drop-in plugins — drag trusted local JS plugins into the app   | planned      |
 | AI1   | AI knowledge base — /docs/ai/*.json, gen:ai-docs, help-export  | ✓ delivered  |
 | AI2   | AI assistant panel — BYO key, streaming chat, opt-in feature   | ✓ delivered  |
-| AI2b  | More AI providers — OpenRouter, Venice, DeepSeek, EUrouter    | planned      |
+| AI2b  | Live model catalogue + OpenRouter & Mistral providers          | planned      |
+| AI2c  | Custom & local AI endpoints — LM Studio, Ollama, OpenAI-compat | planned      |
 | AI3   | Tool-using agent — read_buffer, propose_edit, eval_preview     | ✓ delivered  |
 | AI3b  | AI sample discovery — freesound_search, freesound_load, web_search | ✓ delivered  |
 | AI4   | AI safety & limits — budgets, injection guards, auto-apply     | ✓ delivered  |

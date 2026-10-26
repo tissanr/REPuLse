@@ -1440,27 +1440,46 @@ See full spec: [PROMPTS/PHASE-AI2.md](PROMPTS/PHASE-AI2.md)
 
 ---
 
-## Phase AI2b — More AI Providers 📋 *planned*
+## Phase AI2b — Live Model Catalogue, OpenRouter & Mistral 📋 *planned*
 
-Extend the assistant panel's bring-your-own-key provider list with OpenRouter
-(multi-model aggregator — one key for every major model family, including free-tier
-models), Venice.ai (privacy-focused inference), DeepSeek (cheap direct access), and
-EUrouter (EU data-residency aggregator). All four are OpenAI-compatible — no new wire
-format, no new dependencies.
+Fetch each provider's model list instead of hard-coding IDs that go stale, and add
+OpenRouter (one key for almost every model family, free-tier models) and Mistral
+(EU-based, first-party models). Both are OpenAI-compatible — no new wire format.
+Rescoped in October 2026: DeepSeek, Venice.ai and EUrouter were dropped (reachable via
+OpenRouter, or weaker than Mistral as the EU option).
 
 **Key additions:**
-- `app/src/repulse/ai/client.cljs` — `openai-like-endpoints` map replaces per-provider
-  case branches in `make-request`; openai-like provider groups in `text-from-json`
-  become map-membership checks; OpenRouter `HTTP-Referer`/`X-Title` attribution headers
-- `app/src/repulse/ai/settings.cljs` — `default-models` entries (`openrouter/auto`,
-  `deepseek-chat`; Venice and EUrouter defaults verified against their live docs)
-- `app/src/repulse/ui/assistant_panel.cljs` — provider dropdown gains all four entries
-- `api/ai-stream.ts` — `openrouter.ai`, `api.venice.ai`, `api.deepseek.com`, and the
-  EUrouter API host added to `ALLOWED_HOSTS`
-- `docs/USAGE.md` — provider table, default models, key-signup links, Venice
-  tool-support caveat
+- `api/ai-models.ts` — GET-only, path-restricted `/models` proxy sharing the AI host
+  allowlist with `/api/ai-stream` (moved into `api/_lib.ts`)
+- `app/src/repulse/ai/models.cljs` — fetch, normalise (incl. tool-support flags),
+  24 h localStorage cache, refresh on panel open / provider or key change / ↻ button,
+  `pick-default` chooses the default model from the live list
+- `app/src/repulse/ai/client.cljs` — `openai-like` endpoint table replaces per-provider
+  branches; OpenRouter attribution headers
+- Assistant panel — `openrouter` + `mistral` providers, model `<datalist>` suggestions,
+  "(no tools)" labels, refreshed static fallback defaults
 
 See full spec: [PROMPTS/PHASE-AI2b.md](PROMPTS/PHASE-AI2b.md)
+
+---
+
+## Phase AI2c — Custom & Local AI Endpoints 📋 *planned*
+
+A `custom` provider for any OpenAI-compatible endpoint — local servers (LM Studio,
+Ollama, llama.cpp, vLLM), self-hosted gateways (LiteLLM), or unlisted hosted providers.
+Requests go browser-direct, never through the server proxies. Depends on AI2b.
+
+**Key additions:**
+- Base URL setting with LM Studio / Ollama / llama.cpp presets, optional key,
+  "Send tools" toggle, Test connection; per-provider key storage
+- Browser-direct transport for `custom` only; https anywhere, plain http only for
+  `localhost` / `127.0.0.1` / `[::1]`; CSP `connect-src` extended for localhost
+- Agent loop recovers from malformed tool calls; budget estimates tokens when a
+  server omits `usage`
+- `docs/USAGE.md` "Local models" section: CORS setup per server, Chrome
+  local-network prompt
+
+See full spec: [PROMPTS/PHASE-AI2c.md](PROMPTS/PHASE-AI2c.md)
 
 ---
 

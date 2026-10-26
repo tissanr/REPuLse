@@ -1,226 +1,300 @@
-# Phase AI2b — More AI Providers: OpenRouter, Venice.ai, DeepSeek & EUrouter
+# Phase AI2b — Live Model Catalogue, OpenRouter & Mistral
 
 ## Goal
 
-Extend the assistant panel's bring-your-own-key provider list with four new providers,
-all OpenAI-compatible — so this phase adds **no new wire format**:
+Stop hard-coding model IDs that go stale, and add the two providers that are still
+worth adding as direct integrations:
 
-- **OpenRouter** (`openrouter.ai`) — aggregator exposing every major model family,
-  including free-tier models, behind a single key
-- **Venice.ai** (`venice.ai`) — privacy-focused inference with no conversation retention
-- **DeepSeek** (`deepseek.com`) — very cheap direct access to the popular DeepSeek models
-- **EUrouter** (`eurouter.ai`) — EU-hosted aggregator with EU data residency (GDPR)
+1. **Live model catalogue** — the assistant fetches each provider's model list
+   (`GET …/models`), caches it, refreshes it regularly, and offers it as suggestions
+   in the model field. The default model for a provider is picked from what the
+   provider actually serves today, not from a constant written months ago.
+2. **OpenRouter** (`openrouter.ai`) — one key for almost every model family
+   (467 models at the time of writing), free-tier models, and a public catalogue that
+   reports which models support tool calling.
+3. **Mistral** (`mistral.ai`) — an established EU provider with first-party models,
+   OpenAI-compatible chat completions and function calling. This is the EU /
+   data-residency option.
 
-The resulting lineup has a clean logic: direct keys for the majors (Anthropic, OpenAI,
-Google, DeepSeek), fast/cheap inference (Groq), a general aggregator (OpenRouter), and
-two privacy/residency options (Venice, EUrouter). Other model families (Moonshot/Kimi,
-Zhipu/GLM, Alibaba/Qwen, Mistral, …) stay reachable through aggregator model IDs and are
-deliberately **not** added as direct providers.
+Both new providers are OpenAI-compatible — this phase adds **no new wire format**.
 
 ```lisp
-;; Before — provider dropdown in the AI settings drawer:
-;;   anthropic | openai | google | groq | xai
+;; Before — provider dropdown:   anthropic | openai | google | groq | xai
+;; After:                        anthropic | openai | google | groq | xai | openrouter | mistral
 
-;; After:
-;;   anthropic | openai | google | groq | xai | openrouter | venice | deepseek | eurouter
-
-;; Same Lisp surface — the (ai) built-in works unchanged with the new providers:
+;; Same Lisp surface — the (ai) built-in works unchanged:
 (ai "give me a euclidean kick pattern at 130 bpm")
 
-;; Model override examples that must work with provider = openrouter:
+;; Model field: free text as before, now with a suggestion list fetched from the
+;; provider. Slash-and-colon IDs must survive the request path unmangled:
 ;;   anthropic/claude-sonnet-4.5
-;;   deepseek/deepseek-chat
 ;;   meta-llama/llama-3.3-70b-instruct:free
 ```
 
 ---
 
+## Why the scope changed (October 2026 review)
+
+The first draft of this phase (June 2026) planned four providers: OpenRouter, Venice.ai,
+DeepSeek and EUrouter. A review four months later found:
+
+- **The existing defaults are already stale.** `settings.cljs` ships `gpt-4o`,
+  `gemini-2.0-flash` and `grok-3`. Any constant we write today will age the same
+  way. A live catalogue fixes the cause rather than the symptom.
+- **DeepSeek** — the planned default alias `deepseek-chat` was announced for
+  deprecation (24 July 2026) in favour of the V4 models. DeepSeek is reachable through
+  OpenRouter, so a direct integration adds a provider to maintain for little gain.
+  **Dropped.**
+- **Venice.ai** — tool calling is model-dependent, which conflicts with the AI3 agent
+  loop (it needs tools), and its privacy claims are mostly documented by third
+  parties. Reachable through OpenRouter for users who want it. **Dropped.**
+- **EUrouter** — a small vendor whose own pages disagree on the base URL
+  (`/api/v1` vs `/v1`). For an EU option, Mistral is the stronger, first-party
+  choice. **Replaced by Mistral.**
+- **Custom / local endpoints** (LM Studio, Ollama, vLLM, …) — the most-requested
+  power-user feature, but it needs direct browser fetches that bypass the proxy
+  allowlist and a CSP change. That is an architecture decision of its own and lives
+  in **[Phase AI2c](PHASE-AI2c.md)**.
+
+---
+
 ## Background
 
-### Provider plumbing (delivered in AI2/AI3)
+### Provider plumbing (delivered in AI2/AI3/AI4)
 
-`app/src/repulse/ai/client.cljs` is the single integration point for provider wire
-formats:
+`app/src/repulse/ai/client.cljs` is the single integration point for wire formats:
 
-- `make-request` (line ~142) dispatches on the provider string. OpenAI, Groq, and xAI
-  all flow through `openai-like-request` (line ~122): Bearer auth header, system prompt
-  as first message, `:tools`/`:tool_choice "auto"` passthrough, `stream: true`.
-- `text-from-json` (line ~172) parses streaming deltas; the openai-like providers are
-  grouped in one case branch: `("openai" "groq" "xai")`.
-- `parse-complete-response` (line ~361) handles non-streaming tool-call responses; the
-  **default** branch is already the OpenAI extractor, so openai-like providers need no
-  change there.
+- `build-request` (line ~135) is a pure function `{:provider :key :model}` →
+  `{:url :headers :body}`. It `case`-dispatches on the provider; `openai`, `groq` and
+  `xai` each call `openai-like-request` with their own URL.
+- `complete!` posts the envelope to `/api/ai-stream`; `parse-complete-response` and
+  `extract-usage` use the OpenAI shape as their **default** branch, so new
+  OpenAI-compatible providers need no parser changes.
 - `complete-with-retry!` retries HTTP 429 with exponential back-off (3 attempts) —
   important for OpenRouter free-tier models, which rate-limit aggressively.
 
-`app/src/repulse/ai/settings.cljs` — `default-models` map (line ~27) keyed by provider
-string; `effective-model` falls back to it when the model override field is blank.
+`app/src/repulse/ai/settings.cljs` — localStorage-backed atoms (`provider`, `api-key`,
+`model-override`, …) and the `default-models` map (line ~29); `effective-model` falls
+back to it when the model field is blank.
 
-`app/src/repulse/ai/tools.cljs` — `tool-descriptors` (line ~384) builds provider-specific
-tool schemas; the `case` default is `reg->openai`, so all four new providers get correct
-tool schemas with no change. Only the trailing comment (`; openai, groq, xai`) needs
-updating.
+`app/src/repulse/ai/tools.cljs` — `tool-descriptors` builds provider-specific tool
+schemas; the `case` default is `reg->openai`, so both new providers get correct tool
+schemas with no code change.
 
-`app/src/repulse/ui/assistant_panel.cljs` — the settings drawer builds the provider
-`<select>` from a literal vector (line ~229):
+`app/src/repulse/ui/assistant_panel.cljs` — the settings drawer is built from HTML
+strings. The provider `<select>` comes from a literal vector (line ~237); the model
+field is a plain `<input>` with the hint "Leave blank for provider default".
 
-```clojure
-["anthropic" "openai" "google" "groq" "xai"]
-```
+### The proxy — `/api/ai-stream`
 
-### The proxy allowlist — easy to forget, fails loudly
-
-All AI requests are routed through `/api/ai-stream` (`api/ai-stream.ts`), a server-side
-proxy that exists because the providers reject cross-origin browser requests. It
-validates the target host against a strict SSRF allowlist (line ~18):
-
-```ts
-const ALLOWED_HOSTS = new Set([
-  "api.anthropic.com",
-  "api.openai.com",
-  "api.groq.com",
-  "api.x.ai",
-  "generativelanguage.googleapis.com",
-]);
-```
-
-A provider wired correctly in the client but missing here fails with HTTP 403
+All provider traffic goes through `api/ai-stream.ts`, because the providers reject
+cross-origin browser requests. It is **POST-only**, checks the request `Origin`
+(`originAllowed` in `api/_lib.ts`), and validates the target host against
+`ALLOWED_HOSTS`. A host missing from the allowlist fails with HTTP 403
 `Host not allowed`. **Client and proxy must change in the same commit.**
 
-### Endpoints
+The model catalogue needs `GET` requests, which this proxy does not forward.
 
-| Provider   | Chat completions URL                               | Auth           |
-|------------|----------------------------------------------------|----------------|
-| OpenRouter | `https://openrouter.ai/api/v1/chat/completions`    | `Bearer <key>` |
-| Venice.ai  | `https://api.venice.ai/api/v1/chat/completions`    | `Bearer <key>` |
-| DeepSeek   | `https://api.deepseek.com/chat/completions`        | `Bearer <key>` |
-| EUrouter   | `https://api.eurouter.ai/v1/chat/completions` (?)  | `Bearer <key>` |
+### Model-list endpoints (all verified to exist, October 2026)
 
-All four are OpenAI-compatible: same request body, same SSE `data:` streaming format
-with `[DONE]` terminator, same `choices[0].delta.content` / `choices[0].message.content`
-shapes, same `tools` array and `tool_calls` response format.
+| Provider   | List endpoint                                            | Auth                               | Useful metadata |
+|------------|----------------------------------------------------------|------------------------------------|-----------------|
+| anthropic  | `https://api.anthropic.com/v1/models`                    | `x-api-key` + `anthropic-version`  | `id`, `display_name`, `created_at` |
+| openai     | `https://api.openai.com/v1/models`                       | Bearer                             | `id`, `created` only — no capability flags |
+| google     | `https://generativelanguage.googleapis.com/v1beta/models`| `?key=` (or `x-goog-api-key`)      | `name`, `supportedGenerationMethods` |
+| groq       | `https://api.groq.com/openai/v1/models`                  | Bearer                             | `id`, `active`, `context_window` |
+| xai        | `https://api.x.ai/v1/models`                             | Bearer                             | `id`, `created` |
+| openrouter | `https://openrouter.ai/api/v1/models`                    | **none — public**                  | `id`, `supported_parameters` (contains `"tools"`), `pricing`, `context_length` |
+| mistral    | `https://api.mistral.ai/v1/models`                       | Bearer                             | `id`, `capabilities.function_calling` |
 
-**Verify the EUrouter base URL and hostname against their live docs at implementation
-time** — it is the least-established of the four and marked `?` above.
+All of them except OpenRouter return 401/403 without a key, so the catalogue for those
+providers can only be fetched once a key is set.
 
-### Docs
+### Chat endpoints for the new providers
 
-`docs/USAGE.md` documents the provider list (line ~1352), default models (line ~1362),
-and a provider-comparison note (line ~1364, "Groq vs xAI"). No new Lisp built-in is
-added, so the grammar / completions / `builtin_meta.edn` / `gen:ai-docs` checklist
-(CLAUDE.md Rule 5) does **not** apply to this phase.
+| Provider   | Chat completions URL                              | Auth           |
+|------------|---------------------------------------------------|----------------|
+| OpenRouter | `https://openrouter.ai/api/v1/chat/completions`   | `Bearer <key>` |
+| Mistral    | `https://api.mistral.ai/v1/chat/completions`      | `Bearer <key>` |
 
 ---
 
 ## Implementation
 
-### 1. `app/src/repulse/ai/client.cljs` — data-driven openai-like dispatch
+### 1. `api/ai-models.ts` — GET-only catalogue proxy (new)
 
-With seven openai-like providers, individual `case` branches stop being the clean
-option. Replace them with a small endpoint map:
+A separate, deliberately narrow handler rather than a `method` switch on
+`/api/ai-stream`:
 
-```clojure
-(def ^:private openai-like-endpoints
-  {"openai"     "https://api.openai.com/v1/chat/completions"
-   "groq"       "https://api.groq.com/openai/v1/chat/completions"
-   "xai"        "https://api.x.ai/v1/chat/completions"
-   "openrouter" "https://openrouter.ai/api/v1/chat/completions"
-   "venice"     "https://api.venice.ai/api/v1/chat/completions"
-   "deepseek"   "https://api.deepseek.com/chat/completions"
-   "eurouter"   "https://api.eurouter.ai/v1/chat/completions"})  ; verify URL
-```
+- Accepts `POST { url, headers }` from the browser (POST so the key stays out of the
+  query string and server logs), performs a **`GET`** upstream.
+- Same `originAllowed` check as `ai-stream.ts`.
+- Same host allowlist — move `ALLOWED_HOSTS` into `api/_lib.ts` as
+  `AI_ALLOWED_HOSTS` and import it from both handlers so they can never drift.
+- **Path restriction:** only URLs whose pathname ends in `/models` are forwarded.
+  Anything else → 403. This keeps the GET path from becoming a general fetcher.
+- HTTPS only; hop-by-hop headers stripped (reuse the `HOP_BY_HOP` set — move it to
+  `_lib.ts` too).
+- Response size cap (e.g. 2 MB — OpenRouter's catalogue is a few hundred KB); return
+  502 if exceeded.
+- Keys are never logged.
 
-`make-request` becomes: anthropic branch, google branch, then
-`(if-let [url (openai-like-endpoints provider)] (openai-like-request url ...) (throw ...))`.
+### 2. `api/ai-stream.ts`
 
-`text-from-json` (and any other `("openai" "groq" "xai")` case group — grep for it):
-replace the case-group match with a `(contains? openai-like-endpoints provider)` check,
-e.g. restructure the `case` into a `cond`. `parse-complete-response` and the SSE parser
-need no changes (OpenAI shape is the default path).
+- Import the shared allowlist from `_lib.ts`.
+- Add `openrouter.ai` and `api.mistral.ai`.
+- Update the doc comment listing the providers.
 
-**OpenRouter attribution headers (optional but recommended):** OpenRouter asks apps to
-send `HTTP-Referer` and `X-Title` headers for attribution. Add them only when
-`provider = "openrouter"`:
+### 3. `app/src/repulse/ai/client.cljs` — endpoint table
 
-```clojure
-(update req :headers merge {"HTTP-Referer" "https://repulse.app"
-                            "X-Title"      "REPuLse"})
-```
-
-(Use the real production origin; check `api/_lib.ts` `originAllowed` for the canonical
-domain.)
-
-### 2. `app/src/repulse/ai/settings.cljs`
-
-Add defaults to `default-models`:
+Replace the per-provider `case` branches for OpenAI-compatible providers with one map
+that holds both endpoints per provider:
 
 ```clojure
-"openrouter" "openrouter/auto"
-"venice"     "llama-3.3-70b"
-"deepseek"   "deepseek-chat"
-"eurouter"   "?"               ; verify — likely OpenRouter-style slash IDs
+(def openai-like
+  {"openai"     {:chat   "https://api.openai.com/v1/chat/completions"
+                 :models "https://api.openai.com/v1/models"}
+   "groq"       {:chat   "https://api.groq.com/openai/v1/chat/completions"
+                 :models "https://api.groq.com/openai/v1/models"}
+   "xai"        {:chat   "https://api.x.ai/v1/chat/completions"
+                 :models "https://api.x.ai/v1/models"}
+   "openrouter" {:chat   "https://openrouter.ai/api/v1/chat/completions"
+                 :models "https://openrouter.ai/api/v1/models"}
+   "mistral"    {:chat   "https://api.mistral.ai/v1/chat/completions"
+                 :models "https://api.mistral.ai/v1/models"}})
 ```
 
-`openrouter/auto` delegates model choice to OpenRouter's router — a sensible blank-field
-default. **Verify the Venice default model ID against their live model list**
-(`GET https://api.venice.ai/api/v1/models`) **and the EUrouter default against their
-docs at implementation time** — both catalogues change and a stale ID fails with a 4xx.
-`deepseek-chat` is DeepSeek's stable alias for their current flagship chat model.
+`build-request` becomes: `"anthropic"` branch, `"google"` branch, then
+`(if-let [{:keys [chat]} (openai-like provider)] (openai-like-request chat …) (throw …))`.
 
-### 3. `app/src/repulse/ui/assistant_panel.cljs`
+**OpenRouter attribution headers:** when `provider = "openrouter"`, merge
+`HTTP-Referer` (the production origin — check `ALLOWED_ORIGINS` / the Vercel project
+domain) and `X-Title "REPuLse"` into the request headers. OpenRouter's CORS preflight
+currently also lists `X-Openrouter-Title`; `X-Title` remains accepted.
 
-Extend the dropdown vector (line ~229):
+Add a pure `models-request` function next to `build-request`:
+`{:provider :key}` → `{:url :headers}` for the list endpoint (anthropic and google get
+their own branches, the rest come from `openai-like`). Keep it pure so it is unit
+testable like `build-request`.
+
+### 4. `app/src/repulse/ai/models.cljs` — catalogue (new namespace)
+
+Responsible for fetching, normalising, caching and choosing models. Keeps
+`client.cljs` focused on chat.
+
+**Normalised model record:**
 
 ```clojure
-["anthropic" "openai" "google" "groq" "xai" "openrouter" "venice" "deepseek" "eurouter"]
+{:id     "mistral-medium-latest"
+ :label  "Mistral Medium"   ; display_name where the provider gives one, else id
+ :tools? true               ; true / false / nil (= provider doesn't say)
+ :created 1747000000}       ; for "newest first" sorting; nil if unknown
 ```
 
-The provider badge and settings persistence work off `@settings/provider` strings —
-no other panel changes.
+**Per-provider normalisers** (pure, unit tested with captured fixture JSON):
 
-### 4. `api/ai-stream.ts`
+- `openrouter` — `:tools?` from `supported_parameters` containing `"tools"`.
+- `mistral` — `:tools?` from `capabilities.function_calling`.
+- `google` — keep only models whose `supportedGenerationMethods` contains
+  `generateContent`; strip the `models/` prefix from `name`.
+- `groq` — drop `active: false`.
+- `openai` — no capability flags; filter out obvious non-chat families by ID
+  (`embedding`, `whisper`, `tts`, `dall-e`, `moderation`, `image`, `audio`,
+  `realtime`, `transcribe`). `:tools?` = nil.
+- `anthropic`, `xai` — keep all; `:tools?` = nil.
 
-Add to `ALLOWED_HOSTS`:
+**Cache:** localStorage key `repulse:ai:models:<provider>` →
+`{:fetched-at <ms> :models [...]}`. TTL **24 hours**.
 
-```ts
-"openrouter.ai",
-"api.venice.ai",
-"api.deepseek.com",
-"api.eurouter.ai",   // verify hostname against live EUrouter docs
+**Refresh triggers** (this is the "initialised regularly" part):
+
+- When the assistant panel opens and the cached list is older than the TTL.
+- When the provider changes, or the API key changes (debounced ~800 ms after typing
+  stops) — a new key may see different models.
+- A manual **↻ refresh** button next to the model field ignores the TTL.
+- OpenRouter needs no key, so its catalogue is fetched even before a key is entered.
+
+Failures are non-fatal: keep the previous cache, show a small "couldn't load models"
+hint, and fall back to the static defaults. Never block chat on the catalogue.
+
+**Default model selection** — `pick-default [provider models]`:
+
+`settings/default-models` stays as the **offline fallback**. Add a
+`preferred-models` map of *ordered prefix patterns* per provider, e.g.
+
+```clojure
+(def preferred-models
+  {"anthropic"  ["claude-sonnet-" "claude-opus-" "claude-haiku-"]
+   "openrouter" ["openrouter/auto"]
+   "mistral"    ["mistral-medium-latest" "mistral-large-latest" "mistral-small-latest"]
+   ...})
 ```
 
-Update the file's doc comment listing the providers the proxy serves.
+`pick-default` returns the first catalogue entry that matches the first pattern that
+matches anything, preferring the newest `:created`, and prefers `:tools? true` over
+`nil` over `false`. If nothing matches, it returns the static fallback.
+`effective-model` becomes: override → `pick-default` from cache → static fallback.
+The provider badge keeps showing the resolved ID.
 
-### 5. `app/src/repulse/ai/tools.cljs`
+Fill in `preferred-models` and refresh the static `default-models` fallbacks **against
+each provider's live list at implementation time** — do not copy IDs from this
+document or from memory.
 
-Update the trailing comment on `tool-descriptors`'s default branch to
-`; all openai-compatible providers`. No code change.
+### 5. `app/src/repulse/ai/settings.cljs`
 
-### 6. `docs/USAGE.md`
+- Add `"openrouter"` and `"mistral"` fallbacks to `default-models`
+  (`openrouter/auto` is OpenRouter's own router and a safe fallback).
+- Refresh the stale fallbacks for `openai`, `google` and `xai`.
+- `effective-model` delegates to `models/pick-default` as described above.
 
-- Provider list (line ~1352): add `openrouter`, `venice`, `deepseek`, `eurouter`
-- Default models line (~1362): add all four defaults
-- Extend the provider-comparison note: OpenRouter = one key for every model family,
-  free-tier models, keys at [openrouter.ai/keys](https://openrouter.ai/keys);
-  Venice = privacy-focused, no conversation retention, keys at
-  [venice.ai/settings/api](https://venice.ai/settings/api); DeepSeek = cheap direct
-  access, keys at [platform.deepseek.com](https://platform.deepseek.com);
-  EUrouter = EU data residency aggregator, keys at [eurouter.ai](https://eurouter.ai)
-- Note that Venice tool/function-calling support is **model-dependent**: with a
-  non-tool model the assistant falls back to plain chat (the AI3 agent loop degrades
-  to text answers)
+### 6. `app/src/repulse/ui/assistant_panel.cljs`
 
-### 7. Manual verification (required — cannot be automated)
+- Provider vector: `["anthropic" "openai" "google" "groq" "xai" "openrouter" "mistral"]`.
+- Model field gets `list="ai-model-list"` plus a `<datalist id="ai-model-list">`
+  populated from the cache. Free text still works — the datalist only suggests.
+  Escape every ID/label with `escape-html` (catalogue data is third-party input).
+- Mark models with `:tools? false` in the label (e.g. `… (no tools)`): the AI3 agent
+  loop needs tool calling, so these models only work for plain chat.
+- Hint line under the field: `"N models · updated 3 h ago"` with the ↻ button;
+  `"Leave blank for <resolved default>"` instead of the generic text.
+- If the saved override is not in a freshly fetched list, show a non-blocking
+  warning (`"not in <provider>'s current list"`). Don't clear it — the user may know
+  better, or the list may be filtered.
 
-Streaming, tool calls, and 429 retry must be exercised against the live APIs with real
-keys for **each** of the four providers. There is no mock that proves compatibility;
-this is the same "human verification loop" principle as DSP preset tuning. If a key
-for one provider cannot be obtained, that provider must be dropped from the phase
-rather than shipped unverified.
+### 7. `app/src/repulse/ai/tools.cljs`
 
-No WASM, grammar, or AI-docs build steps are needed. Run `npm test` and
-`npx shadow-cljs compile app` before pushing (the panel/client files are app-layer and
-only compile under the `:app` target).
+Comment-only: the default schema branch now reads
+`; all openai-compatible providers`.
+
+### 8. Tests
+
+- `client_test.cljs` — `build-request` for `openrouter` (URL, Bearer, attribution
+  headers) and `mistral`; `models-request` for every provider.
+- `models_test.cljs` (new) — each normaliser against a small captured fixture;
+  `pick-default` ordering (pattern order, newest first, tools preference, fallback when
+  the catalogue is empty); TTL check.
+- Add the new test namespace to the `:test` build if the runner needs it listed.
+
+### 9. `docs/USAGE.md`
+
+- Provider list and default-model text: describe the live catalogue, the 24 h refresh,
+  the ↻ button, and the static fallback.
+- Provider notes: OpenRouter = one key for every model family, free-tier models
+  (rate-limited), keys at [openrouter.ai/keys](https://openrouter.ai/keys);
+  Mistral = EU-based provider, keys at
+  [console.mistral.ai](https://console.mistral.ai).
+- Note that models marked "(no tools)" cannot run the agent tools (read buffer,
+  propose edit, …) and fall back to plain chat.
+
+No new Lisp built-in is added, so the grammar / completions / `builtin_meta.edn` /
+`gen:ai-docs` checklist (CLAUDE.md Rule 5) does **not** apply.
+
+### 10. Manual verification (required — cannot be automated)
+
+Chat, tool calls, catalogue fetch and 429 retry must be exercised against the live
+APIs with real keys for OpenRouter and Mistral, plus at least one existing provider
+(anthropic) as a regression check. If a key for a new provider cannot be obtained, drop
+that provider from the phase rather than ship it unverified.
 
 ---
 
@@ -228,66 +302,66 @@ only compile under the `:app` target).
 
 | File | Change |
 |------|--------|
-| `app/src/repulse/ai/client.cljs` | `openai-like-endpoints` map replaces per-provider case branches; openai-like `case` groups become map-membership checks; OpenRouter attribution headers |
-| `app/src/repulse/ai/settings.cljs` | `default-models` entries for all four providers |
-| `app/src/repulse/ui/assistant_panel.cljs` | provider dropdown vector + four entries |
-| `api/ai-stream.ts` | `ALLOWED_HOSTS` += `openrouter.ai`, `api.venice.ai`, `api.deepseek.com`, `api.eurouter.ai`; doc comment |
-| `app/src/repulse/ai/tools.cljs` | comment-only: default schema branch covers the new providers |
-| `docs/USAGE.md` | provider list, default models, key-signup links, Venice tool-support caveat |
-| `npm test` + `npx shadow-cljs compile app` | pre-push verification (no WASM/grammar steps needed) |
+| `api/_lib.ts` | shared `AI_ALLOWED_HOSTS` + `HOP_BY_HOP` |
+| `api/ai-models.ts` | **new** — GET-only `/models` proxy, path-restricted, size-capped |
+| `api/ai-stream.ts` | import shared allowlist; `+ openrouter.ai`, `api.mistral.ai`; doc comment |
+| `app/src/repulse/ai/client.cljs` | `openai-like` endpoint table; `models-request`; OpenRouter attribution headers |
+| `app/src/repulse/ai/models.cljs` | **new** — fetch, normalise, cache (24 h TTL), `pick-default` |
+| `app/src/repulse/ai/models_test.cljs` | **new** — normalisers, `pick-default`, TTL |
+| `app/src/repulse/ai/client_test.cljs` | new provider + `models-request` cases |
+| `app/src/repulse/ai/settings.cljs` | fallback defaults refreshed + two new; `effective-model` via catalogue |
+| `app/src/repulse/ui/assistant_panel.cljs` | provider vector; model `<datalist>`, ↻ refresh, status hint, stale-override warning |
+| `app/src/repulse/ai/tools.cljs` | comment only |
+| `docs/USAGE.md` | providers, live catalogue, signup links, "(no tools)" caveat |
 
 ---
 
 ## Definition of done
 
-- [ ] Provider dropdown shows `openrouter`, `venice`, `deepseek`, and `eurouter`;
-      selection persists across reload via `repulse:ai:provider` localStorage key
-- [ ] With provider `openrouter` and a valid key, `(ai "give me a euclidean kick pattern")`
-      opens the panel and submitting streams a response token-by-token
-- [ ] With provider `venice` and a valid key, `(ai "make a 4-bar hi-hat groove")`
-      streams a response token-by-token
-- [ ] With provider `deepseek` and a valid key, `(ai "write a polyrhythmic clave pattern")`
-      streams a response token-by-token
-- [ ] With provider `eurouter` and a valid key, streaming works end-to-end (endpoint
-      and default model verified against live EUrouter docs first)
-- [ ] Blank model override uses each provider's `default-models` entry; the provider
-      badge shows e.g. `openrouter · openrouter/auto`, `deepseek · deepseek-chat`
-- [ ] Model override `meta-llama/llama-3.3-70b-instruct:free` works on OpenRouter
-      (slash-and-colon model IDs survive the request path unmangled)
-- [ ] AI3 agent loop works on OpenRouter with a tools-capable model: asking
+- [ ] Provider dropdown shows `openrouter` and `mistral`; selection persists across
+      reload via `repulse:ai:provider`
+- [ ] Opening the panel with a stale or empty cache fetches the provider's model list;
+      the model field offers it as suggestions; "N models · updated …" is shown
+- [ ] OpenRouter's list loads with **no key set**
+- [ ] Changing provider or key refetches; ↻ forces a refetch inside the TTL
+- [ ] A failed catalogue fetch leaves chat working with the static fallback model and
+      shows a non-blocking hint
+- [ ] Blank model field resolves to a model **from the live list** for every provider
+      that has a key; the badge shows the resolved ID
+- [ ] Models with `:tools? false` are labelled "(no tools)"
+- [ ] A saved override missing from the fresh list shows a warning and is kept
+- [ ] `/api/ai-models` rejects non-allowlisted hosts (403), non-`/models` paths (403),
+      non-HTTPS URLs (403) and foreign origins (403)
+- [ ] `/api/ai-stream` accepts both new hosts and still 403s everything else
+- [ ] With provider `openrouter`: a chat answer arrives; model override
+      `meta-llama/llama-3.3-70b-instruct:free` works (IDs survive unmangled);
+      requests carry `HTTP-Referer` and `X-Title`
+- [ ] AI3 agent loop on OpenRouter with a tools-capable model:
       `(ai "read my buffer and double the tempo of the kick track")` produces
-      `read_buffer` → `propose_edit` tool calls and an Apply/Reject diff card
-- [ ] AI3 agent loop tool calls verified on DeepSeek (`deepseek-chat` supports
-      OpenAI-style function calling)
-- [ ] Venice with a non-tool-capable model degrades gracefully to plain chat —
-      no unhandled error in the agent loop
-- [ ] `/api/ai-stream` accepts all four new hosts and still returns 403 for any
-      non-allowlisted host (no allowlist regression)
-- [ ] OpenRouter requests include `HTTP-Referer` and `X-Title` headers
-- [ ] HTTP 429 from OpenRouter triggers the existing exponential back-off retry and
-      surfaces the inline "rate limited" message after 3 failed attempts
-- [ ] All five existing providers still stream correctly (regression check on at least
-      one: e.g. anthropic)
-- [ ] `docs/USAGE.md` updated: provider list, default models, signup links, Venice
-      tool-support caveat
-- [ ] `npm test` and `npx shadow-cljs compile app` pass
+      `read_buffer` → `propose_edit` and an Apply/Reject diff card
+- [ ] With provider `mistral`: chat works and the same agent-loop prompt produces tool
+      calls
+- [ ] HTTP 429 from OpenRouter triggers the existing back-off and surfaces the
+      "rate limited" message after 3 attempts
+- [ ] Anthropic still works end-to-end (regression)
+- [ ] `docs/USAGE.md` updated
+- [ ] `npm run test:all` and `npx shadow-cljs compile app` pass
 
 ---
 
 ## What NOT to do
 
-- **No local model support (Ollama / LM Studio).** The `/api/ai-stream` proxy cannot
-  reach the user's `localhost` and rejects non-HTTPS URLs; local inference needs a
-  direct-fetch bypass path and is a separate architecture decision — file it as its
-  own phase idea if wanted.
-- **No further hosted providers** (Mistral, Together, Fireworks, Requesty, Moonshot,
-  Zhipu/GLM, Alibaba/Qwen, Opper, …). The aggregators cover their models; Requesty is
-  a second OpenRouter; Opper's primary API is task-based rather than chat-completions
-  and would need a new wire format. Nine providers is the ceiling for this phase.
-- **No per-provider model picker UI.** The free-text model override field is the
-  existing pattern; don't fetch and render OpenRouter's 300-model catalogue.
-- **No server-side key storage.** Keys stay in localStorage — encrypted key relay is
-  Phase AI4b. (When AI4b lands, its provider enum must include all four new providers.)
-- **No wire-format abstraction beyond the endpoint map.** The `openai-like-endpoints`
-  map is as far as the refactor goes — anthropic and google keep their dedicated
-  request builders and parsers; don't unify the three formats behind a protocol.
+- **No custom / local endpoints here** (LM Studio, Ollama, vLLM, LiteLLM, …) — that is
+  [Phase AI2c](PHASE-AI2c.md).
+- **No more direct providers** (DeepSeek, Venice, EUrouter, Together, Fireworks,
+  Moonshot, Zhipu, Qwen, …). OpenRouter covers them. Seven providers is the ceiling
+  for this phase.
+- **No rich model-browser UI** — no pricing tables, search dialog or capability
+  matrix. A `<datalist>` on the existing free-text field is the whole UI.
+- **No server-side catalogue cache.** Lists are fetched with the user's own key and
+  cached in their browser; a shared cache would mean server-side keys (that's AI4b's
+  territory).
+- **No server-side key storage.** Keys stay in localStorage. When AI4b lands, its
+  provider enum must include `openrouter` and `mistral`.
+- **No wire-format abstraction beyond the endpoint table.** anthropic and google keep
+  their dedicated builders and parsers.
