@@ -24,12 +24,28 @@
   (testing "accumulates across calls against the default limits and resets"
     (budget/reset-budget!)
     (is (= :ok (budget/record-usage! {:tokens 1000 :calls 2})))
-    (is (= {:tokens-used 1000 :calls-used 2 :warned? false} (budget/get-state)))
+    (is (= {:tokens-used 1000 :calls-used 2 :warned? false :estimated? false} (budget/get-state)))
     (is (= :warn (budget/record-usage! {:tokens 24000})))
     (is (= :ok (budget/record-usage! {:tokens 1000})) "warning fires only once")
     (is (= :hard-stop (budget/record-usage! {:tokens 24000})))
     (budget/reset-budget!)
-    (is (= {:tokens-used 0 :calls-used 0 :warned? false} (budget/get-state)))))
+    (is (= {:tokens-used 0 :calls-used 0 :warned? false :estimated? false} (budget/get-state)))))
+
+(deftest usage-estimate-test
+  (testing "~4 characters per token, rounded up"
+    (is (= 3 (budget/estimate-tokens 8 1)))
+    (is (= 0 (budget/estimate-tokens 0 0))))
+  (testing "estimated usage still counts toward the budget and is labelled"
+    (budget/reset-budget!)
+    (budget/record-usage! {:tokens 100})
+    (is (false? (:estimated? (budget/get-state))))
+    (budget/record-usage! {:tokens (budget/estimate-tokens 4000 400) :estimated? true})
+    (is (= 1200 (:tokens-used (budget/get-state))))
+    (is (true? (:estimated? (budget/get-state))))
+    (is (= :hard-stop (budget/record-usage! {:tokens (budget/estimate-tokens 200000 0) :estimated? true}))
+        "an estimate can still exhaust the budget")
+    (budget/reset-budget!)
+    (is (false? (:estimated? (budget/get-state))))))
 
 (deftest wrap-test
   (is (= "<untrusted>\nhello\n</untrusted>" (guard/wrap "hello")))

@@ -41,6 +41,8 @@
 (defonce ^:private pending          (atom false))
 (defonce ^:private activity-log     (atom []))
 (defonce ^:private log-expanded?    (atom false))
+;; Provider shown in the settings drawer — committed to settings/provider on Save.
+(defonce ^:private draft-provider   (atom nil))
 
 ;; ── DOM helper ────────────────────────────────────────────────────────────────
 
@@ -225,23 +227,33 @@
   (str (if (and label (not= label id)) (str label " — " id) id)
        (when (false? tools?) " (no tools)")))
 
+(def ^:private providers
+  ["anthropic" "openai" "google" "groq" "xai" "openrouter" "mistral" "custom"])
+
+(def ^:private custom-presets
+  "Default OpenAI-compatible base URLs of common local model servers."
+  [["LM Studio" "http://localhost:1234/v1"]
+   ["Ollama"    "http://localhost:11434/v1"]
+   ["llama.cpp" "http://localhost:8080/v1"]])
+
 (defn- model-hint-html
   "Status line under the model field: catalogue size/age, loading or error."
-  []
-  (let [p     @settings/provider
-        c     (models/cached p)
+  [p]
+  (let [c     (models/cached p)
         st    (get @models/status p)
         ovr   @settings/model-override
-        known (or (not (seq ovr)) (models/known? p ovr))]
+        known (or (not (seq ovr)) (models/known? p ovr))
+        dflt  (models/resolved-default p (get settings/default-models p))]
     (str (case st
            :loading "Loading models&hellip;"
            :error   (str "Couldn&#39;t load models &mdash; using built-in default"
                          (when c " (showing cached list)"))
            (cond c    (str (count (:models c)) " models &middot; updated "
                            (models/age-label (:fetched-at c) (js/Date.now)))
-                 (or (= p "openrouter") (seq @settings/api-key)) ""
+                 (= p "custom") "Test the connection to load the server&#39;s model list."
+                 (or (= p "openrouter") (seq (settings/key-for p))) ""
                  :else "Enter an API key to load this provider&#39;s model list"))
-         " Leave blank for " (escape-html (settings/resolved-default)) "."
+         (when dflt (str " Leave blank for " (escape-html dflt) "."))
          (when-not known
            (str " <strong>Warning:</strong> not in " (escape-html p) "&#39;s current list.")))))
 
@@ -250,11 +262,73 @@
    hint once it lands."
   [force?]
   (when-let [pr (client/refresh-models! {:force? force?})]
-    (.then pr (fn [_] (when (el "ai-model-hint") (render-settings!) (render-panel!))))))
+    (.then pr (fn [_] (if (el "ai-model-hint") (render-settings!) (render-panel!))))))
+
+(defn- custom-fields-html
+  "Base URL, presets, Send tools, Test connection and the trust warning —
+   shown only for the `custom` provider."
+  []
+  (str "<div class=\"ai-field\">"
+       "  <label for=\"ai-custom-url-input\" class=\"ai-label\">Base URL</label>"
+       "  <span class=\"ai-key-hint\">Any OpenAI-compatible <code>/v1</code> endpoint: https:// anywhere, or http://localhost</span>"
+       "  <input id=\"ai-custom-url-input\" class=\"ai-input-text\" type=\"url\""
+       "   autocomplete=\"off\" placeholder=\"http://localhost:1234/v1\""
+       "   value=\"" (escape-html @settings/custom-base-url) "\">"
+       "  <div class=\"ai-key-row\">"
+       (str/join ""
+         (map (fn [[label url]]
+                (str "<button class=\"ai-btn ai-btn--secondary ai-btn--sm ai-preset-btn\" type=\"button\""
+                     " data-url=\"" url "\" title=\"" url "\">" label "</button>"))
+              custom-presets))
+       "  </div>"
+       "  <span id=\"ai-custom-url-msg\" class=\"ai-key-hint\"></span>"
+       "</div>"
+       "<div class=\"ai-field\">"
+       "  <label class=\"ai-checkbox-label\">"
+       "    <input id=\"ai-custom-tools-cb\" type=\"checkbox\""
+       (when @settings/custom-tools? " checked")
+       "> Send tools"
+       "  </label>"
+       "  <span class=\"ai-key-hint\">Turn off if your model returns errors or garbage when given tools</span>"
+       "</div>"
+       "<div class=\"ai-field\">"
+       "  <div class=\"ai-key-row\">"
+       "  <button id=\"ai-test-conn-btn\" class=\"ai-btn ai-btn--secondary ai-btn--sm\" type=\"button\">Test connection</button>"
+       "  <span id=\"ai-test-conn-result\" class=\"ai-key-hint\" role=\"status\"></span>"
+       "  </div>"
+       "  <span class=\"ai-key-hint ai-custom-warning\">&#9888; Requests go straight from your browser to this URL, "
+       "including your key and the code you share. Only use endpoints you trust.</span>"
+       "</div>"))
+
+(defn- test-connection! []
+  (let [url  (some-> (el "ai-custom-url-input") .-value)
+        key  (some-> (el "ai-key-input") .-value)
+        out  (el "ai-test-conn-result")
+        show (fn [html] (when-let [o (el "ai-test-conn-result")] (set! (.-innerHTML o) html)))]
+    (when out (show "Testing&hellip;"))
+    (-> (client/test-connection! {:base-url url :key key})
+        (.then (fn [{:keys [count error]}]
+                 (show (if error
+                         (str "&#10007; " (escape-html error))
+                         (str "&#10003; " count " model" (when (not= 1 count) "s")
+                              " &middot; tools: "
+                              (if (some-> (el "ai-custom-tools-cb") .-checked) "on" "off"))))
+                 ;; Refresh the model datalist from the freshly cached catalogue.
+                 (when-not error
+                   (when-let [dl (el "ai-model-list")]
+                     (set! (.-innerHTML dl)
+                           (str/join ""
+                             (map (fn [m] (str "<option value=\"" (escape-html (:id m)) "\">"
+                                               (escape-html (model-label m)) "</option>"))
+                                  (:models (models/cached "custom")))))))
+                 (when-let [h (el "ai-model-hint")]
+                   (set! (.-innerHTML h) (model-hint-html "custom"))))))))
 
 
 (defn- render-settings! []
   (when-let [panel (el "ai-panel")]
+    (let [p       (or @draft-provider @settings/provider)
+          custom? (= p "custom")]
     (set! (.-innerHTML panel)
           (str "<form class=\"ai-settings\" onsubmit=\"return false\" autocomplete=\"off\">"
                "<h3 class=\"ai-settings-title\">AI Settings</h3>"
@@ -264,23 +338,30 @@
                "  <label for=\"ai-provider-sel\" class=\"ai-label\">Provider</label>"
                "  <select id=\"ai-provider-sel\" class=\"ai-select\">"
                (str/join ""
-                 (map (fn [p]
-                        (str "<option value=\"" p "\""
-                             (when (= p @settings/provider) " selected")
-                             ">" p "</option>"))
-                      ["anthropic" "openai" "google" "groq" "xai" "openrouter" "mistral"]))
+                 (map (fn [opt]
+                        (str "<option value=\"" opt "\""
+                             (when (= opt p) " selected")
+                             ">" opt "</option>"))
+                      providers))
                "  </select>"
                "</div>"
+               (when custom? (custom-fields-html))
                "<div class=\"ai-field\">"
-               "  <label for=\"ai-key-input\" class=\"ai-label\">API key</label>"
-               "  <span class=\"ai-key-hint\">Stored in localStorage; relayed per request via the /api/ai-stream proxy, never logged or stored server-side</span>"
+               "  <label for=\"ai-key-input\" class=\"ai-label\">API key"
+               (when custom? " <em class=\"ai-opt\">(optional)</em>")
+               "</label>"
+               "  <span class=\"ai-key-hint\">"
+               (if custom?
+                 "Stored in localStorage; sent only to the base URL above. Leave blank for local servers"
+                 "Stored in localStorage; relayed per request via the /api/ai-stream proxy, never logged or stored server-side")
+               "</span>"
                "  <input id=\"ai-key-input\" class=\"ai-input-text\" type=\"password\""
                "   autocomplete=\"new-password\""
-               "   value=\"" (escape-html @settings/api-key) "\">"
+               "   value=\"" (escape-html (settings/key-for p)) "\">"
                "</div>"
                "<div class=\"ai-field\">"
                "  <label for=\"ai-model-input\" class=\"ai-label\">Model override</label>"
-               "  <span id=\"ai-model-hint\" class=\"ai-key-hint\">" (model-hint-html) "</span>"
+               "  <span id=\"ai-model-hint\" class=\"ai-key-hint\">" (model-hint-html p) "</span>"
                "  <div class=\"ai-key-row\">"
                "  <input id=\"ai-model-input\" class=\"ai-input-text\" type=\"text\""
                "   autocomplete=\"off\" list=\"ai-model-list\""
@@ -291,7 +372,7 @@
                (str/join ""
                  (map (fn [m] (str "<option value=\"" (escape-html (:id m)) "\">"
                                    (escape-html (model-label m)) "</option>"))
-                      (:models (models/cached @settings/provider))))
+                      (:models (models/cached p))))
                "  </datalist>"
                "</div>"
                "<div class=\"ai-field\">"
@@ -314,7 +395,9 @@
                  (str
                    "<div class=\"ai-field\">"
                    "  <label for=\"ai-token-budget\" class=\"ai-label\">Token limit</label>"
-                   "  <span class=\"ai-key-hint\">Remaining: " (max 0 (- (:tokens lims) tokens-used)) "</span>"
+                   "  <span class=\"ai-key-hint\">Remaining: " (max 0 (- (:tokens lims) tokens-used))
+                   (when (:estimated? (budget/get-state)) " (estimated &mdash; server reports no usage)")
+                   "</span>"
                    "  <input id=\"ai-token-budget\" class=\"ai-input-text\" type=\"number\""
                    "   min=\"1000\" step=\"1000\" value=\"" (:tokens lims) "\">"
                    "</div>"
@@ -351,7 +434,7 @@
                "<button id=\"ai-settings-save-btn\" class=\"ai-btn\" type=\"button\">Save</button>"
                "<button id=\"ai-settings-back-btn\" class=\"ai-btn ai-btn--secondary\" type=\"button\">Back</button>"
                "</div>"
-               "</form>"))))
+               "</form>")))))
 
 ;; ── Main panel render ─────────────────────────────────────────────────────────
 
@@ -362,7 +445,7 @@
             (str "<div class=\"ai-disabled\">"
                  "<p>AI assistant is disabled.</p>"
                  "<p class=\"ai-key-hint\">Enable it to chat with an AI about your patterns.<br>"
-                 "You will need an API key from Anthropic, OpenAI, Google, or Groq.</p>"
+                 "You will need an API key from a hosted provider (Anthropic, OpenAI, Google, …) or a local model server.</p>"
                  "<button id=\"ai-enable-btn\" class=\"ai-btn\">Enable AI assistant</button>"
                  "</div>"))
       (do
@@ -376,8 +459,12 @@
                      "</span>"
                      "<span class=\"ai-budget-badge"
                      (when (budget/exhausted?) " ai-budget-badge--exhausted")
-                     "\" title=\"Session usage: " tokens-used " / " tokens " tokens, "
+                     "\" title=\"Session usage: " tokens-used " / " tokens " tokens"
+                     (when (:estimated? (budget/get-state))
+                       " (partly estimated — the server reports no usage)")
+                     ", "
                      calls-used " / " calls " tool calls\">"
+                     (when (:estimated? (budget/get-state)) "~")
                      (compact-num tokens-used) "/" (compact-num tokens) " tok &middot; "
                      calls-used "/" calls " tools"
                      "</span>"
@@ -468,7 +555,16 @@
             (do (reset! settings/enabled? true) (render-panel!))
 
             (= id "ai-settings-btn")
-            (do (render-settings!) (refresh-catalogue! false))
+            (do (reset! draft-provider @settings/provider)
+                (render-settings!)
+                (refresh-catalogue! false))
+
+            (.contains (.-classList t) "ai-preset-btn")
+            (when-let [inp (el "ai-custom-url-input")]
+              (set! (.-value inp) (.getAttribute t "data-url")))
+
+            (= id "ai-test-conn-btn")
+            (test-connection!)
 
             (= id "ai-models-refresh")
             (do (when-let [mi (el "ai-model-input")]
@@ -489,11 +585,24 @@
             (do (agent-loop/cancel!) (set-pending! false))
 
             (= id "ai-settings-save-btn")
-            (do
+            (if-let [url-error (when-let [ui (el "ai-custom-url-input")]
+                                 (:error (client/normalise-base-url (.-value ui))))]
+              ;; Invalid custom URL: keep the drawer open, save nothing.
+              (when-let [msg (el "ai-custom-url-msg")]
+                (set! (.-innerHTML msg) (str "&#10007; " (escape-html url-error))))
+            (let [url-changed? (when-let [ui (el "ai-custom-url-input")]
+                                 (let [v (:ok (client/normalise-base-url (.-value ui)))]
+                                   (when (not= v @settings/custom-base-url)
+                                     (reset! settings/custom-base-url v)
+                                     true)))]
+              ;; Provider first: switching it loads that provider's stored key,
+              ;; then the key field (rendered for the draft provider) overwrites it.
               (when-let [sel (el "ai-provider-sel")]
                 (reset! settings/provider (.-value sel)))
               (when-let [ki (el "ai-key-input")]
                 (reset! settings/api-key (.-value ki)))
+              (when-let [cb (el "ai-custom-tools-cb")]
+                (reset! settings/custom-tools? (.-checked cb)))
               (when-let [mi (el "ai-model-input")]
                 (reset! settings/model-override (.-value mi)))
               (when-let [cb (el "ai-include-code-cb")]
@@ -511,7 +620,7 @@
               (when-let [sk (el "ai-search-key-input")]
                 (reset! settings/search-api-key (let [v (.-value sk)] (when (seq v) v))))
               (render-panel!)
-              (refresh-catalogue! false))
+              (refresh-catalogue! (boolean url-changed?))))
 
             (= id "ai-freesound-key-toggle")
             (when-let [inp (el "ai-freesound-key-input")]
@@ -559,6 +668,15 @@
 
             ;; All other clicks (ai-messages, ai-input, etc.) — ignore
             :else nil)))
+      false)
+
+    ;; Switching provider in the drawer re-renders it for that provider's
+    ;; fields and stored key (nothing is saved until Save).
+    (.addEventListener panel "change"
+      (fn [^js e]
+        (when (= "ai-provider-sel" (.. e -target -id))
+          (reset! draft-provider (.. e -target -value))
+          (render-settings!)))
       false)
 
     ;; Cmd/Ctrl+Enter in the textarea sends the message

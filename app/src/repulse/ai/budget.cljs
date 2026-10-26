@@ -6,7 +6,13 @@
 (def default-limits {:tokens 50000 :calls 100})
 
 (defonce state
-  (atom {:tokens-used 0 :calls-used 0 :warned? false}))
+  (atom {:tokens-used 0 :calls-used 0 :warned? false :estimated? false}))
+
+(defn estimate-tokens
+  "Token estimate for providers that report no usage (often local servers):
+   ~4 characters per token over everything sent and received."
+  [request-chars response-chars]
+  (js/Math.ceil (/ (+ request-chars response-chars) 4)))
 
 (defn limits
   "Return current budget limits from localStorage, falling back to defaults."
@@ -50,11 +56,14 @@
 
 (defn record-usage!
   "Record token usage for one LLM round-trip and the number of tool calls it
-   requested. Returns :ok, :warn (first time 50% is crossed), or :hard-stop."
-  [{:keys [tokens calls]}]
-  (let [st (swap! state #(-> %
-                             (update :tokens-used + (or tokens 0))
-                             (update :calls-used  + (or calls 0))))
+   requested. `estimated?` marks tokens that came from estimate-tokens rather
+   than the provider; once set, the session total is labelled an estimate.
+   Returns :ok, :warn (first time 50% is crossed), or :hard-stop."
+  [{:keys [tokens calls estimated?]}]
+  (let [st (swap! state #(cond-> (-> %
+                                     (update :tokens-used + (or tokens 0))
+                                     (update :calls-used  + (or calls 0)))
+                           estimated? (assoc :estimated? true)))
         s  (status st (limits))]
     (when (= s :warn) (swap! state assoc :warned? true))
     s))
@@ -64,4 +73,4 @@
 (defn reset-budget!
   "Reset usage counters for a new session."
   []
-  (swap! state assoc :tokens-used 0 :calls-used 0 :warned? false))
+  (swap! state assoc :tokens-used 0 :calls-used 0 :warned? false :estimated? false))

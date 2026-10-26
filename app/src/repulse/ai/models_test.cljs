@@ -72,3 +72,10 @@
   (is (= "just now" (m/age-label 0 1000)))
   (is (= "3 h ago" (m/age-label 0 (* 3 3600 1000))))
   (is (= "2 d ago" (m/age-label 0 (* 2 86400 1000)))))
+
+(deftest pick-default-custom-test
+  (testing "custom has no preferences: first model the server lists"
+    (is (= "qwen3-coder" (m/pick-default "custom" [{:id "qwen3-coder"} {:id "llama3"}] nil)))
+    (is (nil? (m/pick-default "custom" [] nil))))
+  (testing "providers with preferences still fall back, not to the first model"
+    (is (= "fb" (m/pick-default "openai" [{:id "whatever"}] "fb")))))

@@ -146,6 +146,53 @@
    "mistral"    {:chat   "https://api.mistral.ai/v1/chat/completions"
                  :models "https://api.mistral.ai/v1/models"}})
 
+;; ── Custom (user-supplied) OpenAI-compatible endpoint ─────────────────────────
+
+(def ^:private loopback-hosts #{"localhost" "127.0.0.1" "[::1]"})
+
+(defn normalise-base-url
+  "Validate and normalise a user-supplied OpenAI-compatible base URL.
+   https → any host; http → loopback only (anything else is mixed content on an
+   HTTPS page). Strips a trailing slash and a pasted /chat/completions suffix.
+   Returns {:ok url} or {:error msg}."
+  [s]
+  (let [s (str/trim (str s))
+        u (when (seq s) (try (js/URL. s) (catch :default _ nil)))]
+    (cond
+      (not (seq s)) {:error "Enter the server's base URL, e.g. http://localhost:1234/v1"}
+      (nil? u)      {:error (str "Not a valid URL: " s)}
+
+      (and (= "http:" (.-protocol u)) (not (loopback-hosts (.-hostname u))))
+      {:error (str "Plain-HTTP addresses other than localhost are blocked by the browser "
+                   "as mixed content. Use an https:// URL (e.g. a local tunnel), or run "
+                   "the server on this machine and use http://localhost.")}
+
+      (not (#{"http:" "https:"} (.-protocol u)))
+      {:error "Only http(s):// URLs are supported."}
+
+      :else
+      {:ok (-> s
+               (str/replace #"/+$" "")
+               (str/replace #"/chat/completions$" "")
+               (str/replace #"/+$" ""))})))
+
+(def direct-providers
+  "Providers whose requests go straight from the browser to the endpoint. Every
+   other provider goes through the /api/ai-* proxies and their host allowlists."
+  #{"custom"})
+
+(defn direct-provider? [provider]
+  (contains? direct-providers provider))
+
+(defn- custom-base!
+  "Normalised base URL, or throw with the validation message."
+  [base-url]
+  (let [{:keys [ok error]} (normalise-base-url base-url)]
+    (or ok (throw (ex-info error {:base-url base-url})))))
+
+(defn- bearer [key]
+  (when (seq key) {"Authorization" (str "Bearer " key)}))
+
 (def ^:private openrouter-attribution
   {"HTTP-Referer" "https://repulse.app"
    "X-Title"      "REPuLse"})
@@ -153,10 +200,13 @@
 (defn build-request
   "Provider request envelope {:url :headers :body} for one completion.
    Pure — the caller supplies provider, key and model."
-  [{:keys [provider key model]} system messages tools]
+  [{:keys [provider key model base-url tools?] :or {tools? true}} system messages tools]
   (case provider
     "anthropic" (anthropic-request system messages model key tools)
     "google"    (google-request    system messages model key tools)
+    "custom"    (-> (openai-like-request (str (custom-base! base-url) "/chat/completions")
+                                         system messages model key (when tools? tools))
+                    (assoc :headers (merge {"content-type" "application/json"} (bearer key))))
     (if-let [{:keys [chat]} (openai-like provider)]
       (cond-> (openai-like-request chat system messages model key tools)
         (= provider "openrouter") (update :headers merge openrouter-attribution))
@@ -165,8 +215,10 @@
 (defn models-request
   "Model-list request envelope {:url :headers} for a provider. Pure.
    OpenRouter's catalogue is public, so it carries no Authorization header."
-  [{:keys [provider key]}]
+  [{:keys [provider key base-url]}]
   (case provider
+    "custom"    {:url     (str (custom-base! base-url) "/models")
+                 :headers (or (bearer key) {})}
     "anthropic" {:url     "https://api.anthropic.com/v1/models?limit=1000"
                  :headers {"x-api-key" key "anthropic-version" "2023-06-01"}}
     "google"    {:url     "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"
@@ -177,11 +229,15 @@
       {:url models :headers {"Authorization" (str "Bearer " key)}}
       (throw (ex-info "Unknown provider" {:provider provider})))))
 
+(defn- current-config []
+  {:provider @settings/provider
+   :key      @settings/api-key
+   :model    (settings/effective-model)
+   :base-url @settings/custom-base-url
+   :tools?   @settings/custom-tools?})
+
 (defn- make-request [system messages tools]
-  (build-request {:provider @settings/provider
-                  :key      @settings/api-key
-                  :model    (settings/effective-model)}
-                 system messages tools))
+  (build-request (current-config) system messages tools))
 
 ;; ── Response parsers ─────────────────────────────────────────────────────────
 
@@ -204,17 +260,35 @@
               "If the app runs on a new domain, add it to the ALLOWED_ORIGINS "
               "environment variable of the Vercel deployment."))))
 
+(defn direct-error-text
+  "User-facing error for a failed browser-direct request. `status` is nil when
+   fetch itself failed (TypeError) — the browser doesn't say whether that was
+   CORS, a stopped server or a denied local-network permission, so name all."
+  [base status body-text]
+  (case status
+    nil (str "Couldn't reach " base ". Is the server running, and does it allow "
+             "requests from this site (CORS)? See \"Local models\" in the manual.")
+    (401 403) (str "HTTP " status " — the server rejected the API key. Check the key "
+                   "(leave it blank for local servers that need none).")
+    404 (str "HTTP 404 — nothing at " base ". Check the base URL (missing /v1?).")
+    (str "HTTP " status " — " body-text)))
+
 (defn- extract-tool-calls-openai [obj]
   (when-let [msg (some-> (jget obj "choices") first-item (jget "message"))]
     (when-let [tcs (jget msg "tool_calls")]
       (when (pos? (.-length tcs))
         {:tool-calls
          (mapv (fn [tc]
-                 {:id   (jget tc "id")
-                  :name (some-> (jget tc "function") (jget "name"))
-                  :args (try (js->clj (js/JSON.parse (some-> (jget tc "function") (jget "arguments")))
-                                      :keywordize-keys true)
-                             (catch :default _ {}))})
+                 (let [raw    (some-> (jget tc "function") (jget "arguments"))
+                       parsed (if (or (nil? raw) (= "" raw))
+                                {}
+                                (try (js->clj (js/JSON.parse raw) :keywordize-keys true)
+                                     (catch :default _ ::invalid)))]
+                   (cond-> {:id   (or (jget tc "id") (str (gensym "call_")))
+                            :name (some-> (jget tc "function") (jget "name"))
+                            :args (if (map? parsed) parsed {})}
+                     (not (map? parsed))
+                     (assoc :args-error (str "arguments are not a JSON object: " raw)))))
                (array-seq tcs))}))))
 
 (defn- extract-tool-calls-anthropic [obj]
@@ -279,11 +353,17 @@
                        "anthropic" (extract-text-anthropic obj)
                        "google"    (extract-text-google obj)
                        (extract-text-openai obj)))
-        usage      (extract-usage provider obj)]
+        usage      (extract-usage provider obj)
+        ;; Text a model sends alongside its tool calls — shown if the calls fail.
+        aside      (when tool-calls
+                     (case provider
+                       ("anthropic" "google") nil
+                       (extract-text-openai obj)))]
     (cond-> (or tool-calls
                 (when text {:content text})
                 {:content "(no response)"})
-      usage (assoc :usage usage))))
+      usage            (assoc :usage usage)
+      (seq aside)      (assoc :content aside))))
 
 (defn complete!
   "Non-streaming request that supports tool calls.
@@ -294,18 +374,28 @@
    :usage (billed tokens) when the provider reports it; {:rate-limited true}
    on HTTP 429; or {:error msg} on any other failure.
 
-   Requests are routed through /api/ai-stream (a thin server-side proxy) to
-   avoid CORS rejections from AI provider APIs when called from the browser."
+   Hosted providers are routed through /api/ai-stream (a thin server-side proxy)
+   to avoid CORS rejections. `custom` (direct-provider?) goes straight from the
+   browser to the user's endpoint — it can't use the proxy, whose host allowlist
+   is the SSRF defence and which could never reach the user's localhost."
   [system messages tools]
-  (let [{:keys [url headers body]} (make-request system messages tools)
-        provider   @settings/provider
-        proxy-body (js/JSON.stringify #js {:url     url
-                                           :headers (clj->js headers)
-                                           :body    body})]
-    (-> (js/fetch "/api/ai-stream"
-                  #js {:method  "POST"
-                       :headers #js {"content-type" "application/json"}
-                       :body    proxy-body})
+  (let [provider @settings/provider
+        direct?  (direct-provider? provider)
+        base     (:ok (normalise-base-url @settings/custom-base-url))]
+    (-> (js/Promise.resolve nil)
+        (.then (fn [_]
+                 (let [{:keys [url headers body]} (make-request system messages tools)]
+                   (if direct?
+                     (-> (js/fetch url #js {:method  "POST"
+                                            :headers (clj->js headers)
+                                            :body    body})
+                         (.catch (fn [_] (throw (js/Error. (direct-error-text base nil nil))))))
+                     (js/fetch "/api/ai-stream"
+                               #js {:method  "POST"
+                                    :headers #js {"content-type" "application/json"}
+                                    :body    (js/JSON.stringify #js {:url     url
+                                                                     :headers (clj->js headers)
+                                                                     :body    body})})))))
         (.then (fn [resp]
                  (cond
                    (.-ok resp)
@@ -314,7 +404,9 @@
                    {:rate-limited true}
                    :else
                    (-> (.text resp)
-                       (.then (fn [t] {:error (http-error-text (.-status resp) t)}))))))
+                       (.then (fn [t] {:error (if direct?
+                                                (direct-error-text base (.-status resp) t)
+                                                (http-error-text (.-status resp) t))}))))))
         (.catch (fn [err]
                   {:error (if (string? err) err (or (.-message err) "unknown error"))})))))
 
@@ -342,36 +434,75 @@
 
 ;; ── Model catalogue fetch ─────────────────────────────────────────────────────
 
+(defn- fetch-catalogue
+  "Promise of the normalised model list for a provider; rejects with a
+   user-facing Error. `custom` is fetched directly, everyone else via the
+   /api/ai-models proxy."
+  [{:keys [provider base-url] :as cfg}]
+  (-> (js/Promise.resolve nil)
+      (.then (fn [_]
+               (let [{:keys [url headers]} (models-request cfg)]
+                 (if (direct-provider? provider)
+                   (-> (js/fetch url #js {:headers (clj->js headers)})
+                       (.catch (fn [_] (throw (js/Error. (direct-error-text base-url nil nil))))))
+                   (js/fetch "/api/ai-models"
+                             #js {:method  "POST"
+                                  :headers #js {"content-type" "application/json"}
+                                  :body    (js/JSON.stringify #js {:url url :headers (clj->js headers)})})))))
+      (.then (fn [resp]
+               (if (.-ok resp)
+                 (.json resp)
+                 (-> (.text resp)
+                     (.then (fn [t]
+                              (throw (js/Error. (if (direct-provider? provider)
+                                                  (direct-error-text base-url (.-status resp) t)
+                                                  (str "HTTP " (.-status resp)))))))))))
+      (.then (fn [j] (models/normalise provider (js->clj j :keywordize-keys true))))))
+
+(defn- catalogue-config [provider key]
+  {:provider provider
+   :key      key
+   :base-url (:ok (normalise-base-url @settings/custom-base-url))})
+
 (defn fetch-models!
-  "Fetch, normalise and cache a provider's model list via /api/ai-models.
+  "Fetch, normalise and cache a provider's model list.
    Non-fatal: on failure keeps the previous cache and marks the provider :error.
    Returns a Promise resolving to the normalised models or nil."
   [provider key]
   (swap! models/status assoc provider :loading)
-  (let [{:keys [url headers]} (models-request {:provider provider :key key})]
-    (-> (js/fetch "/api/ai-models"
-                  #js {:method  "POST"
-                       :headers #js {"content-type" "application/json"}
-                       :body    (js/JSON.stringify #js {:url url :headers (clj->js headers)})})
-        (.then (fn [resp]
-                 (if (.-ok resp)
-                   (.json resp)
-                   (throw (js/Error. (str "HTTP " (.-status resp)))))))
-        (.then (fn [j]
-                 (let [ms (models/normalise provider (js->clj j :keywordize-keys true))]
-                   (models/store! provider ms)
-                   (swap! models/status dissoc provider)
-                   ms)))
-        (.catch (fn [_]
-                  (swap! models/status assoc provider :error)
-                  nil)))))
+  (-> (fetch-catalogue (catalogue-config provider key))
+      (.then (fn [ms]
+               (models/store! provider ms)
+               (swap! models/status dissoc provider)
+               ms))
+      (.catch (fn [_]
+                (swap! models/status assoc provider :error)
+                nil))))
+
+(defn test-connection!
+  "Fetch <base>/models for a custom endpoint described by `cfg`
+   ({:base-url :key}). Caches the list on success.
+   Promise of {:count n} or {:error msg}."
+  [{:keys [base-url key]}]
+  (let [{:keys [ok error]} (normalise-base-url base-url)]
+    (if error
+      (js/Promise.resolve {:error error})
+      (-> (fetch-catalogue {:provider "custom" :key key :base-url ok})
+          (.then (fn [ms]
+                   (models/store! "custom" ms)
+                   (swap! models/status dissoc "custom")
+                   {:count (count ms)}))
+          (.catch (fn [err] {:error (or (.-message err) (str err))}))))))
 
 (defn refresh-models!
-  "Fetch the current provider's catalogue when forced or stale. Providers other
-   than OpenRouter need an API key first."
+  "Fetch the current provider's catalogue when forced or stale. OpenRouter needs
+   nothing, `custom` needs a valid base URL, every other provider an API key."
   [{:keys [force?]}]
   (let [provider @settings/provider
         key      @settings/api-key]
     (when (and (or force? (models/stale? (models/cached provider)))
-               (or (= provider "openrouter") (seq key)))
+               (case provider
+                 "openrouter" true
+                 "custom"     (some? (:ok (normalise-base-url @settings/custom-base-url)))
+                 (seq key)))
       (fetch-models! provider key))))

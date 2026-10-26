@@ -58,7 +58,7 @@
           :tools?  nil
           :created (parse-iso (:created_at m))})))
 
-(defmethod normalise :default [_ {:keys [data]}]   ; xai and any other openai-like
+(defmethod normalise :default [_ {:keys [data]}]   ; xai, custom and any other openai-like
   (vec (for [m data]
          {:id (:id m) :label (:id m) :tools? nil :created (:created m)})))
 
@@ -81,7 +81,8 @@
 (defn pick-default
   "Choose a default model id from a normalised catalogue, or `fallback` when
    nothing matches. An exact id match beats prefix matches; among prefix matches
-   prefer tools-capable, then newest."
+   prefer tools-capable, then newest. Providers without preferred patterns
+   (`custom`) default to the first model the server lists."
   [provider models fallback]
   (or (some (fn [pat]
               (let [hits (filter #(str/starts-with? (str (:id %)) pat) models)]
@@ -89,6 +90,8 @@
                   (or (:id (first (filter #(= pat (:id %)) hits)))
                       (:id (first (sort-by (juxt tools-rank #(- (or (:created %) 0))) hits)))))))
             (get preferred-models provider))
+      (when-not (contains? preferred-models provider)
+        (:id (first models)))
       fallback))
 
 ;; ── Cache ─────────────────────────────────────────────────────────────────────
