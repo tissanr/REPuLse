@@ -33,7 +33,7 @@
    "openai"     "gpt-4o"
    "google"     "gemini-2.0-flash"
    "groq"       "llama-3.3-70b-versatile"
-   "xai"        "grok-3"
+   "xai"        "grok-4.7"
    "openrouter" "openrouter/auto"
    "mistral"    "mistral-medium-latest"})
 

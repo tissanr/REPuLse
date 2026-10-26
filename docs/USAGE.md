@@ -1373,7 +1373,7 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 - **Freesound API key** — enables `freesound_search` and `freesound_load`; get a key at [freesound.org/apiv2/](https://freesound.org/apiv2/); stored in `repulse:ai:freesound-key`
 - **Web Search API key** (optional) — enables `web_search` via Brave Search; get a key at [brave.com/search/api/](https://brave.com/search/api/); stored in `repulse:ai:search-key`; omit to hide the tool from the model entirely
 
-**Default models:** with a blank override, the default is chosen from the provider's live model list (fetched when the panel opens, then cached for 24 h; OpenRouter's list needs no key, the others load once a key is set). If the list can't be loaded the built-in fallbacks are used: `claude-sonnet-5-5` (Anthropic), `gpt-4o` (OpenAI), `gemini-2.0-flash` (Google), `llama-3.3-70b-versatile` (Groq), `grok-3` (xAI), `openrouter/auto` (OpenRouter), `mistral-medium-latest` (Mistral).
+**Default models:** with a blank override, the default is chosen from the provider's live model list (fetched when the panel opens, then cached for 24 h; OpenRouter's list needs no key, the others load once a key is set). If the list can't be loaded the built-in fallbacks are used: `claude-sonnet-5-5` (Anthropic), `gpt-4o` (OpenAI), `gemini-2.0-flash` (Google), `llama-3.3-70b-versatile` (Groq), `grok-4.7` (xAI), `openrouter/auto` (OpenRouter), `mistral-medium-latest` (Mistral).
 
 > **Groq vs xAI:** `groq` is [Groq cloud](https://groq.com) — fast inference for open-source models like Llama. `xai` is [xAI](https://x.ai) — Elon Musk's company, makers of the Grok model family. Get an xAI key at [console.x.ai](https://console.x.ai).
 >
