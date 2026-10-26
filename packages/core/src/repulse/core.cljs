@@ -1,5 +1,5 @@
 (ns repulse.core
-  (:refer-clojure :exclude [rand time]))
+  (:refer-clojure :exclude [rand time chunk iter]))
 
 ;;; Rational arithmetic — rationals as [numerator denominator]
 
@@ -446,43 +446,6 @@
 
 ;;; ── Phase I: Pattern Combinators ───────────────────────────────────
 
-(defn- euclidean*
-  [k n val rotation]
-  (let [k (int k) n (int n) rotation (int rotation)]
-   (let [;; Björklund algorithm — iteratively distribute remainders
-         result
-         (loop [groups  (into (vec (repeat k [true]))
-                              (repeat (- n k) [false]))]
-           (let [cnt-a (count (filter #(= (first %) (first (first groups))) groups))
-                 cnt-b (- (count groups) cnt-a)]
-             (if (or (<= cnt-b 1) (= (count groups) n))
-               (vec (mapcat identity groups))
-               (let [take-n (min cnt-a cnt-b)
-                     head   (subvec groups 0 take-n)
-                     mid    (subvec groups take-n cnt-a)
-                     tail   (subvec groups cnt-a)]
-                 (recur (into (mapv (fn [a b] (into a b))
-                                    head (subvec tail 0 take-n))
-                              (into mid (subvec tail take-n))))))))
-         ;; Apply rotation
-         rotated (let [r (mod rotation n)
-                       v (vec result)]
-                   (into (subvec v r) (subvec v 0 r)))
-         ;; Map booleans to values
-         values (mapv #(if % val :_) rotated)]
-     (seq* values))))
-
-(defn euclidean
-  "Björklund's algorithm: distribute k onsets across n steps as evenly as possible.
-   Returns a seq pattern of val and :_ rests. k, n and rotation may each be a
-   number or a pattern of numbers.
-   (euclidean 5 8 :bd)       — 5 hits in 8 steps
-   (euclidean 5 8 :bd 2)     — rotated 2 steps
-   (euclidean (seq 3 5) 8 :bd) — patterned hit count"
-  ([k n val] (euclidean k n val 0))
-  ([k n val rotation]
-   ((patternify3 (fn [k' n' r' v] (euclidean* k' n' v r'))) k n rotation val)))
-
 (defn cat*
   "Concatenate patterns: each plays for one full cycle, then the whole sequence loops.
    Unlike seq* (which subdivides one cycle), cat* gives each pattern its own cycle.
@@ -804,3 +767,349 @@
   "Strudel range2: range over a bipolar input = (range-pat lo hi (from-bipolar pat))."
   [lo hi pat]
   (range-pat lo hi (from-bipolar pat)))
+
+;;; ── Phase TL3: Time & structure combinators ─────────────────────────
+
+(defn step-true?
+  "Boolean reading of a step value: false for false nil 0 :_ :f :false."
+  [v]
+  (not (contains? #{false nil 0 :_ :f :false} v)))
+
+(defn- keep-values [pred pat]
+  (pattern (fn [sp] (filter #(pred (:value %)) (query pat sp)))))
+
+(defn- cycle-of [sp] (int (Math/floor (rat->float (:start sp)))))
+
+(defn- cycle-pos-rat
+  "Exact position of rational t inside its cycle, in [0, 1)."
+  [[n d]] (rat (mod n d) d))
+
+(defn- shift-event [ev off]
+  (map-spans #(span (rat+ (:start %) off) (rat+ (:end %) off)) ev))
+
+(defn- ->int
+  "Truncate a number or rational to an integer."
+  [x] (int (rat->float (->rat x))))
+
+(defn- fmap-event [f pat]
+  (pattern (fn [sp] (map #(assoc % :value (f %)) (query pat sp)))))
+
+(defn- compress*
+  "Tidal compressArc: cycle c of pat squeezed into [c+s, c+e). 0 <= s < e <= 1."
+  [s e pat]
+  (let [s (->rat s) e (->rat e) d (rat- e s)]
+    (if (or (rat< s [0 1]) (rat> e [1 1]) (rat<= e s))
+      silence
+      (pattern
+       (per-cycle
+        (fn [piece]
+          (let [c   (int->rat (cycle-of piece))
+                win (span-intersect piece (span (rat+ c s) (rat+ c e)))]
+            (when win
+              (let [to-inner (fn [t] (rat+ c (rat-div (rat- t (rat+ c s)) d)))
+                    to-outer (fn [t] (rat+ (rat+ c s) (rat* (rat- t c) d)))
+                    in-sp    (span (to-inner (:start win)) (to-inner (:end win)))]
+                (keep (fn [ev]
+                        (let [ev' (map-spans #(span (to-outer (:start %)) (to-outer (:end %))) ev)]
+                          (when-let [p (span-intersect (:part ev') win)]
+                            (assoc ev' :part p))))
+                      (query pat in-sp)))))))))))
+
+(defn- slowcat-held*
+  "Tidal cat offsets: result cycle c plays (pat-of c) at source cycle floor(c/n)."
+  [n pat-of]
+  (pattern
+   (per-cycle
+    (fn [sp]
+      (let [c     (cycle-of sp)
+            delta (int->rat (- c (int (Math/floor (/ c n)))))
+            p     (pat-of c)]
+        (map #(shift-event % delta)
+             (query p (span (rat- (:start sp) delta) (rat- (:end sp) delta)))))))))
+
+(defn- within* [s e f pat]
+  (let [s   (->rat s) e (->rat e)
+        fp  (f pat)
+        in? (fn [ev] (let [p (cycle-pos-rat (:start (whole-or-part ev)))]
+                       (and (rat<= s p) (rat< p e))))]
+    (stack* [(pattern (fn [sp] (filter in? (query fp sp))))
+             (pattern (fn [sp] (remove in? (query pat sp))))])))
+
+(defn timecat
+  "pairs: [[weight x] …]; x a value or a pattern. Tidal timeCat."
+  [pairs]
+  (let [pairs (->> pairs
+                   (map (fn [[w x]] [(->rat w) (->pat x)]))
+                   (filter #(rat< [0 1] (first %)))
+                   vec)
+        total (reduce rat+ [0 1] (map first pairs))]
+    (if (empty? pairs)
+      silence
+      (stack* (second (reduce (fn [[acc out] [w p]]
+                                (let [nxt (rat+ acc w)]
+                                  [nxt (conj out (compress* (rat-div acc total)
+                                                            (rat-div nxt total) p))]))
+                              [[0 1] []] pairs))))))
+
+(defn- fastcat* [xs] (timecat (mapv (fn [x] [1 x]) xs)))
+
+;;; Björklund + Euclid
+
+(defn bjorklund
+  "Tidal's bjorklund: vector of n booleans with k trues spread evenly.
+   Negative k inverts; k > n clamps to n; n <= 0 → []."
+  [k n]
+  (let [k (int k) n (int n)]
+    (cond
+      (<= n 0) []
+      (neg? k) (mapv not (bjorklund (- k) n))
+      :else
+      (let [k (min k n)]
+        (loop [i k j (- n k)
+               xs (vec (repeat k [true]))
+               ys (vec (repeat (- n k) [false]))]
+          (if (<= (min i j) 1)
+            (vec (concat (apply concat xs) (apply concat ys)))
+            (if (> i j)
+              (recur j (- i j) (mapv into (subvec xs 0 j) ys) (subvec xs j))
+              (recur i (- j i) (mapv into xs (subvec ys 0 i)) (subvec ys i)))))))))
+
+(defn- euclid-bools [k n r]
+  (let [k (->int k) n (->int n) r (->int r)]
+    (if (<= n 0)
+      []
+      (let [v (bjorklund k n)
+            r (mod r n)]
+        (into (subvec v r) (subvec v 0 r))))))
+
+;;; Boolean structure
+
+(defn struct
+  "Structure from bools: for every true event of bools, the value(s) of pat
+   over that event's whole. False/rest steps produce nothing."
+  [bools pat]
+  (let [b (keep-values step-true? (->pat bools))]
+    (pattern
+     (fn [sp]
+       (for [eb (query b sp)
+             ev (query pat (whole-or-part eb))
+             :let [p (span-intersect (:part eb) (:part ev))]
+             :when p]
+         (with-source (event (:value ev) (:whole eb) p)
+                      (or (:source ev) (:source eb))))))))
+
+(defn mask
+  "Structure from pat; keep only the parts overlapping true events of bools."
+  [bools pat]
+  (app-left (fn [v _] v) pat (keep-values step-true? (->pat bools))))
+
+(defn invert
+  "Boolean not on every non-rest value."
+  [pat]
+  (fmap #(if (= :_ %) % (not (step-true? %))) pat))
+
+(defn- euclidean* [k n val r]
+  (let [bs (euclid-bools k n r)]
+    (if (empty? bs)
+      silence
+      (if (pattern? val)
+        (struct (seq* bs) val)
+        (seq* (mapv #(if % val :_) bs))))))
+
+(defn euclidean
+  "Björklund's algorithm (Tidal bjorklund): distribute k onsets across n steps.
+   k, n and rotation (left) may each be a number or a pattern of numbers.
+   Third argument a value → seq of value and :_ rests;
+   a pattern → struct form (Strudel euclid): the pattern gets the rhythm.
+   (euclidean 3 8 :bd)              — bd . . bd . . bd .
+   (euclidean 3 8 (seq :bd :sd) 2)  — restructure a pattern, rotated 2"
+  ([k n val] (euclidean k n val 0))
+  ([k n val rotation]
+   ((patternify3 (fn [k' n' r' v] (euclidean* k' n' v r'))) k n rotation val)))
+
+(defn- euclid-legato* [k n r pat]
+  (let [bs   (euclid-bools k n r)
+        idxs (vec (keep-indexed (fn [i b] (when b i)) bs))
+        cnt  (count bs)]
+    (if (empty? idxs)
+      silence
+      (let [lead (first idxs)
+            hits (map-indexed (fn [j i] [(- (if (< (inc j) (count idxs)) (nth idxs (inc j)) cnt) i) true])
+                              idxs)]
+        (struct (timecat (into (if (pos? lead) [[lead false]] []) hits)) pat)))))
+
+(defn euclid-legato
+  "Like the struct form of euclidean, but each hit lasts until the next hit."
+  [k n pat]
+  ((patternify2 (fn [k' n' p] (euclid-legato* k' n' 0 p))) k n pat))
+
+(defn euclid-legato-rot
+  "euclid-legato on the rotated boolean list; steps before the first hit rest."
+  [k n r pat]
+  ((patternify3 euclid-legato*) k n r pat))
+
+;;; Repetition
+
+(defn- ply* [n pat]
+  (squeeze-join (fmap-event #(fast* n (pure (:value %) (:source %))) pat)))
+
+(defn ply
+  "Repeat each event n times inside its own whole."
+  [n pat] ((patternify ply*) n pat))
+
+(defn- ply-with* [n f pat]
+  (let [k (max 1 (int (Math/ceil (rat->float (->rat n)))))]
+    (squeeze-join
+     (fmap-event #(fastcat* (vec (take k (iterate f (pure (:value %) (:source %)))))) pat))))
+
+(defn ply-with
+  "Each event becomes ceil(n) sub-steps; sub-step i has f applied i times."
+  [n f pat] ((patternify (fn [n' p] (ply-with* n' f p))) n pat))
+
+;;; Windows & groove
+
+(defn- inside* [n f pat] (fast* n (f (slow* n pat))))
+
+(defn inside
+  "Apply f as if each 1/n of a cycle were a cycle."
+  [n f pat] ((patternify (fn [n' p] (inside* n' f p))) n pat))
+
+(defn outside
+  "Apply f across n cycles: (inside 1/n f pat)."
+  [n f pat]
+  ((patternify (fn [n' p]
+                 (let [r (->rat n')]
+                   (if (zero? (first r)) silence (inside* (rat-div [1 1] r) f p)))))
+   n pat))
+
+(defn within
+  "Apply f only to events whose whole starts in cycle position [s, e)."
+  [s e f pat] ((patternify2 (fn [s' e' p] (within* s' e' f p))) s e pat))
+
+(defn- swing-by* [x n pat]
+  (inside* n #(within* [1 2] [1 1] (fn [q] (late* x q)) %) pat))
+
+(defn swing-by
+  "Delay events in the second half of each 1/n slice by x of the slice."
+  [x n pat] ((patternify2 swing-by*) x n pat))
+
+(defn swing
+  "(swing-by 1/3 n pat)"
+  [n pat] ((patternify (fn [n' p] (swing-by* [1 3] n' p))) n pat))
+
+(defn brak
+  "Odd cycles squeezed into the first half and shifted right by 1/4."
+  [pat]
+  (let [odd-pat (late* [1 4] (compress* [0 1] [1 2] pat))]
+    (pattern (per-cycle (fn [sp] (query (if (odd? (cycle-of sp)) odd-pat pat) sp))))))
+
+;;; Rotation
+
+(defn- iter* [n pat back?]
+  (let [n (->int n)]
+    (if (< n 1)
+      pat
+      (slowcat-held* n (fn [c] (let [amt (rat (mod c n) n)]
+                                 (if back? (late* amt pat) (late* (rat-neg amt) pat))))))))
+
+(defn iter
+  "Shift the start of the pattern earlier by 1/n each cycle (cycle-holding)."
+  [n pat] ((patternify #(iter* %1 %2 false)) n pat))
+
+(defn iter-back
+  "Like iter, shifting later."
+  [n pat] ((patternify #(iter* %1 %2 true)) n pat))
+
+(defn palindrome
+  "Alternate pat and (rev pat) each cycle (cycle-holding)."
+  [pat]
+  (let [r (rev pat)] (slowcat-held* 2 #(if (even? %) pat r))))
+
+(defn- cmp-rat [a b] (cond (rat< a b) -1 (rat< b a) 1 :else 0))
+
+(defn- rot* [n pat]
+  (let [n (->int n)]
+    (pattern
+     (per-cycle
+      (fn [sp]
+        (let [c      (cycle-of sp)
+              evs    (query pat (cycle-span c))
+              rot?   (fn [e] (and (:whole e) (not= :_ (:value e))))
+              rs     (vec (sort (fn [a b]
+                                  (let [r (cmp-rat (:start (:whole a)) (:start (:whole b)))]
+                                    (if (zero? r)
+                                      (cmp-rat (:start (:part a)) (:start (:part b)))
+                                      r)))
+                                (filter rot? evs)))
+              fixed  (remove rot? evs)
+              m      (count rs)
+              vs     (mapv :value rs)
+              rotated (if (zero? m)
+                        rs
+                        (vec (map-indexed (fn [j e] (assoc e :value (nth vs (mod (+ j n) m)))) rs)))]
+          (keep (fn [e] (when-let [p (span-intersect (:part e) sp)] (assoc e :part p)))
+                (concat rotated fixed))))))))
+
+(defn rot
+  "Shift values n places left within each cycle, keeping the structure."
+  [n pat] ((patternify rot*) n pat))
+
+;;; Chunks
+
+(defn- chunk* [n f pat idx-fn hold?]
+  (let [n (->int n)]
+    (if (< n 1)
+      pat
+      (let [variant (fn [c] (let [i (idx-fn c n)] (within* (rat i n) (rat (inc i) n) f pat)))]
+        (if hold?
+          (slowcat-held* n variant)
+          (pattern (per-cycle (fn [sp] (query (variant (cycle-of sp)) sp)))))))))
+
+(defn chunk
+  "Apply f to chunk (c mod n) of the cycle, cycle-holding."
+  [n f pat] ((patternify (fn [n' p] (chunk* n' f p #(mod %1 %2) true))) n pat))
+
+(defn chunk-back
+  "As chunk, with chunk index (mod (- c) n)."
+  [n f pat] ((patternify (fn [n' p] (chunk* n' f p #(mod (- %1) %2) true))) n pat))
+
+(defn fast-chunk
+  "As chunk, without cycle-holding."
+  [n f pat] ((patternify (fn [n' p] (chunk* n' f p #(mod %1 %2) false))) n pat))
+
+;;; Meters & conditionals
+
+(defn- poly* [st pairs]
+  (let [st (->rat st)]
+    (if (<= (first st) 0)
+      silence
+      (stack* (map (fn [[p k]] (fast* (rat-div st (->rat k)) p)) pairs)))))
+
+(defn polymeter-pats
+  "pairs: [[pat step-count] …]. steps nil → first layer's count; number or pattern."
+  [steps pairs]
+  (let [pairs (filterv #(pos? (rat->float (->rat (second %)))) pairs)]
+    (cond
+      (empty? pairs)     silence
+      (nil? steps)       (poly* (second (first pairs)) pairs)
+      (pattern? steps)   (inner-join (fmap #(poly* % pairs) steps))
+      :else              (poly* steps pairs))))
+
+(defn polymeter
+  "layers: [[x …] …] step vectors (values or patterns)."
+  [steps layers]
+  (polymeter-pats steps (keep #(when (seq %) [(fastcat* %) (count %)]) layers)))
+
+(defn first-of
+  "Exactly every: apply f when c mod n = 0."
+  [n f pat] (every n f pat))
+
+(defn- last-of* [n f pat]
+  (let [n (->int n)]
+    (if (< n 1)
+      pat
+      (pattern (per-cycle (fn [sp] (query (if (= (mod (cycle-of sp) n) (dec n)) (f pat) pat) sp)))))))
+
+(defn last-of
+  "Apply f when c mod n = n - 1."
+  [n f pat] ((patternify (fn [n' p] (last-of* n' f p))) n pat))

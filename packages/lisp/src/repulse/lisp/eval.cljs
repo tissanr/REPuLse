@@ -3,6 +3,7 @@
             [repulse.lisp.util :as util]
             [repulse.lisp.builtins.pattern :as b-pattern]
             [repulse.lisp.builtins.signals :as b-signals]
+            [repulse.lisp.builtins.structure :as b-structure]
             [repulse.lisp.builtins.arith :as b-arith]
             [repulse.lisp.builtins.math :as b-math]
             [repulse.lisp.builtins.music :as b-music]
@@ -362,6 +363,7 @@
     (merge
       (b-pattern/make-builtins)
       (b-signals/make-builtins)
+      (b-structure/make-builtins)
       (b-arith/make-builtins)
       (b-math/make-builtins)
       (b-music/make-builtins)

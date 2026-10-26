@@ -128,6 +128,9 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(set {:amp 0.5} pat)` | Merge control maps into every event (Tidal `#`) |
 | `(pan sine2 pat)` | Continuous signals: `sine` `saw` `tri` `square` `rand` `perlin` ... sampled by a rhythm |
 | `(segment 8 (range 1 8 rand))` | Discretise a signal into n events per cycle |
+| `(struct "t ~ t t" (pure :bd))` | Boolean rhythm |
+| `(ply 2 pat)` / `(chunk 4 f pat)` / `(iter 4 pat)` | Repeat, rotating transform, rotate start |
+| `(swing 4 pat)` / `(polymeter [:a :b :c] [:d :e])` | Groove, polymeter |
 | `(fmap f pat)` | Apply a function to every event value |
 | `(scale :minor :c4 pat)` | Map degree integers in pat to Hz using a named scale |
 | `(chord :major7 :c4)` | Stack chord tones as a pattern of Hz values |

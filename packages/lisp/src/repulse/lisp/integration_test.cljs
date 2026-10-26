@@ -514,3 +514,261 @@
         (is (core/pattern? pat) code)
         (when (core/pattern? pat)
           (is (seq (mapcat #(core/query pat (core/cycle-span %)) (range 4))) code))))))
+
+;;; ── Phase TL3: time & structure combinators ─────────────────────────
+
+(defn- rs [[n d]] (if (= d 1) (str n) (str n "/" d)))
+
+(defn- tl3-sorted [evs]
+  (sort-by (juxt #(core/rat->float (:start (:whole %))) #(str (:value %))) evs))
+
+(defn- tl3 "[value ws we] with rationals as strings, sorted, cycle n"
+  [code n]
+  (mapv (fn [e] [(:value e) (rs (:start (:whole e))) (rs (:end (:whole e)))])
+        (tl3-sorted (cycle-evs (eval-pat code) n))))
+
+(defn- tl3v "values in whole-start order at cycle n" [code n] (mapv first (tl3 code n)))
+
+(defn- tl3o "onset starts as strings at cycle n" [code n]
+  (mapv #(rs (:start (:whole %))) (tl3-sorted (onsets (eval-pat code) n))))
+
+(defn- tl3-cycles [code from to] (mapv #(tl3v code %) (range from (inc to))))
+
+(deftest tl3-struct
+  (is (= [[:bd "0" "1/4"] [:bd "1/2" "3/4"] [:bd "3/4" "1"]]
+         (tl3 "(struct \"t ~ t t\" (pure :bd))" 0)))
+  (is (= [[:a "0" "1/3"] [:b "2/3" "1"]]
+         (tl3 "(struct (seq true false true) (seq :a :b))" 0)))
+  (let [evs (tl3-sorted (cycle-evs (eval-pat "(struct \"t\" (seq :a :b))") 0))]
+    (is (= [[:a [0 1] [1 2]] [:b [1 2] [1 1]]]
+           (mapv (fn [e] [(:value e) (:start (:part e)) (:end (:part e))]) evs)))
+    (is (= [true false] (mapv core/onset? evs))))
+  (is (= (tl3 "(struct \"t ~ t t\" (pure :bd))" 0)
+         (tl3 "(struct (seq 1 0 1 1) (pure :bd))" 0))))
+
+(deftest tl3-mask
+  (is (= ["0" "1/8" "1/2" "5/8" "3/4" "7/8"]
+         (tl3o "(mask \"1 0 1 1\" (fast 8 (pure :hh)))" 0)))
+  (let [evs (tl3-sorted (cycle-evs (eval-pat "(mask \"t f\" (seq :a :b :c))") 0))]
+    (is (= [:a :b] (mapv :value evs)))
+    (is (= [[1 3] [1 2]] [(:start (:part (second evs))) (:end (:part (second evs)))]))))
+
+(deftest tl3-invert
+  (is (= [false true :_ false] (tl3v "(invert (seq true false :_ 1))" 0)))
+  (is (= [[:x "1/4" "1/2"] [:x "3/4" "1"]]
+         (tl3 "(struct (invert \"t f t f\") (pure :x))" 0))))
+
+(deftest tl3-euclidean-struct
+  (is (= [[:bd "0" "1/8"] [:bd "3/8" "1/2"] [:sd "3/4" "7/8"]]
+         (tl3 "(euclidean 3 8 (seq :bd :sd))" 0)))
+  (is (= [[:x "1/8" "1/4"] [:x "1/2" "5/8"] [:x "3/4" "7/8"]]
+         (tl3 "(euclidean 3 8 (pure :x) 2)" 0)))
+  (is (= ["1/8" "1/4" "1/2" "5/8" "7/8"] (tl3o "(euclidean -3 8 (pure :x))" 0)))
+  (is (= ["1" "5/4" "11/8" "13/8" "7/4"] (tl3o "(euclidean \"<3 5>\" 8 (pure :x))" 1)))
+  (is (= [:x :_ :_ :x :_ :_ :x :_] (tl3v "(euclidean 3 8 :x)" 0)))
+  (is (= [:_ :x :_ :_ :x :_ :x :_] (tl3v "(euclidean 3 8 :x 2)" 0))))
+
+(deftest tl3-euclid-legato
+  (is (= [["0" "3/8"] ["3/8" "3/4"] ["3/4" "1"]]
+         (mapv rest (tl3 "(euclid-legato 3 8 (pure :x))" 0))))
+  (is (= [["0" "1/4"] ["1/4" "3/8"] ["3/8" "5/8"] ["5/8" "3/4"] ["3/4" "1"]]
+         (mapv rest (tl3 "(euclid-legato 5 8 (pure :x))" 0))))
+  (is (= [["1/8" "1/2"] ["1/2" "3/4"] ["3/4" "1"]]
+         (mapv rest (tl3 "(euclid-legato-rot 3 8 2 (pure :x))" 0))))
+  (is (= 5 (count (tl3 "(euclid-legato \"<3 5>\" 8 (pure :x))" 1))))
+  (is (= [["9/8" "3/2"] ["3/2" "7/4"] ["7/4" "2"]]
+         (mapv rest (tl3 "(euclid-legato-rot 3 8 \"<0 2>\" (pure :x))" 1)))))
+
+(deftest tl3-ply
+  (is (= [[:bd "0" "1/4"] [:bd "1/4" "1/2"] [:sd "1/2" "3/4"] [:sd "3/4" "1"]]
+         (tl3 "(ply 2 (seq :bd :sd))" 0)))
+  (is (= [[:a "1" "7/6"] [:a "7/6" "4/3"] [:a "4/3" "3/2"]
+          [:b "3/2" "5/3"] [:b "5/3" "11/6"] [:b "11/6" "2"]]
+         (tl3 "(ply \"<2 3>\" (seq :a :b))" 1)))
+  (is (= [[:a "0" "1/2"] [:b "1/2" "3/4"] [:b "3/4" "1"]]
+         (tl3 "(ply (seq 1 2) (seq :a :b))" 0)))
+  (let [evs (cycle-evs (eval-pat "(ply 2 (~ \"bd sd\"))") 0)
+        src (fn [e] (:source e))]
+    (is (= 4 (count evs)))
+    (is (= 2 (count (distinct (map src evs)))))
+    (is (every? some? (map src evs)))))
+
+(deftest tl3-ply-with
+  (is (= [[0 "0" "1/6"] [12 "1/6" "1/3"] [24 "1/3" "1/2"]
+          [7 "1/2" "2/3"] [19 "2/3" "5/6"] [31 "5/6" "1"]]
+         (tl3 "(ply-with 3 (add 12) (seq 0 7))" 0)))
+  (is (= 4 (count (tl3 "(ply-with \"<1 2>\" (add 12) (seq 0 7))" 1)))))
+
+(deftest tl3-inside-outside
+  (is (= [3 2 1 0 7 6 5 4] (tl3v "(inside 2 rev (seq 0 1 2 3 4 5 6 7))" 0)))
+  (is (= [1 0 3 2] (tl3v "(inside \"<1 2>\" rev (seq 0 1 2 3))" 1)))
+  (is (= [[:d "0" "1/2"] [:c "1/2" "1"]]
+         (tl3 "(outside 2 rev (cat (seq :a :b) (seq :c :d)))" 0)))
+  (is (= [[:b "1" "3/2"] [:a "3/2" "2"]]
+         (tl3 "(outside 2 rev (cat (seq :a :b) (seq :c :d)))" 1)))
+  (is (= [[:b "0" "1/2"] [:a "1/2" "1"]]
+         (tl3 "(outside \"<1 2>\" rev (cat (seq :a :b) (seq :c :d)))" 0)))
+  (is (= [[:b "1" "3/2"] [:a "3/2" "2"]]
+         (tl3 "(outside \"<1 2>\" rev (cat (seq :a :b) (seq :c :d)))" 1))))
+
+(deftest tl3-within
+  (let [evs (tl3-sorted (onsets (eval-pat "(within 0 1/2 (fast 2) (seq :a :b :c :d))") 0))]
+    (is (= [[:a "0"] [:b "1/8"] [:c "1/4"] [:d "3/8"] [:c "1/2"] [:d "3/4"]]
+           (mapv (fn [e] [(:value e) (rs (:start (:whole e)))]) evs)))
+    (is (= ["1/8" "1/8" "1/8" "1/8" "1/4" "1/4"]
+           (mapv #(rs (core/rat- (:end (:whole %)) (:start (:whole %)))) evs))))
+  (is (= [10 11] (tl3v "(within \"<0 1/2>\" 1 (add 10) (seq 0 1))" 0)))
+  (is (= [0 11] (tl3v "(within \"<0 1/2>\" 1 (add 10) (seq 0 1))" 1))))
+
+(deftest tl3-swing
+  (let [expect ["0" "5/24" "1/4" "11/24" "1/2" "17/24" "3/4" "23/24"]]
+    (is (= expect (tl3o "(swing-by 1/3 4 (fast 8 (pure :hh)))" 0)))
+    (is (= expect (tl3o "(swing 4 (fast 8 (pure :hh)))" 0)))
+    (is (every? #(= [1 8] (core/rat- (:end (:whole %)) (:start (:whole %))))
+                (tl3-sorted (onsets (eval-pat "(swing-by 1/3 4 (fast 8 (pure :hh)))") 0)))))
+  (is (= ["0" "1/8" "1/4" "3/8" "1/2" "5/8" "3/4" "7/8"]
+         (tl3o "(swing-by \"<0 1/3>\" 4 (fast 8 (pure :hh)))" 0)))
+  (let [c1 ["1" "29/24" "5/4" "35/24" "3/2" "41/24" "7/4" "47/24"]]
+    (is (= c1 (tl3o "(swing-by \"<0 1/3>\" 4 (fast 8 (pure :hh)))" 1)))
+    (is (= c1 (tl3o "(swing \"<2 4>\" (fast 8 (pure :hh)))" 1)))))
+
+(deftest tl3-brak
+  (is (= [[:a "0" "1/2"] [:b "1/2" "1"]] (tl3 "(brak (seq :a :b))" 0)))
+  (is (= [[:a "5/4" "3/2"] [:b "3/2" "7/4"]] (tl3 "(brak (seq :a :b))" 1))))
+
+(deftest tl3-iter
+  (is (= [[:b "1" "5/4"] [:c "5/4" "3/2"] [:d "3/2" "7/4"] [:a "7/4" "2"]]
+         (tl3 "(iter 4 (seq :a :b :c :d))" 1)))
+  (is (= [[:c :d :a :b] [:d :a :b :c] [:a :b :c :d]]
+         (mapv #(tl3v "(iter 4 (seq :a :b :c :d))" %) [2 3 4])))
+  (is (= [:d :a :b :c] (tl3v "(iter-back 4 (seq :a :b :c :d))" 1)))
+  (is (= [:b :c :d :a] (tl3v "(iter-back 4 (seq :a :b :c :d))" 3)))
+  (is (= [[:a :b] [:b :c] [:c :d] [:d :a]]
+         (tl3-cycles "(iter 2 (cat (seq :a :b) (seq :c :d)))" 0 3)))
+  (is (= [:c :d :a :b] (tl3v "(iter \"<4 2>\" (seq :a :b :c :d))" 1)))
+  (is (= [:c :d :a :b] (tl3v "(iter-back \"<4 2>\" (seq :a :b :c :d))" 1))))
+
+(deftest tl3-palindrome
+  (is (= [[:a :b :c] [:c :b :a]] (tl3-cycles "(palindrome (seq :a :b :c))" 0 1)))
+  (is (= [[:a :b] [:b :a] [:c :d] [:d :c]]
+         (tl3-cycles "(palindrome (cat (seq :a :b) (seq :c :d)))" 0 3))))
+
+(deftest tl3-rot
+  (is (= [[:b "0" "1/4"] [:c "1/4" "1/2"] [:d "1/2" "3/4"] [:a "3/4" "1"]]
+         (tl3 "(rot 1 (seq :a :b :c :d))" 0)))
+  (is (= [:d :a :b :c] (tl3v "(rot -1 (seq :a :b :c :d))" 0)))
+  (is (= [:b :_ :c :a] (tl3v "(rot 1 (seq :a :_ :b :c))" 0)))
+  (is (= [:c :a :b] (tl3v "(rot \"<0 1 2>\" (seq :a :b :c))" 2)))
+  (let [evs (core/query (eval-pat "(rot 1 (seq :a :b :c :d))") (core/span [1 2] [1 1]))]
+    (is (= [[:d "1/2" "3/4"] [:a "3/4" "1"]]
+           (mapv (fn [e] [(:value e) (rs (:start (:whole e))) (rs (:end (:whole e)))])
+                 (tl3-sorted evs))))))
+
+(deftest tl3-chunk
+  (is (= [[10 1 2 3] [0 11 2 3] [0 1 12 3] [0 1 2 13] [10 1 2 3]]
+         (tl3-cycles "(chunk 4 (add 10) (seq 0 1 2 3))" 0 4)))
+  (is (= [[10 1] [0 11] [14 5] [4 15]]
+         (tl3-cycles "(chunk 2 (add 10) (cat (seq 0 1) (seq 4 5)))" 0 3)))
+  (is (= [0 11 2 3] (tl3v "(chunk \"<2 4>\" (add 10) (seq 0 1 2 3))" 1))))
+
+(deftest tl3-chunk-back-and-fast-chunk
+  (is (= [[10 1 2 3] [0 1 2 13] [0 1 12 3] [0 11 2 3]]
+         (tl3-cycles "(chunk-back 4 (add 10) (seq 0 1 2 3))" 0 3)))
+  (is (= [0 1 12 13] (tl3v "(chunk-back \"<4 2>\" (add 10) (seq 0 1 2 3))" 1)))
+  (is (= [[10 1] [4 15] [10 1] [4 15]]
+         (tl3-cycles "(fast-chunk 2 (add 10) (cat (seq 0 1) (seq 4 5)))" 0 3)))
+  (is (= [0 1 12 13] (tl3v "(fast-chunk \"<4 2>\" (add 10) (seq 0 1 2 3))" 1))))
+
+(deftest tl3-polymeter
+  (is (= [[:a "0" "1/3"] [:d "0" "1/3"] [:b "1/3" "2/3"] [:e "1/3" "2/3"]
+          [:c "2/3" "1"] [:d "2/3" "1"]]
+         (tl3 "(polymeter [:a :b :c] [:d :e])" 0)))
+  (is (= [:e :d :e] (->> (tl3 "(polymeter [:a :b :c] [:d :e])" 1)
+                         (filter #(#{:d :e} (first %)))
+                         (mapv first))))
+  (is (= [:a :b :c :a] (tl3v "(polymeter 4 [:a :b :c])" 0)))
+  (is (= [:b :c :a :b] (tl3v "(polymeter 4 [:a :b :c])" 1)))
+  (is (= [[:a "0" "1/2"] [:b "1/2" "1"]] (tl3 "(polymeter \"<2 4>\" [:a :b :c :d])" 0)))
+  (is (= [:a :b :c :d] (tl3v "(polymeter \"<2 4>\" [:a :b :c :d])" 1))))
+
+(deftest tl3-timecat
+  (is (= [[:e3 "0" "3/4"] [:g3 "3/4" "1"]] (tl3 "(timecat [3 :e3] [1 :g3])" 0)))
+  (is (= [[:bd "0" "1/6"] [:sd "1/6" "1/3"] [:hh "1/3" "1"]]
+         (tl3 "(timecat [1 (seq :bd :sd)] [2 :hh])" 0)))
+  (is (= [[:b "1" "3/2"] [:c "3/2" "2"]]
+         (tl3 "(timecat [1 (cat (pure :a) (pure :b))] [1 :c])" 1))))
+
+(deftest tl3-first-of-last-of
+  (is (= [[10 11] [0 1] [0 1] [0 1] [10 11]]
+         (tl3-cycles "(first-of 4 (add 10) (seq 0 1))" 0 4)))
+  (is (= (tl3-cycles "(every 4 (add 10) (seq 0 1))" 0 7)
+         (tl3-cycles "(first-of 4 (add 10) (seq 0 1))" 0 7)))
+  (is (= (mapv #(if (#{3 7} %) [10 11] [0 1]) (range 8))
+         (tl3-cycles "(last-of 4 (add 10) (seq 0 1))" 0 7)))
+  (is (= [[0 1] [10 11] [0 1] [10 11]]
+         (tl3-cycles "(last-of \"<4 2>\" (add 10) (seq 0 1))" 0 3)))
+  (is (= [[10 11] [0 1] [10 11] [10 11]]
+         (tl3-cycles "(first-of \"<2 3>\" (add 10) (seq 0 1))" 0 3))))
+
+(deftest tl3-curried-forms
+  (doseq [code ["(->> (seq :bd :sd) (ply 2) (iter 4) (swing 4))"
+                "(->> (seq 0 1 2 3) (chunk 4 (add 10)))"
+                "(->> (seq 0 1 2 3) (within 0 1/2 (fast 2)))"
+                "(->> (seq :a :b) (struct \"t ~ t t\"))"
+                "(->> (fast 8 (pure :hh)) (mask \"1 0 1 1\") (swing-by 1/3 4))"
+                "(->> (seq :a :b) (euclid-legato 3 8))"
+                "(->> (seq :a :b) (euclid-legato-rot 3 8 1))"
+                "(->> (seq 0 1) (ply-with 2 (add 1)) (rot 1) (invert) (brak) (palindrome))"
+                "(->> (seq 0 1 2 3) (inside 2 rev) (outside 2 rev) (chunk-back 4 (add 1)) (fast-chunk 4 (add 1)))"
+                "(->> (seq 0 1) (first-of 2 (add 1)) (last-of 2 (add 1)) (iter-back 2))"]]
+    (let [pat (eval-pat code)]
+      (is (core/pattern? pat) code)
+      (when (core/pattern? pat)
+        (is (seq (mapcat #(cycle-evs pat %) (range 4))) code)))))
+
+(deftest tl3-documented-examples-evaluate
+  (doseq [code ["(struct \"t ~ t t\" (pure :bd))"
+                "(mask \"1 0 1 1\" (fast 8 (pure :hh)))"
+                "(invert (seq true false true))"
+                "(euclidean 3 8 :bd)"
+                "(euclidean 3 8 (seq :bd :sd))"
+                "(euclidean \"<3 5>\" 8 (pure :x) 2)"
+                "(euclid-legato 3 8 (pure :x))"
+                "(euclid-legato \"<3 5>\" 8 (pure :x))"
+                "(euclid-legato-rot 3 8 2 (pure :x))"
+                "(ply 2 (seq :bd :sd))"
+                "(ply \"<2 3>\" (seq :a :b))"
+                "(ply-with 3 (add 12) (seq 0 7))"
+                "(ply-with \"<1 2>\" (add 12) (seq 0 7))"
+                "(inside 2 rev (seq 0 1 2 3 4 5 6 7))"
+                "(inside \"<1 2>\" rev (seq 0 1 2 3))"
+                "(outside 2 rev (cat (seq :a :b) (seq :c :d)))"
+                "(within 0 1/2 (fast 2) (seq :a :b :c :d))"
+                "(within \"<0 1/2>\" 1 (add 10) (seq 0 1))"
+                "(swing-by 1/3 4 (fast 8 (pure :hh)))"
+                "(swing 4 (fast 8 (pure :hh)))"
+                "(swing \"<2 4>\" (fast 8 (pure :hh)))"
+                "(brak (seq :a :b))"
+                "(iter 4 (seq :a :b :c :d))"
+                "(iter \"<4 2>\" (seq :a :b :c :d))"
+                "(iter-back 4 (seq :a :b :c :d))"
+                "(palindrome (seq :a :b :c))"
+                "(rot 1 (seq :a :b :c :d))"
+                "(rot \"<0 1 2>\" (seq :a :b :c))"
+                "(chunk 4 (add 10) (seq 0 1 2 3))"
+                "(chunk \"<2 4>\" (add 10) (seq 0 1 2 3))"
+                "(chunk-back 4 (add 10) (seq 0 1 2 3))"
+                "(fast-chunk 2 (add 10) (cat (seq 0 1) (seq 4 5)))"
+                "(polymeter [:bd :sd :hh] [:c3 :e3])"
+                "(polymeter 4 [:a :b :c])"
+                "(polymeter \"<2 4>\" [:a :b :c :d])"
+                "(timecat [3 :e3] [1 :g3])"
+                "(first-of 4 (add 10) (seq 0 1))"
+                "(last-of 4 (add 10) (seq 0 1))"
+                "(~ \"bd!3 sd . hh hh hh, cp(3,8)\")"
+                "(~ \"{a b c}%4\")"
+                "(~ \"bd(<3 5>,8,2)\")"]]
+    (let [pat (eval-pat code)]
+      (is (core/pattern? pat) code)
+      (when (core/pattern? pat)
+        (is (seq (mapcat #(cycle-evs pat %) (range 8))) code)))))

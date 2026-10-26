@@ -42,15 +42,15 @@ Method-chaining (`s("bd").fast(2)`) maps to Lisp application or threading:
 |---|---|---|---|---|---|---|---|---|
 | Core & pattern arithmetic | TL1 | 15 | 2 | 18 | 7 | 4 | 8 | 54 |
 | Continuous signals | TL2 | 23 | 0 | 8 | 3 | 0 | 2 | 36 |
-| Time & structure | TL3/TL3b | 1 | 2 | 41 | 9 | 2 | 6 | 61 |
-| Randomness & conditionals | TL4 | 3 | 6 | 23 | 8 | 1 | 3 | 44 |
+| Time & structure | TL3/TL3b | 24 | 0 | 20 | 9 | 2 | 6 | 61 |
+| Randomness & conditionals | TL4 | 4 | 6 | 22 | 8 | 1 | 3 | 44 |
 | Layering, pitch & harmony | TL5 | 4 | 3 | 12 | 5 | 0 | 2 | 26 |
 | Sample manipulation | TL6 | 3 | 1 | 11 | 2 | 1 | 2 | 20 |
 | Control parameters & effects | TL7 | 4 | 14 | 20 | 4 | 7 | 9 | 58 |
-| Mini-notation | TL1/TL3/TL4 | 8 | 0 | 9 | 0 | 0 | 0 | 17 |
-| Tidal-only functions | TL3–TL5 | 0 | 0 | 8 | 3 | 0 | 2 | 13 |
+| Mini-notation | TL1/TL3/TL4 | 13 | 0 | 4 | 0 | 0 | 0 | 17 |
+| Tidal-only functions | TL3–TL5 | 1 | 0 | 7 | 3 | 0 | 2 | 13 |
 | Visuals, I/O & JS-specific | — | 4 | 2 | 1 | 1 | 13 | 3 | 24 |
-| **Total** | | **65** | **30** | **151** | **42** | **28** | **37** | **353** |
+| **Total** | | **95** | **28** | **123** | **42** | **28** | **37** | **353** |
 
 Rows grouped in one line (e.g. `sine2 / cosine2 / …`) count once.
 
@@ -173,17 +173,17 @@ signals (the voice shortcuts `(saw :c4)` / `(square :c4)` give way to `(synth :s
 
 | Strudel | REPuLse | Status | Phase | Notes |
 |---|---|---|---|---|
-| `struct` | `struct` | 📋 | TL3 | Boolean pattern as rhythm |
-| `mask` | `mask` | 📋 | TL3 | |
-| `euclid` | `euclidean` | 🟡 | TL3 | REPuLse `(euclidean k n val)` builds a pattern from a value; Strudel `euclid(k,n)` restructures an existing pattern. Add the pattern-restructuring form; patterned k/n |
-| `euclidRot` / `euclidrot` | `euclidean` (4th arg) | 🟡 | TL3 | Rotation exists; verify rotation direction matches Strudel (REPuLse rotates left by r) |
+| `struct` | `struct` | ✅ | TL3 | Boolean pattern as rhythm. A step is false for false/nil/0/~/f |
+| `mask` | `mask` | ✅ | TL3 |  |
+| `euclid` | `euclidean` | ✅ | TL3 | Tidal bjorklund (fixed in TL3); struct form when the 3rd arg is a pattern, value form otherwise; patterned k/n/r |
+| `euclidRot` / `euclidrot` | `euclidean` (4th arg) | ✅ | TL3 | Tidal direction (rotate left); patterned rotation |
 | `bjork` | `euclidean` | 🔁 | — | |
 | `bjorklund` | — | ⛔ | — | Internal helper |
-| `euclidLegato` | `euclid-legato` | 📋 | TL3 | |
-| `euclidLegatoRot` | `euclid-legato-rot` | 📋 | TL3 | |
+| `euclidLegato` | `euclid-legato` | ✅ | TL3 |  |
+| `euclidLegatoRot` | `euclid-legato-rot` | ✅ | TL3 |  |
 | `euclidish` / `eish` | `euclidish` | 📋 | TL3b | |
-| `ply` | `ply` | 📋 | TL3 | |
-| `plyWith` | `ply-with` | 📋 | TL3 | |
+| `ply` | `ply` | ✅ | TL3 |  |
+| `plyWith` | `ply-with` | ✅ | TL3 |  |
 | `plyForEach` | `ply-for-each` | 📋 | TL3b | |
 | `compress` | `compress` | 📋 | TL3b | |
 | `compressSpan` | `compress` | 🔁 | — | |
@@ -192,39 +192,39 @@ signals (the voice shortcuts `(saw :c4)` / `(square :c4)` give way to `(synth :s
 | `focusSpan` | `focus` | 🔁 | — | |
 | `zoom` | `zoom` | 📋 | TL3b | |
 | `zoomArc` | `zoom` | 🔁 | — | |
-| `inside` | `inside` | 📋 | TL3 | |
-| `outside` | `outside` | 📋 | TL3 | |
+| `inside` | `inside` | ✅ | TL3 |  |
+| `outside` | `outside` | ✅ | TL3 |  |
 | `linger` | `linger` | 📋 | TL3b | |
 | `bite` | `bite` | 📋 | TL3b | |
 | `isobite` / `cycleStruct` | — | ❓ | — | Recent Strudel addition; semantics still moving |
-| `swingBy` | `swing-by` | 📋 | TL3 | Also needed by MIDI capture (keep the played feel) |
-| `swing` | `swing` | 📋 | TL3 | |
-| `invert` / `inv` | `invert` | 📋 | TL3 | Boolean patterns |
+| `swingBy` | `swing-by` | ✅ | TL3 | Also needed by MIDI capture (keep the played feel) |
+| `swing` | `swing` | ✅ | TL3 |  |
+| `invert` / `inv` | `invert` | ✅ | TL3 | Boolean patterns |
 | `inv` | `invert` | 🔁 | — | |
-| `brak` | `brak` | 📋 | TL3 | |
+| `brak` | `brak` | ✅ | TL3 |  |
 | `press` | `press` | 📋 | TL3b | |
 | `pressBy` | `press-by` | 📋 | TL3b | |
 | `rev` | `rev` | ✅ | — | |
 | `revv` | `revv` | 📋 | TL3b | Reverse across cycles, not within |
-| `palindrome` | `palindrome` | 📋 | TL3 | |
-| `iter` | `iter` | 📋 | TL3 | |
-| `iterBack` | `iter-back` | 📋 | TL3 | |
+| `palindrome` | `palindrome` | ✅ | TL3 |  |
+| `iter` | `iter` | ✅ | TL3 | Tidal cat cycle-holding |
+| `iterBack` | `iter-back` | ✅ | TL3 | Tidal cat cycle-holding |
 | `repeatCycles` | `repeat-cycles` | 📋 | TL3b | |
-| `chunk` / `slowChunk` | `chunk` | 📋 | TL3 | |
+| `chunk` / `slowChunk` | `chunk` | ✅ | TL3 | Tidal cat cycle-holding; window via within |
 | `slowChunk` | `chunk` | 🔁 | — | |
-| `chunkBack` | `chunk-back` | 📋 | TL3 | |
-| `fastChunk` | `fast-chunk` | 📋 | TL3 | |
+| `chunkBack` | `chunk-back` | ✅ | TL3 | Strudel order (0, n-1, …); cycle-holding |
+| `fastChunk` | `fast-chunk` | ✅ | TL3 |  |
 | `chunkInto` | `chunk-into` | 📋 | TL3b | |
 | `chunkBackInto` | `chunk-back-into` | 📋 | TL3b | |
 | `ribbon` / `rib` | `ribbon` | 📋 | TL3b | Loop a section of the timeline |
 | `rib` | `ribbon` | 🔁 | — | |
 | `hurry` | `hurry` | 📋 | TL3b | `fast` + `speed` |
-| `within` | `within` | 📋 | TL3 | |
+| `within` | `within` | ✅ | TL3 |  |
 | `filter` | `filter-events` | 📋 | TL3b | Lisp `filter` already exists for sequences; needs a distinct name |
 | `filterWhen` | `filter-when` | 📋 | TL3b | |
-| `polymeter` | `polymeter` | 📋 | TL3 | |
+| `polymeter` | `polymeter` | ✅ | TL3 |  |
 | `polymeterSteps` | `polymeter` | 🔁 | — | |
-| `stepcat` / `timecat` / `timeCat` | `timecat` | 📋 | TL3 | Weighted concatenation; mini-notation `@` already covers the string form |
+| `stepcat` / `timecat` / `timeCat` | `timecat` | ✅ | TL3 | Weighted concatenation; mini-notation `@` already covers the string form |
 | `timecat`, `s_cat` | `timecat` | 🔁 | — | |
 | `stepalt` | — | ❓ | — | Stepwise API |
 | `take` / `drop` | — | ❓ | — | Stepwise API (`s_add` / `s_sub`); Lisp `take`/`drop` name clash |
@@ -277,7 +277,7 @@ TL2's seeded `rand` should replace it.
 | `when` | `when-pat` | 📋 | TL4 | Lisp `when` would collide if added as a special form |
 | `firstOf` / `every` | `every` | ✅ | — | |
 | `firstOf` | `every` | 🔁 | — | |
-| `lastOf` | `last-of` | 📋 | TL3 | Moved from TL4 (TL3 spec) |
+| `lastOf` | `last-of` | ✅ | TL3 | Exact Tidal `_lastOf` (moved from TL4); delivered in TL3 |
 | `applyN` | `apply-n` | 📋 | TL4 | |
 | `pick` | `pick` | 📋 | TL4 | Select patterns by index/name pattern |
 | `pickmod` | `pick-mod` | 📋 | TL4 | |
@@ -446,13 +446,13 @@ REPuLse's `~` parser (`packages/lisp/src/repulse/lisp/mini.cljs`) supports
 | `:n` | ✅ | ✅ | — | |
 | `@n` | ✅ | ✅ | — | |
 | `~` rest | ✅ | ✅ | — | |
-| `,` stack inside brackets | — | 📋 | TL1 | `"[c3,e3,g3]"` chords |
+| `,` stack inside brackets | — | ✅ | TL1 | `"[c3,e3,g3]"` chords; delivered in TL3 |
 | `/n` slow | — | 📋 | TL1 | |
-| `!` / `!n` replicate | — | 📋 | TL3 | |
+| `!` / `!n` replicate | — | ✅ | TL3 | delivered in TL3 |
 | `_` elongation | `@` weights | ⛔ | — | **Decided:** `_` stays a rest in REPuLse (consistent with `:_`); use `@` for elongation. Deliberate difference |
-| `{ }` polymeter, `{ }%n` | — | 📋 | TL3 | |
-| `(k,n,r)` euclid | — | 📋 | TL3 | |
-| `.` grouping | — | 📋 | TL3 | |
+| `{ }` polymeter, `{ }%n` | — | ✅ | TL3 | delivered in TL3 |
+| `(k,n,r)` euclid | — | ✅ | TL3 |  |
+| `.` grouping | — | ✅ | TL3 |  |
 | `\|` random choice | — | 📋 | TL4 | |
 
 ---
@@ -464,7 +464,7 @@ Not in Strudel, but common in Tidal tutorials.
 | Tidal | REPuLse | Status | Phase | Notes |
 |---|---|---|---|---|
 | `whenmod` | `whenmod` | 📋 | TL4 | |
-| `rot` | `rot` | 📋 | TL3 | Rotate values, keep structure |
+| `rot` | `rot` | ✅ | TL3 | Rotate values, keep structure; rests keep their place |
 | `stutter` | `stutter` | 📋 | TL5 | |
 | `sew` | `sew` | 📋 | TL3b | |
 | `stitch` | `stitch` | 📋 | TL3b | |

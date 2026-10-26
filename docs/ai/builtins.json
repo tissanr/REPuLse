@@ -312,14 +312,17 @@
     "examples": [
       "(euclidean 5 8 :bd)",
       "(euclidean 3 8 :sd 2)",
-      "(euclidean \"<3 5>\" 8 :bd)"
+      "(euclidean \"<3 5>\" 8 :bd)",
+      "(euclidean 3 8 (seq :bd :sd))"
     ],
     "see-also": [
       "seq",
-      "degrade"
+      "degrade",
+      "struct",
+      "euclid-legato"
     ],
-    "detail": "(euclidean k n val) — Björklund algorithm: k onsets in n steps; optional rotation (euclidean k n val rot); k/n/rot may be patterns, e.g. (euclidean \"<3 5>\" 8 :bd)",
-    "description": "Distribute k onsets evenly across n steps using the Björklund algorithm. Optional rot rotates the pattern. k, n and rot may be patterns: (euclidean \"<3 5>\" 8 :bd)."
+    "detail": "(euclidean k n val) — Björklund (Tidal) rhythm: k onsets in n steps; a pattern as val gets the rhythm as structure, e.g. (euclidean 3 8 (seq :bd :sd)); optional left rotation (euclidean k n val rot); k/n/rot may be patterns",
+    "description": "Distribute k onsets evenly across n steps (Tidal's Björklund). Optional rot rotates left. val a pattern gives the rhythm to that pattern: (euclidean 3 8 (seq :bd :sd)). k, n and rot may be patterns: (euclidean \"<3 5>\" 8 :bd)."
   },
   "cat": {
     "category": "source",
@@ -1590,21 +1593,411 @@
     "detail": "(share!) — copy shareable session URL to clipboard",
     "description": ""
   },
+  "struct": {
+    "category": "transform",
+    "signature": "(struct bools pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(struct \"t ~ t t\" (pure :bd))",
+      "(struct \"t*4\" (seq :c3 :e3))"
+    ],
+    "see-also": [
+      "mask",
+      "euclidean",
+      "invert"
+    ],
+    "detail": "(struct bools pat) — Structure from a boolean pattern: every true step of bools plays the value(s) of pat over that step. false, 0, ~, f steps are silent. bools may be a mini-notation string.",
+    "description": "Structure from a boolean pattern: every true step of bools plays the value(s) of pat over that step. false, 0, ~, f steps are silent. bools may be a mini-notation string."
+  },
+  "mask": {
+    "category": "transform",
+    "signature": "(mask bools pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(mask \"1 0 1 1\" (fast 8 (pure :hh)))",
+      "(mask \"t f\" (seq :a :b :c))"
+    ],
+    "see-also": [
+      "struct",
+      "invert"
+    ],
+    "detail": "(mask bools pat) — Keep the structure of pat, but only the parts that overlap true steps of bools.",
+    "description": "Keep the structure of pat, but only the parts that overlap true steps of bools."
+  },
+  "invert": {
+    "category": "transform",
+    "signature": "(invert pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(struct (invert \"t f t f\") (pure :x))"
+    ],
+    "see-also": [
+      "struct",
+      "mask"
+    ],
+    "detail": "(invert pat) — Boolean not on every value: true becomes false and the other way round. Rests stay rests.",
+    "description": "Boolean not on every value: true becomes false and the other way round. Rests stay rests."
+  },
+  "euclid-legato": {
+    "category": "transform",
+    "signature": "(euclid-legato k n pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(euclid-legato 3 8 (pure :x))",
+      "(euclid-legato \"<3 5>\" 8 (pure :x))"
+    ],
+    "see-also": [
+      "euclidean",
+      "euclid-legato-rot"
+    ],
+    "detail": "(euclid-legato k n pat) — Euclidean rhythm where each hit lasts until the next hit (the last one to the end of the cycle). k and n may be patterns.",
+    "description": "Euclidean rhythm where each hit lasts until the next hit (the last one to the end of the cycle). k and n may be patterns."
+  },
+  "euclid-legato-rot": {
+    "category": "transform",
+    "signature": "(euclid-legato-rot k n r pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(euclid-legato-rot 3 8 2 (pure :x))",
+      "(euclid-legato-rot 3 8 \"<0 2>\" (pure :x))"
+    ],
+    "see-also": [
+      "euclid-legato",
+      "euclidean"
+    ],
+    "detail": "(euclid-legato-rot k n r pat) — euclid-legato with the rhythm rotated left by r steps; steps before the first hit rest. k, n and r may be patterns.",
+    "description": "euclid-legato with the rhythm rotated left by r steps; steps before the first hit rest. k, n and r may be patterns."
+  },
+  "ply": {
+    "category": "transform",
+    "signature": "(ply n pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(ply 2 (seq :bd :sd))",
+      "(ply \"<2 3>\" (seq :a :b))"
+    ],
+    "see-also": [
+      "ply-with",
+      "fast"
+    ],
+    "detail": "(ply n pat) — Repeat every event n times inside its own slot. n may be a pattern.",
+    "description": "Repeat every event n times inside its own slot. n may be a pattern."
+  },
+  "ply-with": {
+    "category": "transform",
+    "signature": "(ply-with n f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(ply-with 3 (add 12) (seq 0 7))",
+      "(ply-with \"<1 2>\" (add 12) (seq 0 7))"
+    ],
+    "see-also": [
+      "ply",
+      "add"
+    ],
+    "detail": "(ply-with n f pat) — Like ply, but repetition i has f applied i times: each event becomes ceil(n) sub-steps. n may be a pattern.",
+    "description": "Like ply, but repetition i has f applied i times: each event becomes ceil(n) sub-steps. n may be a pattern."
+  },
+  "inside": {
+    "category": "transform",
+    "signature": "(inside n f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(inside 2 rev (seq 0 1 2 3 4 5 6 7))",
+      "(inside \"<1 2>\" rev (seq 0 1 2 3))"
+    ],
+    "see-also": [
+      "outside",
+      "within"
+    ],
+    "detail": "(inside n f pat) — Apply f as if each 1/n of a cycle were a whole cycle: (fast n (f (slow n pat))). n may be a pattern.",
+    "description": "Apply f as if each 1/n of a cycle were a whole cycle: (fast n (f (slow n pat))). n may be a pattern."
+  },
+  "outside": {
+    "category": "transform",
+    "signature": "(outside n f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(outside 2 rev (cat (seq :a :b) (seq :c :d)))",
+      "(outside \"<1 2>\" rev (cat (seq :a :b) (seq :c :d)))"
+    ],
+    "see-also": [
+      "inside",
+      "rev"
+    ],
+    "detail": "(outside n f pat) — Apply f across n cycles at once: (inside 1/n f pat). n may be a pattern.",
+    "description": "Apply f across n cycles at once: (inside 1/n f pat). n may be a pattern."
+  },
+  "within": {
+    "category": "transform",
+    "signature": "(within start end f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(within 0 1/2 (fast 2) (seq :a :b :c :d))",
+      "(within \"<0 1/2>\" 1 (add 10) (seq 0 1))"
+    ],
+    "see-also": [
+      "inside",
+      "chunk"
+    ],
+    "detail": "(within start end f pat) — Apply f only to the events whose start lies in the cycle window [start, end); the others play unchanged. start and end may be patterns.",
+    "description": "Apply f only to the events whose start lies in the cycle window [start, end); the others play unchanged. start and end may be patterns."
+  },
+  "swing-by": {
+    "category": "transform",
+    "signature": "(swing-by x n pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(swing-by 1/3 4 (fast 8 (pure :hh)))",
+      "(swing-by \"<0 1/3>\" 4 (fast 8 (pure :hh)))"
+    ],
+    "see-also": [
+      "swing",
+      "late",
+      "inside"
+    ],
+    "detail": "(swing-by x n pat) — Delay events in the second half of each 1/n slice by x of that slice. x and n may be patterns.",
+    "description": "Delay events in the second half of each 1/n slice by x of that slice. x and n may be patterns."
+  },
+  "swing": {
+    "category": "transform",
+    "signature": "(swing n pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(swing 4 (fast 8 (pure :hh)))",
+      "(swing \"<2 4>\" (fast 8 (pure :hh)))"
+    ],
+    "see-also": [
+      "swing-by",
+      "late"
+    ],
+    "detail": "(swing n pat) — Shuffle feel: (swing-by 1/3 n pat). n may be a pattern.",
+    "description": "Shuffle feel: (swing-by 1/3 n pat). n may be a pattern."
+  },
+  "brak": {
+    "category": "transform",
+    "signature": "(brak pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(brak (seq :bd :sd))"
+    ],
+    "see-also": [
+      "every",
+      "fast"
+    ],
+    "detail": "(brak pat) — Breakbeat feel: on every odd cycle squeeze the cycle into its first half and shift it right by a quarter.",
+    "description": "Breakbeat feel: on every odd cycle squeeze the cycle into its first half and shift it right by a quarter."
+  },
+  "iter": {
+    "category": "transform",
+    "signature": "(iter n pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(iter 4 (seq :a :b :c :d))",
+      "(iter \"<4 2>\" (seq :a :b :c :d))"
+    ],
+    "see-also": [
+      "iter-back",
+      "rot",
+      "palindrome"
+    ],
+    "detail": "(iter n pat) — Shift the start of the pattern earlier by 1/n each cycle, so it rotates through n positions. A cycle-varying pat is held for n cycles. n may be a pattern.",
+    "description": "Shift the start of the pattern earlier by 1/n each cycle, so it rotates through n positions. A cycle-varying pat is held for n cycles. n may be a pattern."
+  },
+  "iter-back": {
+    "category": "transform",
+    "signature": "(iter-back n pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(iter-back 4 (seq :a :b :c :d))",
+      "(iter-back \"<4 2>\" (seq :a :b :c :d))"
+    ],
+    "see-also": [
+      "iter",
+      "late"
+    ],
+    "detail": "(iter-back n pat) — Like iter, but rotating the other way (the start moves later each cycle). n may be a pattern.",
+    "description": "Like iter, but rotating the other way (the start moves later each cycle). n may be a pattern."
+  },
+  "palindrome": {
+    "category": "transform",
+    "signature": "(palindrome pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(palindrome (seq :a :b :c))"
+    ],
+    "see-also": [
+      "rev",
+      "iter"
+    ],
+    "detail": "(palindrome pat) — Alternate pat and (rev pat) cycle by cycle. A cycle-varying pat is held for two cycles.",
+    "description": "Alternate pat and (rev pat) cycle by cycle. A cycle-varying pat is held for two cycles."
+  },
+  "rot": {
+    "category": "transform",
+    "signature": "(rot n pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(rot 1 (seq :a :b :c :d))",
+      "(rot \"<0 1 2>\" (seq :a :b :c))"
+    ],
+    "see-also": [
+      "iter",
+      "rev"
+    ],
+    "detail": "(rot n pat) — Rotate the values of each cycle n places to the left while keeping the rhythm. Rests keep their place. n may be a pattern.",
+    "description": "Rotate the values of each cycle n places to the left while keeping the rhythm. Rests keep their place. n may be a pattern."
+  },
+  "chunk": {
+    "category": "transform",
+    "signature": "(chunk n f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(chunk 4 (add 10) (seq 0 1 2 3))",
+      "(chunk \"<2 4>\" (add 10) (seq 0 1 2 3))"
+    ],
+    "see-also": [
+      "chunk-back",
+      "fast-chunk",
+      "within"
+    ],
+    "detail": "(chunk n f pat) — Apply f to one n-th of the cycle, moving to the next chunk every cycle (cycle c transforms chunk c mod n). n may be a pattern.",
+    "description": "Apply f to one n-th of the cycle, moving to the next chunk every cycle (cycle c transforms chunk c mod n). n may be a pattern."
+  },
+  "chunk-back": {
+    "category": "transform",
+    "signature": "(chunk-back n f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(chunk-back 4 (add 10) (seq 0 1 2 3))",
+      "(chunk-back \"<4 2>\" (add 10) (seq 0 1 2 3))"
+    ],
+    "see-also": [
+      "chunk",
+      "fast-chunk"
+    ],
+    "detail": "(chunk-back n f pat) — Like chunk, but the transformed chunk moves backwards: 0, n-1, n-2 … n may be a pattern.",
+    "description": "Like chunk, but the transformed chunk moves backwards: 0, n-1, n-2 … n may be a pattern."
+  },
+  "fast-chunk": {
+    "category": "transform",
+    "signature": "(fast-chunk n f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(fast-chunk 2 (add 10) (cat (seq 0 1) (seq 4 5)))",
+      "(fast-chunk \"<4 2>\" (add 10) (seq 0 1 2 3))"
+    ],
+    "see-also": [
+      "chunk",
+      "chunk-back"
+    ],
+    "detail": "(fast-chunk n f pat) — Like chunk, but a cycle-varying pat is not held: it plays at the real cycle. n may be a pattern.",
+    "description": "Like chunk, but a cycle-varying pat is not held: it plays at the real cycle. n may be a pattern."
+  },
+  "polymeter": {
+    "category": "source",
+    "signature": "(polymeter [steps] layer ...)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(polymeter [:bd :sd :hh] [:c3 :e3])",
+      "(polymeter 4 [:a :b :c])",
+      "(polymeter \"<2 4>\" [:a :b :c :d])"
+    ],
+    "see-also": [
+      "timecat",
+      "cat",
+      "seq"
+    ],
+    "detail": "(polymeter [steps] layer ...) — Layer step vectors of different lengths against one steps-per-cycle grid. Each layer is a vector of values or patterns. An optional leading number, string or pattern gives the steps per cycle (default: the first layer's length).",
+    "description": "Layer step vectors of different lengths against one steps-per-cycle grid. Each layer is a vector of values or patterns. An optional leading number, string or pattern gives the steps per cycle (default: the first layer's length)."
+  },
+  "timecat": {
+    "category": "source",
+    "signature": "(timecat [weight x] ...)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(timecat [3 :e3] [1 :g3])",
+      "(timecat [1 (seq :bd :sd)] [2 :hh])"
+    ],
+    "see-also": [
+      "seq",
+      "polymeter",
+      "cat"
+    ],
+    "detail": "(timecat [weight x] ...) — Concatenate within one cycle, each entry taking a share of the cycle proportional to its weight. x is a value or a pattern.",
+    "description": "Concatenate within one cycle, each entry taking a share of the cycle proportional to its weight. x is a value or a pattern."
+  },
+  "first-of": {
+    "category": "transform",
+    "signature": "(first-of n f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(first-of 4 (add 10) (seq 0 1))",
+      "(first-of \"<2 3>\" (add 10) (seq 0 1))"
+    ],
+    "see-also": [
+      "every",
+      "last-of"
+    ],
+    "detail": "(first-of n f pat) — Apply f on cycles 0, n, 2n … (a synonym of every). n may be a pattern.",
+    "description": "Apply f on cycles 0, n, 2n … (a synonym of every). n may be a pattern."
+  },
+  "last-of": {
+    "category": "transform",
+    "signature": "(last-of n f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(last-of 4 (add 10) (seq 0 1))",
+      "(last-of \"<4 2>\" (add 10) (seq 0 1))"
+    ],
+    "see-also": [
+      "every",
+      "first-of"
+    ],
+    "detail": "(last-of n f pat) — Apply f on the last cycle of every n (cycles n-1, 2n-1 …). n may be a pattern.",
+    "description": "Apply f on the last cycle of every n (cycles n-1, 2n-1 …). n may be a pattern."
+  },
   "~": {
     "category": "source",
-    "signature": "(~ \"bd sd [hh hh] bd\") — parse mini-notation string into pattern",
+    "signature": "(~ \"mini-notation\")",
     "returns": "Pattern",
     "side-effects": [],
     "examples": [
       "(~ \"bd sd [hh hh] bd\")",
-      "(~ \"bd*4 sd <oh hh>\")"
+      "(~ \"bd*4 sd <oh hh>\")",
+      "(~ \"bd!3 sd . hh hh hh, cp(3,8)\")",
+      "(~ \"{a b c}%4\")"
     ],
     "see-also": [
       "seq",
       "stack"
     ],
-    "detail": "(~ \"bd sd [hh hh] bd\") — parse mini-notation string into pattern",
-    "description": ""
+    "detail": "(~ \"bd sd [hh hh] bd\") — parse mini-notation string into pattern; also bd!3, a . b, a, b, {a b c}%4, bd(3,8,2)",
+    "description": "Parse a mini-notation string into a pattern: [ ] groups, < > alternation, * ? : @, bd!3 repeats, a . b groups, a, b layers, {a b c}%4 polymeter, bd(3,8,2) euclid. _ and ~ are rests; use @ to elongate."
   },
   "alt": {
     "category": "source",

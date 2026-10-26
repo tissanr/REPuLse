@@ -1826,7 +1826,7 @@ See full spec: [PROMPTS/PHASE-TL2.md](PROMPTS/PHASE-TL2.md)
 
 ---
 
-## Phase TL3 — Time & Structure Combinators 📋 *planned*
+## Phase TL3 — Time & Structure Combinators ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖 auto
 
@@ -1840,6 +1840,27 @@ zoom/compress family moved to TL3b.
   `(euclidean 3 8 pat)`, `euclid-legato` / `euclid-legato-rot`
 - Mini-notation `!`, `.`, `,`, `{ }%n`, `(k,n,r)`; sub-sequences via exact `timecat`
   (fixes `"<a b> c"` never alternating)
+
+**Delivered:**
+- `packages/core/src/repulse/core.cljs` — 25 functions: `struct mask invert euclid-legato
+  euclid-legato-rot ply ply-with inside outside within swing-by swing brak iter iter-back
+  palindrome rot chunk chunk-back fast-chunk polymeter timecat first-of last-of`, plus
+  `bjorklund` and `step-true?`; private `compress*`, `slowcat-held*` (Tidal `cat` offsets),
+  `within*`, `fastcat*` reserved for TL3b
+- **Björklund fix:** `euclidean` now uses a literal port of Tidal's `bjorklund` — `(euclidean
+  3 8 :bd)` is `x . . x . . x .` (before, all hits bunched at the start; existing patterns
+  using `euclidean` change sound). A pattern third argument gives the struct form;
+  negative `k` inverts; rotation is a left rotation
+- Mini-notation: `!`, `.`, `,`, `{ }%n`, `x(k,n,r)`; sub-sequences compile through exact
+  `core/timecat` (no more float rounding). **Nested-alternation fix:** `"<a b> c"` now
+  alternates (before it always played `a`)
+- Lisp — new `builtins/structure.cljs` with curried forms for `->>`; numeric args accept
+  patterns / mini-notation strings
+- Rule 5 artefacts: grammar + `parser.js`, `completions.js`, `hover.js`,
+  `builtin_meta.edn`, `docs/ai/builtins.json`; USAGE "Time & structure" section,
+  `euclidean` and mini-notation updates; README rows; STRUDEL-PARITY TL3 rows
+- Tests: Björklund table, per-function Tidal/Strudel vectors (core, mini, Lisp integration),
+  documented-examples evaluation, three Playwright onset-count tests
 
 See full spec: [PROMPTS/PHASE-TL3.md](PROMPTS/PHASE-TL3.md)
 

@@ -624,3 +624,65 @@
 (deftest tl2-steady-signal
   (is (= [3 3 3 3] (seg-vals 4 (c/steady 3))))
   (is (= [0 2 4 6] (seg-vals 4 (c/signal #(* 8 (c/rat->float %)))))))
+
+;;; ── Phase TL3: Björklund, structure, timecat ────────────────────────
+
+(defn- bools->str [bs] (apply str (map #(if % "x" ".") bs)))
+
+(deftest tl3-bjorklund-table
+  (is (= "x.x.." (bools->str (c/bjorklund 2 5))))
+  (is (= "x..x..x." (bools->str (c/bjorklund 3 8))))
+  (is (= "x.xx.xx." (bools->str (c/bjorklund 5 8))))
+  (is (= "x.xx.x.xx.x." (bools->str (c/bjorklund 7 12))))
+  (is (= "...." (bools->str (c/bjorklund 0 4))))
+  (is (= ".xx.xx.x" (bools->str (c/bjorklund -3 8))))
+  (is (= "xxxxxxxx" (bools->str (c/bjorklund 9 8))))
+  (is (= [] (c/bjorklund 3 0))))
+
+(defn- cvals [pat n] (mapv :value (sort-by #(c/rat->float (:start (:whole %)))
+                                           (c/query pat (c/cycle-span n)))))
+
+(deftest tl3-euclidean-distribution
+  (is (= [:x :_ :_ :x :_ :_ :x :_] (cvals (c/euclidean 3 8 :x) 0)))
+  (is (= [:_ :x :_ :_ :x :_ :x :_] (cvals (c/euclidean 3 8 :x 2) 0)))
+  (is (= [:x :_ :x :x :_ :x :x :_] (cvals (c/euclidean 5 8 :x) 0))))
+
+(defn- wholes [pat n]
+  (mapv (fn [e] [(:value e) (:whole e)])
+        (sort-by #(c/rat->float (:start (:whole %))) (c/query pat (c/cycle-span n)))))
+
+(deftest tl3-step-true
+  (doseq [v [false nil 0 :_ :f :false]] (is (not (c/step-true? v))))
+  (doseq [v [true 1 :t :x :bd]] (is (c/step-true? v))))
+
+(deftest tl3-struct-core
+  (is (= [[:bd (c/span [0 1] [1 4])] [:bd (c/span [1 2] [3 4])] [:bd (c/span [3 4] [1 1])]]
+         (wholes (c/struct (c/seq* [true false true true]) (c/pure :bd)) 0)))
+  (let [evs (c/query (c/struct (c/pure true) (c/seq* [:a :b])) (c/cycle-span 0))]
+    (is (= [:a :b] (mapv :value evs)))
+    (is (= 1 (count (filter c/onset? evs))))))
+
+(deftest tl3-euclidean-struct-core
+  (is (= [[:bd (c/span [0 1] [1 8])] [:bd (c/span [3 8] [1 2])] [:sd (c/span [3 4] [7 8])]]
+         (wholes (c/euclidean 3 8 (c/seq* [:bd :sd])) 0))))
+
+(deftest tl3-timecat-core
+  (is (= [[:e3 (c/span [0 1] [3 4])] [:g3 (c/span [3 4] [1 1])]]
+         (wholes (c/timecat [[3 :e3] [1 :g3]]) 0)))
+  (is (= [] (c/query (c/timecat []) (c/cycle-span 0)))))
+
+(deftest tl3-ply-core
+  (is (= [[:bd (c/span [0 1] [1 4])] [:bd (c/span [1 4] [1 2])]
+          [:sd (c/span [1 2] [3 4])] [:sd (c/span [3 4] [1 1])]]
+         (wholes (c/ply 2 (c/seq* [:bd :sd])) 0)))
+  (is (= [] (c/query (c/ply 0 (c/seq* [:bd :sd])) (c/cycle-span 0)))))
+
+(deftest tl3-rot-fragment-query
+  (let [evs (c/query (c/rot 1 (c/seq* [:a :b :c :d])) (c/span [1 2] [1 1]))]
+    (is (= [[:d (c/span [1 2] [3 4])] [:a (c/span [3 4] [1 1])]]
+           (mapv (fn [e] [(:value e) (:whole e)]) (sort-by #(c/rat->float (:start (:whole %))) evs))))))
+
+(deftest tl3-polymeter-core
+  (is (= [:a :b :c :a] (cvals (c/polymeter 4 [[:a :b :c]]) 0)))
+  (is (= [:b :c :a :b] (cvals (c/polymeter 4 [[:a :b :c]]) 1)))
+  (is (= [] (c/query (c/polymeter 0 [[:a :b]]) (c/cycle-span 0)))))
