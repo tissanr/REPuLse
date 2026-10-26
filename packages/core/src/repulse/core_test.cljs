@@ -127,6 +127,51 @@
       (is (= [:bd :sd] (mapv :value (c/query pat (c/cycle-span 0)))))
       (is (= [:hh]     (mapv :value (c/query pat (c/cycle-span 1))))))))
 
+;; ── Queries spanning several cycles ─────────────────────────────────
+;; The scheduler asks for one cycle at a time, but (fast n …) asks its input
+;; for n cycles at once — cycle-dependent combinators must answer per cycle.
+
+(defn- vals-in [pat start end]
+  (mapv :value (c/query pat (c/span (c/int->rat start) (c/int->rat end)))))
+
+(deftest split-cycles-test
+  (is (= [(c/span [0 1] [1 1]) (c/span [1 1] [2 1]) (c/span [2 1] [5 2])]
+         (c/split-cycles (c/span [0 1] [5 2]))))
+  (is (= [(c/span [1 4] [3 4])] (c/split-cycles (c/span [1 4] [3 4]))))
+  (is (empty? (c/split-cycles (c/span [1 1] [1 1])))))
+
+(deftest cat-multi-cycle-span
+  (let [pat (c/cat* [(c/pure :a) (c/pure :b)])]
+    (is (= [:a :b :a] (vals-in pat 0 3)))
+    (testing "(fast 2 (cat a b)) plays both patterns every cycle"
+      (is (= [:a :b] (vals-in (c/fast 2 pat) 0 1))))))
+
+(deftest every-multi-cycle-span
+  (let [pat (c/every 2 (fn [p] (c/fmap (constantly :x) p)) (c/pure :a))]
+    (is (= [:x :a :x :a] (vals-in pat 0 4)))
+    (is (= [:x :a] (vals-in (c/fast 2 pat) 0 1)))))
+
+(deftest sometimes-by-multi-cycle-span
+  (let [pat (c/sometimes-by 0.5 (fn [p] (c/fmap (constantly :x) p)) (c/pure :a))]
+    (is (= (into [] (mapcat #(vals-in pat % (inc %))) (range 6))
+           (vals-in pat 0 6)))))
+
+(deftest arrange-multi-cycle-span
+  (let [arr (c/arrange* [[(c/pure :a) 1] [(c/pure :b) 2]])]
+    (is (= [:a :b :b :a] (vals-in arr 0 4)))))
+
+(deftest rev-multi-cycle-and-partial-spans
+  (let [pat (c/rev (c/cat* [(c/seq* [:a :b]) (c/seq* [:c :d])]))]
+    (testing "each cycle is reversed on its own"
+      (is (= [:b :a :d :c]
+             (->> (c/query pat (c/span [0 1] [2 1]))
+                  (sort-by #(c/rat->float (:start (:whole %))))
+                  (mapv :value)))))
+    (testing "a partial span returns the events that land in it after reversal"
+      (let [evs (c/query (c/rev (c/seq* [:a :b :c :d])) (c/span [0 1] [1 4]))]
+        (is (= [:d] (mapv :value evs)))
+        (is (= (c/span [0 1] [1 4]) (:whole (first evs))))))))
+
 (deftest late-shifts-forward
   (testing "late shifts events forward in time"
     (let [pat    (c/late 0.5 (c/pure :bd))

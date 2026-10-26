@@ -10,20 +10,20 @@ jobs:
     name: Test (cljs.test)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v5.6.0
         with:
           distribution: temurin
           java-version: '21'
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Cache shadow-cljs deps
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.m2
           key: m2-${{ hashFiles('shadow-cljs.edn') }}
@@ -36,10 +36,10 @@ jobs:
     name: Rust audio tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Cache Cargo
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -56,20 +56,20 @@ jobs:
     name: Browser audio tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v5.6.0
         with:
           distribution: temurin
           java-version: '21'
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Cache shadow-cljs deps
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.m2
           key: m2-${{ hashFiles('shadow-cljs.edn') }}
@@ -83,9 +83,9 @@ jobs:
     name: AI docs drift check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: 'npm'
@@ -97,27 +97,27 @@ jobs:
     name: Release build (shadow-cljs release app)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v5.6.0
         with:
           distribution: temurin
           java-version: '21'
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Cache shadow-cljs deps
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.m2
           key: m2-${{ hashFiles('shadow-cljs.edn') }}
           restore-keys: m2-
 
       - name: Cache Cargo
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
