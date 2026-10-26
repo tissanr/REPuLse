@@ -27,6 +27,7 @@ evaluate them with **Ctrl+Enter** (or the **▶ play** button), and hear them lo
 5. [Pattern combinators](#pattern-combinators)
    - [Patterned arguments](#patterned-arguments)
    - [Pattern arithmetic — `add` `sub` `mul` `div` `set`](#pattern-arithmetic--add-sub-mul-div-set)
+   - [Signals — `sine` `saw` `rand` `perlin` `segment` `range`](#signals--sine-saw-rand-perlin-segment-range)
 6. [Music theory](#music-theory)
 7. [Per-event parameters](#per-event-parameters)
 8. [Sound and samples](#sound-and-samples)
@@ -315,6 +316,22 @@ These patterns are **wrong** in REPuLse. If you see AI-generated code that looks
 ;; LFO-like variation: use (every), (sometimes), patterned params
 (amp (seq 0.9 0.4 0.9 0.4) pat)          ; patterned amplitude
 ```
+
+### ❌ Calling a signal
+
+```clojure
+;; WRONG - signals are values, not functions
+(saw :c4)        ; error: saw is a signal ... use (synth :saw ...)
+(sine)           ; error: use it without parentheses
+
+;; RIGHT
+(synth :saw (seq :c4 :e4))               ; the saw voice
+(pan sine (fast 8 (seq :hh)))            ; a signal as a parameter
+(segment 8 sine)                         ; a signal discretised into events
+```
+
+A bare signal as a track (`sine` on its own) plays nothing: it has no rhythm. Give it
+structure with `segment` or use it inside `pan`, `amp`, `range` and friends.
 
 ### ❌ Keyword arguments on pattern functions
 
@@ -806,6 +823,106 @@ updates nothing audible — exactly like Tidal.
 
 ---
 
+## Signals — `sine` `saw` `rand` `perlin` `segment` `range`
+
+A **signal** is a *continuous* pattern: it has a value at every moment but no rhythm of
+its own. A rhythmic pattern gives it structure by sampling it, and the sampled value is
+the signal at the **start** of each event. This is how you get smooth movement (filter
+sweeps, panning, swells) and deterministic random variation.
+
+Signals are **values**, not functions. Write `sine`, never `(sine)`.
+
+```lisp
+(pan sine2 (fast 8 (seq :hh)))                                  ; smooth L<->R sweep every cycle
+(->> (fast 16 (seq :hh)) (amp (range 0.3 0.9 (slow 4 saw))))    ; 4-cycle swell
+(->> (segment 8 (range 1 8 rand)) (scale :minor :c4))           ; 8 random degrees per cycle
+(pan (range -0.5 0.5 perlin) (fast 4 (seq :hh)))                ; smooth random drift
+(segment 4 saw)                                                 ; 0 0.25 0.5 0.75 as events
+```
+
+### Signal reference
+
+Values are floats; `t` is the position in the cycle. "At t = 0" is the value a rhythm
+starting on the downbeat samples.
+
+| Signal | Range | Shape | At t = 0 |
+|---|---|---|---|
+| `saw` | 0..1 | rising ramp, `t` | 0 |
+| `isaw` | 0..1 | falling ramp | 1 |
+| `sine` | 0..1 | sine wave | 0.5 |
+| `cosine` | 0..1 | sine shifted a quarter cycle later (Tidal phase) | 0 |
+| `tri` | 0..1 | triangle, up then down | 0 |
+| `itri` | 0..1 | inverted triangle | 1 |
+| `square` | 0 / 1 | 0 for the first half, 1 for the second | 0 |
+| `isquare` | 0 / 1 | 1 for the first half, 0 for the second | 1 |
+| `rand` | 0..1 | deterministic random | 0 |
+| `perlin` | 0..1 | smooth random (interpolates one random value per cycle) | 0 |
+| `time` | any | absolute cycle time: 0, 0.25 ... 1, 1.25 ... | 0 |
+| `sine2` `cosine2` `saw2` `isaw2` `tri2` `itri2` `square2` `isquare2` `rand2` | -1..1 | bipolar versions | |
+
+Samples of `(segment 4 sig)` in cycle 0: `saw` 0 0.25 0.5 0.75, `sine` 0.5 1 0.5 0, `tri`
+0 0.5 1 0.5, `square` 0 0 1 1.
+
+### `segment` - turn a signal into events
+
+`(segment n sig)` samples a signal `n` times per cycle and returns `n` ordinary events.
+`n` may be a pattern. A bare signal plays nothing, because it has no events to trigger.
+
+```lisp
+(segment 4 saw)                       ; 0 0.25 0.5 0.75
+(->> saw (segment 4))                 ; same, curried
+(segment "<4 8>" sine)
+```
+
+### `range` `rangex` `range2` - scale a 0..1 signal
+
+| Form | Meaning |
+|---|---|
+| `(range lo hi sig)` | scale 0..1 to `lo`..`hi` linearly |
+| `(rangex lo hi sig)` | exponential scaling; `lo` and `hi` must be > 0. Good for frequencies |
+| `(range2 lo hi sig)` | like `range` for a bipolar (-1..1) input such as `sine2` |
+| `(to-bipolar sig)` / `(from-bipolar sig)` | convert 0..1 to -1..1 and back |
+
+`lo` and `hi` may be numbers, mini-notation strings or patterns. `range` only means
+Tidal's `range` when the **last argument is a pattern**; with plain numbers it is still
+the collection function `(range 0 8 2)`.
+
+```lisp
+(segment 4 (range 200 2000 saw))
+(->> sine (rangex 100 1000) (segment 2))
+(->> saw (range 2 6))                 ; works in ->> as well
+```
+
+### Randomness - `rand` `irand` `perlin`
+
+`rand` is deterministic: it is Tidal's `timeToRand` of the sampling time, so a given
+position in the song always yields the same number, on every run. `rand` is exactly `0` at
+time 0 (and every 300 cycles). To get a different stream, offset it in time:
+`(early 7 rand)`. `(irand n)` gives random integers `0 .. n-1`, and `perlin` is smooth
+noise that glides between random values.
+
+```lisp
+(segment 8 (irand 8))                 ; 0 5 2 1 ... (deterministic)
+(segment 4 (early 7 rand))            ; another random stream
+```
+
+### `run` `signal` `steady` `time`
+
+```lisp
+(run 4)                               ; the discrete pattern 0 1 2 3 in one cycle
+(segment 4 (signal (fn [t] (* t 2)))) ; your own signal: f gets the cycle time as a number
+(segment 4 (steady 3))                ; constant 3
+(segment 4 time)                      ; 0 0.25 0.5 0.75, then 1 1.25 ... in cycle 1
+```
+
+### `saw` and `square` are signals now
+
+Before TL2, `(saw :c4)` and `(square :c4)` were synth-voice shortcuts. They are signals
+now. Use `(synth :saw pat)` and `(synth :square :pw 0.25 pat)` for the voices. Calling a
+signal gives a helpful error. Inside `defsynth`, `saw`, `square` and `tri` remain UGens.
+
+---
+
 ## Music theory
 
 REPuLse has a built-in music theory layer that lets you write melodies, scales, and chords
@@ -1062,8 +1179,10 @@ tuning needed — just name the instrument:
 already-transformed maps. All `amp`/`attack`/`decay`/`pan` parameters compose normally
 on top of it.
 
-The per-note forms `(saw :c4)`, `(square :c3 :pw 0.25)`, `(fm :c4 :index 4)` remain
-available when you need different voices on individual steps within the same `seq`.
+The per-note forms `(fm :c4 :index 4)` and `(noise)` remain available when you need
+different voices on individual steps within the same `seq`. Pulse width of the square
+voice goes through `synth`: `(synth :square :pw 0.25 pat)`. (`saw` and `square` on their
+own are [signals](#signals--sine-saw-rand-perlin-segment-range); `(saw :c4)` is an error.)
 
 ### Named voice presets
 
@@ -1177,6 +1296,17 @@ complement each other:
      (synth :saw)
      (attack 0.3)                     ; each note swells in over 300ms
      (amp (tween :linear 0.0 1.0 4))) ; overall sequence fades in over 4 bars
+```
+
+### Signals vs. `tween`
+
+`tween` is a **one-shot ramp** that starts at the moment you evaluate and then holds its
+end value. A [signal](#signals--sine-saw-rand-perlin-segment-range) is a **cyclic**
+function of the cycle position: it is the same every time the cycle comes round, and the
+same on every evaluation. For a repeating 8-cycle sweep use `(slow 8 saw)`:
+
+```lisp
+(->> (fast 8 (seq :hh)) (pan (range -1 1 (slow 8 saw))))
 ```
 
 ---
@@ -1791,6 +1921,8 @@ Define custom instruments from Web Audio node graphs. UGen functions build the g
      (synth :pluck)
      (amp 0.7))
 ```
+
+Inside a `defsynth` body, `saw`, `square` and `tri` are the UGens below. They are independent of the top-level [signals](#signals--sine-saw-rand-perlin-segment-range) of the same name.
 
 Available UGens:
 
@@ -2602,6 +2734,19 @@ track :boom playing — Warning: unknown sound :kick — did you mean :bd?
 ```
 
 See [Keywords as sounds](#keywords-as-sounds).
+
+Calling a signal as a function is an error with a hint:
+
+```
+Error: saw is a signal (a continuous pattern), not a function. Use it without parentheses ...
+```
+
+A track that contains a continuous signal with no rhythm plays nothing, and a warning is
+shown (once per evaluation):
+
+```
+Warning: track :_ contains a continuous signal with no rhythm, which plays nothing. A signal needs structure, e.g. (segment 8 ...) or (pan sine pat)
+```
 
 ---
 
