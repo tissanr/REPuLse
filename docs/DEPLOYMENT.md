@@ -96,8 +96,8 @@ environment provides Node 20 and Java 21 (needed for shadow-cljs).
 ## 4. Local development
 
 ```bash
-# Copy and fill in env vars
-cp .env.example .env
+# Copy and fill in env vars (.env*.local files are gitignored — never use .env)
+cp .env.example .env.local
 
 # Install dependencies
 npm install

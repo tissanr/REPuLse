@@ -44,7 +44,8 @@ REPuLse-handoff-*.zip
 .gemini/
 gha-creds-*.json
 
-# Vercel
+# Vercel / local secrets
+.env
 .env*.local
 
 # Design 
