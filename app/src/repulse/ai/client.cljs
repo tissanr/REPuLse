@@ -1,5 +1,6 @@
 (ns repulse.ai.client
   (:require [repulse.ai.settings :as settings]
+            [repulse.ai.models :as models]
             [clojure.string :as str]
             [goog.object :as gobj]))
 
@@ -132,20 +133,49 @@
                                 :contents (google-messages messages)}
                           (seq tools) (assoc :tools tools))))})
 
+(def openai-like
+  "Chat and model-list endpoints of the OpenAI-compatible providers."
+  {"openai"     {:chat   "https://api.openai.com/v1/chat/completions"
+                 :models "https://api.openai.com/v1/models"}
+   "groq"       {:chat   "https://api.groq.com/openai/v1/chat/completions"
+                 :models "https://api.groq.com/openai/v1/models"}
+   "xai"        {:chat   "https://api.x.ai/v1/chat/completions"
+                 :models "https://api.x.ai/v1/models"}
+   "openrouter" {:chat   "https://openrouter.ai/api/v1/chat/completions"
+                 :models "https://openrouter.ai/api/v1/models"}
+   "mistral"    {:chat   "https://api.mistral.ai/v1/chat/completions"
+                 :models "https://api.mistral.ai/v1/models"}})
+
+(def ^:private openrouter-attribution
+  {"HTTP-Referer" "https://repulse.app"
+   "X-Title"      "REPuLse"})
+
 (defn build-request
   "Provider request envelope {:url :headers :body} for one completion.
    Pure — the caller supplies provider, key and model."
   [{:keys [provider key model]} system messages tools]
   (case provider
-    "anthropic" (anthropic-request  system messages model key tools)
-    "openai"    (openai-like-request "https://api.openai.com/v1/chat/completions"
-                                     system messages model key tools)
-    "groq"      (openai-like-request "https://api.groq.com/openai/v1/chat/completions"
-                                     system messages model key tools)
-    "xai"       (openai-like-request "https://api.x.ai/v1/chat/completions"
-                                     system messages model key tools)
-    "google"    (google-request      system messages model key tools)
-    (throw (ex-info "Unknown provider" {:provider provider}))))
+    "anthropic" (anthropic-request system messages model key tools)
+    "google"    (google-request    system messages model key tools)
+    (if-let [{:keys [chat]} (openai-like provider)]
+      (cond-> (openai-like-request chat system messages model key tools)
+        (= provider "openrouter") (update :headers merge openrouter-attribution))
+      (throw (ex-info "Unknown provider" {:provider provider})))))
+
+(defn models-request
+  "Model-list request envelope {:url :headers} for a provider. Pure.
+   OpenRouter's catalogue is public, so it carries no Authorization header."
+  [{:keys [provider key]}]
+  (case provider
+    "anthropic" {:url     "https://api.anthropic.com/v1/models?limit=1000"
+                 :headers {"x-api-key" key "anthropic-version" "2023-06-01"}}
+    "google"    {:url     "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"
+                 :headers {"x-goog-api-key" key}}
+    "openrouter" {:url     (get-in openai-like ["openrouter" :models])
+                  :headers {}}
+    (if-let [{:keys [models]} (openai-like provider)]
+      {:url models :headers {"Authorization" (str "Bearer " key)}}
+      (throw (ex-info "Unknown provider" {:provider provider})))))
 
 (defn- make-request [system messages tools]
   (build-request {:provider @settings/provider
@@ -309,3 +339,39 @@
                            {:error (str "Rate limited — " max-attempts
                                         " attempts failed. Try again shortly.")})))))]
     (attempt 0)))
+
+;; ── Model catalogue fetch ─────────────────────────────────────────────────────
+
+(defn fetch-models!
+  "Fetch, normalise and cache a provider's model list via /api/ai-models.
+   Non-fatal: on failure keeps the previous cache and marks the provider :error.
+   Returns a Promise resolving to the normalised models or nil."
+  [provider key]
+  (swap! models/status assoc provider :loading)
+  (let [{:keys [url headers]} (models-request {:provider provider :key key})]
+    (-> (js/fetch "/api/ai-models"
+                  #js {:method  "POST"
+                       :headers #js {"content-type" "application/json"}
+                       :body    (js/JSON.stringify #js {:url url :headers (clj->js headers)})})
+        (.then (fn [resp]
+                 (if (.-ok resp)
+                   (.json resp)
+                   (throw (js/Error. (str "HTTP " (.-status resp)))))))
+        (.then (fn [j]
+                 (let [ms (models/normalise provider (js->clj j :keywordize-keys true))]
+                   (models/store! provider ms)
+                   (swap! models/status dissoc provider)
+                   ms)))
+        (.catch (fn [_]
+                  (swap! models/status assoc provider :error)
+                  nil)))))
+
+(defn refresh-models!
+  "Fetch the current provider's catalogue when forced or stale. Providers other
+   than OpenRouter need an API key first."
+  [{:keys [force?]}]
+  (let [provider @settings/provider
+        key      @settings/api-key]
+    (when (and (or force? (models/stale? (models/cached provider)))
+               (or (= provider "openrouter") (seq key)))
+      (fetch-models! provider key))))

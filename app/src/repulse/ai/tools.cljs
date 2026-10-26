@@ -400,7 +400,7 @@
     (case provider
       "anthropic" (reg->anthropic reg)
       "google"    (reg->google reg)
-      (reg->openai reg))))  ; openai, groq, xai
+      (reg->openai reg))))  ; all openai-compatible providers
 
 ;; ── Dispatch ─────────────────────────────────────────────────────────────────
 

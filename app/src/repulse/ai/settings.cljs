@@ -1,4 +1,5 @@
-(ns repulse.ai.settings)
+(ns repulse.ai.settings
+  (:require [repulse.ai.models :as models]))
 
 (def ^:private key-prefix "repulse:ai:")
 
@@ -27,12 +28,21 @@
 (add-watch search-api-key    :persist (fn [_ _ _ v] (if (seq v) (ls-set! "search-key" v) (ls-del! "search-key"))))
 
 (def default-models
-  {"anthropic" "claude-sonnet-4-6"
-   "openai"    "gpt-4o"
-   "google"    "gemini-2.0-flash"
-   "groq"      "llama-3.3-70b-versatile"
-   "xai"       "grok-3"})
+  "Offline fallbacks, used until a live catalogue has been fetched."
+  {"anthropic"  "claude-sonnet-5-5"
+   "openai"     "gpt-4o"
+   "google"     "gemini-2.0-flash"
+   "groq"       "llama-3.3-70b-versatile"
+   "xai"        "grok-3"
+   "openrouter" "openrouter/auto"
+   "mistral"    "mistral-medium-latest"})
+
+(defn resolved-default
+  "Provider default: newest matching model in the live catalogue, else the
+   static fallback."
+  []
+  (models/resolved-default @provider (get default-models @provider)))
 
 (defn effective-model []
   (let [override @model-override]
-    (if (seq override) override (get default-models @provider))))
+    (if (seq override) override (resolved-default))))

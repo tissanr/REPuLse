@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { originAllowed } from "./_lib";
+import { originAllowed, AI_ALLOWED_HOSTS, HOP_BY_HOP } from "./_lib";
 
 /**
  * /api/ai-stream — thin server-side proxy for AI provider streaming requests.
  *
- * Why this exists: Anthropic, OpenAI, Groq, xAI, and Google all block
+ * Why this exists: Anthropic, OpenAI, Groq, xAI, Google, OpenRouter, and Mistral all block
  * cross-origin (CORS) requests from third-party browser origins. The browser
  * SPA posts the prepared request envelope here; we forward it server-side
  * (no CORS concern) and pipe the SSE stream straight back to the client.
@@ -14,27 +14,6 @@ import { originAllowed } from "./_lib";
  *  - API keys travel only over HTTPS (browser → Vercel → provider).
  *  - Keys are never logged or stored server-side.
  */
-
-const ALLOWED_HOSTS = new Set([
-  "api.anthropic.com",
-  "api.openai.com",
-  "api.groq.com",
-  "api.x.ai",
-  "generativelanguage.googleapis.com",
-]);
-
-// Hop-by-hop headers must not be forwarded to the upstream
-const HOP_BY_HOP = new Set([
-  "connection",
-  "keep-alive",
-  "proxy-authenticate",
-  "proxy-authorization",
-  "te",
-  "trailers",
-  "transfer-encoding",
-  "upgrade",
-  "host",
-]);
 
 export const config = {
   api: {
@@ -73,7 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "Malformed URL" });
   }
 
-  if (!ALLOWED_HOSTS.has(parsedUrl.hostname)) {
+  if (!AI_ALLOWED_HOSTS.has(parsedUrl.hostname)) {
     return res.status(403).json({ error: `Host not allowed: ${parsedUrl.hostname}` });
   }
 
