@@ -62,27 +62,20 @@ Update `README.md` too if the phase adds user-facing syntax or changes the quick
 - Change `📋 *planned*` → `✅ *delivered*` in the heading
 - Add a **Delivered:** section with 2–6 bullet points summarising what was built (match the style of existing delivered phases)
 
-### 7. Write the test protocol (Rule 2, step 4)
+### 7. Write the test protocol (Rule 5)
 
-Create `docs/test-protocols/$ARGUMENTS.md` following `docs/test-protocols/README.md`
-(use `docs/test-protocols/TL2.md` as the model) and add it to the index in that README.
+Write the `## Test protocol` section for the PR as described in **Rule 5** of `CLAUDE.md`:
+a GitHub task list with one checkbox per test, each with a pasteable snippet and its
+concrete expected outcome. Check pattern snippets with the TEST1 harness and copy values
+from its output; never invent them. It is not a file in the repo.
 
-- One numbered test per new built-in, effect, parameter, error/warning message and
-  removed or changed behaviour, plus at least two regression tests.
-- Each test: a pasteable ```` ```lisp ```` snippet and a concrete **Expected:** (note
-  names, counts per cycle, sweep direction, exact message text).
-- Check every pattern snippet with the TEST1 harness
-  (`window.__REPULSE_TEST__.evalToEvents(code, cycles)` from a scratch Playwright spec in
-  `e2e/`, deleted before commit) and copy expected values from its output. Take message
-  texts from the code.
-- List accepted limitations under a *Known issues* test so testers don't re-report them.
-
-The phase is not done without it, whether implemented by hand or by the auto-phase
-pipeline.
+- If a PR for this branch already exists (`gh pr view`), append the section to its
+  description with `gh pr edit --body-file`, as the last section before the 🤖 line.
+- Otherwise put it at the end of the description when opening the PR (`/commit-push-pr`).
 
 ### 8. Commit
 
-Run `npm run test:all` first (Rule 2, step 1). Commit implementation + docs + test protocol + ROADMAP.md together. Message format:
+Run `npm run test:all` first (Rule 2, step 1). Commit implementation + docs + ROADMAP.md together. Message format:
 ```
 feat: implement Phase $ARGUMENTS — <short title>
 ```
