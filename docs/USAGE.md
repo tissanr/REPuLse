@@ -1647,11 +1647,11 @@ Evaluating a new `play` for the same name replaces the pattern without stopping 
 (solo :lead)   ; all other tracks are muted; re-evaluate another track to un-solo
 ```
 
-### `clear` — remove a track
+### `clear!` — remove a track
 
 ```lisp
-(clear :kick)   ; remove the kick track
-(clear)         ; stop everything and remove all tracks
+(clear! :kick)  ; remove the kick track
+(clear!)        ; stop everything and remove all tracks
 ```
 
 ### `tracks` — list active tracks
