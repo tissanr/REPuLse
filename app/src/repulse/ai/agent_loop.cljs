@@ -7,6 +7,7 @@
             [repulse.ai.system-prompt :as sys-prompt]
             [repulse.ai.tools :as tools]
             [repulse.ai.budget :as budget]
+            [repulse.ai.tool-calls :as tool-calls]
             [repulse.ai.undo :as undo]
             [clojure.string :as str]))
 
@@ -76,14 +77,12 @@
 ;; ── Token accounting ─────────────────────────────────────────────────────────
 
 (defn- estimate-tokens
-  "Fallback when the provider reports no usage: ~4 characters per token over
-   everything sent (system prompt + history) and received."
+  "Fallback when the provider reports no usage (budget/estimate-tokens over
+   everything sent — system prompt + history — and received)."
   [system messages response]
-  (js/Math.ceil (/ (+ (count system)
-                      (count (pr-str messages))
-                      (count (str (:content response)))
-                      (count (pr-str (:tool-calls response))))
-                   4)))
+  (budget/estimate-tokens (+ (count system) (count (pr-str messages)))
+                          (+ (count (str (:content response)))
+                             (count (pr-str (:tool-calls response))))))
 
 ;; ── Tool execution ────────────────────────────────────────────────────────────
 
@@ -116,7 +115,10 @@
                       {:role "assistant" :content (or content "(stopped)")})
   (set-pending! false))
 
-(defn- run-loop! [messages call-count user-msg turn-id]
+(def ^:private malformed-give-up-msg
+  "The model kept sending tool calls I couldn't run. Try rephrasing, pick a model that handles function calling, or turn off \"Send tools\" in AI settings.")
+
+(defn- run-loop! [messages call-count malformed user-msg turn-id]
   (cond
     @cancelled?
     (set-pending! false)
@@ -147,7 +149,11 @@
                 :else
                 (let [tc     (:tool-calls response)
                       tokens (or (:usage response) (estimate-tokens system messages response))
-                      status (budget/record-usage! {:tokens tokens :calls (count tc)})]
+                      status (budget/record-usage! {:tokens     tokens
+                                                    :calls      (count tc)
+                                                    :estimated? (nil? (:usage response))})
+                      known  (tools/known-names)
+                      action (when tc (tool-calls/next-action known tc malformed))]
                   (when (= status :warn)
                     (add-msg! "system" "⚠️ 50% of your AI budget used this session."))
                   (cond
@@ -158,6 +164,24 @@
                     (= status :hard-stop)
                     (do (add-msg! "system" budget-exhausted-msg)
                         (finish! user-msg nil))
+
+                    ;; Second malformed batch: stop and show whatever text came with it.
+                    (= action :give-up)
+                    (finish! user-msg (or (:content response) malformed-give-up-msg))
+
+                    ;; First malformed batch: execute nothing, tell the model why.
+                    (= action :retry)
+                    (let [results (tool-calls/error-results known tc)]
+                      (doseq [{:keys [call error]} (tool-calls/invalid-calls known tc)]
+                        (log-tool-call! (str (:name call)) (:args call) {:error error})
+                        (add-msg! "tool" (str "▸ " (or (:name call) "?") " → error: " error)))
+                      (run-loop! (conj messages
+                                       {:role "assistant" :tool-calls tc}
+                                       {:role "tool"      :results results})
+                                 call-count
+                                 (inc malformed)
+                                 user-msg
+                                 turn-id))
 
                     :else
                     (do
@@ -174,6 +198,7 @@
                                                  {:role "assistant" :tool-calls tc}
                                                  {:role "tool"      :results results})
                                            (+ call-count (count tc))
+                                           malformed
                                            user-msg
                                            turn-id)))))))))))
           (.catch
@@ -194,4 +219,4 @@
       (set-pending! true)
       (let [messages (conj (mapv #(select-keys % [:role :content :tool-calls :results]) @history)
                            {:role "user" :content user-message})]
-        (run-loop! messages 0 user-message turn-id)))))
+        (run-loop! messages 0 0 user-message turn-id)))))

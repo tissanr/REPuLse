@@ -1354,7 +1354,7 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 
 **Code blocks** in assistant responses include an **↓ insert** button that appends the code to the editor without replacing existing content.
 
-**Budget:** The assistant tracks token and tool-call usage across all turns in the session. Token counts come from the provider's reported usage (input + output, so the system prompt and history are included); when a provider reports none, a 4-characters-per-token estimate is used. A usage badge in the panel header shows `used/limit tok · used/limit tools`. A soft warning appears at 50%. Once either limit is reached the assistant refuses to send further requests until you raise the limit in settings or click **Reset session** in the tool log.
+**Budget:** The assistant tracks token and tool-call usage across all turns in the session. Token counts come from the provider's reported usage (input + output, so the system prompt and history are included); when a provider reports none (common with local servers), a 4-characters-per-token estimate is used and the badge shows a `~` prefix (e.g. `~3.9k/50.0k tok`). A usage badge in the panel header shows `used/limit tok · used/limit tools`. A soft warning appears at 50%. Once either limit is reached the assistant refuses to send further requests until you raise the limit in settings or click **Reset session** in the tool log.
 
 **Rate limiting:** HTTP 429 responses from any provider trigger automatic exponential back-off (1 s, then 2 s; at most 3 requests in total). If all attempts are rate-limited, an error message is shown inline.
 
@@ -1363,8 +1363,8 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 **Activity log:** Once tool calls have been made, a collapsible **🔍 tool log** section appears above the input box showing the last 50 calls (time, tool, and any error). An **Export log** button downloads the log as JSON. **Reset session** clears both the log and the session budget counters.
 
 **Settings** (accessible via the ⚙ button):
-- **Provider** — `anthropic`, `openai`, `google`, `groq`, `xai`, `openrouter`, `mistral`
-- **API key** — stored in `repulse:ai:key` in localStorage; never relayed through any REPuLse backend
+- **Provider** — `anthropic`, `openai`, `google`, `groq`, `xai`, `openrouter`, `mistral`, `custom` (any OpenAI-compatible endpoint — see [Local models & custom endpoints](#local-models--custom-endpoints))
+- **API key** — one per provider, stored in `repulse:ai:key:<provider>` in localStorage, so switching provider keeps each key. Hosted providers' requests are relayed per request through the `/api/ai-stream` proxy (never logged or stored); `custom` keys go only to the base URL you enter
 - **Model override** — override the default model (e.g. `claude-opus-4-7`, `grok-3-mini`, or on OpenRouter `meta-llama/llama-3.3-70b-instruct:free`); free text, with suggestions from the provider's live model list. Leave blank for the provider default. The ↻ button next to the field refetches the list; models marked `(no tools)` cannot run the agent tools (read buffer, propose edit, …) and fall back to plain chat. A saved override missing from a fresh list shows a warning but is kept.
 - **Share editor code with AI** — when enabled, the current editor buffer is included in the system prompt; disabled by default
 - **Auto-apply edits** — apply `propose_edit` immediately and show the Revert button; default off
@@ -1378,6 +1378,47 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 > **Groq vs xAI:** `groq` is [Groq cloud](https://groq.com) — fast inference for open-source models like Llama. `xai` is [xAI](https://x.ai) — Elon Musk's company, makers of the Grok model family. Get an xAI key at [console.x.ai](https://console.x.ai).
 >
 > **OpenRouter and Mistral:** `openrouter` gives one key for almost every model family, including rate-limited free-tier models (429s are retried with back-off); keys at [openrouter.ai/keys](https://openrouter.ai/keys). `mistral` is an EU-based provider with first-party models; keys at [console.mistral.ai](https://console.mistral.ai). Other families (DeepSeek, Kimi, Qwen, …) are reachable through OpenRouter model IDs.
+
+#### Local models & custom endpoints
+
+The `custom` provider talks to **any OpenAI-compatible `/v1` endpoint**: a local model server (LM Studio, Ollama, llama.cpp, vLLM), a self-hosted gateway (LiteLLM), or a hosted provider REPuLse doesn't list (Together, Fireworks, DeepSeek, …). With a local model the assistant is free and works offline. Your Lisp doesn't change — `(ai "write a dub techno chord stab pattern")` works the same.
+
+| Setting | What it does |
+|---------|--------------|
+| **Base URL** | The server's `/v1` root. Quick-fill chips: **LM Studio** `http://localhost:1234/v1`, **Ollama** `http://localhost:11434/v1`, **llama.cpp** `http://localhost:8080/v1`. A pasted `…/chat/completions` URL is trimmed to the base. |
+| **API key** *(optional)* | Sent as `Authorization: Bearer …` only when set. Leave blank for local servers. |
+| **Send tools** | On by default. Turn off if your model returns errors or garbage when given tools — no `tools` field is sent and the assistant works as plain chat. |
+| **Test connection** | Fetches `<base>/models` and reports `✓ N models` or an actionable error. The model field then suggests those models; a blank override uses the first one the server lists. |
+
+```text
+Provider:  custom
+Base URL:  http://localhost:1234/v1
+Model:     qwen3-coder-30b
+```
+
+**How requests travel.** Hosted providers go through REPuLse's server proxy. `custom` requests go **straight from your browser** to the base URL — including your key and any code you share — so only use endpoints you trust. Allowed URLs:
+
+- `https://…` — any host.
+- `http://localhost`, `http://127.0.0.1`, `http://[::1]` (any port).
+- Plain-HTTP LAN or remote addresses (`http://192.168.…`) are rejected in the settings: browsers block them as mixed content on an HTTPS page. Use HTTPS (e.g. a tunnel), or run the server on the same machine and use `localhost`.
+
+**Enable CORS on your server** so it accepts requests from the REPuLse origin:
+
+| Server | Setting |
+|--------|---------|
+| **LM Studio** | Developer tab → server settings → **Enable CORS**, or `lms server start --cors` |
+| **Ollama** | Set `OLLAMA_ORIGINS` to the REPuLse origin (or `*`) before starting the server, e.g. `OLLAMA_ORIGINS="*" ollama serve` |
+| **llama.cpp** `llama-server` | Answers cross-origin requests by default; check `llama-server --help` if your build differs |
+| **vLLM** | `--allowed-origins '["*"]'` (or the REPuLse origin) |
+| **LiteLLM** | Proxy allows all origins by default; restrict as needed in its config |
+
+**Chrome's local-network prompt.** When REPuLse runs on a public HTTPS site and connects to `localhost`, Chrome may ask for permission to access devices on your local network — allow it.
+
+**If it fails**, the panel says which problem is likely:
+- *Couldn't reach … Is the server running, and does it allow requests from this site?* — server down, CORS not enabled, or the local-network prompt was denied (the browser doesn't say which).
+- *HTTP 401/403* — the key was rejected. *HTTP 404* — wrong base URL (missing `/v1`?).
+
+**Tool calling depends heavily on the model.** Small local models often emit broken tool calls. REPuLse returns the error to the model once; if the next reply is broken too, it stops and shows the model's text instead of hanging. For editing your code via `read_buffer` → `propose_edit`, pick a model known for function calling (e.g. Qwen3 or Llama 3.x instruct). If a model struggles, turn **Send tools** off.
 
 **Conversation history** persists across page reloads (last 40 turns). Use the **clear** button to reset the chat and history.
 

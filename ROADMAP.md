@@ -64,7 +64,7 @@ before implementing it. Dependencies are listed at the top of each spec.
 **Side track** (not on the critical path, can run any time): DOC1, TEST2, UI1, R3,
 PLUG1, O2.
 
-**Deferred** (⏸, outside the four milestones; revisit after M2): AI2c, AI4b, AI5,
+**Deferred** (⏸, outside the four milestones; revisit after M2): AI4b, AI5,
 SYN3, SYN4, SYN5, P2, O3, O4.
 
 ---
@@ -1555,9 +1555,7 @@ See full spec: [PROMPTS/PHASE-AI2b.md](PROMPTS/PHASE-AI2b.md)
 
 ---
 
-## Phase AI2c — Custom & Local AI Endpoints ⏸ *deferred*
-
-> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
+## Phase AI2c — Custom & Local AI Endpoints ✅ *delivered*
 
 A `custom` provider for any OpenAI-compatible endpoint — local servers (LM Studio,
 Ollama, llama.cpp, vLLM), self-hosted gateways (LiteLLM), or unlisted hosted providers.
@@ -1572,6 +1570,14 @@ Requests go browser-direct, never through the server proxies. Depends on AI2b.
   server omits `usage`
 - `docs/USAGE.md` "Local models" section: CORS setup per server, Chrome
   local-network prompt
+
+**Delivered:**
+- `client.cljs`: `normalise-base-url` (https any host; http loopback only; trims `/` and `/chat/completions`), `custom` branches in `build-request` / `models-request` (Bearer only with a key, no tools when "Send tools" is off), `direct-provider?` as the single direct-vs-proxy branch point, `direct-error-text` for unreachable / 401 / 403 / 404, `test-connection!`
+- `settings.cljs`: `custom-base-url`, `custom-tools?`, per-provider keys (`repulse:ai:key:<provider>`) with migration of the old single key; `custom` defaults to the first model the server lists
+- New `tool_calls.cljs`: malformed tool calls (bad JSON args, unknown or missing name) are fed back once as tool errors, then the turn ends with the model's text; `budget.cljs` estimates tokens when `usage` is absent and labels the badge `~`
+- Panel: `custom` provider with Base URL + LM Studio / Ollama / llama.cpp chips, optional key, Send tools, Test connection, trust warning; CSP `connect-src` += `http://localhost:* http://127.0.0.1:* http://[::1]:*`
+- `docs/USAGE.md` "Local models & custom endpoints"; unit tests for URL validation, custom requests, transport selection, error mapping, malformed-call recovery and the usage estimate
+- Verified in dev against a mock OpenAI-compatible server (no `usage`): test connection, `read_buffer` → `propose_edit` diff card, malformed-call recovery, tools off. Not yet verified against a real local model or on a Vercel preview
 
 See full spec: [PROMPTS/PHASE-AI2c.md](PROMPTS/PHASE-AI2c.md)
 
