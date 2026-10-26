@@ -123,9 +123,10 @@ arithmetic on pattern values.
 
 ## Continuous signals — TL2
 
-None exist yet. Note the **name clash**: `square`, `noise`, `saw`, `sin`, `tri` are
-already REPuLse synth / UGen names. TL2 must pick non-colliding names (e.g. a `sig-`
-prefix, or rename the synth keywords) before adding signals.
+None exist yet. **Name clashes, decided (2026-10-26):** UGen names inside `defsynth` live
+in their own environment and are unaffected. At top level, `saw` and `square` become
+signals (the voice shortcuts `(saw :c4)` / `(square :c4)` give way to `(synth :saw …)`),
+`(noise)` stays a voice, and `range` dispatches on whether its last argument is a pattern.
 
 | Strudel | REPuLse | Status | Phase | Notes |
 |---|---|---|---|---|
@@ -134,11 +135,11 @@ prefix, or rename the synth keywords) before adding signals.
 | `time` | `time` | 📋 | TL2 | Current cycle position as a signal |
 | `sine` | `sine` | 📋 | TL2 | 0..1 |
 | `cosine` | `cosine` | 📋 | TL2 | |
-| `saw` | `saw` (signal) | 📋 | TL2 | Collides with synth name `saw` |
+| `saw` | `saw` (signal) | 📋 | TL2 | **Decided:** top-level `saw` becomes the signal; voice shortcut `(saw :c4)` replaced by `(synth :saw …)` |
 | `isaw` | `isaw` | 📋 | TL2 | |
 | `tri` | `tri` (signal) | 📋 | TL2 | Collides with UGen `tri` |
 | `itri` | `itri` | 📋 | TL2 | |
-| `square` | `square` (signal) | 📋 | TL2 | Collides with synth `square` |
+| `square` | `square` (signal) | 📋 | TL2 | **Decided:** as `saw` |
 | `isquare` | `isquare` | 📋 | TL2 | |
 | `sine2` / `cosine2` / `saw2` / `isaw2` / `tri2` / `itri2` / `square2` / `isquare2` | same | 📋 | TL2 | Bipolar −1..1 versions |
 | `rand` | `rand` | 📋 | TL2 | Deterministic, seeded by time |
@@ -155,7 +156,7 @@ prefix, or rename the synth keywords) before adding signals.
 | `randrun` | `randrun` | 📋 | TL2 | Random permutation of `0..n-1` |
 | `segment` / `seg` | `segment` | 📋 | TL2 | Sample a signal n times per cycle |
 | `seg` | `segment` | 🔁 | — | |
-| `range` | `range` | 📋 | TL2 | Collides with Lisp `range` (sequence builder). Needs a pattern-aware dispatch or a new name (`scale-range`) |
+| `range` | `range` | 📋 | TL2 | Collides with Lisp `range`. **Decided:** dispatch on last argument (pattern → Tidal `range`, else collection `range`) |
 | `rangex` | `rangex` | 📋 | TL2 | Exponential range |
 | `range2` | `range2` | 📋 | TL2 | |
 | `toBipolar` | `to-bipolar` | 📋 | TL2 | |
@@ -297,10 +298,9 @@ TL2's seeded `rand` should replace it.
 
 ## Layering, pitch & harmony — TL5
 
-**Semantics warning:** REPuLse `scale` degrees are **1-indexed** and return **Hz**;
-Strudel `scale` degrees are **0-indexed** and return **note names**. Decide in TL5
-whether to switch to 0-indexing (Tidal/Strudel tutorials translate directly) or keep
-1-indexing as a deliberate REPuLse choice. Either way, document it here.
+**Decided (2026-10-26):** REPuLse `scale` is currently 1-indexed and returns Hz. TL5
+switches it to **0-indexed degrees returning notes**, as in Tidal/Strudel, so tutorials
+translate directly. This is a deliberate breaking change.
 
 | Strudel | REPuLse | Status | Phase | Notes |
 |---|---|---|---|---|
@@ -322,7 +322,7 @@ whether to switch to 0-indexing (Tidal/Strudel tutorials translate directly) or 
 | `chord` (control, `"<C Am F G>"`) | `chord` | 🟡 | TL5 | REPuLse `(chord :major7 :c4)` builds a stacked pattern; Strudel uses chord symbols + `voicing`. Add chord-symbol parsing (`"Cm7"`) |
 | `dictionary` / `anchor` / `mode` / `offset` / `octaves` | voicing options | 📋 | TL5 | Voicing controls |
 | `setVoicingRange` / `addVoicings` / `registerVoicings` / `voicingAlias` | — | ❓ | — | Custom voicing dictionaries |
-| `scale` | `scale` | 🟡 | TL5 | 1-indexed vs 0-indexed, Hz vs note; patterned scale name |
+| `scale` | `scale` | 🟡 | TL5 | **Decided:** switch to 0-based degrees returning notes (breaking); patterned scale name |
 | `scaleTranspose` / `scaleTrans` / `strans` | `scale-transpose` | 📋 | TL5 | |
 | `scaleTrans`, `strans` | `scale-transpose` | 🔁 | — | |
 | `transpose` / `trans` | `transpose` | 🟡 | TL5 | Semitones work; interval strings (`"3M"`) and patterned amount missing |
@@ -449,7 +449,7 @@ REPuLse's `~` parser (`packages/lisp/src/repulse/lisp/mini.cljs`) supports
 | `,` stack inside brackets | — | 📋 | TL1 | `"[c3,e3,g3]"` chords |
 | `/n` slow | — | 📋 | TL1 | |
 | `!` / `!n` replicate | — | 📋 | TL3 | |
-| `_` elongation | — | 📋 | TL3 | REPuLse treats `_` as rest; Strudel `_` extends the previous step. Breaking change — decide in TL3 |
+| `_` elongation | `@` weights | ⛔ | — | **Decided:** `_` stays a rest in REPuLse (consistent with `:_`); use `@` for elongation. Deliberate difference |
 | `{ }` polymeter, `{ }%n` | — | 📋 | TL3 | |
 | `(k,n,r)` euclid | — | 📋 | TL3 | |
 | `.` grouping | — | 📋 | TL3 | |

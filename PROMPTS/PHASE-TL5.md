@@ -24,7 +24,7 @@ chord symbols, voicings and scale-aware transposition.
 (echo 3 1/8 0.6 (seq :cp))                       ; 3 repeats, 1/8 apart, decaying
 (arp :up-down (chord "Cm7"))                       ; chord symbols as strings
 (voicing (seq "C^7" "A7b13" "Dm7" "G7"))           ; smooth voice leading
-(scale-transpose "<0 2>" :minor (seq 1 3 5))       ; transpose in scale steps
+(scale-transpose "<0 2>" :minor (seq 0 2 4))       ; transpose in scale steps
 ```
 
 ## Background
@@ -46,10 +46,16 @@ chord symbols, voicings and scale-aware transposition.
 
 - Chord symbol input: strings (`"Cm7"`) vs keywords (`:Cm7`). Recommend strings, since
   keywords can't hold `^` or `#` cleanly.
-- **Scale degree base:** REPuLse's `scale` is 1-based and returns Hz; Strudel/Tidal are
-  0-based and return notes. Tidal tutorials won't translate one-to-one until this is
-  settled. Options: switch to 0-based (breaking), or add a Tidal-compatible variant.
-  This is a user decision; ask before implementing.
+- ~~Scale degree base~~ **Decided (2026-10-26):** `scale` becomes **0-based** (degree 0 =
+  root, negative degrees go below it) and returns **notes** (MIDI-note values that the
+  audio layer converts to Hz), not Hz. This matches Tidal/Strudel, and makes
+  `(add 12 (scale …))` an octave rather than +12 Hz. It is a deliberate breaking change:
+  - Update `theory/scale` and its tests, plus `chord`/`transpose` if they rely on Hz.
+  - Make sure every audio path (WASM, JS fallback, MIDI out, `midi-export`) accepts note values.
+  - Migrate bundled demos (`content/demos.cljs`), tutorial chapters, USAGE.md and README
+    examples to 0-based degrees.
+  - Community snippets (S3) can't be migrated automatically: add a one-line note to the
+    release notes and USAGE.md.
 - Voicing dictionary: port Strudel's `ireal`-style dictionary (check licence) or write a
   smaller own one.
 
@@ -59,7 +65,9 @@ chord symbols, voicings and scale-aware transposition.
 - [ ] Chord-symbol parser covers at least the 30 most common symbols; table-driven tests.
 - [ ] `(voicing (seq "Dm7" "G7" "C^7"))` moves each voice by ≤ 4 semitones between chords.
 - [ ] `(echo 3 1/8 0.6 (seq :cp))` → 3 onsets with amps 1, 0.6, 0.36.
-- [ ] `(scale-transpose 2 :minor (seq 1 3 5))` → degrees 3 5 7 in the same scale.
+- [ ] `(scale :minor :c4 (seq 0 2 4 7))` → MIDI 60 63 67 72; `(seq -1)` → 58.
+- [ ] `(scale-transpose 2 :minor (seq 0 2 4))` → degrees 2 4 6 in the same scale.
+- [ ] `(add 12 (scale :minor :c3 (seq 0)))` → MIDI 60 (one octave above C3).
 - [ ] Rule 3 registration; USAGE.md "Harmony" section; parity rows ✅.
 - [ ] `npm run test:all` and `npx shadow-cljs compile app` pass.
 

@@ -159,6 +159,11 @@ rejected: it sounds plucked and re-triggers instead of sustaining.
 
 `main` is protected — all changes go via Pull Request.
 
+**Branches:** `dev` is the integration branch. Phase work, both manual and automated,
+targets `dev`; a human merges `dev` → `main` by PR. The unattended pipeline
+(`.claude/commands/auto-phase.md`, run by a usage-gated scheduled task) implements only
+🤖 phases, one at a time, and its PRs auto-merge into `dev` once CI passes.
+
 **Source of truth:** `ROADMAP.md` holds every phase and its status;
 `PROMPTS/PHASE-*.md` holds each spec. There is no other status table to update.
 

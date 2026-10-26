@@ -53,10 +53,19 @@ sweeps, panning, random variation) that is sampled by a rhythmic pattern.
 - Should `rand` match Tidal numerically? Recommend yes; it makes ported examples sound
   the same.
 - Interaction with `tween` (T1): keep both; document when to use which.
-- **Name clashes** (see parity doc): `saw`, `square`, `tri`, `sin`, `noise` already exist
-  as synth/UGen names, and `range` is a Lisp collection builtin. Choose: context-dependent
-  meaning (signal outside `defsynth`, UGen inside), or distinct names. Decide before
-  writing code; it affects TL3 too.
+- ~~Name clashes~~ **Decided (2026-10-26):**
+  - UGen names inside `defsynth` (`sin saw square tri noise lpf …`) live in their own
+    environment (`ugen-env` in `app/src/repulse/synth.cljs`) and are unaffected.
+  - At top level, `saw` and `square` become Tidal **signals**. Their current role as
+    voice shortcuts (`(saw :c4)`, `(square :c4 :pw 0.3)` in
+    `packages/lisp/src/repulse/lisp/builtins/synth.cljs`) is removed; `(synth :saw pat)`
+    covers it. Calling a signal like a function gives a helpful eval error suggesting
+    `(synth :saw …)`. Update demos, tutorial, completions and `builtin_meta.edn`.
+  - `tri`, `sine`, `cosine` and the rest are new top-level signal names (Tidal uses
+    `sine`, not `sin`).
+  - `(noise)` stays as the noise voice; Tidal/Strudel have no `noise` signal.
+  - `range` dispatches on its last argument: a pattern or signal means Tidal's
+    `range lo hi pat`; otherwise it stays the Lisp collection `range`.
 
 ## Definition of done
 

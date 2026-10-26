@@ -50,9 +50,10 @@ replicate, `a . b` grouping, `,` stacks, `(3,8)` euclid) where `mini.cljs` lacks
 
 - `every` today means "when cycle mod n = 0", like Tidal 1.x. Tidal 1.9 also has
   `first-of`/`last-of`. Recommend adding both as names and keeping `every` unchanged.
-- Mini-notation `_`: REPuLse uses it as a rest; Strudel uses it to extend the previous
-  step. Matching Strudel breaks existing code. Recommend keeping `~` and `_` as rests
-  for now and offering Strudel's meaning via `@`, unless the user decides otherwise.
+- ~~Mini-notation `_`~~ **Decided (2026-10-26):** `_` stays a rest, as do `~` and `:_`
+  everywhere in REPuLse. Strudel's "extend the previous step" is expressed with `@`
+  weights. This is a documented, deliberate parity difference; say so in `docs/USAGE.md`
+  (mini-notation section) and in the parity doc.
 - Batch size: if the list exceeds ~25 functions, split into TL3a (core rhythm) and
   TL3b (zoom/compress family).
 

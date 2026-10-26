@@ -30,32 +30,39 @@ without a human:
 
 ### Implementation order
 
-| # | Phase | Title | Marker | Spec |
-|---|---|---|---|---|
-| **M1** | | **Tidal-Lisp core** | | |
-| 1 | TL1 | Patterned arguments & pattern arithmetic | 🤖 | full |
-| 2 | TL2 | Continuous signals | 🤖 | outline |
-| 3 | TL3 | Time & structure combinators | 🤖 | outline |
-| 4 | TL4 | Randomness & conditionals | 🤖 | outline |
-| 5 | TL5 | Layering, pitch & harmony | 🤖 | outline |
-| 6 | TL6 | Sample slicing & playback control | 🤖👂 | outline |
-| 7 | TL7 | Per-event effects & control parameters | 🤖👂 | outline |
-| 8 | KIT1 | High-quality drum kits | 🤖👂 | outline |
-| **M2** | | **Full songs** | | |
-| 9 | SONG1 | Sections, song form & full-song render | 🤖 | outline |
-| 10 | SONG2 | Song-time automation & transitions | 🤖 | outline |
-| 11 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | outline |
-| 12 | SONG4 | Multi-buffer projects | 🤖 | outline |
-| **M3** | | **Plays with others** | | |
-| 13 | N1 | MIDI CC → parameter mapping | 🤖👂 | full |
-| 14 | LIVE1 | Companion bridge: Ableton Link & OSC | 🧑 | outline |
-| 15 | LIVE2 | Latency compensation, nudge & per-track outputs | 🧑 | outline |
-| **M4** | | **Sketchpad** | | |
-| 16 | SK1 | Stem export & full-song MIDI export | 🤖 | outline |
-| 17 | SK2 | Session snapshots & eval history | 🤖 | outline |
-| 18 | SK3 | MIDI capture 1: click, fixed grid, velocity → code | 🤖👂 | outline |
-| 19 | SK4 | MIDI capture 2: always-on capture | 🤖👂 | outline |
-| 20 | SK5 | MIDI capture 3: grid & feel detection | 🤖👂 | outline |
+| # | Phase | Title | Marker | Spec | Build model |
+|---|---|---|---|---|---|
+| **M1** | | **Tidal-Lisp core** | | | |
+| 1 | TL1 | Patterned arguments & pattern arithmetic | 🤖 | full | opus |
+| 2 | TL2 | Continuous signals | 🤖 | outline | sonnet |
+| 3 | TL3 | Time & structure combinators | 🤖 | outline | sonnet |
+| 4 | TL4 | Randomness & conditionals | 🤖 | outline | sonnet |
+| 5 | TL5 | Layering, pitch & harmony | 🤖 | outline | sonnet |
+| 6 | TL6 | Sample slicing & playback control | 🤖👂 | outline | opus |
+| 7 | TL7 | Per-event effects & control parameters | 🤖👂 | outline | opus |
+| 8 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
+| **M2** | | **Full songs** | | | |
+| 9 | SONG1 | Sections, song form & full-song render | 🤖 | outline | opus |
+| 10 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
+| 11 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | outline | sonnet |
+| 12 | SONG4 | Multi-buffer projects | 🤖 | outline | opus |
+| **M3** | | **Plays with others** | | | |
+| 13 | N1 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
+| 14 | LIVE1 | Companion bridge: Ableton Link & OSC | 🧑 | outline | opus |
+| 15 | LIVE2 | Latency compensation, nudge & per-track outputs | 🧑 | outline | sonnet |
+| **M4** | | **Sketchpad** | | | |
+| 16 | SK1 | Stem export & full-song MIDI export | 🤖 | outline | sonnet |
+| 17 | SK2 | Session snapshots & eval history | 🤖 | outline | sonnet |
+| 18 | SK3 | MIDI capture 1: click, fixed grid, velocity → code | 🤖👂 | outline | sonnet |
+| 19 | SK4 | MIDI capture 2: always-on capture | 🤖👂 | outline | sonnet |
+| 20 | SK5 | MIDI capture 3: grid & feel detection | 🤖👂 | outline | opus |
+
+**Models.** Expanding an outline into a full spec is always done with **Opus**: it makes
+the design decisions and writes reference test cases. The *Build model* column is the
+model that implements the phase from its full spec: **sonnet** where the spec leaves no
+judgment calls, **opus** where the design keeps needing decisions during the build
+(foundation code, the audio engine, cross-cutting state). If Sonnet can't get the tests
+green, the phase is escalated to Opus. Haiku isn't used for phases.
 
 **Outline** specs settle goal, scope, open questions and acceptance criteria. Expand an
 outline into a full spec (exact code paths, step-by-step implementation, files to change)
