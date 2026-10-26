@@ -101,7 +101,7 @@ All code in `cookbook.json` is playable in a fresh REPuLse session without any e
 
 ## Updating builtins.json
 
-When you add a new built-in name (see CLAUDE.md Rule 5):
+When you add a new built-in name (see CLAUDE.md Rule 3):
 
 ```bash
 npm run gen:grammar          # regenerate Lezer parser

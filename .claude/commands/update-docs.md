@@ -28,8 +28,8 @@ Bring all documentation up to date with the current state of the codebase. Read 
 
 ### 3. CLAUDE.md
 
-- **Phase status table** — update the status column to match reality. Check the codebase, not just git history.
-- **Repository structure** — update the file tree if new significant files/dirs were added.
+- **Repository structure** — update the directory overview if new significant dirs were added.
+- CLAUDE.md has no phase status table — phase status lives only in ROADMAP.md.
 - Only touch sections that are factually outdated. Do not rephrase or reformat things that are already correct.
 
 ### 4. docs/USAGE.md

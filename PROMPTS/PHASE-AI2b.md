@@ -287,7 +287,7 @@ Comment-only: the default schema branch now reads
   propose edit, …) and fall back to plain chat.
 
 No new Lisp built-in is added, so the grammar / completions / `builtin_meta.edn` /
-`gen:ai-docs` checklist (CLAUDE.md Rule 5) does **not** apply.
+`gen:ai-docs` checklist (CLAUDE.md Rule 3) does **not** apply.
 
 ### 10. Manual verification (required — cannot be automated)
 

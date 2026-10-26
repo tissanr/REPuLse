@@ -354,7 +354,7 @@ No grammar or WASM build steps required for this phase.
 | `app/public/css/main.css` | Append settings modal styles; audit for any stray hard-coded hex in component rules |
 | `docs/USAGE.md` | Add "Settings & themes" section |
 | `README.md` | Mention the gear icon in the quick tour |
-| `CLAUDE.md` | Mark Phase UI1 as ✓ delivered |
+| `ROADMAP.md` | Mark Phase UI1 as ✅ delivered |
 
 ---
 
