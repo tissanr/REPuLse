@@ -34,6 +34,33 @@ export function setCors(req: VercelRequest, res: VercelResponse, methods: string
   res.setHeader("Vary", "Origin");
 }
 
+// ── AI proxy shared config ────────────────────────────────────────────────────
+
+// Hosts the AI proxies (/api/ai-stream, /api/ai-models) may contact. One list so
+// the two handlers can never drift.
+export const AI_ALLOWED_HOSTS = new Set([
+  "api.anthropic.com",
+  "api.openai.com",
+  "api.groq.com",
+  "api.x.ai",
+  "openrouter.ai",
+  "api.mistral.ai",
+  "generativelanguage.googleapis.com",
+]);
+
+// Hop-by-hop headers must not be forwarded to the upstream
+export const HOP_BY_HOP = new Set([
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailers",
+  "transfer-encoding",
+  "upgrade",
+  "host",
+]);
+
 // ── Supabase clients ──────────────────────────────────────────────────────────
 
 // Strip any accidental path suffix (e.g. /rest/v1) — createClient needs the bare origin.

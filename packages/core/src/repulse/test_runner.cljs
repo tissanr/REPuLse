@@ -15,6 +15,7 @@
             [repulse.ai.safety-test]
             [repulse.ai.edit-test]
             [repulse.ai.client-test]
+            [repulse.ai.models-test]
             [repulse.ai.knowledge-test]
             [repulse.audio-clock-test]))
 
@@ -36,5 +37,6 @@
                   'repulse.ai.safety-test
                   'repulse.ai.edit-test
                   'repulse.ai.client-test
+                  'repulse.ai.models-test
                   'repulse.ai.knowledge-test
                   'repulse.audio-clock-test))

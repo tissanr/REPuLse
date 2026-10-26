@@ -1363,9 +1363,9 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 **Activity log:** Once tool calls have been made, a collapsible **🔍 tool log** section appears above the input box showing the last 50 calls (time, tool, and any error). An **Export log** button downloads the log as JSON. **Reset session** clears both the log and the session budget counters.
 
 **Settings** (accessible via the ⚙ button):
-- **Provider** — `anthropic`, `openai`, `google`, `groq`, `xai`
+- **Provider** — `anthropic`, `openai`, `google`, `groq`, `xai`, `openrouter`, `mistral`
 - **API key** — stored in `repulse:ai:key` in localStorage; never relayed through any REPuLse backend
-- **Model override** — override the default model (e.g. `claude-opus-4-7`, `grok-3-mini`); leave blank for the provider default
+- **Model override** — override the default model (e.g. `claude-opus-4-7`, `grok-3-mini`, or on OpenRouter `meta-llama/llama-3.3-70b-instruct:free`); free text, with suggestions from the provider's live model list. Leave blank for the provider default. The ↻ button next to the field refetches the list; models marked `(no tools)` cannot run the agent tools (read buffer, propose edit, …) and fall back to plain chat. A saved override missing from a fresh list shows a warning but is kept.
 - **Share editor code with AI** — when enabled, the current editor buffer is included in the system prompt; disabled by default
 - **Auto-apply edits** — apply `propose_edit` immediately and show the Revert button; default off
 - **Token limit** — session token budget (default 50 000); remaining count shown next to the input
@@ -1373,9 +1373,11 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 - **Freesound API key** — enables `freesound_search` and `freesound_load`; get a key at [freesound.org/apiv2/](https://freesound.org/apiv2/); stored in `repulse:ai:freesound-key`
 - **Web Search API key** (optional) — enables `web_search` via Brave Search; get a key at [brave.com/search/api/](https://brave.com/search/api/); stored in `repulse:ai:search-key`; omit to hide the tool from the model entirely
 
-**Default models:** `claude-sonnet-4-6` (Anthropic), `gpt-4o` (OpenAI), `gemini-2.0-flash` (Google), `llama-3.3-70b-versatile` (Groq), `grok-3` (xAI).
+**Default models:** with a blank override, the default is chosen from the provider's live model list (fetched when the panel opens, then cached for 24 h; OpenRouter's list needs no key, the others load once a key is set). If the list can't be loaded the built-in fallbacks are used: `claude-sonnet-5-5` (Anthropic), `gpt-4o` (OpenAI), `gemini-2.0-flash` (Google), `llama-3.3-70b-versatile` (Groq), `grok-4.7` (xAI), `openrouter/auto` (OpenRouter), `mistral-medium-latest` (Mistral).
 
 > **Groq vs xAI:** `groq` is [Groq cloud](https://groq.com) — fast inference for open-source models like Llama. `xai` is [xAI](https://x.ai) — Elon Musk's company, makers of the Grok model family. Get an xAI key at [console.x.ai](https://console.x.ai).
+>
+> **OpenRouter and Mistral:** `openrouter` gives one key for almost every model family, including rate-limited free-tier models (429s are retried with back-off); keys at [openrouter.ai/keys](https://openrouter.ai/keys). `mistral` is an EU-based provider with first-party models; keys at [console.mistral.ai](https://console.mistral.ai). Other families (DeepSeek, Kimi, Qwen, …) are reachable through OpenRouter model IDs.
 
 **Conversation history** persists across page reloads (last 40 turns). Use the **clear** button to reset the chat and history.
 

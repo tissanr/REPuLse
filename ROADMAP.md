@@ -1440,7 +1440,7 @@ See full spec: [PROMPTS/PHASE-AI2.md](PROMPTS/PHASE-AI2.md)
 
 ---
 
-## Phase AI2b — Live Model Catalogue, OpenRouter & Mistral 📋 *planned*
+## Phase AI2b — Live Model Catalogue, OpenRouter & Mistral ✅ *delivered*
 
 Fetch each provider's model list instead of hard-coding IDs that go stale, and add
 OpenRouter (one key for almost every model family, free-tier models) and Mistral
@@ -1458,6 +1458,15 @@ OpenRouter, or weaker than Mistral as the EU option).
   branches; OpenRouter attribution headers
 - Assistant panel — `openrouter` + `mistral` providers, model `<datalist>` suggestions,
   "(no tools)" labels, refreshed static fallback defaults
+
+**Delivered:**
+- `api/ai-models.ts` GET-only `/models` proxy (HTTPS, `/models` paths, size-capped); `AI_ALLOWED_HOSTS` and `HOP_BY_HOP` shared via `api/_lib.ts`; `openrouter.ai` and `api.mistral.ai` allowlisted
+- `client.cljs`: `openai-like` endpoint table, pure `models-request`, OpenRouter `HTTP-Referer`/`X-Title` headers, `fetch-models!`
+- `models.cljs`: per-provider normalisers, 24 h localStorage cache, `pick-default` (pattern order, tools-capable, newest); `effective-model` resolves from the live list
+- Panel: `openrouter` + `mistral`, model `<datalist>`, ↻ refresh, status hint, "(no tools)" labels, stale-override warning
+- Unit tests for URLs, headers, normalisers, `pick-default`, TTL
+
+**Verification status — ⚠️ not fully done.** Verified live: `/api/ai-models` handler (local), OpenRouter public catalogue, Anthropic + xAI model lists, xAI chat with tool call. **Still open** (needs keys / a deploy / credits): OpenRouter and Mistral chat, agent loop (`read_buffer` → `propose_edit`) on both, HTTP 429 back-off on OpenRouter, Mistral/OpenAI/Google/Groq catalogues, Anthropic chat (account out of credits), deployed `/api/ai-models` 403 checks, in-app panel flow (datalist, ↻, "(no tools)", stale-override warning). Static fallbacks for `openai`, `google` and `groq` are not yet checked against live lists.
 
 See full spec: [PROMPTS/PHASE-AI2b.md](PROMPTS/PHASE-AI2b.md)
 

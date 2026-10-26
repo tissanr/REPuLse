@@ -35,7 +35,9 @@
 (deftest openai-like-request-test
   (doseq [[provider url] [["openai" "https://api.openai.com/v1/chat/completions"]
                           ["groq"   "https://api.groq.com/openai/v1/chat/completions"]
-                          ["xai"    "https://api.x.ai/v1/chat/completions"]]]
+                          ["xai"    "https://api.x.ai/v1/chat/completions"]
+                          ["openrouter" "https://openrouter.ai/api/v1/chat/completions"]
+                          ["mistral" "https://api.mistral.ai/v1/chat/completions"]]]
     (testing provider
       (let [{u :url headers :headers body :body} (request provider tools)
             [sys usr asst tool] (:messages body)]
@@ -50,6 +52,24 @@
     (let [{:keys [body]} (request "openai" nil)]
       (is (not (contains? body :tools)))
       (is (not (contains? body :tool_choice))))))
+
+(deftest openrouter-attribution-test
+  (is (= {"HTTP-Referer" "https://repulse.app" "X-Title" "REPuLse"}
+         (select-keys (:headers (request "openrouter" nil)) ["HTTP-Referer" "X-Title"])))
+  (is (not (contains? (:headers (request "mistral" nil)) "X-Title"))))
+
+(deftest models-request-test
+  (doseq [[provider url] [["anthropic" "https://api.anthropic.com/v1/models?limit=1000"]
+                          ["openai"    "https://api.openai.com/v1/models"]
+                          ["google"    "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"]
+                          ["groq"      "https://api.groq.com/openai/v1/models"]
+                          ["xai"       "https://api.x.ai/v1/models"]
+                          ["openrouter" "https://openrouter.ai/api/v1/models"]
+                          ["mistral"   "https://api.mistral.ai/v1/models"]]]
+    (is (= url (:url (client/models-request {:provider provider :key "k"}))) provider))
+  (is (= "k" (get-in (client/models-request {:provider "anthropic" :key "k"}) [:headers "x-api-key"])))
+  (is (= "Bearer k" (get-in (client/models-request {:provider "mistral" :key "k"}) [:headers "Authorization"])))
+  (is (= {} (:headers (client/models-request {:provider "openrouter" :key ""}))) "openrouter list is public"))
 
 (deftest google-request-test
   (let [{:keys [url body]} (request "google" tools)

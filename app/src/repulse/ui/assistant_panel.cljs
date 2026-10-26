@@ -5,13 +5,15 @@
   (:require [repulse.ai.settings :as settings]
             [repulse.ai.agent-loop :as agent-loop]
             [repulse.ai.budget :as budget]
+            [repulse.ai.client :as client]
+            [repulse.ai.models :as models]
             [repulse.ai.undo :as undo]
             [repulse.ui.editor :as editor]
             [repulse.ui.html :refer [escape-html]]
             [clojure.string :as str]))
 
 ;;; Forward declarations
-(declare render-panel!)
+(declare render-panel! render-settings!)
 
 ;; ── History persistence ───────────────────────────────────────────────────────
 
@@ -219,6 +221,38 @@
 
 ;; ── Settings drawer ───────────────────────────────────────────────────────────
 
+(defn- model-label [{:keys [id label tools?]}]
+  (str (if (and label (not= label id)) (str label " — " id) id)
+       (when (false? tools?) " (no tools)")))
+
+(defn- model-hint-html
+  "Status line under the model field: catalogue size/age, loading or error."
+  []
+  (let [p     @settings/provider
+        c     (models/cached p)
+        st    (get @models/status p)
+        ovr   @settings/model-override
+        known (or (not (seq ovr)) (models/known? p ovr))]
+    (str (case st
+           :loading "Loading models&hellip;"
+           :error   (str "Couldn&#39;t load models &mdash; using built-in default"
+                         (when c " (showing cached list)"))
+           (cond c    (str (count (:models c)) " models &middot; updated "
+                           (models/age-label (:fetched-at c) (js/Date.now)))
+                 (or (= p "openrouter") (seq @settings/api-key)) ""
+                 :else "Enter an API key to load this provider&#39;s model list"))
+         " Leave blank for " (escape-html (settings/resolved-default)) "."
+         (when-not known
+           (str " <strong>Warning:</strong> not in " (escape-html p) "&#39;s current list.")))))
+
+(defn- refresh-catalogue!
+  "Fetch the model list (when stale or forced) and refresh the settings drawer
+   hint once it lands."
+  [force?]
+  (when-let [pr (client/refresh-models! {:force? force?})]
+    (.then pr (fn [_] (when (el "ai-model-hint") (render-settings!) (render-panel!))))))
+
+
 (defn- render-settings! []
   (when-let [panel (el "ai-panel")]
     (set! (.-innerHTML panel)
@@ -234,7 +268,7 @@
                         (str "<option value=\"" p "\""
                              (when (= p @settings/provider) " selected")
                              ">" p "</option>"))
-                      ["anthropic" "openai" "google" "groq" "xai"]))
+                      ["anthropic" "openai" "google" "groq" "xai" "openrouter" "mistral"]))
                "  </select>"
                "</div>"
                "<div class=\"ai-field\">"
@@ -246,10 +280,19 @@
                "</div>"
                "<div class=\"ai-field\">"
                "  <label for=\"ai-model-input\" class=\"ai-label\">Model override</label>"
-               "  <span class=\"ai-key-hint\">Leave blank for provider default</span>"
+               "  <span id=\"ai-model-hint\" class=\"ai-key-hint\">" (model-hint-html) "</span>"
+               "  <div class=\"ai-key-row\">"
                "  <input id=\"ai-model-input\" class=\"ai-input-text\" type=\"text\""
-               "   autocomplete=\"off\""
+               "   autocomplete=\"off\" list=\"ai-model-list\""
                "   value=\"" (escape-html @settings/model-override) "\">"
+               "  <button id=\"ai-models-refresh\" class=\"ai-btn ai-btn--secondary ai-btn--sm\" type=\"button\" title=\"Refresh model list\">&#8635;</button>"
+               "  </div>"
+               "  <datalist id=\"ai-model-list\">"
+               (str/join ""
+                 (map (fn [m] (str "<option value=\"" (escape-html (:id m)) "\">"
+                                   (escape-html (model-label m)) "</option>"))
+                      (:models (models/cached @settings/provider))))
+               "  </datalist>"
                "</div>"
                "<div class=\"ai-field\">"
                "  <label class=\"ai-checkbox-label\">"
@@ -384,7 +427,8 @@
   (reset! visible? true)
   (when-let [panel (el "ai-panel")]
     (.remove (.-classList panel) "hidden"))
-  (render-panel!))
+  (render-panel!)
+  (when @settings/enabled? (refresh-catalogue! false)))
 
 (defn hide-panel! []
   (reset! visible? false)
@@ -424,7 +468,13 @@
             (do (reset! settings/enabled? true) (render-panel!))
 
             (= id "ai-settings-btn")
-            (render-settings!)
+            (do (render-settings!) (refresh-catalogue! false))
+
+            (= id "ai-models-refresh")
+            (do (when-let [mi (el "ai-model-input")]
+                  (reset! settings/model-override (.-value mi)))
+                (refresh-catalogue! true)
+                (render-settings!))
 
             (= id "ai-clear-btn")
             (do (reset! messages []) (clear-history!) (agent-loop/reset-history!) (render-panel!))
@@ -460,7 +510,8 @@
                 (reset! settings/freesound-api-key (let [v (.-value fk)] (when (seq v) v))))
               (when-let [sk (el "ai-search-key-input")]
                 (reset! settings/search-api-key (let [v (.-value sk)] (when (seq v) v))))
-              (render-panel!))
+              (render-panel!)
+              (refresh-catalogue! false))
 
             (= id "ai-freesound-key-toggle")
             (when-let [inp (el "ai-freesound-key-input")]
