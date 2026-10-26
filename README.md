@@ -122,6 +122,10 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(slow 2 pat)` | Halve the speed |
 | `(rev pat)` | Reverse a pattern within each cycle |
 | `(every 4 (fast 2) pat)` | Apply transform every 4th cycle |
+| `(fast "<1 2 4>" pat)` | Patterned arguments: numeric args may be patterns or mini-notation strings |
+| `(add 7 pat)` | Pattern arithmetic: also `sub` `mul` `div`; note keywords move by semitones |
+| `(add :out (seq 0 12) pat)` | Pick the rhythm source: `:in` (default, from `pat`), `:out`, `:mix`, `:squeeze` |
+| `(set {:amp 0.5} pat)` | Merge control maps into every event (Tidal `#`) |
 | `(fmap f pat)` | Apply a function to every event value |
 | `(scale :minor :c4 pat)` | Map degree integers in pat to Hz using a named scale |
 | `(chord :major7 :c4)` | Stack chord tones as a pattern of Hz values |

@@ -278,3 +278,191 @@
     (let [pat (c/off 0.5 c/rev (c/seq* [:a :b]))
           evs (c/query pat (c/span [0 1] [2 1]))]
       (is (> (count evs) 2)))))
+
+;;; ── Phase TL1: onsets, rationals, app-*, joins, patterned args ───────
+
+(defn- cyc [n] (c/cycle-span n))
+
+(defn- ev-summary
+  "[value whole-start whole-end part-start part-end] for compact assertions."
+  [e]
+  [(:value e)
+   (:start (:whole e)) (:end (:whole e))
+   (:start (:part e)) (:end (:part e))])
+
+(defn- by-time
+  "Event values ordered by part start (rev returns events in query order)."
+  [evs]
+  (map :value (sort-by #(c/rat->float (:start (:part %))) evs)))
+
+(defn- onset-values [pat sp]
+  (map :value (c/query-onsets pat sp)))
+
+(deftest onset-predicate
+  (let [w (c/span [0 1] [2 1])]
+    (is (true? (c/onset? (c/event :bd w (c/span [0 1] [1 1])))))
+    (is (false? (c/onset? (c/event :bd w (c/span [1 1] [2 1])))))
+    (is (false? (c/onset? {:value :bd :part w})) "events without a whole are never onsets")))
+
+(deftest slow-whole-crossing-cycles-is-one-onset
+  (testing "plain query returns a fragment in every cycle (the pre-TL1 double trigger)"
+    (let [p (c/slow 4 (c/seq* [:bd :sd]))]
+      (is (= [1 1 1 1] (map #(count (c/query p (cyc %))) (range 4))))
+      (testing "but only the onsets trigger: :bd once per 4 cycles"
+        (is (= [[:bd] [] [:sd] []] (map #(vec (onset-values p (cyc %))) (range 4)))))))
+  (testing "(late 1/2 (pure :bd)) triggers once per cycle"
+    (let [p (c/late [1 2] (c/pure :bd))]
+      (is (= [2 2] (map #(count (c/query p (cyc %))) (range 2))))
+      (is (= [1 1] (map #(count (c/query-onsets p (cyc %))) (range 2))))
+      (is (= [1 2] (:start (:whole (first (c/query-onsets p (cyc 0))))))))))
+
+(deftest to-rat-coercion
+  (is (= [1 4] (c/->rat 0.25)))
+  (is (= [3 2] (c/->rat 1.5)))
+  (is (= [1 3] (c/->rat 0.3333333)))
+  (is (= [1 2] (c/->rat [2 4])))
+  (is (= [3 1] (c/->rat 3)))
+  (is (= [-1 8] (c/->rat -0.125)))
+  (is (thrown? js/Error (c/->rat :bd))))
+
+(deftest rat-overflow-guard
+  (testing "rationals beyond Number.MAX_SAFE_INTEGER throw in dev builds"
+    (let [big (* 2 9007199254740991)]
+      (is (= :rational-overflow
+             (try (c/rat big 3) nil
+                  (catch :default e (:type (ex-data e)))))))))
+
+(deftest fast-one-third-stays-exact
+  (testing "(fast 1/3 …) over cycles 0–3000: exact rationals, small denominators"
+    (let [p   (c/fast [1 3] (c/seq* [:a :b]))
+          evs (mapcat #(c/query p (cyc %)) (range 0 3001 7))]
+      (is (seq evs))
+      (is (every? (fn [e]
+                    (every? (fn [[n d]] (and (integer? n) (integer? d) (<= 1 d 6)))
+                            [(:start (:whole e)) (:end (:whole e))
+                             (:start (:part e)) (:end (:part e))]))
+                  evs))
+      (testing "first event of cycle 3000 is :a with whole [3000, 6003/2)"
+        (let [e (first (c/query p (cyc 3000)))]
+          (is (= :a (:value e)))
+          (is (= [[3000 1] [6003 2]] [(:start (:whole e)) (:end (:whole e))])))))))
+
+(deftest float-late-is-exact
+  (is (= [1 3] (:start (:whole (first (c/query-onsets (c/late 0.3333333 (c/pure :x)) (cyc 0))))))))
+
+;; Tidal reference: "10 20" |+ "1 2 3", "10 20" +| "1 2 3", "10 20" |+| "1 2 3"
+(def ^:private tens  (c/seq* [10 20]))
+(def ^:private ones  (c/seq* [1 2 3]))
+
+(deftest app-left-matches-tidal
+  (is (= [[11 [0 1] [1 2] [0 1] [1 3]]
+          [12 [0 1] [1 2] [1 3] [1 2]]
+          [22 [1 2] [1 1] [1 2] [2 3]]
+          [23 [1 2] [1 1] [2 3] [1 1]]]
+         (map ev-summary (c/query (c/app-left + tens ones) (cyc 0))))))
+
+(deftest app-right-matches-tidal
+  (is (= [[11 [0 1] [1 3] [0 1] [1 3]]
+          [12 [1 3] [2 3] [1 3] [1 2]]
+          [22 [1 3] [2 3] [1 2] [2 3]]
+          [23 [2 3] [1 1] [2 3] [1 1]]]
+         (map ev-summary (c/query (c/app-right + tens ones) (cyc 0))))))
+
+(deftest app-both-matches-tidal
+  (is (= [[11 [0 1] [1 3] [0 1] [1 3]]
+          [12 [1 3] [1 2] [1 3] [1 2]]
+          [22 [1 2] [2 3] [1 2] [2 3]]
+          [23 [2 3] [1 1] [2 3] [1 1]]]
+         (map ev-summary (c/query (c/app-both + tens ones) (cyc 0))))))
+
+(deftest app-keeps-structure-source
+  (let [a (c/pure 1 {:from 0 :to 1})
+        b (c/pure 2 {:from 5 :to 6})]
+    (is (= {:from 0 :to 1} (:source (first (c/query (c/app-left + a b) (cyc 0))))))
+    (is (= {:from 5 :to 6} (:source (first (c/query (c/app-right + a b) (cyc 0))))))
+    (is (= {:from 0 :to 1} (:source (first (c/query (c/app-both + a b) (cyc 0))))))))
+
+(deftest combine-is-app-right
+  (is (= (map ev-summary (c/query (c/app-right vector tens ones) (cyc 0)))
+         (map ev-summary (c/query (c/combine vector tens ones) (cyc 0))))))
+
+(deftest inner-join-hand-computed
+  ;; outer: two halves carrying (seq :a :b) and (pure :c); structure from inner.
+  ;; first half sees (seq :a :b)'s first half → :a [0,1/2);
+  ;; second half sees (pure :c) whole [0,1) cut to part [1/2,1).
+  (let [pp (c/seq* [(c/seq* [:a :b]) (c/pure :c)])]
+    (is (= [[:a [0 1] [1 2] [0 1] [1 2]]
+            [:c [0 1] [1 1] [1 2] [1 1]]]
+           (map ev-summary (c/query (c/inner-join pp) (cyc 0)))))))
+
+(deftest outer-join-hand-computed
+  ;; structure from outer halves; values sampled at each outer whole's start.
+  (let [pp (c/seq* [(c/seq* [:a :b]) (c/seq* [:x :y :z])])]
+    (is (= [[:a [0 1] [1 2] [0 1] [1 2]]
+            [:y [1 2] [1 1] [1 2] [1 1]]]
+           (map ev-summary (c/query (c/outer-join pp) (cyc 0)))))))
+
+(deftest squeeze-join-hand-computed
+  ;; each outer half squeezes a full cycle of its inner pattern.
+  (let [pp (c/seq* [(c/seq* [:a :b]) (c/pure :c)])]
+    (is (= [[:a [0 1] [1 4] [0 1] [1 4]]
+            [:b [1 4] [1 2] [1 4] [1 2]]
+            [:c [1 2] [1 1] [1 2] [1 1]]]
+           (map ev-summary (c/query (c/squeeze-join pp) (cyc 0)))))
+    (testing "cycle 1 plays inner cycle 1"
+      (is (= [[:a [1 1] [5 4] [1 1] [5 4]]
+              [:b [5 4] [3 2] [5 4] [3 2]]
+              [:c [3 2] [2 1] [3 2] [2 1]]]
+             (map ev-summary (c/query (c/squeeze-join pp) (cyc 1))))))))
+
+(deftest patternify-scalar-fast-path
+  (let [f (c/patternify (fn [n p] [n p]))]
+    (is (= [2 :p] (f 2 :p)) "scalars call f directly")))
+
+(deftest fast-with-pattern-factor
+  (is (= [[:bd [0 1] [1 2] [0 1] [1 2]]
+          [:bd [1 2] [3 4] [1 2] [3 4]]
+          [:sd [3 4] [1 1] [3 4] [1 1]]]
+         (map ev-summary (c/query (c/fast (c/seq* [1 2]) (c/seq* [:bd :sd])) (cyc 0))))))
+
+(deftest slow-early-every-patterned
+  (testing "slow with a per-cycle factor"
+    (let [p (c/slow (c/cat* [(c/pure 1) (c/pure 2)]) (c/seq* [:a :b]))]
+      (is (= 2 (count (c/query-onsets p (cyc 0)))))
+      (is (= 1 (count (c/query-onsets p (cyc 1)))))))
+  (testing "early with a patterned amount"
+    (let [p (c/early (c/cat* [(c/pure 0) (c/pure [1 4])]) (c/seq* [:a :b :c :d]))]
+      (is (= [:a :b :c :d] (map :value (c/query-onsets p (cyc 0)))))
+      (is (= [:b :c :d :a] (map :value (c/query-onsets p (cyc 1)))))))
+  (testing "every with a patterned n"
+    (let [p (c/every (c/cat* [(c/pure 1) (c/pure 3)]) c/rev (c/seq* [:a :b]))]
+      ;; cycle 0: n=1 → rev; cycle 1: n=3 → 1 mod 3 ≠ 0 → plain
+      (is (= [:b :a] (by-time (c/query p (cyc 0)))))
+      (is (= [:a :b] (by-time (c/query p (cyc 1))))))))
+
+(deftest euclidean-patterned-k
+  (let [p (c/euclidean (c/cat* [(c/pure 3) (c/pure 5)]) 8 :bd)
+        hits (fn [n] (count (remove #(= :_ (:value %)) (c/query-onsets p (cyc n)))))]
+    (is (= 3 (hits 0)))
+    (is (= 5 (hits 1)))
+    (is (= (map :value (c/query (c/euclidean 3 8 :bd) (cyc 0)))
+           (map :value (c/query p (cyc 0)))))))
+
+(deftest degrade-sometimes-off-patterned
+  (testing "degrade-by with a per-cycle probability"
+    (let [base (c/fast 8 (c/pure :hh))
+          p    (c/degrade-by (c/cat* [(c/pure 0) (c/pure 1)]) base)]
+      (is (= 8 (count (c/query p (cyc 0)))))
+      (is (= 0 (count (c/query p (cyc 1)))))))
+  (testing "sometimes-by with a per-cycle probability"
+    (let [p (c/sometimes-by (c/cat* [(c/pure 0) (c/pure 1)]) c/rev (c/seq* [:a :b]))]
+      (is (= [:a :b] (by-time (c/query p (cyc 0)))))
+      (is (= [:b :a] (by-time (c/query p (cyc 1)))))))
+  (testing "off with a patterned amount"
+    (let [p (c/off (c/cat* [(c/pure [1 4]) (c/pure [1 2])]) identity (c/pure :x))]
+      (is (= [[0 1] [1 4]] (map #(:start (:whole %)) (c/query-onsets p (cyc 0)))))
+      (is (= [[1 1] [3 2]] (map #(:start (:whole %)) (c/query-onsets p (cyc 1))))))))
+
+(deftest fast-zero-is-silence
+  (is (empty? (c/query (c/fast 0 (c/pure :bd)) (cyc 0))))
+  (is (empty? (c/query (c/slow 0 (c/pure :bd)) (cyc 0)))))

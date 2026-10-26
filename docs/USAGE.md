@@ -25,6 +25,8 @@ evaluate them with **Ctrl+Enter** (or the **▶ play** button), and hear them lo
    - [Top-level definitions — `def`](#top-level-definitions--def)
 4. [Pattern functions](#pattern-functions)
 5. [Pattern combinators](#pattern-combinators)
+   - [Patterned arguments](#patterned-arguments)
+   - [Pattern arithmetic — `add` `sub` `mul` `div` `set`](#pattern-arithmetic--add-sub-mul-div-set)
 6. [Music theory](#music-theory)
 7. [Per-event parameters](#per-event-parameters)
 8. [Sound and samples](#sound-and-samples)
@@ -566,6 +568,8 @@ One value repeated every cycle:
 ```lisp
 (fast 2 (seq :hh :hh))    ; double speed — 4 hats per bar
 (fast 0.5 (seq :bd :sd))  ; half speed — one hit every 2 bars
+(fast 1/3 (seq :bd :sd))  ; rationals stay exact — no float drift
+(fast "<1 2 4>" (seq :bd :sd))  ; patterned factor — see Patterned arguments
 ```
 
 ### `slow` — slow down
@@ -573,7 +577,11 @@ One value repeated every cycle:
 ```lisp
 (slow 2 (seq :bd :sd :bd :sd))    ; half speed
 (slow 3 (pure :bd))               ; one kick every 3 bars
+(slow (seq 1 2) (seq :bd :sd :hh :oh))  ; factor may be a pattern
 ```
+
+A sound whose event spans several cycles (as in `(slow 3 (pure :bd))`) triggers once,
+at its start — not again at every cycle boundary.
 
 ### `rev` — reverse
 
@@ -590,6 +598,7 @@ Apply a transformation every nth cycle, leave pattern unchanged otherwise:
 ```lisp
 (every 4 (fast 2) (seq :bd :sd))   ; double speed on every 4th bar
 (every 2 rev (seq :bd :hh :sd :hh)) ; reverse every other bar
+(every "<2 4>" rev (seq :bd :sd))   ; n may be a pattern
 ```
 
 ### `fmap` — transform values
@@ -619,6 +628,9 @@ Distribute `k` onsets across `n` steps as evenly as possible (Björklund algorit
 
 ; Optional rotation — shift the pattern left by r steps:
 (euclidean 5 8 :bd 2)    ; same rhythm, rotated 2 steps
+
+; k, n and rotation may be patterns:
+(euclidean "<3 5>" 8 :bd)  ; 3 hits on even cycles, 5 on odd
 ```
 
 ### `cat` — sequential concatenation
@@ -637,7 +649,11 @@ Shift all events forward (`late`) or backward (`early`) within the cycle:
 ```lisp
 (late  0.25  (seq :bd :sd :bd :sd))   ; delay by ¼ cycle
 (early 0.125 hihat)                    ; advance by ⅛ cycle
+(late "<0 1/8>" (seq :hh :hh :hh :hh)) ; nudge every other cycle
 ```
+
+Amounts may be integers, rationals (`1/3` is exact) or floats; floats become the
+nearest rational with a denominator up to 1 000 000, so `0.3333333` is exactly `1/3`.
 
 ### `sometimes` / `often` / `rarely` — probabilistic transforms
 
@@ -654,6 +670,7 @@ Use `sometimes-by` for custom probability:
 
 ```lisp
 (sometimes-by 0.2 (fast 4) fill)   ; double-time 20% of cycles
+(sometimes-by "<0.1 0.9>" rev fill) ; probability may be a pattern
 ```
 
 ### `degrade` / `degrade-by` — probabilistic event removal
@@ -663,6 +680,7 @@ Randomly drop events from a pattern each cycle:
 ```lisp
 (degrade (seq :hh :hh :hh :hh))           ; drop ~50% of hi-hats
 (degrade-by 0.3 (fast 4 (seq :hh :oh)))   ; drop 30% of events
+(degrade-by "<0 0.5>" (fast 8 (pure :hh))) ; patterned probability
 ```
 
 ### `choose` / `wchoose` — random selection per cycle
@@ -682,6 +700,7 @@ Stack the original pattern (panned left) with a transformed copy (panned right):
 (jux rev (seq :c4 :e4 :g4))    ; original left, reversed right
 (jux (fast 2) (seq :hh :oh))   ; normal left, double-speed right
 (jux-by 0.5 rev melody)        ; half stereo width
+(jux-by "<0.3 1>" rev melody)  ; width may be a pattern
 ```
 
 ### `off` — time-offset layering
@@ -691,6 +710,7 @@ Layer the original with a time-shifted, transformed copy:
 ```lisp
 (off 0.125 (fast 2) (seq :c4 :e4 :g4))   ; original + shifted double-speed copy
 (off 0.25  rev      (seq :bd :sd :hh))    ; original + ¼-cycle offset reversed copy
+(off "<1/8 1/4>" (fast 2) (seq :bd :sd))  ; amount may be a pattern
 ```
 
 Combines freely with all other combinators:
@@ -701,6 +721,88 @@ Combines freely with all other combinators:
      (jux (fast 2))
      (amp 0.8))
 ```
+
+---
+
+## Patterned arguments
+
+Every numeric argument of a pattern transformer may itself be a pattern — REPuLse is
+"patterns all the way down", like Tidal. Where a number is expected you can pass:
+
+- a number or rational: `(fast 2 pat)`, `(late 1/8 pat)`
+- a pattern: `(fast (seq 1 2) pat)`
+- a mini-notation string, parsed as if wrapped in `~`: `(fast "<1 2 4>" pat)`
+
+```lisp
+(fast (seq 1 2) (seq :bd :sd))          ; 1× in the first half, 2× in the second
+(fast "<1 2 4>" (seq :bd :sd))          ; one factor per cycle
+(late "<0 1/8>" (seq :hh :hh :hh :hh))  ; nudge every other cycle
+(euclidean "<3 5>" 8 :bd)               ; alternate 3 and 5 hits per 8 steps
+```
+
+Functions with patternable arguments: `fast`, `slow`, `late`, `early`, `every` (n),
+`euclidean` (k, n, rotation), `sometimes-by` (probability), `degrade-by`
+(probability), `off` (amount), `jux-by` (width). The curried forms still work:
+`(fast "<1 2>")` returns a transformer for `->>`.
+
+The argument pattern decides *which value is in force when*; the rhythm still comes
+from the pattern being transformed (Tidal's `innerJoin`). With `(fast (seq 1 2) …)`
+the first half of each cycle plays at normal speed and the second half at double speed.
+Rational atoms such as `1/8` are exact inside mini-notation strings.
+
+---
+
+## Pattern arithmetic — `add` `sub` `mul` `div` `set`
+
+Combine a pattern's values with a number, a pattern or a mini-notation string:
+
+| Built-in | Meaning |
+|---|---|
+| `(add [mode] amt pat)` | value + amt |
+| `(sub [mode] amt pat)` | value − amt |
+| `(mul [mode] amt pat)` | value × amt |
+| `(div [mode] amt pat)` | value ÷ amt (÷ 0 leaves the value unchanged) |
+| `(set [mode] ctrl pat)` | merge control maps into each event; `ctrl` wins (Tidal `#`) |
+
+```lisp
+(add 12 (seq :c3 :e3 :g3))                ; note keywords move by semitones → :c4 :e4 :g4
+(->> (seq 1 3 5 8)
+     (add "<0 2 4>")                       ; shift scale degrees per cycle
+     (scale :minor :c3))
+(mul 2 (seq 220 330))                      ; Hz numbers
+(set {:amp 0.5 :pan -0.5} (seq :c4 :e4))  ; like (->> … (amp 0.5) (pan -0.5))
+(set (seq {:amp 1.0} {:amp 0.4}) (seq :bd :hh :sd :hh))
+```
+
+Values: numbers are combined directly; note keywords (`:c4`) go through MIDI note
+numbers and back; parameter maps apply the operation to `:note`; anything else —
+rests `:_`, drum names — passes through unchanged.
+
+### Choosing where the rhythm comes from
+
+The optional leading mode keyword picks which side supplies the event structure (the
+Tidal `|+` / `+|` / `|+|` family, Strudel `.add.in` / `.out` / `.mix` / `.squeeze`):
+
+| Mode | Rhythm from | Tidal |
+|---|---|---|
+| `:in` (default) | the pattern (last argument) | `\|+` |
+| `:out` | the amount | `+\|` |
+| `:mix` | both — event boundaries of either side | `\|+\|` |
+| `:squeeze` | the pattern; a whole cycle of the amount is squeezed into each event | `\|\|+` |
+
+```lisp
+(add :in  (seq 10 20) (seq 1 2 3))   ; rhythm of (seq 1 2 3)   → 11 12 23
+(add :out (seq 10 20) (seq 1 2 3))   ; rhythm of (seq 10 20)   → 11 22
+(add :mix (seq 10 20) (seq 1 2 3))   ; both rhythms intersect  → 11 12 22 23
+(add :squeeze (seq 0 7) (seq :c3 :g3)) ; each note becomes a two-note figure
+```
+
+Every form has a curried version for `->>`: `(add 7)` and `(add :out "<0 12>")` return
+transformers.
+
+Only the *start* of an event triggers a sound. When a value changes in the middle of an
+event (the `12 → 22` change of the second step under `:in` above), the later fragment
+updates nothing audible — exactly like Tidal.
 
 ---
 
@@ -1008,7 +1110,9 @@ Loop the sample buffer continuously:
 ### Patterned parameters
 
 Parameters can be patterns themselves — they are combined with the note pattern
-cycle-aligned, so different densities create polyrhythmic parameter changes:
+cycle-aligned, so different densities create polyrhythmic parameter changes. The note
+pattern supplies the rhythm: each note takes the parameter value in force at its start
+(Tidal `#`, the same as `(set :in …)`):
 
 ```lisp
 ; 2-step amp pattern over a 3-step melody — creates shifting accents
@@ -1238,7 +1342,11 @@ Lisp is the host language and `~` is just another function returning a Pattern.
 (~ "bd@3 sd")        ; elongation — bd takes ¾ of the cycle
 (~ "c4 e4 g4")       ; note names → keywords (:c4 :e4 :g4)
 (~ "440 330 220")    ; numbers pass through as Hz values
+(~ "0 1/8 1/4")      ; rationals stay exact — [1 8], [1 4]
 ```
+
+Mini-notation strings are also accepted directly wherever an argument is patternable:
+`(fast "<1 2>" pat)` ≡ `(fast (~ "<1 2>") pat)` (see [Patterned arguments](#patterned-arguments)).
 
 ### Mini-notation inside Lisp
 

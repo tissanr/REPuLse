@@ -21,7 +21,8 @@
  :euclidean  {:category "source"
               :returns "Pattern"
               :side-effects []
-              :examples ["(euclidean 5 8 :bd)" "(euclidean 3 8 :sd 2)"]
+              :examples ["(euclidean 5 8 :bd)" "(euclidean 3 8 :sd 2)"
+                         "(euclidean \"<3 5>\" 8 :bd)"]
               :see-also ["seq" "degrade"]}
 
  :cat        {:category "source"
@@ -77,13 +78,15 @@
  :fast       {:category "transform"
               :returns "Pattern"
               :side-effects []
-              :examples ["(fast 2 (seq :bd :sd))" "(fast 3 (seq :hh :oh :hh))"]
+              :examples ["(fast 2 (seq :bd :sd))" "(fast 3 (seq :hh :oh :hh))"
+                         "(fast \"<1 2 4>\" (seq :bd :sd))"]
               :see-also ["slow" "every" "rev"]}
 
  :slow       {:category "transform"
               :returns "Pattern"
               :side-effects []
-              :examples ["(slow 2 (seq :bd :sd :hh :oh))" "(slow 4 (seq :c4 :e4 :g4))"]
+              :examples ["(slow 2 (seq :bd :sd :hh :oh))" "(slow 4 (seq :c4 :e4 :g4))"
+                         "(slow (seq 1 2) (seq :bd :sd :hh :oh))"]
               :see-also ["fast" "every"]}
 
  :rev        {:category "transform"
@@ -96,7 +99,8 @@
               :returns "Pattern"
               :side-effects []
               :examples ["(every 4 (fast 2) (seq :bd :sd))"
-                         "(every 3 rev (seq :bd :sd :hh :oh))"]
+                         "(every 3 rev (seq :bd :sd :hh :oh))"
+                         "(every \"<2 4>\" rev (seq :bd :sd :hh :oh))"]
               :see-also ["sometimes" "fast" "slow"]}
 
  :fmap       {:category "transform"
@@ -110,14 +114,16 @@
               :returns "Pattern"
               :side-effects []
               :examples ["(late 0.25 (seq :hh :hh :hh :hh))"
-                         "(late 0.5 (euclidean 3 8 :sd))"]
+                         "(late 0.5 (euclidean 3 8 :sd))"
+                         "(late \"<0 1/8>\" (seq :hh :hh :hh :hh))"]
               :see-also ["early" "off"]}
 
  :early      {:category "transform"
               :returns "Pattern"
               :side-effects []
               :examples ["(early 0.125 (seq :sd :_ :sd :_))"
-                         "(early 0.25 (seq :hh :oh))"]
+                         "(early 0.25 (seq :hh :oh))"
+                         "(early (seq 0 1/8) (seq :hh :oh :hh :oh))"]
               :see-also ["late" "off"]}
 
  :sometimes  {:category "transform"
@@ -145,7 +151,8 @@
                 :returns "Pattern"
                 :side-effects []
                 :examples ["(sometimes-by 0.3 rev (seq :bd :sd :hh :oh))"
-                           "(sometimes-by 0.8 (fast 2) (seq :hh))"]
+                           "(sometimes-by 0.8 (fast 2) (seq :hh))"
+                           "(sometimes-by \"<0.2 0.8>\" rev (seq :bd :sd :hh :oh))"]
                 :see-also ["sometimes" "often" "rarely"]}
 
  :degrade    {:category "transform"
@@ -159,7 +166,8 @@
               :returns "Pattern"
               :side-effects []
               :examples ["(degrade-by 0.3 (seq :hh :hh :hh :hh))"
-                         "(degrade-by 0.7 (fast 2 (seq :bd :sd)))"]
+                         "(degrade-by 0.7 (fast 2 (seq :bd :sd)))"
+                         "(degrade-by \"<0 0.5>\" (fast 8 (pure :hh)))"]
               :see-also ["degrade" "sometimes-by"]}
 
  :jux        {:category "transform"
@@ -173,15 +181,54 @@
               :returns "Pattern"
               :side-effects []
               :examples ["(jux-by 0.5 rev (seq :bd :sd))"
-                         "(jux-by 0.8 (fast 2) (seq :hh :oh))"]
+                         "(jux-by 0.8 (fast 2) (seq :hh :oh))"
+                         "(jux-by \"<0.3 1>\" rev (seq :bd :sd))"]
               :see-also ["jux" "pan"]}
 
  :off        {:category "transform"
               :returns "Pattern"
               :side-effects []
               :examples ["(off 0.25 (fast 2) (seq :bd :sd))"
-                         "(off 0.125 rev (seq :hh :oh))"]
+                         "(off 0.125 rev (seq :hh :oh))"
+                         "(off \"<1/8 1/4>\" (fast 2) (seq :bd :sd))"]
               :see-also ["late" "jux"]}
+
+ ;; ── Pattern arithmetic (TL1) ─────────────────────────────────────────────
+ :add        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(add 12 (seq :c3 :e3 :g3))"
+                         "(->> (seq 1 3 5 8) (add \"<0 2 4>\") (scale :minor :c3))"
+                         "(add :out (seq 10 20) (seq 1 2 3))"]
+              :see-also ["sub" "mul" "div" "set" "transpose"]}
+
+ :sub        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(sub 12 (seq :c4 :e4 :g4))"
+                         "(->> (seq 8 7 5) (sub \"<0 1>\") (scale :major :c4))"]
+              :see-also ["add" "mul" "div"]}
+
+ :mul        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(mul 2 (seq 220 330))"
+                         "(mul :mix (seq 1 2) (seq 110 220 330))"]
+              :see-also ["add" "div"]}
+
+ :div        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(div 2 (seq 440 660))"
+                         "(div \"<1 2>\" (seq 440 880))"]
+              :see-also ["mul" "sub"]}
+
+ :set        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(set {:amp 0.5 :pan -0.5} (seq :c4 :e4))"
+                         "(set (seq {:amp 1.0} {:amp 0.4}) (seq :bd :hh :sd :hh))"]
+              :see-also ["amp" "pan" "add"]}
 
  :comp       {:category "transform"
               :returns "fn"

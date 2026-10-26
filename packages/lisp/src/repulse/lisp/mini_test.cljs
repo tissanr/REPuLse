@@ -149,3 +149,8 @@
   ;; "[bd sd]*2" — the group is repeated twice
   (let [evs (core/query (mini/parse "[bd sd]*2") one-cycle)]
     (is (= 4 (count evs)))))
+
+(deftest rational-atoms-are-exact
+  ;; TL1: "1/8" used to parse as the float 1 (parseFloat stops at "/")
+  (is (= [[1 8] [1 4]] (values (mini/parse "1/8 2/8"))))
+  (is (= [[-1 2]] (values (mini/parse "-1/2")))))

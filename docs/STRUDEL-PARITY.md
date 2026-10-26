@@ -40,7 +40,7 @@ Method-chaining (`s("bd").fast(2)`) maps to Lisp application or threading:
 
 | Family | Phase | ✅ | 🟡 | 📋 | 🔁 | ⛔ | ❓ | Total |
 |---|---|---|---|---|---|---|---|---|
-| Core & pattern arithmetic | TL1 | 5 | 5 | 25 | 7 | 4 | 8 | 54 |
+| Core & pattern arithmetic | TL1 | 15 | 2 | 18 | 7 | 4 | 8 | 54 |
 | Continuous signals | TL2 | 0 | 0 | 31 | 3 | 0 | 2 | 36 |
 | Time & structure | TL3 | 1 | 2 | 41 | 9 | 2 | 6 | 61 |
 | Randomness & conditionals | TL4 | 3 | 6 | 23 | 8 | 1 | 3 | 44 |
@@ -50,7 +50,7 @@ Method-chaining (`s("bd").fast(2)`) maps to Lisp application or threading:
 | Mini-notation | TL1/TL3/TL4 | 8 | 0 | 9 | 0 | 0 | 0 | 17 |
 | Tidal-only functions | TL3–TL5 | 0 | 0 | 8 | 3 | 0 | 2 | 13 |
 | Visuals, I/O & JS-specific | — | 4 | 2 | 1 | 1 | 13 | 3 | 24 |
-| **Total** | | **32** | **33** | **181** | **42** | **28** | **37** | **353** |
+| **Total** | | **42** | **30** | **174** | **42** | **28** | **37** | **353** |
 
 Rows grouped in one line (e.g. `sine2 / cosine2 / …`) count once.
 
@@ -78,16 +78,16 @@ arithmetic on pattern values.
 | `seqPLoop` | — | ❓ | — | |
 | `fmap` / `withValue` | `fmap` | ✅ | — | |
 | `withValue` | `fmap` | 🔁 | — | |
-| `fast` | `fast` | 🟡 | TL1 | Scalar factor only; patterned factor `(fast (seq 1 2) p)` planned |
-| `slow` / `sparsity` | `slow` | 🟡 | TL1 | Scalar factor only |
+| `fast` | `fast` | ✅ | TL1 | Factor may be a number, rational, pattern or mini-notation string: `(fast "<1 2>" p)` |
+| `slow` / `sparsity` | `slow` | ✅ | TL1 | Patterned factor, exact rationals |
 | `sparsity` | `slow` | 🔁 | — | |
-| `set` (`#` in Tidal) | `set` | 📋 | TL1 | Merge control maps, structure from left |
+| `set` (`#` in Tidal) | `set` | ✅ | TL1 | `(set [mode] ctrl pat)` — merge control maps, ctrl wins, structure from `pat` |
 | `keep` | `keep` | 📋 | TL1 | |
 | `keepif` | `keep-if` | 📋 | TL1 | |
-| `add` | `add` | 📋 | TL1 | Numbers, Hz and note keywords |
-| `sub` | `sub` | 📋 | TL1 | |
-| `mul` | `mul` | 📋 | TL1 | |
-| `div` | `div` | 📋 | TL1 | |
+| `add` | `add` | ✅ | TL1 | Numbers, Hz and note keywords (via MIDI numbers); maps apply to `:note` |
+| `sub` | `sub` | ✅ | TL1 | |
+| `mul` | `mul` | ✅ | TL1 | |
+| `div` | `div` | ✅ | TL1 | Division by zero leaves the value unchanged |
 | `mod` | `mod` (pattern-aware) | 📋 | TL1 | Lisp `mod` exists for numbers only |
 | `pow` | `pow` | 📋 | TL1 | |
 | `band` / `bor` / `bxor` / `blshift` / `brshift` | — | ❓ | — | Bitwise ops on patterns; low musical value |
@@ -101,8 +101,8 @@ arithmetic on pattern values.
 | `log2` | `log2` | 📋 | TL1 | |
 | `ratio` | — | ❓ | — | Parses `"3:2"` strings to numbers |
 | `func` | — | ⛔ | — | JS function wrapper; Lisp functions are already values |
-| Structure modes `.in` / `.out` / `.mix` / `.squeeze` / `.reset` / `.restart` | `add-in`, `add-out`, `add-mix`, … or a `:structure` option | 📋 | TL1 | Tidal `\|+`, `+\|`, `\|+\|`. API shape decided in the TL1 spec |
-| `bind` / `innerBind` / `outerBind` / `squeezeBind` | `inner-join`, `outer-join`, `squeeze-join` | 📋 | TL1 | Monadic joins — needed internally for patterned arguments |
+| Structure modes `.in` / `.out` / `.mix` / `.squeeze` / `.reset` / `.restart` | leading mode keyword: `(add :out amt pat)` | 🟡 | TL1 | `:in` `:out` `:mix` `:squeeze` done (Tidal `\|+`, `+\|`, `\|+\|`, `\|\|+`); `.reset` / `.restart` not yet |
+| `bind` / `innerBind` / `outerBind` / `squeezeBind` | `inner-join`, `outer-join`, `squeeze-join` | ✅ | TL1 | Core functions (`repulse.core`) used for patterned arguments; not exposed as Lisp built-ins |
 | `stepBind` / `polyBind` | — | ❓ | — | Stepwise joins |
 | `squeeze` | `squeeze` | 📋 | TL1 | |
 | `reset` / `restart` | `reset`, `restart` | 📋 | TL1 | Retrigger a pattern on events of another |
@@ -110,8 +110,8 @@ arithmetic on pattern values.
 | `register` | `defn` | ⛔ | — | Lisp `defn`/`defmacro` already define new pattern functions |
 | `reify` / `isPattern` | — | ⛔ | — | Internal coercion; REPuLse coerces in the evaluator |
 | `steps` / `pace` | `pace` | 📋 | TL1 | Strudel step-count metadata for stepwise functions |
-| `early` | `early` | 🟡 | TL1 | Float amounts are rounded to 1/1000 cycle (`late`/`early` in `core.cljs`); 1/3 becomes inexact. Accept rationals exactly, patterned amount planned |
-| `late` | `late` | 🟡 | TL1 | Same rounding issue |
+| `early` | `early` | ✅ | TL1 | Exact rationals; floats → nearest rational (denominator ≤ 10⁶); patterned amount |
+| `late` | `late` | ✅ | TL1 | Same as `early` |
 | `hush` | `stop` | 🔁 | — | |
 | `layer` | `layer` | 📋 | TL1 | Apply several functions and stack results |
 | `compressSpan`, `focusSpan`, `zoomArc` | see TL3 | 🔁 | — | |

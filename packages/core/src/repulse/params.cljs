@@ -27,9 +27,10 @@
         note-pat' (if (pat? note-pat)
                     note-pat
                     (core/pure note-pat))]
-    (core/combine (fn [pv nv] (assoc (to-map nv) kw pv))
-                  param-pat
-                  note-pat')))
+    ;; Structure from the note pattern (Tidal `#`, Strudel `.set`).
+    (core/app-right (fn [pv nv] (assoc (to-map nv) kw pv))
+                    param-pat
+                    note-pat')))
 
 ;;; ── Parameter transformers ───────────────────────────────────────────
 
@@ -112,9 +113,12 @@
 (defn jux-by
   "Like jux but with adjustable stereo width.
    width 0.0 = both copies centre (mono), 1.0 = full left/right.
+   width may also be a pattern of widths.
    (jux-by 0.5 rev pat) — half stereo width"
   [width f pat]
-  (core/stack* [(pan (- width) pat) (pan width (f pat))]))
+  ((core/patternify
+    (fn [w p] (core/stack* [(pan (- w) p) (pan w (f p))])))
+   width pat))
 
 (defn midi-out
   "Tag events for MIDI note output on the given channel (1–16).

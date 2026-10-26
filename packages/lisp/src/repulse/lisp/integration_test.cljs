@@ -220,3 +220,178 @@
   (testing "arrange creates a playable pattern from a plan"
     (let [evs (eval-pattern "(arrange [[(seq :bd :sd) 2] [(pure :hh) 1]])")]
       (is (pos? (count evs))))))
+
+;;; ── Phase TL1: patterned arguments & pattern arithmetic ─────────────
+
+(defn- eval-pat [code]
+  (let [r (lisp/eval-string code (make-test-env))]
+    (is (not (lisp/eval-error? r)) (str "eval error: " (:message r)))
+    (:result r)))
+
+(defn- cycle-evs [pat n] (core/query pat (core/cycle-span n)))
+
+(defn- onsets [pat n] (core/query-onsets pat (core/cycle-span n)))
+
+(defn- starts [evs] (mapv #(:start (:whole %)) evs))
+
+(deftest tl1-fast-rational-literal-stays-exact
+  (testing "(fast 1/3 (seq :a :b)) over cycles 0–3000: no float drift, no overflow"
+    (let [pat (eval-pat "(fast 1/3 (seq :a :b))")
+          evs (mapcat #(cycle-evs pat %) (range 0 3001))]
+      ;; one (seq :a :b) cycle now lasts 3 cycles: :a starts at 0, 3, 6, … < 3001
+      (is (= 1001 (count (filter #(and (core/onset? %) (= :a (:value %))) evs))))
+      (is (= [3000 1] (:start (:whole (first (onsets pat 3000))))))
+      (is (every? (fn [e] (every? (fn [[_ d]] (<= 1 d 2))
+                                  [(:start (:whole e)) (:end (:whole e))
+                                   (:start (:part e)) (:end (:part e))]))
+                  evs)))))
+
+(deftest tl1-fast-patterned-factor
+  (testing "(fast (seq 1 2) (seq :bd :sd)): :bd at 0, then :bd at 1/2 and :sd at 3/4"
+    (let [evs (cycle-evs (eval-pat "(fast (seq 1 2) (seq :bd :sd))") 0)]
+      (is (= [:bd :bd :sd] (event-values evs)))
+      (is (= [[0 1] [1 2] [3 4]] (starts evs))))))
+
+(deftest tl1-fast-mini-notation-factor
+  (testing "(fast \"<1 2 4>\" (seq :bd :sd)) yields 2, 4, 8 events in cycles 0, 1, 2"
+    (let [pat (eval-pat "(fast \"<1 2 4>\" (seq :bd :sd))")]
+      (is (= [2 4 8] (mapv #(count (onsets pat %)) [0 1 2]))))))
+
+(deftest tl1-fast-mini-string-keeps-source
+  (testing "events from a mini-notation factor still carry the inner pattern's source"
+    (let [evs (cycle-evs (eval-pat "(fast \"<1 2>\" (seq :bd :sd))") 0)]
+      (is (every? :source evs)))))
+
+(deftest tl1-late-rational-mini
+  (testing "(late \"<0 1/8>\" …) nudges every other cycle by exactly 1/8"
+    (let [pat (eval-pat "(late \"<0 1/8>\" (seq :hh :hh :hh :hh))")]
+      (is (= [[0 1] [1 4] [1 2] [3 4]] (starts (onsets pat 0))))
+      (is (= [[9 8] [11 8] [13 8] [15 8]] (starts (onsets pat 1)))))))
+
+(deftest tl1-euclidean-patterned
+  (testing "(euclidean \"<3 5>\" 8 :bd) has 3 onsets in cycle 0 and 5 in cycle 1"
+    (let [pat  (eval-pat "(euclidean \"<3 5>\" 8 :bd)")
+          hits (fn [n] (count (filter #(= :bd (:value %)) (onsets pat n))))]
+      (is (= 3 (hits 0)))
+      (is (= 5 (hits 1))))))
+
+(deftest tl1-other-patterned-args
+  (testing "slow, early, every, degrade-by, sometimes-by, off, jux-by accept patterns/strings"
+    (doseq [code ["(slow \"<1 2>\" (seq :a :b))"
+                  "(early \"<0 1/4>\" (seq :a :b))"
+                  "(every \"<2 3>\" rev (seq :a :b))"
+                  "(degrade-by \"<0 0.5>\" (seq :a :b))"
+                  "(sometimes-by (seq 0 1) rev (seq :a :b))"
+                  "(off \"<1/8 1/4>\" (fast 2) (seq :a :b))"
+                  "(jux-by \"<0.5 1>\" rev (seq :a :b))"
+                  "(->> (seq :a :b) (fast \"<1 2>\") (late \"<0 1/8>\") (degrade-by \"0\"))"]]
+      (is (core/pattern? (eval-pat code)) code)))
+  (testing "curried forms return transformers"
+    (let [evs (cycle-evs (eval-pat "((fast \"<2 4>\") (seq :a :b))") 0)]
+      (is (= 4 (count evs))))))
+
+(deftest tl1-scalar-calls-unchanged
+  (testing "integer and float scalar args give the same events as before TL1"
+    (is (= (mapv (juxt :value :whole :part) (cycle-evs (eval-pat "(fast 2 (seq :a :b))") 0))
+           [[:a {:start [0 1] :end [1 4]} {:start [0 1] :end [1 4]}]
+            [:b {:start [1 4] :end [1 2]} {:start [1 4] :end [1 2]}]
+            [:a {:start [1 2] :end [3 4]} {:start [1 2] :end [3 4]}]
+            [:b {:start [3 4] :end [1 1]} {:start [3 4] :end [1 1]}]]))
+    (is (= [[1 4]] (starts (onsets (eval-pat "(late 0.25 (pure :a))") 0))))))
+
+;;; Arithmetic — Tidal "1 2 3" |+ "10 20" and friends
+
+(defn- vals-and-onsets [evs]
+  (mapv (fn [e] [(:value e) (core/onset? e)]) evs))
+
+(deftest tl1-add-in
+  (let [evs (cycle-evs (eval-pat "(add :in (seq 10 20) (seq 1 2 3))") 0)]
+    (testing "onsets 11 12 23 with the wholes of (seq 1 2 3), plus fragment 22"
+      (is (= [[11 true] [12 true] [22 false] [23 true]] (vals-and-onsets evs)))
+      (is (= [[0 1] [1 3] [1 3] [2 3]] (starts evs))))
+    (testing ":in is the default"
+      (is (= (map :value evs)
+             (map :value (cycle-evs (eval-pat "(add (seq 10 20) (seq 1 2 3))") 0)))))))
+
+(deftest tl1-add-out
+  (let [evs (cycle-evs (eval-pat "(add :out (seq 10 20) (seq 1 2 3))") 0)]
+    (is (= [11 22] (map :value (filter core/onset? evs))))
+    (is (= [[0 1] [1 2]] (starts (filter core/onset? evs))))))
+
+(deftest tl1-add-mix
+  (let [evs (cycle-evs (eval-pat "(add :mix (seq 10 20) (seq 1 2 3))") 0)]
+    (is (= [11 12 22 23] (map :value (filter core/onset? evs))))
+    (is (every? core/onset? evs))))
+
+(deftest tl1-add-squeeze
+  (let [evs (cycle-evs (eval-pat "(add :squeeze (seq 0 10) (seq 1 2))") 0)]
+    (is (= [1 11 2 12] (map :value evs)))
+    (is (= [[0 1] [1 4] [1 2] [3 4]] (starts evs)))))
+
+(deftest tl1-sub-mul-div
+  (is (= [9 19] (map :value (cycle-evs (eval-pat "(sub 1 (seq 10 20))") 0))))
+  (is (= [20 40] (map :value (cycle-evs (eval-pat "(mul 2 (seq 10 20))") 0))))
+  (is (= [5 10] (map :value (cycle-evs (eval-pat "(div 2 (seq 10 20))") 0))))
+  (is (= [1 1.5] (map :value (cycle-evs (eval-pat "(add 1/2 (seq 0.5 1))") 0)))))
+
+(deftest tl1-add-notes-and-rests
+  (testing "(add 12 (seq :c3 :e3)) moves notes up an octave"
+    (is (= [:c4 :e4] (map :value (cycle-evs (eval-pat "(add 12 (seq :c3 :e3))") 0)))))
+  (testing "rests and drum names pass through"
+    (is (= [:_ 3] (map :value (cycle-evs (eval-pat "(add 1 (seq :_ 2))") 0))))
+    (is (= [:bd] (map :value (cycle-evs (eval-pat "(add 1 (pure :bd))") 0)))))
+  (testing "maps apply the op to :note"
+    (is (= [{:note :d4 :amp 0.5}]
+           (map :value (cycle-evs (eval-pat "(add 2 (amp 0.5 (pure :c4)))") 0))))))
+
+(deftest tl1-set-merges-controls
+  (is (= [{:note :c4 :amp 0.5} {:note :e4 :amp 0.25}]
+         (map :value (cycle-evs (eval-pat "(set (seq {:amp 0.5} {:amp 0.25}) (seq :c4 :e4))") 0))))
+  (is (= [{:note :c4 :amp 0.9}]
+         (map :value (cycle-evs (eval-pat "(set {:amp 0.9} (amp 0.1 (pure :c4)))") 0))))
+  (is (= [:_] (map :value (cycle-evs (eval-pat "(set {:amp 0.9} (pure :_))") 0)))))
+
+(deftest tl1-arith-curried-in-thread
+  (testing "(->> (seq 1 3 5) (add \"<0 2>\") (scale :minor :c3))"
+    (let [pat  (eval-pat "(->> (seq 1 3 5) (add \"<0 2>\") (scale :minor :c3))")
+          base (eval-pat "(scale :minor :c3 (seq 1 3 5))")
+          up   (eval-pat "(scale :minor :c3 (seq 3 5 7))")]
+      (is (= (map :value (cycle-evs base 0)) (map :value (cycle-evs pat 0))))
+      (is (= (map :value (cycle-evs up 1)) (map :value (cycle-evs pat 1))))))
+  (testing "mode + amount curried form"
+    (is (= [11 22] (map :value (filter core/onset?
+                                       (cycle-evs (eval-pat "((add :out (seq 10 20)) (seq 1 2 3))") 0))))))
+  (testing "bad arity is an eval error"
+    (is (lisp/eval-error? (lisp/eval-string "(add)" (make-test-env))))))
+
+(deftest tl1-documented-examples-evaluate
+  (testing "every TL1 example in builtin_meta.edn / docs evaluates to a pattern"
+    (doseq [code ["(fast \"<1 2 4>\" (seq :bd :sd))"
+                  "(slow (seq 1 2) (seq :bd :sd :hh :oh))"
+                  "(every \"<2 4>\" rev (seq :bd :sd :hh :oh))"
+                  "(late \"<0 1/8>\" (seq :hh :hh :hh :hh))"
+                  "(early (seq 0 1/8) (seq :hh :oh :hh :oh))"
+                  "(sometimes-by \"<0.2 0.8>\" rev (seq :bd :sd :hh :oh))"
+                  "(degrade-by \"<0 0.5>\" (fast 8 (pure :hh)))"
+                  "(jux-by \"<0.3 1>\" rev (seq :bd :sd))"
+                  "(off \"<1/8 1/4>\" (fast 2) (seq :bd :sd))"
+                  "(euclidean \"<3 5>\" 8 :bd)"
+                  "(add 12 (seq :c3 :e3 :g3))"
+                  "(->> (seq 1 3 5 8) (add \"<0 2 4>\") (scale :minor :c3))"
+                  "(add :out (seq 10 20) (seq 1 2 3))"
+                  "(sub 12 (seq :c4 :e4 :g4))"
+                  "(->> (seq 8 7 5) (sub \"<0 1>\") (scale :major :c4))"
+                  "(mul 2 (seq 220 330))"
+                  "(mul :mix (seq 1 2) (seq 110 220 330))"
+                  "(div 2 (seq 440 660))"
+                  "(div \"<1 2>\" (seq 440 880))"
+                  "(set {:amp 0.5 :pan -0.5} (seq :c4 :e4))"
+                  "(set (seq {:amp 1.0} {:amp 0.4}) (seq :bd :hh :sd :hh))"
+                  "(add :squeeze (seq 0 7) (seq :c3 :g3))"
+                  "(mul 2 (seq 220 330))"
+                  "(fast 1/3 (seq :bd :sd))"
+                  "(~ \"0 1/8 1/4\")"]]
+      (let [pat (eval-pat code)]
+        (is (core/pattern? pat) code)
+        (when (core/pattern? pat)
+          (is (seq (mapcat #(cycle-evs pat %) (range 4))) code))))))

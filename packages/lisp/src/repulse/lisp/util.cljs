@@ -2,7 +2,8 @@
   "Shared helpers for the Lisp evaluator and builtin sub-namespaces.
    Extracted from eval.cljs so builtins can require them without creating
    circular dependencies."
-  (:require [repulse.lisp.reader :as reader]))
+  (:require [repulse.lisp.reader :as reader]
+            [repulse.lisp.mini :as mini]))
 
 (defn sourced? [x] (instance? reader/SourcedVal x))
 
@@ -36,4 +37,16 @@
   (let [v (unwrap x)]
     (if (and (vector? v) (= 2 (count v)) (number? (first v)) (number? (second v)))
       (/ (first v) (second v))
+      v)))
+
+(defn pat-arg
+  "Unwrap a value that sits in a patternable argument position.
+   Strings are parsed as mini-notation (with editor source offsets, so the
+   tokens still highlight); everything else — numbers, [n d] rationals,
+   patterns — is passed through unwrapped, never coerced to a float."
+  [x]
+  (let [v (unwrap x)]
+    (if (string? v)
+      (let [src (source-of x)]
+        (mini/parse v (when src (inc (:from src)))))
       v)))
