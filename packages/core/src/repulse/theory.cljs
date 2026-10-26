@@ -29,6 +29,22 @@
         octave     (if oct-str (js/parseInt oct-str 10) 4)]
     (+ semitone accidental (* (+ octave 1) 12))))
 
+(declare midi->hz)
+
+(def ^:private midi-note-names
+  ["c" "cs" "d" "ds" "e" "f" "fs" "g" "gs" "a" "as" "b"])
+
+(defn midi->note
+  "Convert an integer MIDI note number back to a note keyword (sharps spelling).
+   Inverse of note->midi up to enharmonics: 60 → :c4, 61 → :cs4, 51 → :ds3.
+   Non-integer input has no note name and returns its frequency in Hz."
+  [midi]
+  (if (integer? midi)
+    (let [pc  (mod midi 12)
+          oct (dec (quot (- midi pc) 12))]
+      (keyword (str (nth midi-note-names pc) oct)))
+    (midi->hz midi)))
+
 (defn midi->hz
   "Convert a MIDI note number to a frequency in Hz.
    Uses equal temperament with A4 (MIDI 69) = 440 Hz."

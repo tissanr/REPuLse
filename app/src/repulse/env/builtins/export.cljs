@@ -33,9 +33,9 @@
              (let [sp {:start [(int c) 1] :end [(int (inc c)) 1]}]
                (doseq [[_track-name pattern] tracks]
                  (when pattern
-                   (let [evs (core/query pattern sp)]
+                   (let [evs (core/query-onsets pattern sp)]
                      (doseq [ev evs]
-                       (let [part-start (core/rat->float (:start (:part ev)))
+                       (let [part-start (core/rat->float (:start (:whole ev)))
                              t          (* (- part-start c) cycle-dur)
                              abs-t      (+ (* c cycle-dur) t)]
                          (when (>= abs-t 0)

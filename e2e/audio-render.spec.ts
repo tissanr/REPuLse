@@ -111,3 +111,17 @@ test('rests render silence', async ({ page }) => {
   assertFinitePcm(mono);
   expect(rms(mono)).toBeLessThan(SILENCE_RMS);
 });
+
+// TL1: only event onsets trigger sound. A whole that crosses a cycle boundary is
+// returned as two fragments; before TL1 both fragments were played.
+test('slow 4 triggers each step once, not once per cycle', async ({ page }) => {
+  const result = await render(page, '(slow 4 (seq :bd :sd))', 4);
+  const mono = mixMono(result.left, result.right);
+  expect(countOnsets(mono, result.sampleRate)).toBe(2);
+});
+
+test('late 1/2 of a pure kick triggers once per cycle', async ({ page }) => {
+  const result = await render(page, '(late 1/2 (pure :bd))', 2);
+  const mono = mixMono(result.left, result.right);
+  expect(countOnsets(mono, result.sampleRate)).toBe(2);
+});

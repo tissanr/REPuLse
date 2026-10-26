@@ -100,6 +100,10 @@
   [text]
   (cond
     (or (= text "~") (= text "_")) :_
+    ;; Rational literal "1/8" → exact [1 8] (used by patterned time args)
+    (re-matches #"-?\d+/\d+" text)
+    (let [[n d] (.split text "/")]
+      (core/->rat [(js/parseInt n 10) (js/parseInt d 10)]))
     (parse-number-text text)        (parse-number-text text)
     (note-name? text)               (keyword text)
     :else                           (keyword text)))

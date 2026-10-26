@@ -57,15 +57,16 @@
     "side-effects": [],
     "examples": [
       "(fast 2 (seq :bd :sd))",
-      "(fast 3 (seq :hh :oh :hh))"
+      "(fast 3 (seq :hh :oh :hh))",
+      "(fast \"<1 2 4>\" (seq :bd :sd))"
     ],
     "see-also": [
       "slow",
       "every",
       "rev"
     ],
-    "detail": "(fast factor pat) — speed up a pattern",
-    "description": "Speed up a pattern by the given factor. 2 = twice as fast."
+    "detail": "(fast factor pat) — speed up a pattern; factor may be a pattern or mini-notation, e.g. (fast \"<1 2>\" pat)",
+    "description": "Speed up a pattern by the given factor. 2 = twice as fast. The factor may be a pattern or a mini-notation string: (fast \"<1 2>\" pat)."
   },
   "slow": {
     "category": "transform",
@@ -74,14 +75,15 @@
     "side-effects": [],
     "examples": [
       "(slow 2 (seq :bd :sd :hh :oh))",
-      "(slow 4 (seq :c4 :e4 :g4))"
+      "(slow 4 (seq :c4 :e4 :g4))",
+      "(slow (seq 1 2) (seq :bd :sd :hh :oh))"
     ],
     "see-also": [
       "fast",
       "every"
     ],
-    "detail": "(slow factor pat) — slow down a pattern",
-    "description": "Slow down a pattern by the given factor. 2 = half speed."
+    "detail": "(slow factor pat) — slow down a pattern; factor may be a pattern or mini-notation",
+    "description": "Slow down a pattern by the given factor. 2 = half speed. The factor may be a pattern or a mini-notation string."
   },
   "rev": {
     "category": "transform",
@@ -106,15 +108,16 @@
     "side-effects": [],
     "examples": [
       "(every 4 (fast 2) (seq :bd :sd))",
-      "(every 3 rev (seq :bd :sd :hh :oh))"
+      "(every 3 rev (seq :bd :sd :hh :oh))",
+      "(every \"<2 4>\" rev (seq :bd :sd :hh :oh))"
     ],
     "see-also": [
       "sometimes",
       "fast",
       "slow"
     ],
-    "detail": "(every n f pat) — apply f every n cycles",
-    "description": "Apply a transformation every nth cycle. Other cycles play unmodified."
+    "detail": "(every n f pat) — apply f every n cycles; n may be a pattern, e.g. (every \"<2 4>\" rev pat)",
+    "description": "Apply a transformation every nth cycle. Other cycles play unmodified. n may be a pattern."
   },
   "fmap": {
     "category": "transform",
@@ -308,14 +311,15 @@
     "side-effects": [],
     "examples": [
       "(euclidean 5 8 :bd)",
-      "(euclidean 3 8 :sd 2)"
+      "(euclidean 3 8 :sd 2)",
+      "(euclidean \"<3 5>\" 8 :bd)"
     ],
     "see-also": [
       "seq",
       "degrade"
     ],
-    "detail": "(euclidean k n val) — Björklund algorithm: k onsets in n steps; optional rotation (euclidean k n val rot)",
-    "description": "Distribute k onsets evenly across n steps using the Björklund algorithm. Optional rot rotates the pattern."
+    "detail": "(euclidean k n val) — Björklund algorithm: k onsets in n steps; optional rotation (euclidean k n val rot); k/n/rot may be patterns, e.g. (euclidean \"<3 5>\" 8 :bd)",
+    "description": "Distribute k onsets evenly across n steps using the Björklund algorithm. Optional rot rotates the pattern. k, n and rot may be patterns: (euclidean \"<3 5>\" 8 :bd)."
   },
   "cat": {
     "category": "source",
@@ -341,14 +345,15 @@
     "side-effects": [],
     "examples": [
       "(late 0.25 (seq :hh :hh :hh :hh))",
-      "(late 0.5 (euclidean 3 8 :sd))"
+      "(late 0.5 (euclidean 3 8 :sd))",
+      "(late \"<0 1/8>\" (seq :hh :hh :hh :hh))"
     ],
     "see-also": [
       "early",
       "off"
     ],
-    "detail": "(late amount pat) — shift events forward by fraction of a cycle",
-    "description": "Shift events forward in time by a fraction of a cycle."
+    "detail": "(late amount pat) — shift events forward by fraction of a cycle; amount may be a pattern, e.g. (late \"<0 1/8>\" pat)",
+    "description": "Shift events forward in time by a fraction of a cycle. The amount may be a pattern: (late \"<0 1/8>\" pat)."
   },
   "early": {
     "category": "transform",
@@ -357,14 +362,15 @@
     "side-effects": [],
     "examples": [
       "(early 0.125 (seq :sd :_ :sd :_))",
-      "(early 0.25 (seq :hh :oh))"
+      "(early 0.25 (seq :hh :oh))",
+      "(early (seq 0 1/8) (seq :hh :oh :hh :oh))"
     ],
     "see-also": [
       "late",
       "off"
     ],
-    "detail": "(early amount pat) — shift events backward by fraction of a cycle",
-    "description": "Shift events backward in time by a fraction of a cycle."
+    "detail": "(early amount pat) — shift events backward by fraction of a cycle; amount may be a pattern",
+    "description": "Shift events backward in time by a fraction of a cycle. The amount may be a pattern."
   },
   "sometimes": {
     "category": "transform",
@@ -425,15 +431,16 @@
     "side-effects": [],
     "examples": [
       "(sometimes-by 0.3 rev (seq :bd :sd :hh :oh))",
-      "(sometimes-by 0.8 (fast 2) (seq :hh))"
+      "(sometimes-by 0.8 (fast 2) (seq :hh))",
+      "(sometimes-by \"<0.2 0.8>\" rev (seq :bd :sd :hh :oh))"
     ],
     "see-also": [
       "sometimes",
       "often",
       "rarely"
     ],
-    "detail": "(sometimes-by prob f pat) — apply transform with probability 0.0–1.0",
-    "description": "Apply transform f with probability prob (0.0–1.0) per cycle."
+    "detail": "(sometimes-by prob f pat) — apply transform with probability 0.0–1.0; prob may be a pattern",
+    "description": "Apply transform f with probability prob (0.0–1.0) per cycle. prob may be a pattern."
   },
   "degrade": {
     "category": "transform",
@@ -458,14 +465,15 @@
     "side-effects": [],
     "examples": [
       "(degrade-by 0.3 (seq :hh :hh :hh :hh))",
-      "(degrade-by 0.7 (fast 2 (seq :bd :sd)))"
+      "(degrade-by 0.7 (fast 2 (seq :bd :sd)))",
+      "(degrade-by \"<0 0.5>\" (fast 8 (pure :hh)))"
     ],
     "see-also": [
       "degrade",
       "sometimes-by"
     ],
-    "detail": "(degrade-by prob pat) — drop events with probability 0.0–1.0",
-    "description": "Drop events with the given probability (0.0 = keep all, 1.0 = drop all)."
+    "detail": "(degrade-by prob pat) — drop events with probability 0.0–1.0; prob may be a pattern",
+    "description": "Drop events with the given probability (0.0 = keep all, 1.0 = drop all). prob may be a pattern."
   },
   "choose": {
     "category": "source",
@@ -523,14 +531,15 @@
     "side-effects": [],
     "examples": [
       "(jux-by 0.5 rev (seq :bd :sd))",
-      "(jux-by 0.8 (fast 2) (seq :hh :oh))"
+      "(jux-by 0.8 (fast 2) (seq :hh :oh))",
+      "(jux-by \"<0.3 1>\" rev (seq :bd :sd))"
     ],
     "see-also": [
       "jux",
       "pan"
     ],
-    "detail": "(jux-by width f pat) — like jux with adjustable stereo width 0.0–1.0",
-    "description": "Like jux with adjustable stereo width (0.0 = mono, 1.0 = hard pan)."
+    "detail": "(jux-by width f pat) — like jux with adjustable stereo width 0.0–1.0; width may be a pattern",
+    "description": "Like jux with adjustable stereo width (0.0 = mono, 1.0 = hard pan). width may be a pattern."
   },
   "off": {
     "category": "transform",
@@ -539,14 +548,101 @@
     "side-effects": [],
     "examples": [
       "(off 0.25 (fast 2) (seq :bd :sd))",
-      "(off 0.125 rev (seq :hh :oh))"
+      "(off 0.125 rev (seq :hh :oh))",
+      "(off \"<1/8 1/4>\" (fast 2) (seq :bd :sd))"
     ],
     "see-also": [
       "late",
       "jux"
     ],
-    "detail": "(off amount f pat) — layer original with time-shifted transformed copy",
+    "detail": "(off amount f pat) — layer original with time-shifted transformed copy; amount may be a pattern",
     "description": "Layer the original with a time-shifted transformed copy: (stack pat (late amount (f pat)))."
+  },
+  "add": {
+    "category": "transform",
+    "signature": "(add [mode] amt pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(add 12 (seq :c3 :e3 :g3))",
+      "(->> (seq 1 3 5 8) (add \"<0 2 4>\") (scale :minor :c3))",
+      "(add :out (seq 10 20) (seq 1 2 3))"
+    ],
+    "see-also": [
+      "sub",
+      "mul",
+      "div",
+      "set",
+      "transpose"
+    ],
+    "detail": "(add [mode] amt pat) — add amt (number, pattern or mini-notation) to values; mode :in (default) :out :mix :squeeze",
+    "description": "Add amt to every value. amt may be a number, a pattern or a mini-notation string. Note keywords move by semitones; maps change :note; rests pass through. mode picks where the rhythm comes from: :in (default, from pat), :out (from amt), :mix (both), :squeeze."
+  },
+  "sub": {
+    "category": "transform",
+    "signature": "(sub [mode] amt pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(sub 12 (seq :c4 :e4 :g4))",
+      "(->> (seq 8 7 5) (sub \"<0 1>\") (scale :major :c4))"
+    ],
+    "see-also": [
+      "add",
+      "mul",
+      "div"
+    ],
+    "detail": "(sub [mode] amt pat) — subtract amt from values; mode :in :out :mix :squeeze",
+    "description": "Subtract amt from every value. Same modes and argument types as add."
+  },
+  "mul": {
+    "category": "transform",
+    "signature": "(mul [mode] amt pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(mul 2 (seq 220 330))",
+      "(mul :mix (seq 1 2) (seq 110 220 330))"
+    ],
+    "see-also": [
+      "add",
+      "div"
+    ],
+    "detail": "(mul [mode] amt pat) — multiply values by amt; mode :in :out :mix :squeeze",
+    "description": "Multiply every value by amt. Same modes and argument types as add."
+  },
+  "div": {
+    "category": "transform",
+    "signature": "(div [mode] amt pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(div 2 (seq 440 660))",
+      "(div \"<1 2>\" (seq 440 880))"
+    ],
+    "see-also": [
+      "mul",
+      "sub"
+    ],
+    "detail": "(div [mode] amt pat) — divide values by amt; mode :in :out :mix :squeeze",
+    "description": "Divide every value by amt (division by zero leaves the value unchanged). Same modes as add."
+  },
+  "set": {
+    "category": "transform",
+    "signature": "(set [mode] ctrl pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(set {:amp 0.5 :pan -0.5} (seq :c4 :e4))",
+      "(set (seq {:amp 1.0} {:amp 0.4}) (seq :bd :hh :sd :hh))"
+    ],
+    "see-also": [
+      "amp",
+      "pan",
+      "add"
+    ],
+    "detail": "(set [mode] ctrl pat) — merge control maps into events, ctrl wins (Tidal #)",
+    "description": "Merge control maps into every event; ctrl values win (Tidal #). ctrl may be a map or a pattern of maps."
   },
   "def": {
     "category": "special",

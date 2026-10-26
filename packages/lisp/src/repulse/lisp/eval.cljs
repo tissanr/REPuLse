@@ -1,6 +1,7 @@
 (ns repulse.lisp.eval
   (:require [repulse.lisp.util :as util]
             [repulse.lisp.builtins.pattern :as b-pattern]
+            [repulse.lisp.builtins.arith :as b-arith]
             [repulse.lisp.builtins.math :as b-math]
             [repulse.lisp.builtins.music :as b-music]
             [repulse.lisp.builtins.params :as b-params]
@@ -342,6 +343,7 @@
         synths (atom {})]
     (merge
       (b-pattern/make-builtins)
+      (b-arith/make-builtins)
       (b-math/make-builtins)
       (b-music/make-builtins)
       (b-params/make-builtins)

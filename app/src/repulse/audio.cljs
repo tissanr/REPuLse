@@ -617,14 +617,17 @@
         snap (clock-snapshot ac)]
     (doseq [[track-name pattern] tracks]
       (when (and pattern (not (contains? muted track-name)))
-        (let [evs (core/query pattern sp)]
+        ;; Only onsets trigger: a whole that crosses a cycle boundary (or is
+        ;; cut by a structure-aware combinator) also yields non-onset
+        ;; fragments, which must not re-trigger the sound.
+        (let [evs (core/query-onsets pattern sp)]
           (doseq [ev evs]
-            (let [part-start        (core/rat->float (:start (:part ev)))
-                  part-end          (core/rat->float (:end   (:part ev)))
+            (let [whole-start       (core/rat->float (:start (:whole ev)))
+                  whole-end         (core/rat->float (:end   (:whole ev)))
                   cycle-audio-start (* cycle cycle-dur)
-                  event-offset      (* (- part-start cycle) cycle-dur)
+                  event-offset      (* (- whole-start cycle) cycle-dur)
                   t                 (+ cycle-audio-start event-offset)
-                  dur               (* (- part-end part-start) cycle-dur)]
+                  dur               (* (- whole-end whole-start) cycle-dur)]
               (when (> t (.-currentTime ac))
                 (let [tween-st (get-in state [:tween-state track-name] {})
                       raw      (:value ev)

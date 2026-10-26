@@ -27,12 +27,12 @@ const DOCS = {
   // --- Transformations ---
   "fast": {
     signature: "(fast factor pat)",
-    description: "Speed up a pattern by the given factor. 2 = twice as fast.",
+    description: "Speed up a pattern by the given factor. 2 = twice as fast. The factor may be a pattern or a mini-notation string: (fast \"<1 2>\" pat).",
     example: "(fast 2 (seq :bd :sd))",
   },
   "slow": {
     signature: "(slow factor pat)",
-    description: "Slow down a pattern by the given factor. 2 = half speed.",
+    description: "Slow down a pattern by the given factor. 2 = half speed. The factor may be a pattern or a mini-notation string.",
     example: "(slow 2 (seq :bd :sd :hh :oh))",
   },
   "rev": {
@@ -42,7 +42,7 @@ const DOCS = {
   },
   "every": {
     signature: "(every n transform pat)",
-    description: "Apply a transformation every nth cycle. Other cycles play unmodified.",
+    description: "Apply a transformation every nth cycle. Other cycles play unmodified. n may be a pattern.",
     example: "(every 4 (fast 2) (seq :bd :sd))",
   },
   "fmap": {
@@ -54,7 +54,7 @@ const DOCS = {
   // --- Pattern combinators ---
   "euclidean": {
     signature: "(euclidean k n val) or (euclidean k n val rot)",
-    description: "Distribute k onsets evenly across n steps using the Björklund algorithm. Optional rot rotates the pattern.",
+    description: "Distribute k onsets evenly across n steps using the Björklund algorithm. Optional rot rotates the pattern. k, n and rot may be patterns: (euclidean \"<3 5>\" 8 :bd).",
     example: "(euclidean 5 8 :bd)",
   },
   "cat": {
@@ -64,12 +64,12 @@ const DOCS = {
   },
   "late": {
     signature: "(late amount pat)",
-    description: "Shift events forward in time by a fraction of a cycle.",
+    description: "Shift events forward in time by a fraction of a cycle. The amount may be a pattern: (late \"<0 1/8>\" pat).",
     example: "(late 0.25 (seq :hh :hh :hh :hh))",
   },
   "early": {
     signature: "(early amount pat)",
-    description: "Shift events backward in time by a fraction of a cycle.",
+    description: "Shift events backward in time by a fraction of a cycle. The amount may be a pattern.",
     example: "(early 0.125 (seq :sd :_ :sd :_))",
   },
   "sometimes": {
@@ -89,7 +89,7 @@ const DOCS = {
   },
   "sometimes-by": {
     signature: "(sometimes-by prob f pat)",
-    description: "Apply transform f with probability prob (0.0–1.0) per cycle.",
+    description: "Apply transform f with probability prob (0.0–1.0) per cycle. prob may be a pattern.",
     example: "(sometimes-by 0.3 rev (seq :bd :sd :hh :oh))",
   },
   "degrade": {
@@ -99,7 +99,7 @@ const DOCS = {
   },
   "degrade-by": {
     signature: "(degrade-by prob pat)",
-    description: "Drop events with the given probability (0.0 = keep all, 1.0 = drop all).",
+    description: "Drop events with the given probability (0.0 = keep all, 1.0 = drop all). prob may be a pattern.",
     example: "(degrade-by 0.3 (seq :hh :hh :hh :hh))",
   },
   "choose": {
@@ -119,13 +119,40 @@ const DOCS = {
   },
   "jux-by": {
     signature: "(jux-by width f pat)",
-    description: "Like jux with adjustable stereo width (0.0 = mono, 1.0 = hard pan).",
+    description: "Like jux with adjustable stereo width (0.0 = mono, 1.0 = hard pan). width may be a pattern.",
     example: "(jux-by 0.5 rev (seq :bd :sd))",
   },
   "off": {
     signature: "(off amount f pat)",
     description: "Layer the original with a time-shifted transformed copy: (stack pat (late amount (f pat))).",
     example: "(off 0.25 (fast 2) (seq :bd :sd))",
+  },
+
+  // --- Pattern arithmetic (TL1) ---
+  "add": {
+    signature: "(add [mode] amt pat)",
+    description: "Add amt to every value. amt may be a number, a pattern or a mini-notation string. Note keywords move by semitones; maps change :note; rests pass through. mode picks where the rhythm comes from: :in (default, from pat), :out (from amt), :mix (both), :squeeze.",
+    example: "(->> (seq 1 3 5 8) (add \"<0 2 4>\") (scale :minor :c3))",
+  },
+  "sub": {
+    signature: "(sub [mode] amt pat)",
+    description: "Subtract amt from every value. Same modes and argument types as add.",
+    example: "(sub 12 (seq :c4 :e4 :g4))",
+  },
+  "mul": {
+    signature: "(mul [mode] amt pat)",
+    description: "Multiply every value by amt. Same modes and argument types as add.",
+    example: "(mul 2 (seq 220 330))",
+  },
+  "div": {
+    signature: "(div [mode] amt pat)",
+    description: "Divide every value by amt (division by zero leaves the value unchanged). Same modes as add.",
+    example: "(div 2 (seq 440 660))",
+  },
+  "set": {
+    signature: "(set [mode] ctrl pat)",
+    description: "Merge control maps into every event; ctrl values win (Tidal #). ctrl may be a map or a pattern of maps.",
+    example: "(set {:amp 0.5 :pan -0.5} (seq :c4 :e4))",
   },
 
   // --- Music theory ---
