@@ -1,6 +1,7 @@
 (ns repulse.sound-check-test
   (:require [cljs.test :refer [deftest is testing]]
             [repulse.core :as core]
+            [repulse.params :as params]
             [repulse.sound-check :as sc]))
 
 (def banks ["bd" "sd" "hh" "cp" "tabla" "RolandTR808_bd" "RolandTR808_sd"])
@@ -66,3 +67,14 @@
     (is (= [{:from 18 :to 23} {:from 35 :to 40}]
            (sc/keyword-ranges code :kick))))
   (is (= [] (sc/keyword-ranges "(seq :bd)" :kick))))
+
+(deftest structure-guard-test
+  (testing "continuous signals without structure are flagged"
+    (is (sc/has-analog-events? core/sine))
+    (is (sc/has-analog-events? (core/stack* [core/sine (core/pure :bd)]))))
+  (testing "sampled signals are fine"
+    (is (not (sc/has-analog-events? (core/segment 8 core/sine))))
+    (is (not (sc/has-analog-events? (params/pan core/sine (core/pure :hh)))))
+    (is (not (sc/has-analog-events? (core/seq* [:bd :sd])))))
+  (testing "message explains the fix"
+    (is (re-find #"signal needs structure" (sc/structure-warning-message :_)))))

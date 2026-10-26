@@ -351,32 +351,195 @@
               :examples ["(->> (seq :c4 :eb4) (synth :saw))"
                          "(->> (scale :minor :c3 (seq 0 2 4)) (synth :fm :index 3))"
                          "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :western))"]
-              :see-also ["saw" "square" "noise" "fm" "western" "nylon" "harp" "koto" "pizz" "lute" "mandolin" "defsynth"]}
+              :see-also ["noise" "fm" "western" "nylon" "harp" "koto" "pizz" "lute" "mandolin" "defsynth"]}
 
- :saw        {:category "source"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(saw :c4)" "(->> (seq :c4 :e4) (synth :saw))"]
-              :see-also ["square" "noise" "fm" "synth"]}
+;; ── Continuous signals (TL2) ────────────────────────────────────────────────
+ :signal {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (signal (fn [t] (* t 2))))"]
+  :see-also ["steady" "time" "segment"]}
 
- :square     {:category "source"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(square :c4)" "(square :c4 :pw 0.25)"]
-              :see-also ["saw" "noise" "synth"]}
+ :steady {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (steady 3))"]
+  :see-also ["signal" "segment"]}
+
+ :time {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 time)"]
+  :see-also ["signal" "saw"]}
+
+ :sine {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 8 (range 200 2000 sine))"]
+  :see-also ["cosine" "sine2" "saw" "range"]}
+
+ :cosine {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 8 cosine)"]
+  :see-also ["sine" "cosine2"]}
+
+ :isaw {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 isaw)"]
+  :see-also ["saw" "isaw2"]}
+
+ :itri {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 itri)"]
+  :see-also ["tri" "itri2"]}
+
+ :isquare {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 isquare)"]
+  :see-also ["square" "isquare2"]}
+
+ :sine2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan sine2 (fast 8 (seq :hh)))"]
+  :see-also ["sine" "to-bipolar" "range2"]}
+
+ :cosine2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan cosine2 (fast 8 (seq :hh)))"]
+  :see-also ["cosine" "to-bipolar" "range2"]}
+
+ :saw2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan saw2 (fast 8 (seq :hh)))"]
+  :see-also ["saw" "to-bipolar" "range2"]}
+
+ :isaw2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan isaw2 (fast 8 (seq :hh)))"]
+  :see-also ["isaw" "to-bipolar" "range2"]}
+
+ :tri2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan tri2 (fast 8 (seq :hh)))"]
+  :see-also ["tri" "to-bipolar" "range2"]}
+
+ :itri2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan itri2 (fast 8 (seq :hh)))"]
+  :see-also ["itri" "to-bipolar" "range2"]}
+
+ :square2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan square2 (fast 8 (seq :hh)))"]
+  :see-also ["square" "to-bipolar" "range2"]}
+
+ :isquare2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan isquare2 (fast 8 (seq :hh)))"]
+  :see-also ["isquare" "to-bipolar" "range2"]}
+
+ :rand2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan rand2 (fast 8 (seq :hh)))"]
+  :see-also ["rand" "to-bipolar" "range2"]}
+
+ :rand {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 8 (range 1 8 rand))" "(segment 4 (early 7 rand))"]
+  :see-also ["irand" "rand2" "perlin" "segment"]}
+
+ :irand {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 8 (irand 8))"]
+  :see-also ["rand" "segment"]}
+
+ :perlin {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan (range -0.5 0.5 perlin) (fast 4 (seq :hh)))"]
+  :see-also ["rand" "sine" "range"]}
+
+ :segment {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 saw)" "(->> sine (rangex 100 1000) (segment 2))"]
+  :see-also ["saw" "range" "rand"]}
+
+ :rangex {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (rangex 20 2000 saw))"]
+  :see-also ["range" "range2" "segment"]}
+
+ :range2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (range2 200 2000 sine2))"]
+  :see-also ["range" "rangex" "from-bipolar"]}
+
+ :to-bipolar {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (to-bipolar saw))"]
+  :see-also ["from-bipolar" "sine2"]}
+
+ :from-bipolar {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (from-bipolar sine2))"]
+  :see-also ["to-bipolar" "range2"]}
+
+ :run {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(run 4)" "(->> (run 8) (scale :minor :c3))"]
+  :see-also ["segment" "seq"]}
+
+ :saw {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 saw)" "(->> (fast 8 (seq :hh)) (amp (range 0.3 1 saw)))"]
+  :see-also ["isaw" "saw2" "segment" "synth"]}
+
+ :square {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 square)" "(synth :square :pw 0.25 (seq :c3 :e3))"]
+  :see-also ["isquare" "square2" "segment" "synth"]}
+
+ :tri {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 tri)"]
+  :see-also ["itri" "tri2" "segment" "defsynth"]}
 
  :noise      {:category "source"
               :returns "Pattern"
               :side-effects []
               :examples ["(noise)" "(->> (noise) (amp 0.5) (decay 0.1))"]
-              :see-also ["saw" "square"]}
+              :see-also ["synth" "fm"]}
 
  :fm         {:category "source"
               :returns "Pattern"
               :side-effects []
               :examples ["(fm :c4 :index 3 :ratio 2)"
                          "(->> (scale :minor :c2 (seq 0 2 4)) (synth :fm :index 5))"]
-              :see-also ["saw" "synth" "defsynth"]}
+              :see-also ["synth" "noise" "defsynth"]}
 
  ;; ── Karplus-Strong plucked strings ──────────────────────────────────────────
  :western    {:category "synth"
@@ -533,12 +696,6 @@
               :side-effects []
               :examples ["(sin freq)" "(->> (sin (* 2 freq)) (gain 0.5))"]
               :see-also ["tri" "lpf" "env-perc" "defsynth"]}
-
- :tri        {:category "ugen"
-              :returns "UGen"
-              :side-effects []
-              :examples ["(tri freq)" "(->> (tri freq) (lpf 2000))"]
-              :see-also ["sin" "lpf" "defsynth"]}
 
  :lpf        {:category "ugen"
               :returns "UGen"
@@ -1057,8 +1214,8 @@
  :range      {:category "util"
               :returns "sequence"
               :side-effects []
-              :examples ["(range 8)" "(range 2 8)" "(range 0 8 2)"]
-              :see-also ["count" "map" "filter"]}
+              :examples ["(range 8)" "(range 2 8)" "(range 0 8 2)" "(segment 4 (range 200 2000 saw))"]
+              :see-also ["count" "map" "filter" "segment" "rangex"]}
 
  :mod        {:category "util"
               :returns "number"

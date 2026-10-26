@@ -466,3 +466,161 @@
 (deftest fast-zero-is-silence
   (is (empty? (c/query (c/fast 0 (c/pure :bd)) (cyc 0))))
   (is (empty? (c/query (c/slow 0 (c/pure :bd)) (cyc 0)))))
+
+;;; ── Phase TL2: continuous signals ───────────────────────────────────
+
+(defn- near? [a b tol] (< (Math/abs (- a b)) tol))
+
+(defn- seg-vals
+  "Values of (segment n sig) over cycle k."
+  ([n sig] (seg-vals n sig 0))
+  ([n sig k] (mapv :value (sort-by #(c/rat->float (:start (:whole %)))
+                                   (c/query-onsets (c/segment n sig) (c/cycle-span k))))))
+
+(defn- all-near? [expected actual tol]
+  (and (= (count expected) (count actual))
+       (every? true? (map #(near? %1 %2 tol) expected actual))))
+
+(deftest tl2-signal-shape
+  (testing "one analog event covering the query span"
+    (let [evs (c/query c/sine (c/span [1 4] [1 2]))]
+      (is (= 1 (count evs)))
+      (is (contains? (first evs) :whole))
+      (is (nil? (:whole (first evs))))
+      (is (= (c/span [1 4] [1 2]) (:part (first evs))))
+      (is (near? 1 (:value (first evs)) 1e-12))
+      (is (specs/valid-event? (first evs)))
+      (is (specs/analog-event? (first evs)))
+      (is (c/analog? (first evs)))))
+  (testing "no splitting at cycle boundaries"
+    (let [evs (c/query c/saw (c/span [1 2] [5 2]))]
+      (is (= 1 (count evs)))
+      (is (= (c/span [1 2] [5 2]) (:part (first evs))))
+      (is (= 0.5 (:value (first evs))))))
+  (testing "empty and inverted spans"
+    (is (= [] (c/query c/saw (c/span [1 2] [1 2]))))
+    (is (= [] (c/query c/saw (c/span [1 1] [1 2])))))
+  (testing "never an onset"
+    (is (empty? (c/query-onsets c/sine (c/cycle-span 0))))))
+
+(deftest tl2-segment
+  (testing "segment 4 saw"
+    (let [evs (sort-by #(c/rat->float (:start (:whole %)))
+                       (c/query-onsets (c/segment 4 c/saw) (c/cycle-span 0)))]
+      (is (= [0 0.25 0.5 0.75] (mapv :value evs)))
+      (is (= [(c/span [0 1] [1 4]) (c/span [1 4] [1 2]) (c/span [1 2] [3 4]) (c/span [3 4] [1 1])]
+             (mapv :whole evs))))
+    (is (= [0 0.25 0.5 0.75] (seg-vals 4 c/saw 1)))
+    (is (= [(c/span [1 1] [5 4])]
+           (map :whole (take 1 (sort-by #(c/rat->float (:start (:whole %)))
+                                        (c/query-onsets (c/segment 4 c/saw) (c/cycle-span 1))))))))
+  (testing "patterned n"
+    (let [evs (sort-by #(c/rat->float (:start (:whole %)))
+                       (c/query-onsets (c/segment (c/seq* [2 4]) c/saw) (c/cycle-span 0)))]
+      (is (= [[0 1] [1 2] [3 4]] (mapv #(:start (:whole %)) evs)))
+      (is (= [0 0.5 0.75] (mapv :value evs))))))
+
+(deftest tl2-waveforms
+  (is (all-near? [0.5 1 0.5 0] (seg-vals 4 c/sine) 1e-12))
+  (is (all-near? [0 0.5 1 0.5] (seg-vals 4 c/cosine) 1e-12))
+  (is (= [0 0.5 1 0.5] (seg-vals 4 c/tri)))
+  (is (= [1 0.5 0 0.5] (seg-vals 4 c/itri)))
+  (is (= [0 0 1 1] (seg-vals 4 c/square)))
+  (is (= [1 1 0 0] (seg-vals 4 c/isquare)))
+  (is (all-near? [1 0.75 0.5 0.25] (seg-vals 4 c/isaw) 1e-12))
+  (is (all-near? [0 1 0 -1] (seg-vals 4 c/sine2) 1e-12))
+  (is (all-near? [-1 -0.5 0 0.5] (seg-vals 4 c/saw2) 1e-12))
+  (is (= [1 1.25 1.5 1.75] (seg-vals 4 c/time 1)))
+  (testing "negative time wraps with floored mod"
+    (is (= 0.75 (:value (first (c/query c/saw (c/span [-1 4] [0 1]))))))))
+
+(deftest tl2-time->rand
+  (testing "Tidal timeToRand reference values (exact)"
+    (is (= 0 (c/time->rand [0 1])))
+    (is (= 0.6295689214020967 (c/time->rand [1 4])))
+    (is (= 0.2591378428041935 (c/time->rand [1 2])))
+    (is (= 0.20052618719637394 (c/time->rand [3 4])))
+    (is (= 0.5177721455693245 (c/time->rand [1 1])))
+    (is (= 0.4010523743927479 (c/time->rand [3 2])))
+    (is (= 0.30286644771695137 (c/time->rand [73 10])))
+    (is (= 0.6520281322300434 (c/time->rand [-1 4]))))
+  (testing "int seeds and xorwise"
+    (is (= 447392 (js/Number (c/time->int-seed [1 4]))))
+    (is (= -447392 (js/Number (c/time->int-seed [-1 4]))))
+    (is (= 118449597881 (js/Number (c/xorwise (c/time->int-seed [1 4]))))))
+  (testing "deterministic"
+    (is (= (c/time->rand [7 3]) (c/time->rand [7 3]))))
+  (testing "segment rand"
+    (is (= [0 0.6295689214020967 0.2591378428041935 0.20052618719637394]
+           (seg-vals 4 c/rand)))))
+
+(deftest tl2-irand-perlin-run
+  (is (= [0 5 2 1] (seg-vals 4 (c/irand 8))))
+  (let [at (fn [t] (:value (first (c/query c/perlin (c/span t (c/rat+ t [1 1]))))))]
+    (is (near? 0 (at [0 1]) 1e-12))
+    (is (near? 0.053597507256199606 (at [1 4]) 1e-12))
+    (is (near? 0.25888607278466225 (at [1 2]) 1e-12))
+    (is (near? 0.2768947295844555 (at [3 2]) 1e-12))
+    (is (near? 0.1463428430059552 (at [73 10]) 1e-12)))
+  (let [evs (sort-by #(c/rat->float (:start (:whole %)))
+                     (c/query-onsets (c/run 4) (c/cycle-span 0)))]
+    (is (= [0 1 2 3] (mapv :value evs)))
+    (is (= [[0 1] [1 4] [1 2] [3 4]] (mapv #(:start (:whole %)) evs))))
+  (is (empty? (c/query (c/run 0) (c/cycle-span 0)))))
+
+(deftest tl2-params-sampled-at-onsets
+  (testing "app-right with a signal samples at the structure event's onset"
+    (let [pat (c/app-right (fn [v _] v) c/sine (c/fast 8 (c/seq* [:hh])))
+          evs (sort-by #(c/rat->float (:start (:whole %))) (c/query-onsets pat (c/cycle-span 0)))]
+      (is (= 8 (count evs)))
+      (is (all-near? [0.5 0.8535533905932737 1 0.8535533905932737 0.5
+                      0.14644660940672627 0 0.14644660940672616]
+                     (mapv :value evs) 1e-12))))
+  (testing "app-left with a signal on the right"
+    (let [pat (c/app-left (fn [a b] [a b]) (c/seq* [:a :b]) c/saw)
+          evs (c/query-onsets pat (c/cycle-span 0))]
+      (is (= [[:a 0] [:b 0.5]] (mapv :value evs)))))
+  (testing "slow 4 saw swell"
+    (let [pat (c/range-pat 0.3 0.9 (c/slow 4 c/saw))
+          v   (fn [k t] (:value (first (c/query pat (c/span (c/rat+ [k 1] t) [(+ k 2) 1])))))]
+      (is (near? 0.3 (v 0 [0 1]) 1e-12))
+      (is (near? 0.375 (v 0 [1 2]) 1e-12))
+      (is (near? 0.440625 (v 0 [15 16]) 1e-12))
+      (is (near? 0.890625 (v 3 [15 16]) 1e-12)))))
+
+(deftest tl2-range
+  (testing "range-pat"
+    (let [vs (seg-vals 16 (c/range-pat 2 6 c/saw))]
+      (is (= 2 (first vs)))
+      (is (every? #(and (>= % 2) (< % 6)) vs)))
+    (is (near? 6 (nth (seg-vals 4 (c/range-pat 2 6 c/sine)) 1) 1e-12))
+    (testing "patterned bounds keep analog structure"
+      (let [evs (c/query (c/range-pat (c/pure 0) (c/pure 10) c/saw) (c/span [1 2] [1 2]))]
+        (is (= [] evs)))
+      (let [evs (c/query (c/range-pat (c/pure 0) (c/pure 10) c/saw) (c/span [1 4] [1 2]))]
+        (is (= 1 (count evs)))
+        (is (nil? (:whole (first evs))))
+        (is (near? 2.5 (:value (first evs)) 1e-12)))))
+  (testing "rangex-pat"
+    (is (all-near? [20 63.245553203367585 200] (take 3 (seg-vals 4 (c/rangex-pat 20 2000 c/saw))) 1e-9))
+    (is (thrown? js/Error (c/rangex-pat 0 10 c/saw))))
+  (testing "range2-pat"
+    (is (all-near? (seg-vals 4 c/sine2) (seg-vals 4 (c/range2-pat -1 1 c/sine2)) 1e-12))))
+
+(deftest tl2-bipolar
+  (is (= [-1 0 1] (mapv :value (c/query-onsets (c/to-bipolar (c/seq* [0 0.5 1])) (c/cycle-span 0)))))
+  (is (= [0 0.5 1] (mapv :value (c/query-onsets (c/from-bipolar (c/seq* [-1 0 1])) (c/cycle-span 0)))))
+  (is (= [:bd] (mapv :value (c/query-onsets (c/to-bipolar (c/seq* [:bd])) (c/cycle-span 0))))))
+
+(deftest tl2-nil-whole-safety
+  (doseq [[nm p] [["fast" (c/fast 2 c/sine)] ["slow" (c/slow 4 c/sine)] ["rev" (c/rev c/sine)]
+                  ["late" (c/late [1 4] c/sine)] ["early" (c/early [1 4] c/sine)]]]
+    (let [evs (c/query p (c/cycle-span 0))]
+      (is (seq evs) nm)
+      (is (every? #(and (contains? % :whole) (nil? (:whole %))) evs) nm)))
+  (is (= [0 0.5 0 0.5] (seg-vals 4 (c/fast 2 c/saw))))
+  (is (= [0.75 0 0.25 0.5] (seg-vals 4 (c/late [1 4] c/saw)))))
+
+(deftest tl2-steady-signal
+  (is (= [3 3 3 3] (seg-vals 4 (c/steady 3))))
+  (is (= [0 2 4 6] (seg-vals 4 (c/signal #(* 8 (c/rat->float %)))))))

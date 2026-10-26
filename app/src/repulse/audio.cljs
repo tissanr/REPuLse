@@ -619,7 +619,9 @@
       (when (and pattern (not (contains? muted track-name)))
         ;; Only onsets trigger: a whole that crosses a cycle boundary (or is
         ;; cut by a structure-aware combinator) also yields non-onset
-        ;; fragments, which must not re-trigger the sound.
+        ;; fragments, which must not re-trigger the sound. Continuous (analog)
+        ;; events have no :whole and are skipped here on purpose; the user is
+        ;; warned about structureless signals at eval time.
         (let [evs (core/query-onsets pattern sp)]
           (doseq [ev evs]
             (let [whole-start       (core/rat->float (:start (:whole ev)))

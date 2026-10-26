@@ -199,12 +199,22 @@
 
 ;;; ── Synth voices ────────────────────────────────────────────────────
 
-(deftest saw-produces-synth-map
-  (testing "(saw :c4) produces a map with :synth :saw"
-    (let [r (eval-result "(saw :c4)")]
-      (is (map? r))
-      (is (= :saw (:synth r)))
-      (is (= :c4 (:note r))))))
+(deftest calling-a-signal-is-a-helpful-error
+  (testing "(saw :c4) and (square :c4 :pw 0.3) point to (synth :saw ...)"
+    (doseq [[code voice] [["(saw :c4)" "(synth :saw"]
+                          ["(square :c4 :pw 0.3)" "(synth :square"]]]
+      (let [r (lisp/eval-string code (make-test-env))]
+        (is (lisp/eval-error? r) code)
+        (is (re-find #"not a function" (:message r)) code)
+        (is (.includes (:message r) voice) code))))
+  (testing "(sine) says to drop the parentheses"
+    (let [r (lisp/eval-string "(sine)" (make-test-env))]
+      (is (lisp/eval-error? r))
+      (is (re-find #"without parentheses" (:message r)))))
+  (testing "the synth voice still works"
+    (let [evs (eval-pattern "(synth :saw (seq :c4 :e4))")]
+      (is (= 2 (count evs)))
+      (is (every? #(= :saw (:synth (leval/unwrap (:value %)))) evs)))))
 
 (deftest fm-produces-synth-map
   (testing "(fm :a4 :index 3.0 :ratio 1.5) produces correct params"
@@ -395,3 +405,112 @@
         (is (core/pattern? pat) code)
         (when (core/pattern? pat)
           (is (seq (mapcat #(cycle-evs pat %) (range 4))) code))))))
+
+;;; ── Phase TL2: continuous signals ───────────────────────────────────
+
+(defn- seg
+  "Values of (segment n sig) at cycle k for Lisp code."
+  ([code] (seg code 0))
+  ([code k]
+   (->> (onsets (eval-pat code) k)
+        (sort-by #(core/rat->float (:start (:whole %))))
+        (mapv :value))))
+
+(defn- near-all? [expected actual tol]
+  (and (= (count expected) (count actual))
+       (every? true? (map #(< (Math/abs (- %1 %2)) tol) expected actual))))
+
+(deftest tl2-bare-signals-are-patterns
+  (doseq [nm ["sine" "cosine" "saw" "isaw" "tri" "itri" "square" "isquare" "sine2" "saw2"
+              "rand" "rand2" "perlin" "time"]]
+    (is (core/pattern? (eval-pat nm)) nm)
+    (is (empty? (onsets (eval-pat nm) 0)) nm)))
+
+(deftest tl2-segment-and-waveforms
+  (is (= [0 0.25 0.5 0.75] (seg "(segment 4 saw)")))
+  (is (= [0 0.25 0.5 0.75] (seg "(segment 4 saw)" 1)))
+  (is (near-all? [0.5 1 0.5 0] (seg "(segment 4 sine)") 1e-12))
+  (is (= [0 0 1 1] (seg "(segment 4 square)")))
+  (is (= [0 0.6295689214020967 0.2591378428041935 0.20052618719637394] (seg "(segment 4 rand)")))
+  (is (= [0 5 2 1] (seg "(segment 4 (irand 8))")))
+  (is (= [0 1 2 3] (seg "(run 4)")))
+  (is (= [3 3 3 3] (seg "(segment 4 (steady 3))")))
+  (is (near-all? [0 0.5 1 1.5] (seg "(segment 4 (signal (fn [t] (* 2 t))))") 1e-12)))
+
+(deftest tl2-parameters-sampled-at-onsets
+  (let [evs (sort-by #(core/rat->float (:start (:whole %)))
+                     (onsets (eval-pat "(pan sine (fast 8 (seq :hh)))") 0))]
+    (is (= 8 (count evs)))
+    (is (near-all? [0.5 0.8535533905932737 1 0.8535533905932737 0.5
+                    0.14644660940672627 0 0.14644660940672616]
+                   (mapv #(:pan (:value %)) evs) 1e-12)))
+  (let [pat (eval-pat "(->> (fast 16 (seq :hh)) (amp (range 0.3 0.9 (slow 4 saw))))")
+        amp-at (fn [cyc start]
+                 (->> (onsets pat cyc)
+                      (filter #(= start (:start (:whole %))))
+                      first :value :amp))]
+    (is (< (Math/abs (- 0.3 (amp-at 0 [0 1]))) 1e-12))
+    (is (< (Math/abs (- 0.375 (amp-at 0 [1 2]))) 1e-12))
+    (is (< (Math/abs (- 0.440625 (amp-at 0 [15 16]))) 1e-12))
+    (is (< (Math/abs (- 0.890625 (amp-at 3 [63 16]))) 1e-12))))
+
+(deftest tl2-range-dispatch
+  (testing "pattern last argument is Tidal range"
+    (let [vs (seg "(segment 16 (range 2 6 saw))")]
+      (is (= 2 (first vs)))
+      (is (every? #(and (>= % 2) (< % 6)) vs)))
+    (is (< (Math/abs (- 6 (second (seg "(segment 4 (range 2 6 sine))")))) 1e-12))
+    (is (near-all? [20 63.245553203367585 200] (take 3 (seg "(segment 4 (rangex 20 2000 saw))")) 1e-9))
+    (is (near-all? (seg "(segment 4 sine2)") (seg "(segment 4 (range2 -1 1 sine2))") 1e-12)))
+  (testing "rangex with non-positive bounds is an eval error"
+    (is (lisp/eval-error? (lisp/eval-string "(rangex 0 10 saw)" (make-test-env)))))
+  (testing "collection range unchanged"
+    (is (= [0 1 2 3 4] (eval-result "(vec (range 5))")))
+    (is (= [0 2 4 6] (vec (eval-result "(range 0 8 2)"))))))
+
+(deftest tl2-lisp-examples
+  (let [evs (onsets (eval-pat "(->> (segment 8 (range 1 8 rand)) (scale :minor :c4))") 0)]
+    (is (= 8 (count evs)))
+    (is (every? #(number? (:value %)) evs)))
+  (let [evs (onsets (eval-pat "(pan (range -0.5 0.5 perlin) (fast 4 (seq :hh)))") 0)]
+    (is (= 4 (count evs)))
+    (is (every? #(<= -0.5 (:pan (:value %)) 0.5) evs)))
+  (testing "curried forms"
+    (is (= [0 0.25 0.5 0.75] (seg "(->> saw (segment 4))")))
+    (is (= 4 (count (seg "(->> saw (range 2 6) (segment 4))"))))
+    (is (= 2 (count (seg "(->> sine (rangex 100 1000) (segment 2))")))))
+  (testing "nil-whole safety through the Lisp layer"
+    (is (= [0 0.5 0 0.5] (seg "(segment 4 (fast 2 saw))")))
+    (is (= [0.75 0 0.25 0.5] (seg "(segment 4 (late 1/4 saw))")))))
+
+(deftest tl2-documented-examples-evaluate
+  (testing "every TL2 example in builtin_meta.edn / docs evaluates to a pattern"
+    (doseq [code ["(pan sine2 (fast 8 (seq :hh)))"
+                  "(->> (fast 16 (seq :hh)) (amp (range 0.3 0.9 (slow 4 saw))))"
+                  "(->> (segment 8 (range 1 8 rand)) (scale :minor :c4))"
+                  "(pan (range -0.5 0.5 perlin) (fast 4 (seq :hh)))"
+                  "(segment 4 saw)"
+                  "(synth :saw (seq :c4 :e4))"
+                  "(segment 4 (range 200 2000 saw))"
+                  "(segment 8 (rangex 100 5000 sine))"
+                  "(segment 4 (range2 0 1 sine2))"
+                  "(segment 4 (to-bipolar saw))"
+                  "(segment 4 (from-bipolar sine2))"
+                  "(segment 8 (irand 8))"
+                  "(segment 4 (early 7 rand))"
+                  "(run 4)"
+                  "(segment 4 (signal (fn [t] (* t 2))))"
+                  "(segment 4 (steady 1))"
+                  "(segment 4 time)"
+                  "(segment 4 tri)" "(segment 4 itri)" "(segment 4 isaw)"
+                  "(segment 4 cosine)" "(segment 4 isquare)" "(segment 4 square)"
+                  "(segment 4 rand2)" "(segment 4 sine2)" "(segment 4 cosine2)"
+                  "(segment 4 saw2)" "(segment 4 isaw2)" "(segment 4 tri2)"
+                  "(segment 4 itri2)" "(segment 4 square2)" "(segment 4 isquare2)"
+                  "(->> saw (segment 4))"
+                  "(->> sine (rangex 100 1000) (segment 2))"
+                  "(slow 4 saw)"]]
+      (let [pat (eval-pat code)]
+        (is (core/pattern? pat) code)
+        (when (core/pattern? pat)
+          (is (seq (mapcat #(core/query pat (core/cycle-span %)) (range 4))) code))))))

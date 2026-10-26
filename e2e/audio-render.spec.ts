@@ -125,3 +125,18 @@ test('late 1/2 of a pure kick triggers once per cycle', async ({ page }) => {
   const mono = mixMono(result.left, result.right);
   expect(countOnsets(mono, result.sampleRate)).toBe(2);
 });
+
+// TL2: a bare continuous signal has no onsets, so it renders silence without error.
+test('bare sine signal renders silence without throwing', async ({ page }) => {
+  const result = await render(page, 'sine');
+  const mono = mixMono(result.left, result.right);
+  assertFinitePcm(mono);
+  expect(rms(mono)).toBeLessThan(SILENCE_RMS);
+});
+
+test('pan sine2 over eight hats has eight onsets', async ({ page }) => {
+  const result = await render(page, '(pan sine2 (fast 8 (seq :hh)))');
+  const mono = mixMono(result.left, result.right);
+  expect(rms(mono)).toBeGreaterThan(NON_SILENT_RMS);
+  expect(countOnsets(mono, result.sampleRate)).toBe(8);
+});

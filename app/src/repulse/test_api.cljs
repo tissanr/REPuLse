@@ -40,8 +40,8 @@
     {:value      (safe-value (:value ev))
      :start      (core/rat->float (:start part))
      :end        (core/rat->float (:end part))
-     :wholeStart (core/rat->float (:start whole))
-     :wholeEnd   (core/rat->float (:end whole))}))
+     :wholeStart (when whole (core/rat->float (:start whole)))
+     :wholeEnd   (when whole (core/rat->float (:end whole)))}))
 
 (defn- eval-to-events
   ([code] (eval-to-events code 1))
