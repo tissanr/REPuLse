@@ -38,7 +38,7 @@ without a human:
 | 3 | TL3 | Time & structure combinators | 🤖 | full | sonnet |
 | 4 | TL3b | Zoom, compress & structure extras | 🤖 | full | sonnet |
 | 5 | TL4 | Randomness & conditionals | 🤖 | full | sonnet |
-| 6 | TL5 | Layering, pitch & harmony | 🤖 | outline | sonnet |
+| 6 | TL5 | Layering, pitch & harmony | 🤖 | full | sonnet |
 | 7 | TL6 | Sample slicing & playback control | 🤖👂 | outline | opus |
 | 8 | TL7 | Per-event effects & control parameters | 🤖👂 | outline | opus |
 | 9 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
