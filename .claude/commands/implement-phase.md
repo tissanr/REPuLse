@@ -62,7 +62,18 @@ Update `README.md` too if the phase adds user-facing syntax or changes the quick
 - Change `📋 *planned*` → `✅ *delivered*` in the heading
 - Add a **Delivered:** section with 2–6 bullet points summarising what was built (match the style of existing delivered phases)
 
-### 7. Commit
+### 7. Write the test protocol (Rule 5)
+
+Write the `## Test protocol` section for the PR as described in **Rule 5** of `CLAUDE.md`:
+a GitHub task list with one checkbox per test, each with a pasteable snippet and its
+concrete expected outcome. Check pattern snippets with the TEST1 harness and copy values
+from its output; never invent them. It is not a file in the repo.
+
+- If a PR for this branch already exists (`gh pr view`), append the section to its
+  description with `gh pr edit --body-file`, as the last section before the 🤖 line.
+- Otherwise put it at the end of the description when opening the PR (`/commit-push-pr`).
+
+### 8. Commit
 
 Run `npm run test:all` first (Rule 2, step 1). Commit implementation + docs + ROADMAP.md together. Message format:
 ```
