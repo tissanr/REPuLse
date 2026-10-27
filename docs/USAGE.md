@@ -691,42 +691,95 @@ Shift all events forward (`late`) or backward (`early`) within the cycle:
 Amounts may be integers, rationals (`1/3` is exact) or floats; floats become the
 nearest rational with a denominator up to 1 000 000, so `0.3333333` is exactly `1/3`.
 
-### `sometimes` / `often` / `rarely` — probabilistic transforms
+> **Random sequences changed in TL4.** Randomness now uses Tidal's exact `timeToRand`
+> (see [Randomness](#randomness---rand-irand-perlin)), so the old, visibly periodic 0–99
+> hash is gone and **which cycles/events are picked is different from before**:
+>
+> | Before TL4 | Now |
+> |---|---|
+> | `sometimes` / `often` / `rarely` / `sometimes-by` transformed whole **cycles** | They decide **per event**. The old behaviour is `some-cycles` / `some-cycles-by` |
+> | `choose` / `wchoose` gave one value per cycle | They are **signals** (silent on their own): `(segment 4 (choose [:bd :sd]))`. The old behaviour is `choose-cycles` / `wchoose-cycles` (or `randcat`) |
+> | `degrade` / `degrade-by` used a coarse hash of the event time | They keep an event when `rand` at its start is `>= prob` — different events survive |
+> | `(~ "bd?")` was truly random on every query | `?` is deterministic and repeats identically each time you evaluate it; `?0.3` sets the amount |
+>
+> There is no legacy flag. Use `(with-seed n pat)` to get a different (still
+> deterministic) variation.
 
-Apply a transformation with a given probability. The result is deterministic — the same
-cycle always gets the same decision:
+### `sometimes` family — per-event probabilistic transforms
 
-```lisp
-(sometimes rev (seq :c4 :e4 :g4 :c5))   ; reverse ~50% of cycles
-(often (fast 2) (seq :hh :oh))           ; speed up ~75% of cycles
-(rarely rev melody)                       ; reverse ~25% of cycles
-```
-
-Use `sometimes-by` for custom probability:
-
-```lisp
-(sometimes-by 0.2 (fast 4) fill)   ; double-time 20% of cycles
-(sometimes-by "<0.1 0.9>" rev fill) ; probability may be a pattern
-```
-
-### `degrade` / `degrade-by` — probabilistic event removal
-
-Randomly drop events from a pattern each cycle:
+Each **event** independently goes through the transform with a given probability. The
+result is deterministic — the same event time always gets the same decision:
 
 ```lisp
-(degrade (seq :hh :hh :hh :hh))           ; drop ~50% of hi-hats
-(degrade-by 0.3 (fast 4 (seq :hh :oh)))   ; drop 30% of events
-(degrade-by "<0 0.5>" (fast 8 (pure :hh))) ; patterned probability
+(sometimes (fast 2) (seq :bd :sd :hh :cp))   ; each event: 50% through (fast 2)
+(often (fast 2) (seq :hh :oh))               ; 75%
+(rarely rev melody)                          ; 25%
+(sometimes-by 0.2 (fast 4) fill)             ; custom probability
+(sometimes-by "<0.1 0.9>" rev fill)          ; probability may be a pattern
 ```
 
-### `choose` / `wchoose` — random selection per cycle
+| Name | Probability |
+|---|---|
+| `almost-never` | 0.1 |
+| `rarely` | 0.25 |
+| `sometimes` | 0.5 |
+| `often` | 0.75 |
+| `almost-always` | 0.9 |
+| `always` | 1 (`(always f pat)` ≡ `(f pat)`) |
+| `never` | 0 (`(never f pat)` ≡ `pat`) |
 
-Pick one value from a list each cycle (deterministic per cycle):
+`(sometimes-by x f pat)` is `(stack (degrade-by x pat) (f (undegrade-by x pat)))`: every
+event takes exactly one of the two branches *before* `f` is applied.
+
+### `some-cycles` / `some-cycles-by` — per-cycle probabilistic transforms
+
+The whole cycle is either transformed or not (this is the pre-TL4 behaviour of
+`sometimes`). Cycle `c` is answered by `(f pat)` when `rand` at `c` is `< prob`:
 
 ```lisp
-(choose [:bd :sd :hh :oh])                    ; uniform probability
-(wchoose [[0.5 :bd] [0.3 :sd] [0.2 :hh]])    ; weighted — bd most likely
+(some-cycles rev (seq :c4 :e4 :g4 :c5))      ; reverse ~50% of cycles
+(some-cycles-by 0.3 (fast 2) (seq :bd :sd))  ; ~30% of cycles
+(some-cycles-by "<0 1>" rev (seq :a :b))     ; probability may be a pattern
 ```
+
+### `degrade` / `undegrade` / `degrade-by-with` — probabilistic event removal
+
+An event is kept when `rand` at the start of the event is `>= prob`; `undegrade-by` keeps
+the complement (`rand < prob`), so `(stack (degrade-by x p) (undegrade-by x p))` ≡ `p`:
+
+```lisp
+(degrade (seq :hh :hh :hh :hh))             ; drop ~50% of hi-hats
+(degrade-by 0.3 (fast 4 (seq :hh :oh)))     ; drop 30% of events
+(degrade-by "<0 0.5>" (fast 8 (pure :hh)))  ; patterned probability
+(undegrade-by 0.3 (fast 8 (pure :hh)))      ; keep the 30% degrade-by 0.3 would drop
+(degrade-by-with saw 0.5 (fast 8 (pure :hh))) ; your own random source: keep where saw >= 0.5
+```
+
+### Random choice — `choose` `wchoose` `choose-cycles` `randcat`
+
+`choose` and `wchoose` are **continuous signals** (like `rand`): they have no onsets of
+their own, so sample them with `segment` or `struct`. Weights come first in `wchoose`:
+
+```lisp
+(segment 4 (choose [:bd :sd :hh :oh]))         ; four random picks per cycle
+(struct "t ~ t t" (choose [:bd :sd]))
+(segment 4 (wchoose [[3 :bd] [1 :sd]]))        ; weighted: bd is 3x as likely
+(segment 4 (choose-with sine [:a :b :c]))      ; pick with your own 0..1 signal
+```
+
+> A bare `(choose [:bd :sd])` is silent after TL4. Use `choose-cycles` for one pick per
+> cycle (the old behaviour).
+
+```lisp
+(choose-cycles [:bd :sd :hh])                  ; one value per cycle
+(wchoose-cycles [[3 :bd] [1 :sd]])             ; weighted, one per cycle
+(randcat (seq :bd :sd) (seq :hh :hh :oh) (seq :cp))   ; a random pattern per cycle
+(wrandcat [3 (seq :bd :sd)] [1 (pure :cp)])    ; weighted random pattern per cycle
+(choose-in [(seq :a :b) (seq :c :d)])          ; chosen pattern keeps its own structure
+```
+
+`choose-in` and `choose-in-with` depend on where a query starts, so they can differ
+between scheduler chunks; prefer `randcat` for a stable per-cycle choice.
 
 ### `jux` / `jux-by` — stereo spatial layering
 
@@ -916,14 +969,54 @@ the collection function `(range 0 8 2)`.
 
 `rand` is deterministic: it is Tidal's `timeToRand` of the sampling time, so a given
 position in the song always yields the same number, on every run. `rand` is exactly `0` at
-time 0 (and every 300 cycles). To get a different stream, offset it in time:
-`(early 7 rand)`. `(irand n)` gives random integers `0 .. n-1`, and `perlin` is smooth
-noise that glides between random values.
+time 0 (and every 300 cycles). `(irand n)` gives random integers `0 .. n-1`, and `perlin`
+is smooth noise that glides between random values. To get a different stream use
+`(with-seed n pat)`: every random function inside `pat` reads its random number at time
+`t + n` instead of `t` (structure is not shifted; the innermost `with-seed` wins; `n` may
+be a pattern). A per-track seed is just `(track :x (with-seed 3 ...))`.
 
 ```lisp
 (segment 8 (irand 8))                 ; 0 5 2 1 ... (deterministic)
-(segment 4 (early 7 rand))            ; another random stream
+(segment 4 (with-seed 7 rand))        ; another random stream
+(with-seed 7 (shuffle 4 (seq :a :b :c :d)))   ; a different, still deterministic, permutation
 ```
+
+More random sources:
+
+| Name | Meaning |
+|---|---|
+| `brand` / `(brand-by p)` | Boolean signal: `true` when `rand < 0.5` / `< p` (use with `struct`, `mask`, `sew`, `when-pat`) |
+| `berlin` | Sawtooth-like ridge noise in 0..1 (`rand` at the cycle start blended into the next) |
+| `(rand-l n)` | Signal whose value is a vector of `n` random floats |
+| `(randrun n)` | A random permutation of `0 .. n-1` each cycle, `n` events per cycle |
+
+```lisp
+(segment 4 brand)                     ; true false true true
+(struct (segment 8 (brand-by 0.25)) (pure :hh))
+(randrun 4)                           ; each of 0 1 2 3 once per cycle (shuffled)
+```
+
+### `shuffle` / `scramble` — random slice order
+
+```lisp
+(shuffle 4 (seq :a :b :c :d))   ; each cycle: the 4 slices in random order, each exactly once
+(scramble 4 (seq :a :b :c :d))  ; each of 4 slots plays a random slice (repeats possible)
+(shuffle "<2 4>" pat)           ; n may be a pattern
+```
+
+### Conditionals — `when-pat` `whenmod` `apply-n`
+
+```lisp
+(when-pat "<0 1>" rev (seq :a :b))            ; where the boolean pattern is true, apply rev
+(when-pat (fn [c] (> c 3)) rev (seq :a :b))   ; or a function of the cycle number (Tidal when)
+(whenmod 8 6 rev (seq 0 2 4 7))               ; rev in cycles 6 and 7 of every 8 (c mod 8 >= 6)
+(whenmod "<4 2>" 1 rev (seq :a :b))           ; a and b may be patterns
+(apply-n 2 (fast 2) (seq :a :b))              ; (fast 2 (fast 2 ...)) — apply f n times
+(always rev pat)  (never rev pat)             ; ≡ (rev pat) / pat
+```
+
+`when-pat` is Strudel's `when` (named so to keep `when` free); Tidal's `while` is the same
+thing with a pattern condition, so it has no separate name.
 
 ### `run` `signal` `steady` `time`
 
@@ -1630,7 +1723,7 @@ Lisp is the host language and `~` is just another function returning a Pattern.
 (~ "bd [sd hh]")     ; subdivision — sd and hh share one step
 (~ "hh*4 sd")        ; repetition — four hats then a snare
 (~ "<bd sd cp>")     ; alternation — cycles through bd → sd → cp
-(~ "bd? sd")         ; 50% probability — bd plays on ~half of cycles
+(~ "bd? sd")         ; 50% probability — deterministic: the same events every time
 (~ "bd:2 sd:0")      ; sample index — ≡ (sound :bd 2), (sound :sd 0)
 (~ "bd@3 sd")        ; elongation — bd takes ¾ of the cycle
 (~ "c4 e4 g4")       ; note names → keywords (:c4 :e4 :g4)
@@ -1642,7 +1735,17 @@ Lisp is the host language and `~` is just another function returning a Pattern.
 (~ "{a b c}%4")      ; polymeter — 4 steps per cycle through a b c: a b c a | b c a b
 (~ "{a b c, d e}")   ; layers with different lengths on the first layer's grid
 (~ "bd(3,8)")        ; euclid — 3 hits in 8 steps; bd(3,8,2) rotates; bd(<3 5>,8) is patterned
+(~ "hh*8?0.3")       ; ?amount — drop 30% of the hats (the number must touch the ?)
+(~ "[bd | sd sd | hh*3]") ; "|" — one random alternative per cycle
 ```
+
+**Randomness is deterministic.** `x?` is `(degrade-by-with (early (* seed 3/10000) rand) 0.5 x)`
+and `a | b` picks with `(early (* seed 3/10000) rand)` sampled once per cycle, where `seed`
+is a counter that starts at 0 for each string and is incremented, in parse-completion
+order, for every `?`, every `|` group and every `.`-feet group (Strudel's krill `seed++`).
+So `"a? b? c? d?"` degrades the four steps independently, and evaluating the same string
+always gives the same events. `"a? 0.3"` (with a space) is two steps. `|` is allowed at top
+level and inside `[ ]`, but not inside `< >` or `{ }`, and not mixed with `,` in the same group.
 
 `_` is a **rest** (like `~`); use `@` to elongate a step (`bd@3`). This is a deliberate
 difference from Strudel, where `_` extends the previous step.
@@ -2959,8 +3062,12 @@ transform  = "(fast"  number pattern ")"
            | "(early" number pattern ")"
            | "(jux"   fn pattern ")"
            | "(off"   number fn pattern ")"
-           | "(sometimes" fn pattern ")"
+           | "(sometimes" fn pattern ")"      ; per event
+           | "(some-cycles" fn pattern ")"    ; per cycle
            | "(degrade" pattern ")"
+           | "(randcat" pattern+ ")"
+           | "(shuffle" n pattern ")"
+           | "(whenmod" a b fn pattern ")"
            | "(fmap"  fn pattern ")"
 
 ;; Per-event parameters (value + pattern, or pattern → pattern transformer)
@@ -3123,7 +3230,7 @@ The app exposes a serverless REST API on Vercel:
 (~ "bd [sd hh]")             ; subdivision: sd and hh share one slot
 (~ "hh*4 sd")                ; repetition: four hats then a snare
 (~ "<bd sd cp>")             ; alternation: cycles through bd → sd → cp
-(~ "bd? sd")                 ; bd plays with ~50% probability
+(~ "bd? sd")                 ; bd is deterministically dropped on ~half of the cycles
 (~ "bd:2 sd:0")              ; sample index: (sound :bd 2), (sound :sd 0)
 (~ "bd@3 sd")                ; elongation: bd takes ¾ of the cycle
 (~ "c4 e4 g4")               ; note names → keywords (:c4 :e4 :g4)

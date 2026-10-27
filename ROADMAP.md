@@ -1904,7 +1904,7 @@ See full spec: [PROMPTS/PHASE-TL3b.md](PROMPTS/PHASE-TL3b.md)
 
 ---
 
-## Phase TL4 — Randomness & Conditionals 📋 *planned*
+## Phase TL4 — Randomness & Conditionals ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖 auto
 
@@ -1917,7 +1917,47 @@ Controlled unpredictability with Tidal semantics; replaces the coarse `cycle-has
   per-pattern seeds via `with-seed`
 - Mini-notation: deterministic `?`, `?0.3` and `|` random choice
 
+**Delivered:**
+- `packages/core/src/repulse/core.cljs` — seeded RNG (`*rand-seed*`, `seed->rand`,
+  `time->rands`, `rand-at`; `rand`/`perlin` seed-aware); `cycle-hash` and `event-hash` deleted.
+  New TL4 block: `degrade-by degrade undegrade-by undegrade degrade-by-with` (Tidal `>=`),
+  per-event `sometimes-by sometimes often rarely almost-never almost-always always never`,
+  per-cycle `some-cycles-by some-cycles`, signal-based `choose wchoose choose-with
+  choose-in-with choose-in`, per-cycle `choose-cycles wchoose-cycles randcat wrandcat`,
+  `brand brand-by berlin rand-l randrun`, `with-seed`, `shuffle scramble`, `when-pat whenmod
+  apply-n`. 27 new built-ins, 8 re-based ones
+- Mini-notation — deterministic `?` (Strudel seeding, no more `Math/random`), `?0.3`
+  amounts and `|` random choice with a per-string seed counter; parse errors for `|` inside
+  `< >`/`{ }` and for mixing `,` and `|`
+- Lisp — new `builtins/random.cljs` (curried forms for `->>`); `brand`/`berlin` in
+  `builtins/signals.cljs`; `choose`/`wchoose` keep the vector, weight-first signature
+- Rule 3/5 artefacts: grammar + `parser.js`, `completions.js`, `hover.js`,
+  `builtin_meta.edn`, `docs/ai/builtins.json`; USAGE rewritten sections plus the "Random
+  sequences changed in TL4" note, README rows, STRUDEL-PARITY rows and summary
+- Tests: every spec vector in `core_test`/`mini_test`/`integration_test`, statistics over
+  1000 cycles, `tl4-documented-examples-evaluate`, four Playwright onset-count tests. Existing
+  tests migrated to the new semantics: `choose`/`wchoose` per-cycle tests moved to
+  `choose-cycles`/`wchoose-cycles`, `choose-attaches-source`, `lisp-choose-attaches-source`,
+  `degrade-produces-subset` (mini `?` is now deterministic) and
+  `sometimes-by-multi-cycle-span` (the per-event stack lists branch by branch)
+- Deferred to TL4b: `pick*`, `inhabit`, `fix`
+
 See full spec: [PROMPTS/PHASE-TL4.md](PROMPTS/PHASE-TL4.md)
+
+---
+
+## Phase TL4b — Pick & Fix 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖 auto
+
+The selection and matching functions deferred from TL4.
+
+**Key additions:**
+- `pick pick-mod pick-f pick-out pick-restart pick-reset inhabit` — choose patterns or
+  functions from a lookup by an index/name pattern
+- Tidal `fix` — apply a function to events matching control values
+
+See full spec: [PROMPTS/PHASE-TL4b.md](PROMPTS/PHASE-TL4b.md)
 
 ---
 
