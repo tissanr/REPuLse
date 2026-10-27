@@ -37,7 +37,7 @@ without a human:
 | 2 | TL2 | Continuous signals | 🤖 | full | sonnet |
 | 3 | TL3 | Time & structure combinators | 🤖 | full | sonnet |
 | 4 | TL3b | Zoom, compress & structure extras | 🤖 | full | sonnet |
-| 5 | TL4 | Randomness & conditionals | 🤖 | outline | sonnet |
+| 5 | TL4 | Randomness & conditionals | 🤖 | full | sonnet |
 | 6 | TL5 | Layering, pitch & harmony | 🤖 | outline | sonnet |
 | 7 | TL6 | Sample slicing & playback control | 🤖👂 | outline | opus |
 | 8 | TL7 | Per-event effects & control parameters | 🤖👂 | outline | opus |
@@ -1911,9 +1911,11 @@ See full spec: [PROMPTS/PHASE-TL3b.md](PROMPTS/PHASE-TL3b.md)
 Controlled unpredictability with Tidal semantics; replaces the coarse `cycle-hash`.
 
 **Key additions:**
-- Existing random functions re-based on `time->rand` (probabilities preserved)
-- `some-cycles-by randcat wrandcat shuffle scramble when when-mod almost-always almost-never`, seeds
-- Mini-notation `?p` and `|` random choice where missing
+- Existing random functions re-based on `time->rand` (probabilities preserved); `sometimes*`
+  per event (Strudel), per-cycle behaviour as `some-cycles*`; `choose`/`wchoose` become signals
+- `randcat wrandcat choose-cycles shuffle scramble randrun brand berlin when-pat whenmod apply-n`,
+  per-pattern seeds via `with-seed`
+- Mini-notation: deterministic `?`, `?0.3` and `|` random choice
 
 See full spec: [PROMPTS/PHASE-TL4.md](PROMPTS/PHASE-TL4.md)
 
