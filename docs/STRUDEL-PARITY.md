@@ -40,17 +40,17 @@ Method-chaining (`s("bd").fast(2)`) maps to Lisp application or threading:
 
 | Family | Phase | ✅ | 🟡 | 📋 | 🔁 | ⛔ | ❓ | Total |
 |---|---|---|---|---|---|---|---|---|
-| Core & pattern arithmetic | TL1 | 15 | 2 | 18 | 7 | 4 | 8 | 54 |
+| Core & pattern arithmetic | TL1 | 16 | 2 | 17 | 7 | 4 | 8 | 54 |
 | Continuous signals | TL2/TL4 | 30 | 0 | 0 | 3 | 1 | 2 | 36 |
 | Time & structure | TL3/TL3b | 44 | 0 | 0 | 9 | 2 | 6 | 61 |
 | Randomness & conditionals | TL4/TL4b | 27 | 0 | 6 | 8 | 1 | 2 | 44 |
-| Layering, pitch & harmony | TL5 | 4 | 3 | 12 | 5 | 0 | 2 | 26 |
+| Layering, pitch & harmony | TL5 | 18 | 1 | 0 | 5 | 0 | 2 | 26 |
 | Sample manipulation | TL6 | 3 | 1 | 11 | 2 | 1 | 2 | 20 |
 | Control parameters & effects | TL7 | 4 | 14 | 20 | 4 | 7 | 9 | 58 |
 | Mini-notation | TL1/TL3/TL4 | 15 | 0 | 2 | 0 | 0 | 0 | 17 |
-| Tidal-only functions | TL3–TL5 | 5 | 0 | 3 | 3 | 0 | 2 | 13 |
+| Tidal-only functions | TL3–TL5 | 7 | 0 | 1 | 3 | 0 | 2 | 13 |
 | Visuals, I/O & JS-specific | — | 4 | 2 | 1 | 1 | 13 | 3 | 24 |
-| **Total** | | **151** | **22** | **73** | **42** | **29** | **36** | **353** |
+| **Total** | | **168** | **20** | **58** | **42** | **29** | **36** | **353** |
 
 Rows grouped in one line (e.g. `sine2 / cosine2 / …`) count once.
 
@@ -113,7 +113,7 @@ arithmetic on pattern values.
 | `early` | `early` | ✅ | TL1 | Exact rationals; floats → nearest rational (denominator ≤ 10⁶); patterned amount |
 | `late` | `late` | ✅ | TL1 | Same as `early` |
 | `hush` | `stop` | 🔁 | — | |
-| `layer` | `layer` | 📋 | TL1 | Apply several functions and stack results |
+| `layer` | `layer` | ✅ | TL5 | Delivered in TL5 with `superimpose`: `(layer f … pat)` stacks `(f pat)` for every f, without the original |
 | `compressSpan`, `focusSpan`, `zoomArc` | see TL3 | 🔁 | — | |
 | `ref` | — | ❓ | — | Reference to a live value; overlaps with T1 tweens and N1 CC mapping |
 | `cpm` | `bpm` | 🔁 | — | Strudel sets cycles/min per pattern; REPuLse tempo is global |
@@ -298,36 +298,36 @@ The `pick` family, `inhabit` and Tidal `fix` are deferred to **TL4b**.
 
 ## Layering, pitch & harmony — TL5
 
-**Decided (2026-10-26):** REPuLse `scale` is currently 1-indexed and returns Hz. TL5
-switches it to **0-indexed degrees returning notes**, as in Tidal/Strudel, so tutorials
-translate directly. This is a deliberate breaking change.
+**Delivered (TL5):** REPuLse `scale` is now **0-indexed and returns note keywords** (it was
+1-indexed and returned Hz), as in Tidal/Strudel, so tutorials translate directly. `chord` and
+`transpose` return note keywords too. This was a deliberate breaking change.
 
 | Strudel | REPuLse | Status | Phase | Notes |
 |---|---|---|---|---|
-| `superimpose` | `superimpose` | 📋 | TL5 | |
+| `superimpose` | `superimpose` | ✅ | TL5 | Variadic in functions; curried when only functions are given |
 | `off` | `off` | ✅ | — | |
-| `echo` | `echo` | 📋 | TL5 | |
-| `stut` | `stut` | 🔁 | — | Strudel `stut` = `echo` with Tidal argument order |
-| `echoWith` / `stutWith` | `echo-with` | 📋 | TL5 | |
+| `echo` | `echo` | ✅ | TL5 | Multiplies `:amp` by `feedback^i` (Strudel sets `gain`) |
+| `stut` | `stut` | 🔁 | — | Strudel `stut` = `echo` with Tidal argument order; implemented as an alias, Tidal argument order |
+| `echoWith` / `stutWith` | `echo-with` | ✅ | TL5 | Follows Tidal `stutWith` (original untouched, `f` takes one argument); Strudel's `echoWith` also applies `f` to layer 0 |
 | `stutWith` | `echo-with` | 🔁 | — | |
 | `jux` | `jux` | ✅ | — | |
 | `juxBy` | `jux-by` | ✅ | — | |
-| `juxFlip` / `flux` | `jux-flip` | 📋 | TL5 | |
-| `juxFlipBy` / `fluxBy` | `jux-flip-by` | 📋 | TL5 | |
-| `arp` | `arp` | 📋 | TL5 | |
-| `arpWith` | `arp-with` | 📋 | TL5 | |
-| `voicing` | `voicing` | 📋 | TL5 | |
+| `juxFlip` / `flux` | `jux-flip` | ✅ | TL5 | |
+| `juxFlipBy` / `fluxBy` | `jux-flip-by` | ✅ | TL5 | Patterned width |
+| `arp` | `arp` | ✅ | TL5 | Tidal modes (keyword/pattern) and Strudel index lists (`"0 2 1 3"`); one-note groups pass through |
+| `arpWith` | `arp-with` | ✅ | TL5 | `f` gets a vector of values, returns a pattern |
+| `voicing` | `voicing` | ✅ | TL5 | Chord symbols are strings; anchor-based voice leading; own small dictionary (no port of Strudel's AGPL one) |
 | `voicings` | `voicing` | 🔁 | — | Older API |
-| `rootNotes` | `root-notes` | 📋 | TL5 | |
-| `chord` (control, `"<C Am F G>"`) | `chord` | 🟡 | TL5 | REPuLse `(chord :major7 :c4)` builds a stacked pattern; Strudel uses chord symbols + `voicing`. Add chord-symbol parsing (`"Cm7"`) |
-| `dictionary` / `anchor` / `mode` / `offset` / `octaves` | voicing options | 📋 | TL5 | Voicing controls |
+| `rootNotes` | `root-notes` | ✅ | TL5 | |
+| `chord` (control, `"<C Am F G>"`) | `chord` | ✅ | TL5 | `(chord "Cm7")` takes chord symbols (34 qualities, slash chords) as strings; the keyword form `(chord :major7 :c4)` still works and returns notes |
+| `dictionary` / `anchor` / `mode` / `offset` / `octaves` | voicing options | 🟡 | TL5 | `anchor`/`mode`/`offset` done; single built-in dictionary, no `dictionary`/`octaves` |
 | `setVoicingRange` / `addVoicings` / `registerVoicings` / `voicingAlias` | — | ❓ | — | Custom voicing dictionaries |
-| `scale` | `scale` | 🟡 | TL5 | **Decided:** switch to 0-based degrees returning notes (breaking); patterned scale name |
-| `scaleTranspose` / `scaleTrans` / `strans` | `scale-transpose` | 📋 | TL5 | |
+| `scale` | `scale` | ✅ | TL5 | 0-based degrees returning notes (breaking); patterned name and root; 11 more scales |
+| `scaleTranspose` / `scaleTrans` / `strans` | `scale-transpose` | ✅ | TL5 | |
 | `scaleTrans`, `strans` | `scale-transpose` | 🔁 | — | |
-| `transpose` / `trans` | `transpose` | 🟡 | TL5 | Semitones work; interval strings (`"3M"`) and patterned amount missing |
+| `transpose` / `trans` | `transpose` | ✅ | TL5 | Note keywords stay keywords; interval strings (`"3M"`); patterned amount |
 | `trans` | `transpose` | 🔁 | — | |
-| `xfade` | `xfade` | 📋 | TL5 | Crossfade two patterns by gain |
+| `xfade` | `xfade` | ✅ | TL5 | Crossfade two patterns by scaling `:amp` |
 | `morph` | — | ❓ | — | Strudel's new morph; overlaps the FUTURE-FEATURES `morph` idea |
 | Note names (`c4`, `eb3`) | `:c4`, `:eb3` | ✅ | — | |
 
@@ -465,13 +465,13 @@ Not in Strudel, but common in Tidal tutorials.
 |---|---|---|---|---|
 | `whenmod` | `whenmod` | ✅ | TL4 | Tidal `whenmod a b`; `c mod a >= b`; patterned a, b |
 | `rot` | `rot` | ✅ | TL3 | Rotate values, keep structure; rests keep their place |
-| `stutter` | `stutter` | 📋 | TL5 | |
+| `stutter` | `stutter` | ✅ | TL5 | |
 | `sew` | `sew` | ✅ | TL3b | |
 | `stitch` | `stitch` | ✅ | TL3b | |
 | `fix` | `fix` | 📋 | TL4b | Apply a function to events matching control values |
 | `trunc` | `trunc` | ✅ | TL3b | |
-| `rolled` / `rolledBy` | `rolled` | 📋 | TL5 | Strum chords |
-| `toScale` | `scale` | 🔁 | — | |
+| `rolled` / `rolledBy` | `rolled` / `rolled-by` | ✅ | TL5 | Strum chords |
+| `toScale` | `scale` | 🔁 | — | `scale` with a semitone vector |
 | `discretise` | `segment` | 🔁 | — | |
 | `fastspread` / `spread` | `spread` | ❓ | — | |
 | `nTake` | — | ❓ | — | |

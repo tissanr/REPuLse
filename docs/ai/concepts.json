@@ -79,11 +79,11 @@
   },
 
   "music-theory": {
-    "scale": "(scale :minor :c4 (seq 0 2 4 7)) maps degree integers to Hz using a named scale. Degree 0 is the root. Negative degrees and degrees > scale-length wrap into adjacent octaves.",
-    "scales": ["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "harmonic-minor", "melodic-minor", "pentatonic-major", "pentatonic-minor", "blues", "chromatic", "whole-tone", "diminished"],
-    "chord": "(chord :major7 :c4) stacks all tones of the named chord as simultaneous Hz values in a pattern.",
+    "scale": "(scale :minor :c4 (seq 0 2 4 7)) maps 0-based degree integers to note names using a named scale (or a vector of semitone offsets). Degree 0 is the root. Negative degrees and degrees > scale-length wrap into adjacent octaves. Note names are MIDI-note values, so (add 12 ...) is one octave. Changed in TL5: degrees used to start at 1 and the result was Hz.",
+    "scales": ["major", "ionian", "minor", "aeolian", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "pentatonic", "major-pentatonic", "minor-pentatonic", "blues", "harmonic-minor", "melodic-minor", "whole-tone", "chromatic", "hirajoshi", "phrygian-dominant", "lydian-dominant", "altered", "diminished", "bebop-dominant"],
+    "chord": "(chord :major7 :c4) stacks all tones of the named chord as simultaneous note names in a pattern. Chord symbols work too: (chord \"Cm7\"), (chord \"<C F>\"); (voicing \"<C^7 Dm7 G7>\") voices them with smooth voice leading.",
     "chords": ["major", "minor", "dim", "aug", "sus2", "sus4", "major7", "minor7", "dom7", "dim7", "half-dim7", "aug7"],
-    "transpose": "(transpose n pat) shifts all Hz values by n semitones. Keywords that are not note-keywords (e.g. :bd, :_) pass through unchanged."
+    "transpose": "(transpose n pat) shifts notes by n semitones (n may be a pattern or an interval string like \"3M\"); note names stay note names, plain numbers (Hz) are scaled. Keywords that are not note-keywords (e.g. :bd, :_) pass through unchanged."
   },
 
   "session-snapshot": {

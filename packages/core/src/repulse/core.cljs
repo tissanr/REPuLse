@@ -1506,3 +1506,154 @@
   "Apply f n times."
   [n f pat]
   ((patternify (fn [n' p] (nth (iterate f p) (max 0 (->int n'))))) n pat))
+
+;;; ── Phase TL5: Layering & arpeggios ──────────────────────────────────
+
+(defn superimpose
+  "Stack pat with (f pat) for every function in fs. fs is a vector."
+  [fs pat]
+  (stack* (into [pat] (map #(% pat) fs))))
+
+(defn layer
+  "Stack (f pat) for every function in fs — without the original."
+  [fs pat]
+  (stack* (mapv #(% pat) fs)))
+
+(defn- echo-with* [n t f pat]
+  (let [n (->int n)]
+    (if (<= n 1)
+      pat
+      (stack* [pat (f (late t (echo-with* (dec n) t f pat)))]))))
+
+(defn echo-with
+  "Tidal stutWith: pat plus n-1 copies, copy i = (f ∘ late t) applied i times."
+  [n t f pat]
+  ((patternify2 (fn [n' t' p] (echo-with* n' t' f p))) n t pat))
+
+(defn stutter
+  "Tidal stutter: n copies of pat, t apart, unchanged."
+  [n t pat]
+  (echo-with n t identity pat))
+
+(defn- group-wholes
+  "Group events of one query by equal :whole (order-preserving, digital only)."
+  [evs]
+  (let [ws (distinct (keep :whole evs))]
+    (map (fn [w] (filter #(= w (:whole %)) evs)) ws)))
+
+(defn- with-groups
+  "Apply f (group → events) to every group of simultaneous events.
+   Analog events pass through."
+  [f pat]
+  (pattern (fn [sp]
+             (let [evs (query pat sp)]
+               (concat (remove :whole evs) (mapcat f (group-wholes evs)))))))
+
+(defn- spread-out
+  "Tidal spreadOut: lay the events of a group evenly over the group's whole."
+  [evs]
+  (let [d (count evs)]
+    (keep-indexed
+     (fn [n ev]
+       (let [{s :start e :end} (:whole ev)
+             dur (rat-div (rat- e s) (int->rat d))
+             ns  (rat+ s (rat* dur (int->rat n)))
+             nw  (span ns (rat+ ns dur))
+             np  (span-intersect nw (:part ev))]
+         (when np (assoc ev :whole nw :part np))))
+     evs)))
+
+(defn- converge [xs]
+  (loop [v (vec xs) front? true out []]
+    (if (empty? v)
+      out
+      (if front?
+        (recur (subvec v 1) false (conj out (first v)))
+        (recur (pop v) true (conj out (peek v)))))))
+
+(def arp-modes
+  "Tidal arp modes: name → (vector → vector)."
+  (let [init  #(vec (butlast %))
+        rev   #(vec (reverse %))
+        pinky (fn [x] (vec (mapcat (fn [y] [y (peek x)]) (pop x))))
+        thumb (fn [x] (vec (mapcat (fn [y] [(first x) y]) (rest x))))
+        m {:up            vec
+           :down          rev
+           :up-down       #(into (init %) (init (rev %)))
+           :down-up       #(into (init (rev %)) (init %))
+           :up-and-down   #(into (vec %) (rev %))
+           :down-and-up   #(into (rev %) %)
+           :converge      converge
+           :diverge       #(rev (converge %))
+           :disconverge   #(into (converge %) (rest (rev (converge %))))
+           :pinky-up      pinky
+           :pinky-up-down #(into (init (pinky %)) (init (rev (pinky %))))
+           :thumb-up      thumb
+           :thumb-up-down #(into (init (thumb %)) (init (rev (thumb %))))}]
+    (assoc m :updown (:up-down m) :downup (:down-up m) :pinkyup (:pinky-up m)
+             :pinkyupdown (:pinky-up-down m) :thumbup (:thumb-up m)
+             :thumbupdown (:thumb-up-down m)
+             :up&down (:up-and-down m) :down&up (:down-and-up m))))
+
+(defn- arp* [mode pat]
+  (if-let [f (get arp-modes mode)]
+    (with-groups #(if (< (count %) 2) % (spread-out (f (vec %)))) pat)
+    pat))
+
+(defn arp-index
+  "Strudel arp with an index pattern: structure from ipat, each index picks the
+   (i mod n)-th simultaneous note."
+  [ipat pat]
+  (inner-join
+   (pattern
+    (fn [sp]
+      (for [g (group-wholes (query pat sp))]
+        (assoc (first g) :value
+               (pattern (fn [isp]
+                          (for [ie (query (->pat ipat) isp)
+                                :let [vg (vec g)
+                                      src (nth vg (mod (->int (:value ie)) (count vg)))]]
+                            (with-source (assoc ie :value (:value src)) (:source src)))))))))))
+
+(defn arp
+  "Arpeggiate each group of simultaneous events. mode: keyword (Tidal mode),
+   pattern of modes, or a number/rational (index form)."
+  [mode pat]
+  (if (or (number? mode) (vector? mode))
+    (arp-index mode pat)
+    ((patternify arp*) mode pat)))
+
+(defn arp-with
+  "Collect each group of simultaneous events into a vector of values, call f on
+   it and inner-join the returned pattern."
+  [f pat]
+  (inner-join
+   (pattern (fn [sp] (for [g (group-wholes (query pat sp))]
+                       (assoc (first g) :value (->pat (f (mapv :value g)))))))))
+
+(defn- rolled-by* [t pat]
+  (let [t (->rat t)]
+    (if (zero? (first t))
+      pat
+      (with-groups
+        (fn [g]
+          (let [neg? (neg? (first t))
+                g    (if neg? (reverse g) g)
+                d    (count g)
+                at   (rat-div (if neg? (rat-neg t) t) (int->rat d))]
+            (keep-indexed
+             (fn [n ev]
+               (let [{s :start e :end} (:whole ev)
+                     ns (rat+ s (rat* (rat* (rat- e s) at) (int->rat n)))
+                     nw (span ns e)
+                     np (span-intersect nw (:part ev))]
+                 (when np (assoc ev :whole nw :part np))))
+             g)))
+        pat))))
+
+(defn rolled-by
+  "Tidal rolledBy: stagger the starts of simultaneous events by t of the whole."
+  [t pat]
+  ((patternify rolled-by*) t pat))
+
+(defn rolled [pat] (rolled-by [1 4] pat))

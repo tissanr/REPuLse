@@ -193,3 +193,20 @@ for (const [name, code, expected] of [
     expect(countOnsets(mono, result.sampleRate)).toBe(expected);
   });
 }
+
+// TL5: layering, pitch & harmony — note keywords from scale/chord/voicing reach the audio path
+for (const [name, code, expected] of [
+  // Sine notes need a short decay so consecutive notes are separated by silence
+  ['scale :minor :c4 (seq 0 2 4 7) has four onsets', '(decay 0.05 (scale :minor :c4 (seq 0 2 4 7)))', 4],
+  ['arp :up (chord "Cm7") has four onsets', '(decay 0.05 (arp :up (chord "Cm7")))', 4],
+  // :bd instead of :cp (a multi-burst clap the detector counts as 2)
+  ['echo 3 1/8 0.6 (seq :bd) has three onsets', '(echo 3 1/8 0.6 (seq :bd))', 3],
+  // the 4 simultaneous tones of each voiced chord are one onset to the detector (12 events, 3 onsets)
+  ['voicing of Dm7 G7 C^7 has three chord onsets', '(decay 0.05 (voicing (seq "Dm7" "G7" "C^7")))', 3],
+] as [string, string, number][]) {
+  test(`TL5 ${name}`, async ({ page }) => {
+    const result = await render(page, code);
+    const mono = mixMono(result.left, result.right);
+    expect(countOnsets(mono, result.sampleRate)).toBe(expected);
+  });
+}

@@ -126,10 +126,9 @@
   (testing "(transpose 12 (seq :c4 :e4)) shifts values up an octave"
     (let [evs (eval-pattern "(transpose 12 (seq :c4 :e4))")]
       (is (= 2 (count evs)))
-      ;; transpose produces Hz frequencies, not keywords
+      ;; note keywords stay note keywords (TL5)
       (let [vals (event-values evs)]
-        (is (number? (first vals)))
-        (is (> (first vals) 500))))))
+        (is (= [:c5 :e5] vals))))))
 
 ;;; ── def and multi-form programs ─────────────────────────────────────
 
@@ -472,7 +471,7 @@
 (deftest tl2-lisp-examples
   (let [evs (onsets (eval-pat "(->> (segment 8 (range 1 8 rand)) (scale :minor :c4))") 0)]
     (is (= 8 (count evs)))
-    (is (every? #(number? (:value %)) evs)))
+    (is (every? #(keyword? (:value %)) evs)))
   (let [evs (onsets (eval-pat "(pan (range -0.5 0.5 perlin) (fast 4 (seq :hh)))") 0)]
     (is (= 4 (count evs)))
     (is (every? #(<= -0.5 (:pan (:value %)) 0.5) evs)))
@@ -1079,3 +1078,264 @@
       (is (core/pattern? pat) code)
       (when (core/pattern? pat)
         (is (seq (mapcat #(cycle-evs pat %) (range 16))) code)))))
+
+;;; ── Phase TL5: layering, pitch & harmony ────────────────────────────
+
+(defn- note->m [v] (repulse.theory/note->midi v))
+
+(defn- rows
+  "Onsets of cycle c as [value start end] sorted by start, then value order of
+   the query. start/end are rationals as [n d]."
+  ([code] (rows code 0))
+  ([code c]
+   (->> (onsets (eval-pat code) c)
+        (sort-by (fn [e] (core/rat->float (:start (:whole e)))))
+        (mapv (fn [e] [(:value e) (:start (:whole e)) (:end (:whole e))])))))
+
+(defn- vals-of
+  ([code] (vals-of code 0))
+  ([code c] (mapv first (rows code c))))
+
+(defn- midis-of
+  ([code] (midis-of code 0))
+  ([code c] (mapv note->m (vals-of code c))))
+
+(defn- msort [code c] (vec (sort (midis-of code c))))
+
+(defn- err-msg [code]
+  (let [r (lisp/eval-string code (make-test-env))]
+    (when (lisp/eval-error? r) (:message r))))
+
+(deftest tl5-scale
+  (is (= [60 63 67 72] (midis-of "(scale :minor :c4 (seq 0 2 4 7))")))
+  (is (= [:c4 :ds4 :g4 :c5] (vals-of "(scale :minor :c4 (seq 0 2 4 7))")))
+  (is (= [58] (midis-of "(scale :minor :c4 (seq -1))")))
+  (is (= [60 72 84] (midis-of "(scale :major :c4 (seq 0 7 14))")))
+  (is (= [62] (midis-of "(scale :major :c4 (seq 1))")))
+  (is (= [:d4] (vals-of "(scale :minor :c4 (seq 1.7))")))
+  (is (= [:_ :c4] (vals-of "(scale :minor :c4 (seq :_ 0))")))
+  (is (= [60] (midis-of "(add 12 (scale :minor :c3 (seq 0)))")))
+  (is (= [64] (midis-of "(scale \"<major minor>\" :c4 (seq 2))" 0)))
+  (is (= [63] (midis-of "(scale \"<major minor>\" :c4 (seq 2))" 1)))
+  (is (= [60 62 64] (midis-of "(scale [0 2 4 5 7 9 11] :c4 (seq 0 1 2))")))
+  (is (= [50 53] (midis-of "(->> (seq 0 2) (scale :dorian :d3))")))
+  (is (= [71] (midis-of "(scale :harmonic-minor :c4 (seq 6))")))
+  (is (= [70] (midis-of "(scale :whole-tone :c4 (seq 5))")))
+  (is (= [73] (midis-of "(scale :chromatic :c4 (seq 13))")))
+  (is (= [64] (midis-of "(scale :altered :c4 (seq 3))")))
+  (is (= [72] (midis-of "(scale :bebop-dominant :c4 (seq 8))")))
+  (is (includes? (err-msg "(scale :foo :c4 (seq 0))") "scale: unknown scale :foo")))
+
+(deftest tl5-chord-transpose
+  (is (= [:c4 :ds4 :g4 :as4] (vals-of "(chord :minor7 :c4)")))
+  (is (= [:c5 :e5] (vals-of "(transpose 12 (seq :c4 :e4))")))
+  (is (= [:e4] (vals-of "(transpose \"3M\" (seq :c4))")))
+  (is (= [:as3] (vals-of "(transpose \"-2M\" (seq :c4))")))
+  (is (= [:c5] (vals-of "(transpose \"8P\" (seq :c4))")))
+  (is (= [:g4] (vals-of "(transpose \"<0 7>\" (seq :c4))" 1)))
+  (is (= [:e4] (vals-of "(transpose \"<3M 5P>\" (seq :c4))" 0)))
+  (is (= [:g4] (vals-of "(transpose \"<3M 5P>\" (seq :c4))" 1)))
+  (is (= [880] (vals-of "(transpose 12 (seq 440))")))
+  (is (= [{:note :g4 :amp 0.5}] (vals-of "(transpose 7 (pure {:note :c4 :amp 0.5}))")))
+  (is (= [:bd :_] (vals-of "(transpose 7 (seq :bd :_))")))
+  (is (includes? (err-msg "(transpose \"3P\" (seq :c4))") "invalid interval"))
+  (testing "token source offsets intact"
+    (let [evs (onsets (eval-pat "(transpose \"<3M 5P>\" (seq :c4))") 0)]
+      (is (some? (:source (first evs)))))))
+
+(deftest tl5-scale-transpose
+  (is (= [2 4 6] (vals-of "(scale-transpose 2 :minor (seq 0 2 4))")))
+  (is (= [63 67 70] (midis-of "(->> (seq 0 2 4) (scale-transpose 2 :minor) (scale :minor :c4))")))
+  (is (= [0 2 4] (vals-of "(scale-transpose \"<0 2>\" :minor (seq 0 2 4))" 0)))
+  (is (= [2 4 6] (vals-of "(scale-transpose \"<0 2>\" :minor (seq 0 2 4))" 1)))
+  (is (= [62 65 68] (midis-of "(scale-transpose 1 :minor (seq :c4 :eb4 :g4))")))
+  (is (= [59] (midis-of "(scale-transpose -1 :major (seq :c4))")))
+  (is (= [:e4 :f4] (vals-of "(scale-transpose 1 [:dorian :d] (seq :d4 :e4))")))
+  (is (= [:c4] (vals-of "(scale-transpose 0 :major (seq :cs4))"))))
+
+(deftest tl5-chord-symbols
+  (is (= [:c4 :ds4 :g4 :as4] (vals-of "(chord \"Cm7\")")))
+  (is (every? #(= [[0 1] [1 1]] [(second %) (nth % 2)]) (rows "(chord \"Cm7\")")))
+  (is (= [:f4 :a4 :c5] (vals-of "(chord \"<C F>\")" 1)))
+  (let [rs (rows "(chord (seq \"Dm7\" \"G7\"))")]
+    (is (= 8 (count rs)))
+    (is (= 4 (count (filter #(= [[0 1] [1 2]] [(second %) (nth % 2)]) rs))))
+    (is (= 4 (count (filter #(= [[1 2] [1 1]] [(second %) (nth % 2)]) rs)))))
+  (is (some? (:source (first (onsets (eval-pat "(chord (seq \"Dm7\" \"G7\"))") 0)))))
+  (is (= "unknown chord symbol \"Cmj7\" — did you mean \"Cmaj7\"?" (err-msg "(chord \"Cmj7\")")))
+  (is (= "unknown chord symbol \"Cxyz\"" (err-msg "(chord \"Cxyz\")")))
+  (is (= [] (vals-of "(chord (seq \"Cxyz\"))"))))
+
+(deftest tl5-voicing
+  (let [rs (rows "(voicing (seq \"Dm7\" \"G7\" \"C^7\"))")
+        at (fn [s] (vec (sort (map #(note->m (first %)) (filter #(= s (second %)) rs)))))]
+    (is (= 12 (count rs)))
+    (is (= [62 65 69 72] (at [0 1])))
+    (is (= [62 65 67 71] (at [1 3])))
+    (is (= [64 67 71 72] (at [2 3]))))
+  (is (= [[64 67 71 72] [61 65 67 69] [62 65 69 72] [62 65 67 71]]
+         (mapv #(msort "(voicing \"<C^7 A7b13 Dm7 G7>\")" %) (range 4))))
+  (is (= [64 67 72] (msort "(voicing \"C\")" 0)))
+  (is (= [60 64 67] (msort "(voicing {:mode :above :anchor :c4} \"C\")" 0)))
+  (is (= [60 62 65 69] (msort "(voicing {:mode :duck} \"Dm7\")" 0)))
+  (is (= [65 69 72 74] (msort "(voicing {:offset 1} \"Dm7\")" 0)))
+  (is (= [60 62 65 69] (msort "(voicing {:offset -1} \"Dm7\")" 0)))
+  (is (= [55 59 62 65] (msort "(voicing {:mode :root :anchor :c4} \"G7\")" 0)))
+  (is (= [52 64 67 72] (msort "(voicing \"C/E\")" 0)))
+  (is (<= (apply max (midis-of "(->> \"Dm7\" (voicing {:anchor :c4}))")) 60))
+  (is (includes? (err-msg "(voicing {:mode :sideways} \"C\")") "voicing: unknown mode"))
+  (is (includes? (err-msg "(voicing {:nope 1} \"C\")") "unknown option")))
+
+(deftest tl5-root-notes
+  (is (= [:c2] (vals-of "(root-notes \"<Cm7 F7>\")" 0)))
+  (is (= [:f2] (vals-of "(root-notes \"<Cm7 F7>\")" 1)))
+  (is (= [[:as3 [0 1] [1 2]] [:ds3 [1 2] [1 1]]] (rows "(root-notes 3 (seq \"Bb7\" \"Eb^7\"))")))
+  (is (= [:c2] (vals-of "(root-notes 2 \"C/E\")")))
+  (is (= [:c4] (vals-of "(root-notes \"<2 4>\" \"C\")" 1)))
+  (is (= [:c3] (vals-of "(->> \"C\" (root-notes 3))"))))
+
+(deftest tl5-arp
+  (is (= [[:c4 [0 1] [1 4]] [:ds4 [1 4] [1 2]] [:g4 [1 2] [3 4]] [:as4 [3 4] [1 1]]]
+         (rows "(arp :up (chord \"Cm7\"))")))
+  (let [m (fn [mode] (midis-of (str "(arp " mode " (chord \"Cm7\"))")))]
+    (is (= [70 67 63 60] (m ":down")))
+    (is (= [60 63 67 70 67 63] (m ":up-down")))
+    (is (= [70 67 63 60 63 67] (m ":down-up")))
+    (is (= [60 63 67 70 70 67 63 60] (m ":up-and-down")))
+    (is (= [60 70 63 67] (m ":converge")))
+    (is (= [67 63 70 60] (m ":diverge")))
+    (is (= [60 70 63 67 63 70 60] (m ":disconverge")))
+    (is (= [60 70 63 70 67 70] (m ":pinky-up")))
+    (is (= [60 63 60 67 60 70] (m ":thumb-up")))
+    (is (= (m ":up-down") (m "\"updown\""))))
+  (is (= [[:g4 [1 1] [4 3]] [:e4 [4 3] [5 3]] [:c4 [5 3] [2 1]]]
+         (->> (rows "(arp \"<up down>\" (chord \"C\"))" 1) (mapv identity))))
+  (is (= [[:c4 [0 1] [1 1]]] (rows "(arp :up (pure :c4))")))
+  (is (includes? (err-msg "(arp :sideways (chord \"C\"))") "arp: unknown mode"))
+  (is (includes? (err-msg "(arp :sideways (chord \"C\"))") "up-down"))
+  (testing "index form"
+    (is (= [[:c4 [0 1] [1 4]] [:g4 [1 4] [1 2]] [:ds4 [1 2] [3 4]] [:as4 [3 4] [1 1]]]
+           (rows "(arp \"0 2 1 3\" (chord \"Cm7\"))")))
+    (is (= [[:c4 [0 1] [1 2]] [:ds4 [1 2] [1 1]]]
+           (rows "(arp \"0 5\" (chord \"Cm7\"))"))))
+  (testing "over a seq of chords, chunk independent"
+    (let [code "(arp :up (chord (seq \"C\" \"F\")))"
+          pat  (eval-pat code)
+          full (core/query pat (core/span [0 1] [1 1]))
+          a    (core/query pat (core/span [0 1] [1 2]))
+          b    (core/query pat (core/span [1 2] [1 1]))
+          norm #(set (map (juxt :value :whole) %))]
+      (is (= [60 64 67 65 69 72] (mapv #(note->m (first %)) (rows code))))
+      (is (= [[0 1] [1 6] [1 3] [1 2] [2 3] [5 6]] (mapv (comp second) (rows code))))
+      (is (= (norm full) (norm (concat a b))))))
+  (is (= [[:c4 [0 1] [1 2]] [:as4 [1 2] [1 1]]]
+         (rows "(arp-with (fn [ns] (seq (first ns) (nth ns (- (count ns) 1)))) (chord \"Cm7\"))"))))
+
+(deftest tl5-rolled
+  (is (= [[:c4 [0 1] [1 1]] [:e4 [1 12] [1 1]] [:g4 [1 6] [1 1]]] (rows "(rolled (chord \"C\"))")))
+  (is (= [[:g4 [0 1] [1 1]] [:e4 [1 12] [1 1]] [:c4 [1 6] [1 1]]] (rows "(rolled-by -1/4 (chord \"C\"))")))
+  (is (= [[:c4 [0 1] [1 1]] [:e4 [0 1] [1 1]] [:g4 [0 1] [1 1]]] (rows "(rolled-by 0 (chord \"C\"))")))
+  (is (= [[0 1] [1 8] [1 4] [3 8]] (mapv second (rows "(rolled-by 1/2 (chord \"Cm7\"))")))))
+
+(defn- amp-rows [code]
+  (mapv (fn [[v s e]] [(:note v) (:amp v) s e]) (rows code)))
+
+(deftest tl5-echo-stut
+  (let [r (amp-rows "(echo 3 1/8 0.6 (seq :cp))")]
+    (is (= 3 (count r)))
+    (is (= [:cp 1.0 [0 1] [1 1]] (first r)))
+    (is (= [:cp 0.6 [1 8] [9 8]] (second r)))
+    (is (= [[1 4] [5 4]] [(nth (nth r 2) 2) (nth (nth r 2) 3)]))
+    (is (< (js/Math.abs (- 0.36 (second (nth r 2)))) 1e-9)))
+  (is (= [0.8 0.4 0.2] (mapv second (amp-rows "(echo 3 1/8 0.5 (amp 0.8 (seq :cp)))"))))
+  (is (= [] (rows "(echo 0 1/8 0.5 (seq :cp))")))
+  (is (= [1.0] (mapv second (amp-rows "(echo 1 1/8 0.5 (seq :cp))"))))
+  (is (= 2 (count (rows "(echo \"<1 2>\" 1/4 0.5 (seq :cp))" 1))))
+  (is (= [[:cp 1.0 [0 1] [1 1]] [:cp 0.5 [1 8] [9 8]] [:cp 0.25 [1 4] [5 4]]]
+         (amp-rows "(stut 3 0.5 1/8 (seq :cp))"))))
+
+(deftest tl5-echo-with-stutter
+  (is (= [[:c3 [0 1] [1 1]] [:c4 [1 8] [9 8]] [:c5 [1 4] [5 4]]]
+         (rows "(echo-with 3 1/8 (add 12) (seq :c3))")))
+  (is (= (rows "(echo-with 1 1/8 rev (seq :a :b))") (rows "(seq :a :b)")))
+  (is (= [[:bd [0 1] [1 1]] [:bd [1 16] [17 16]] [:bd [1 8] [9 8]] [:bd [3 16] [19 16]]]
+         (rows "(stutter 4 1/16 (seq :bd))"))))
+
+(deftest tl5-superimpose-layer
+  (is (= #{[:a [0 1] [1 2]] [:b [1 2] [1 1]] [:a [0 1] [1 4]] [:b [1 4] [1 2]] [:a [1 2] [3 4]] [:b [3 4] [1 1]]}
+         (set (rows "(superimpose (fast 2) (seq :a :b))"))))
+  (is (= 6 (count (rows "(superimpose (fast 2) (seq :a :b))"))))
+  (is (= 9 (count (rows "(superimpose (comp (fast 2) (add 12)) (seq :c3 :e3 :g3))"))))
+  (is (= 8 (count (rows "(superimpose rev (fast 2) (seq :a :b))"))))
+  (is (= #{[:b [0 1] [1 2]] [:a [1 2] [1 1]] [:a [0 1] [1 4]] [:b [1 4] [1 2]] [:a [1 2] [3 4]] [:b [3 4] [1 1]]}
+         (set (rows "(layer rev (fast 2) (seq :a :b))"))))
+  (is (= 6 (count (rows "(->> (seq :c3 :e3 :g3) (superimpose (add 12)))")))))
+
+(deftest tl5-jux-flip
+  (let [r (fn [code c] (set (map (fn [[v s e]] [(:note v) (:pan v) (core/rat- s [c 1])]) (rows code c))))]
+    (is (= #{[:a -1 [0 1]] [:b -1 [1 2]] [:b 1 [0 1]] [:a 1 [1 2]]} (r "(jux-flip rev (seq :a :b))" 0)))
+    (is (= #{[:a 1 [0 1]] [:b 1 [1 2]] [:b -1 [0 1]] [:a -1 [1 2]]} (r "(jux-flip rev (seq :a :b))" 1)))
+    (is (= #{[:a -0.5 [0 1]] [:b -0.5 [1 2]] [:b 0.5 [0 1]] [:a 0.5 [1 2]]} (r "(jux-flip-by 0.5 rev (seq :a :b))" 0)))))
+
+(deftest tl5-xfade
+  (let [r (fn [code c] (sort-by (juxt first second) (map (fn [[v _ _]] [(:note v) (:amp v)]) (rows code c))))]
+    (is (= [[:bd 1] [:bd 1] [:hh 0.5]] (r "(xfade (seq :bd :bd) 0.25 (seq :hh))" 0)))
+    (is (= [[:bd 0.5] [:bd 0.5] [:hh 1]] (r "(xfade (seq :bd :bd) 0.75 (seq :hh))" 0)))
+    (is (= [[:bd 1] [:hh 1]] (r "(xfade (seq :bd) 0.5 (seq :hh))" 0)))
+    (is (= [[:bd 1] [:hh 0]] (r "(xfade (seq :bd) \"<0 1>\" (seq :hh))" 0)))
+    (is (= [[:bd 0] [:hh 1]] (r "(xfade (seq :bd) \"<0 1>\" (seq :hh))" 1)))))
+
+(deftest tl5-documented-examples-evaluate
+  (doseq [code ["(superimpose (comp (fast 2) (add 12)) (seq :c3 :e3 :g3))"
+                "(layer rev (fast 2) (seq :a :b))"
+                "(echo 3 1/8 0.6 (seq :cp))"
+                "(stut 3 0.5 1/8 (seq :cp))"
+                "(echo-with 3 1/8 (add 12) (seq :c3))"
+                "(stutter 4 1/16 (seq :bd))"
+                "(jux-flip rev (seq :a :b))"
+                "(jux-flip-by 0.5 rev (seq :a :b))"
+                "(xfade (seq :bd :bd) \"<0 0.5 1>\" (seq :hh))"
+                "(arp :up-down (chord \"Cm7\"))"
+                "(arp \"0 2 1 3\" (chord \"Cm7\"))"
+                "(arp \"<up down>\" (chord \"C\"))"
+                "(arp-with (fn [ns] (seq (first ns) (nth ns (- (count ns) 1)))) (chord \"Cm7\"))"
+                "(rolled (chord \"C\"))"
+                "(rolled-by -1/4 (chord \"C\"))"
+                "(voicing (seq \"C^7\" \"A7b13\" \"Dm7\" \"G7\"))"
+                "(voicing \"<C^7 A7b13 Dm7 G7>\")"
+                "(voicing {:mode :above :anchor :c4} \"C\")"
+                "(root-notes \"<Cm7 F7>\")"
+                "(root-notes 3 (seq \"Bb7\" \"Eb^7\"))"
+                "(scale-transpose \"<0 2>\" :minor (seq 0 2 4))"
+                "(scale :minor :c4 (seq 0 2 4 7))"
+                "(add 12 (scale :minor :c3 (seq 0)))"
+                "(chord \"Cm7\")"
+                "(chord :minor7 :c4)"
+                "(transpose \"3M\" (seq :c4))"
+                "(->> (seq :c3 :e3) (superimpose (add 12)) (echo 3 1/8 0.6) (stutter 2 1/16) (arp :up) (rolled-by 1/8) (jux-flip rev))"
+                "(->> \"<Dm7 G7>\" (voicing) (arp :up-down))"
+                "(->> (seq 0 2 4) (scale-transpose 1 :minor) (scale :minor :c4))"
+                "(scale :major :g3 (seq 0 2 4 7))"
+                "(scale \"<major minor>\" :c4 (seq 0 2 4))"
+                "(scale [0 2 4 5 7 9 11] :c4 (seq 0 1 2))"
+                "(transpose -12 (chord :minor :e4))"
+                "(transpose \"<0 7>\" (seq :c4 :e4))"
+                "(chord \"<C F G7>\")"
+                "(chord (seq \"Dm7\" \"G7\"))"
+                "(rolled-by 1/2 (chord \"Cm7\"))"
+                "(scale-transpose 1 [:dorian :d] (seq :d4 :e4))"
+                "(scale-transpose 1 :minor (seq :c4 :eb4 :g4))"
+                "(arp-with (fn [ns] (seq (first ns) (nth ns 1) (first ns))) (chord \"Cm7\"))"
+                "(arp-with (fn [ns] (seq (first ns) (nth ns 1))) (chord \"Cm7\"))"
+                "(echo \"<1 2>\" 1/4 0.5 (seq :cp))"
+                "(superimpose (fast 2) (seq :a :b))"
+                "(xfade (seq :bd) \"<0 0.5 1>\" (seq :hh))"
+                "(->> \"Dm7\" (voicing {:anchor :c4}))"
+                "(arp \"<up down>\" (chord \"C\"))"
+                "(arp \"0 5\" (chord \"Cm7\"))"
+                "(stack (slow 4 (chord :minor :a3)) (scale :minor :a3 (fast 2 (seq 0 2 4 5 4 2))))"]]
+    (let [r (lisp/eval-string code (make-test-env))]
+      (is (not (lisp/eval-error? r)) (str code " → " (:message r)))
+      (is (core/pattern? (:result r)) code)
+      (when (core/pattern? (:result r))
+        (core/query (:result r) (core/cycle-span 0))))))
