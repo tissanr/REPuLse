@@ -1291,7 +1291,7 @@
  :quote      {:category "special"
               :returns "any"
               :side-effects []
-              :examples ["'(seq :bd :sd)" "'x"]
+              :examples ["(quote (seq :bd :sd))" "(quote x)"]
               :see-also ["quasiquote"]}
 
  :symbol     {:category "util"

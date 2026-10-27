@@ -1,6 +1,6 @@
 ---
 allowed-tools: Bash(git *), Bash(gh *), Bash(npm *), Read, Glob, Grep, AskUserQuestion
-description: Create a GitHub release — drafts notes from delivered phases, bumps version, prompts for missing info
+description: Create a GitHub release — drafts notes from delivered phases, bumps the version in package.json via PR, tags the release
 ---
 
 ## Context
@@ -9,6 +9,7 @@ description: Create a GitHub release — drafts notes from delivered phases, bum
 - Latest release tag: !`gh release list --limit 1 --json tagName --jq '.[0].tagName'`
 - Latest release date: !`gh release list --limit 1 --json publishedAt --jq '.[0].publishedAt'`
 - Latest tag ref: !`git describe --tags --abbrev=0`
+- package.json version on this branch: !`npm pkg get version`
 - Delivered phases (ROADMAP.md): !`grep -E "^## Phase .*✅ \*delivered\*" ROADMAP.md`
 - Arguments provided by user: $ARGUMENTS
 
@@ -85,11 +86,41 @@ Show the user:
 - Title: the release title
 - The full draft notes
 
-Then ask: **"Shall I create this release on main with the above details?"**
+Then ask: **"Shall I create this release with the above details?"**
 
-Wait for confirmation ("yes", "go ahead", "do it", etc.) before running `gh release create`.
+Wait for confirmation ("yes", "go ahead", "do it", etc.) before changing anything.
 
-### Step 7 — Create the release
+### Step 7 — Get the version onto `main`
+
+Releases are cut from `main`. Changes reach it only as `dev` → `main` PRs, which a human
+merges (CLAUDE.md, "Phase workflow"; the `main` ruleset blocks every other update). The
+version in `package.json` must match the tag without the leading `v` (tag `v0.2.0-alpha` →
+version `0.2.0-alpha`).
+
+Run `git fetch origin dev main`, then read `git show origin/main:package.json` and
+`git show origin/dev:package.json`, and take the first matching case:
+
+1. **`main` already has the version** → continue with Step 8.
+2. **`dev` has it, `main` does not** → the release PR is missing or unmerged. If there is no
+   open `dev` → `main` PR, open one:
+   `gh pr create --base main --head dev --title "Release <tag>" --body "<draft notes from Step 5>"`.
+   Stop: return the PR URL and ask the user to merge it, then run `/create-release` again.
+3. **Neither has it** → open the version-bump PR against `dev`:
+
+   ```bash
+   git switch -c chore/release-<tag> origin/dev
+   npm version <version> --no-git-tag-version   # updates package.json and package-lock.json
+   git add package.json package-lock.json
+   git commit -m "chore: bump version to <version>"
+   git push -u origin chore/release-<tag>
+   gh pr create --base dev --title "chore: bump version to <version>" --body "Version bump for release <tag>."
+   ```
+
+   Stop: return the PR URL. Once it is merged, run `/create-release` again (→ case 2).
+
+Never tag before the version is on `main`.
+
+### Step 8 — Create the release
 
 ```bash
 gh release create <tag> --target main --title "<title>" --notes "<notes>"

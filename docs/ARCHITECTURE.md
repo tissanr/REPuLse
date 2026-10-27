@@ -1,6 +1,6 @@
 # REPuLse — Architecture
 
-REPuLse is structured as a monorepo of four packages wired together by a browser app.
+REPuLse is structured as a monorepo of three packages wired together by a browser app.
 The design principle is strict layering: each layer knows only about the layer below it.
 
 ---
@@ -83,7 +83,7 @@ A classic environment-based interpreter:
 - Everything else is a function call
 - Levenshtein distance on unknown symbols for typo hints
 
-The environment is created once by `make-env` (in `app.cljs`) and passed through
+The environment is created once by `make-env` (in `eval.cljs`) and passed through
 each evaluation. `def` writes into a mutable `defs` atom attached to the environment
 as `:*defs*`; symbol lookup checks both the env map and `@(:*defs* env)` so that
 `def`-bound names are visible in subsequent evaluations.
@@ -460,7 +460,7 @@ User types expression
         │
         ▼
   CodeMirror editor
-        │  Ctrl+Enter
+        │  Alt+Enter
         ▼
   lisp/reader.cljs         parse source → AST
         │

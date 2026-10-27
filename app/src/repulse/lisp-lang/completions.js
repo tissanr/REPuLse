@@ -320,7 +320,7 @@ export const BUILTINS = [
   { label: "keys",         type: "function", detail: "(keys m) — list of map keys" },
   { label: "vals",         type: "function", detail: "(vals m) — list of map values" },
   // --- Quote forms ---
-  { label: "quote",        type: "keyword",  detail: "(quote form) or 'form — prevent evaluation of form" },
+  { label: "quote",        type: "keyword",  detail: "(quote form) — prevent evaluation of form" },
   { label: "quasiquote",   type: "keyword",  detail: "(quasiquote form) or `form — template with ~unquote and ~@splice; used in defmacro" },
   // --- Session ---
   { label: "help-export",  type: "function", detail: "(help-export) — return live session as a map; access with (:bpm (help-export)), (:tracks (help-export)), etc." },

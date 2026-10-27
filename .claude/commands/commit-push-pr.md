@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(git *), Bash(gh *), Read, Glob, Grep
+allowed-tools: Bash(git *), Bash(gh *), Bash(npm run *), Bash(npx shadow-cljs compile *), Read, Glob, Grep
 description: Commit all changes, push, and open a PR against dev
 ---
 
@@ -10,16 +10,27 @@ description: Commit all changes, push, and open a PR against dev
 - Current branch: !`git branch --show-current`
 - Recent commits on this branch: !`git log --oneline -10`
 - Diff from dev: !`git diff origin/dev...HEAD --stat`
+- Open PRs (match `headRefName` against the current branch): !`gh pr list --state open --json number,headRefName,baseRefName,url`
 
 ## Your task
 
-Based on the changes above, do all of the following:
+Nothing is ever pushed to `dev` or `main` directly. Based on the changes above, do all of the following:
 
-1. **Stage and commit** all relevant changes with a clear commit message. Follow conventional commit style (e.g. `feat:`, `fix:`, `refactor:`, `docs:`). Do not commit files containing secrets (.env, credentials, etc).
+0. **Get off `dev` / `main`.** If the current branch is `dev` or `main`, create a branch first and commit there:
+   `git switch -c <type>/<short-slug>` (e.g. `feat/phase-syn4`, `fix/solo-unmute`, `docs/usage-tracks`).
 
-2. **Push** the branch to origin (with `-u` if not yet tracking).
+1. **Verify before committing** (CLAUDE.md, "Pre-push verification"). Run what applies to the changed files and stop with a report if anything fails — do not push a red branch:
+   - Any ClojureScript change: `npm run test` **and** `npx shadow-cljs compile app`
+   - Rust change (`packages/audio/`): `npm run test:rust`
+   - Grammar change: run `npm run gen:grammar` and commit the regenerated `parser.js` / `parser.terms.js` with it
+   - `builtin_meta.edn` change: run `npm run gen:ai-docs` and commit the regenerated `docs/ai/builtins.json` with it
+   - Docs-only change: no checks needed
 
-3. **Create a PR** against `dev` using `gh pr create --base dev` (only `dev` → `main` release PRs target `main`). The PR body MUST follow this exact structure:
+2. **Stage and commit** all relevant changes with a clear commit message. Follow conventional commit style (e.g. `feat:`, `fix:`, `refactor:`, `docs:`). Do not commit files containing secrets (.env, credentials, etc).
+
+3. **Push** the branch to origin (with `-u` if not yet tracking).
+
+4. **Create a PR** against `dev` using `gh pr create --base dev` (only `dev` → `main` release PRs target `main`) — unless the context shows an open PR for this branch already; then the push updates it and you only return its URL. The PR body MUST follow this exact structure:
 
 ```
 ## Summary
@@ -62,6 +73,6 @@ regressions and add ones for the areas touched (audio code changed → sample pl
 lisp code changed → eval checks). For a change with no runtime behaviour (docs,
 tooling), write `No runtime behaviour changed.` plus the commands that verify it.
 
-4. Return the PR URL when done.
+5. Return the PR URL when done.
 
 Do all of the above in a single response. Do not ask for confirmation.
