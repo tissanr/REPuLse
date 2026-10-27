@@ -1874,9 +1874,12 @@ The time & structure functions deferred from TL3: windows of a cycle and the rem
 structure helpers.
 
 **Key additions:**
-- `compress zoom focus fast-gap linger bite ribbon trunc` on TL3's private `compress*`
-- `hurry revv repeat-cycles press press-by chunk-into chunk-back-into euclidish ply-for-each`
-- `filter-events filter-when bypass beat sew stitch binary binary-n` (`binary-l` dropped)
+- Windows: `compress fast-gap press press-by euclidish beat` on TL3's private `compress*`; new
+  private `zoom*` (Tidal `zoomArc`) for `zoom bite chunk-into chunk-back-into`; `focus linger
+  ribbon trunc revv`; `repeat-cycles` on `slowcat-held*`
+- `hurry` in `params.cljs` (fast + multiplies `rate`; no `speed` alias), `ply-for-each`
+- `filter-events filter-when bypass sew stitch binary binary-n` (`binary-l` dropped; Strudel
+  `binaryN` argument order, default 16 bits)
 
 See full spec: [PROMPTS/PHASE-TL3b.md](PROMPTS/PHASE-TL3b.md)
 
