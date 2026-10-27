@@ -42,11 +42,10 @@ cycle repetition, binary rhythms).
 
 ## Scope
 
-Function list (26, from the TL3b-tagged parity rows): `compress`, `zoom`, `focus`,
+Function list (25, from the TL3b-tagged parity rows; `binary-l` dropped — see *Open design questions*): `compress`, `zoom`, `focus`,
 `fast-gap`, `linger`, `bite`, `ribbon`, `hurry`, `revv`, `repeat-cycles`, `trunc`,
 `press`, `press-by`, `chunk-into`, `chunk-back-into`, `euclidish`, `ply-for-each`,
-`filter-events`, `filter-when`, `bypass`, `beat`, `sew`, `stitch`, `binary`, `binary-n`,
-`binary-l`.
+`filter-events`, `filter-when`, `bypass`, `beat`, `sew`, `stitch`, `binary`, `binary-n`.
 
 ## Open design questions
 
@@ -55,7 +54,10 @@ Function list (26, from the TL3b-tagged parity rows): `compress`, `zoom`, `focus
 - `zoom` vs `zoom-arc`/`focus`: Strudel's `zoom` keeps cycle alignment differently from
   Tidal's `zoomArc`; pick one and record it.
 - `binary-l` returns a list, not a pattern: keep, or drop as JS-specific?
-- Batch size: 26 functions. If the full spec finds this too large, split again
+  **Decided: drop.** Every REPuLse built-in returns a pattern; `binary-n` already gives
+  the same bits as a step pattern, and a bare boolean vector has no use without extra
+  list plumbing. Parity row marked ⛔. Not implemented in TL3b.
+- Batch size: 25 functions. If the full spec finds this too large, split again
   (e.g. TL3c for `filter-*`/`bypass`/`beat`/`binary*`).
 
 ## Definition of done

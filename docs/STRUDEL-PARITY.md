@@ -42,7 +42,7 @@ Method-chaining (`s("bd").fast(2)`) maps to Lisp application or threading:
 |---|---|---|---|---|---|---|---|---|
 | Core & pattern arithmetic | TL1 | 15 | 2 | 18 | 7 | 4 | 8 | 54 |
 | Continuous signals | TL2 | 23 | 0 | 8 | 3 | 0 | 2 | 36 |
-| Time & structure | TL3/TL3b | 24 | 0 | 20 | 9 | 2 | 6 | 61 |
+| Time & structure | TL3/TL3b | 24 | 0 | 19 | 9 | 3 | 6 | 61 |
 | Randomness & conditionals | TL4 | 4 | 6 | 22 | 8 | 1 | 3 | 44 |
 | Layering, pitch & harmony | TL5 | 4 | 3 | 12 | 5 | 0 | 2 | 26 |
 | Sample manipulation | TL6 | 3 | 1 | 11 | 2 | 1 | 2 | 20 |
@@ -50,7 +50,7 @@ Method-chaining (`s("bd").fast(2)`) maps to Lisp application or threading:
 | Mini-notation | TL1/TL3/TL4 | 13 | 0 | 4 | 0 | 0 | 0 | 17 |
 | Tidal-only functions | TL3–TL5 | 1 | 0 | 7 | 3 | 0 | 2 | 13 |
 | Visuals, I/O & JS-specific | — | 4 | 2 | 1 | 1 | 13 | 3 | 24 |
-| **Total** | | **95** | **28** | **123** | **42** | **28** | **37** | **353** |
+| **Total** | | **95** | **28** | **122** | **42** | **29** | **37** | **353** |
 
 Rows grouped in one line (e.g. `sine2 / cosine2 / …`) count once.
 
@@ -151,7 +151,7 @@ signals (the voice shortcuts `(saw :c4)` / `(square :c4)` give way to `(synth :s
 | `berlin` | `berlin` | 📋 | TL4 | moved from TL2 (TL2 spec) |
 | `run` | `run` | ✅ | TL2 | `0 1 2 … n-1` — discrete, but defined with the signals |
 | `binary` / `binaryN` | `binary`, `binary-n` | 📋 | TL3b | Number → boolean step pattern; moved from TL2 (TL2 spec) |
-| `binaryL` / `binaryNL` | `binary-l` | 📋 | TL3b | List-returning variants; moved from TL2 (TL2 spec) |
+| `binaryL` / `binaryNL` | — | ⛔ | — | Returns a list, not a pattern; `binary-n` covers the use case (TL3b decision) |
 | `randL` | `rand-l` | 📋 | TL4 | moved from TL2 (TL2 spec) |
 | `randrun` | `randrun` | 📋 | TL4 | Random permutation of `0..n-1`; moved from TL2 (TL2 spec) |
 | `segment` / `seg` | `segment` | ✅ | TL2 | Sample a signal n times per cycle |

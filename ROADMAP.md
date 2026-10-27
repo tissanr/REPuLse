@@ -1876,7 +1876,7 @@ structure helpers.
 **Key additions:**
 - `compress zoom focus fast-gap linger bite ribbon trunc` on TL3's private `compress*`
 - `hurry revv repeat-cycles press press-by chunk-into chunk-back-into euclidish ply-for-each`
-- `filter-events filter-when bypass beat sew stitch binary binary-n binary-l`
+- `filter-events filter-when bypass beat sew stitch binary binary-n` (`binary-l` dropped)
 
 See full spec: [PROMPTS/PHASE-TL3b.md](PROMPTS/PHASE-TL3b.md)
 
