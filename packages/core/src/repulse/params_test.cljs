@@ -214,3 +214,44 @@
       (is (= [2 2 2 2] (mapv (comp :rate first) (hurry-evs p 1))))))
   (testing "curried"
     (is (= 4 (count (hurry-evs ((params/hurry 2) (core/seq* [:bd :sd])) 0))))))
+
+;;; ── Phase TL5: echo, stut, jux-flip, xfade ──────────────────────────
+
+(defn- tl5-onsets [pat n]
+  (->> (core/query pat (core/cycle-span n))
+       (filter core/onset?)
+       (sort-by (comp core/rat->float :start :whole))))
+
+(deftest tl5-echo-decays-amp
+  (let [evs (tl5-onsets (params/echo 3 [1 8] 0.6 (core/pure :cp)) 0)
+        amps (mapv (comp :amp :value) evs)]
+    (is (= [[0 1] [1 8] [1 4]] (mapv (comp :start :whole) evs)))
+    (is (= [1.0 0.6] (subvec amps 0 2)))
+    (is (< (js/Math.abs (- 0.36 (nth amps 2))) 1e-9)))
+  (is (empty? (tl5-onsets (params/echo 0 [1 8] 0.5 (core/pure :cp)) 0)))
+  (testing "existing amp is multiplied"
+    (is (= [0.8 0.4 0.2]
+           (mapv (comp :amp :value)
+                 (tl5-onsets (params/echo 3 [1 8] 0.5 (params/amp 0.8 (core/pure :cp))) 0))))))
+
+(deftest tl5-stut-is-echo-with-tidal-order
+  (is (= (mapv (juxt :value :whole) (tl5-onsets (params/echo 3 [1 8] 0.5 (core/pure :cp)) 0))
+         (mapv (juxt :value :whole) (tl5-onsets (params/stut 3 0.5 [1 8] (core/pure :cp)) 0)))))
+
+(deftest tl5-jux-flip-swaps-sides
+  (let [first-note-pan (fn [n]
+                         (:pan (:value (first (tl5-onsets (params/jux-flip core/rev (core/seq* [:a :b])) n)))))
+        pan-of-a (fn [n] (set (map (comp :pan :value)
+                                   (filter #(= :a (:note (:value %)))
+                                           (tl5-onsets (params/jux-flip core/rev (core/seq* [:a :b])) n)))))]
+    ;; cycle 0: original :a on the left (-1), reversed :a on the right (1)
+    (is (= #{-1 1} (pan-of-a 0)))
+    (is (= [-1 1] [(first-note-pan 0) (first-note-pan 1)]))))
+
+(deftest tl5-xfade-gains
+  (let [amps (fn [pos]
+               (sort (map (fn [e] [(:note (:value e)) (:amp (:value e))])
+                          (tl5-onsets (params/xfade (core/pure :bd) pos (core/pure :hh)) 0))))]
+    (is (= [[:bd 1] [:hh 0.5]] (amps 0.25)))
+    (is (= [[:bd 0.5] [:hh 1]] (amps 0.75)))
+    (is (= [[:bd 1] [:hh 1]] (amps 0.5)))))

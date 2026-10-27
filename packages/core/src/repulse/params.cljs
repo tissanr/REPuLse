@@ -143,3 +143,51 @@
    (hurry 2)     — return transformer"
   ([r]     (fn [pat] (hurry r pat)))
   ([r pat] ((core/patternify hurry*) r pat)))
+
+;;; ── Phase TL5: amp-scaling layering ──────────────────────────────────
+
+(defn- amp*
+  "Multiply the :amp of an event value by f (default amp 1). Rests stay rests."
+  [f v]
+  (if (= v :_) v (update (to-map v) :amp #(* (or % 1.0) f))))
+
+(defn- echo* [times time feedback pat]
+  (let [n  (int (core/rat->float (core/->rat times)))
+        fb (core/rat->float (core/->rat feedback))
+        t  (core/->rat time)]
+    (core/stack* (mapv (fn [i]
+                         (core/fmap #(amp* (Math/pow fb i) %)
+                                    (core/late (core/rat* t [i 1]) pat)))
+                       (range (max 0 n))))))
+
+(defn echo
+  "Strudel echo: times layers, each `time` later, amp × feedback^i."
+  [times time feedback pat]
+  ((core/patternify3 echo*) times time feedback pat))
+
+(defn stut
+  "Strudel stut: echo with Tidal argument order (times feedback time)."
+  [times feedback time pat]
+  (echo times time feedback pat))
+
+(defn jux-flip-by
+  "jux-by whose width alternates between w and −w every cycle."
+  [w f pat]
+  (let [->f (fn [x] (let [x (if (vector? x) (core/rat->float (core/->rat x)) x)] (double x)))
+        w'  (if (core/pattern? w) (core/fmap ->f w) (core/pure (->f w)))]
+    (jux-by (core/cat* [w' (core/fmap - w')]) f pat)))
+
+(defn jux-flip [f pat] (jux-flip-by 1 f pat))
+
+(defn- fade-gain [p] (if (< p 0.5) 1 (* 2 (- 1 p))))
+
+(defn xfade
+  "Crossfade two patterns: a gets fade-gain(pos), b gets fade-gain(1 − pos)."
+  [a pos b]
+  (let [pos  (if (core/pattern? pos) pos (core/pure pos))
+        ->p  #(if (core/pattern? %) % (core/pure %))
+        side (fn [pat g]
+               (core/app-left
+                (fn [v p] (amp* (fade-gain (g (core/rat->float (core/->rat p)))) v))
+                (->p pat) pos))]
+    (core/stack* [(side a identity) (side b #(- 1 %))])))

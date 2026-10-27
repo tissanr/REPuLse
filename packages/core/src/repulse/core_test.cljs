@@ -1196,3 +1196,54 @@
       (doseq [k [:a :b :c :d]] (is (near 0.25 (frac #{k} (map first cs))))))
     (let [vs (mapcat #(vc (c/scramble 4 s4') %) (range n))]
       (doseq [k [:a :b :c :d]] (is (near 0.25 (frac #{k} vs)))))))
+
+;;; ── Phase TL5: layering & arpeggios ─────────────────────────────────
+
+(defn- tl5-chord [vals] (c/stack* (mapv c/pure vals)))
+(defn- tl5-cyc [p n] (c/query p (c/cycle-span n)))
+(defn- tl5-norm [evs] (set (map (juxt :value :whole :part) evs)))
+
+(deftest tl5-superimpose-layer
+  (let [p (c/seq* [:a :b])]
+    (is (= 6 (count (tl5-cyc (c/superimpose [(partial c/fast 2)] p) 0))))
+    (is (= 4 (count (tl5-cyc (c/layer [(partial c/fast 2)] p) 0))))
+    (is (= 2 (count (tl5-cyc (c/superimpose [] p) 0))))
+    (is (= 0 (count (tl5-cyc (c/layer [] p) 0))))))
+
+(deftest tl5-echo-with-stutter
+  (let [p (c/seq* [:c3])
+        evs (tl5-cyc (c/echo-with 3 [1 8] identity p) 0)]
+    (is (= 3 (count (filter c/onset? evs)))))
+  (is (= (tl5-norm (tl5-cyc (c/echo-with 1 [1 8] c/rev (c/seq* [:a :b])) 0))
+         (tl5-norm (tl5-cyc (c/seq* [:a :b]) 0))))
+  (is (= [[0 1] [1 16] [1 8] [3 16]]
+         (->> (tl5-cyc (c/stutter 4 [1 16] (c/pure :bd)) 0)
+              (filter c/onset?) (map (comp :start :whole))
+              (sort-by c/rat->float) vec))))
+
+(deftest tl5-arp-modes
+  (let [p (tl5-chord [60 63 67 70])
+        run (fn [mode] (mapv :value (sort-by (comp c/rat->float :start :whole) (tl5-cyc (c/arp mode p) 0))))]
+    (is (= [60 63 67 70] (run :up)))
+    (is (= [70 67 63 60] (run :down)))
+    (is (= [60 63 67 70 67 63] (run :up-down)))
+    (is (= [60 70 63 67] (run :converge)))
+    (is (= [60 63 60 67 60 70] (run :thumb-up))))
+  (testing "single-note groups pass through"
+    (is (= [60] (map :value (tl5-cyc (c/arp :up-down (c/pure 60)) 0)))))
+  (testing "chunk independence"
+    (let [p (c/arp :up (c/seq* [(tl5-chord [60 64 67]) (tl5-chord [65 69 72])]))]
+      (is (= (tl5-norm (c/query p (c/span [0 1] [1 1])))
+             (tl5-norm (concat (c/query p (c/span [0 1] [1 2])) (c/query p (c/span [1 2] [1 1]))))))))
+  (testing "index form"
+    (is (= [60 67 63 70]
+           (map :value (sort-by (comp c/rat->float :start :whole)
+                                (tl5-cyc (c/arp-index (c/seq* [0 2 1 3]) (tl5-chord [60 63 67 70])) 0)))))))
+
+(deftest tl5-rolled
+  (let [evs (sort-by (comp c/rat->float :start :whole) (tl5-cyc (c/rolled (tl5-chord [60 64 67])) 0))]
+    (is (= [[0 1] [1 12] [1 6]] (mapv (comp :start :whole) evs)))
+    (is (every? #(= [1 1] (:end (:whole %))) evs)))
+  (is (= [60 64 67]
+         (map :value (sort-by (comp c/rat->float :start :whole)
+                              (tl5-cyc (c/rolled-by 0 (tl5-chord [60 64 67])) 0))))))

@@ -5,6 +5,8 @@
             [repulse.fx :as fx]
             [repulse.lisp.core :as lisp]
             [repulse.lisp.eval :as leval]
+            [repulse.midi :as midi]
+            [repulse.theory :as theory]
             [repulse.plugins :as plugins]))
 
 (defn- node-stub []
@@ -139,3 +141,8 @@
                :active? false
                :bypassed? false}]
              @fx/chain)))))
+
+(deftest tl5-note-keywords-reach-midi-math
+  (testing "note keywords from scale/chord/voicing convert to the right MIDI numbers (MIDI out / export)"
+    (is (= 63 (midi/hz->midi (theory/note->hz :ds4))))
+    (is (= [60 63 67 70] (mapv #(midi/hz->midi (theory/note->hz %)) [:c4 :ds4 :g4 :as4])))))
