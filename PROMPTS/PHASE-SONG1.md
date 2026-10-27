@@ -75,6 +75,11 @@ last section, and the whole song can be rendered to WAV in one call.
    context — decide whether that belongs here or in SK1.
 5. Bars vs cycles: keep 1 cycle = 1 bar, or allow a time signature?
 
+> **Awaiting human decision (auto-phase, 2026-10-27):** none of the questions above has a
+> stated recommendation, so the unattended pipeline cannot expand this spec. Mark each
+> question **Decided: …** (or add a recommendation) and remove the `needs-human` label
+> from the SONG1 pipeline PR to let the next run continue.
+
 ## Definition of done
 
 - [ ] A buffer with tracks + a song block plays sections in order and stops after the last bar (`:end :stop`).
