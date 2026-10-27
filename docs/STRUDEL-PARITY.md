@@ -41,16 +41,16 @@ Method-chaining (`s("bd").fast(2)`) maps to Lisp application or threading:
 | Family | Phase | ✅ | 🟡 | 📋 | 🔁 | ⛔ | ❓ | Total |
 |---|---|---|---|---|---|---|---|---|
 | Core & pattern arithmetic | TL1 | 15 | 2 | 18 | 7 | 4 | 8 | 54 |
-| Continuous signals | TL2 | 24 | 0 | 6 | 3 | 1 | 2 | 36 |
+| Continuous signals | TL2/TL4 | 30 | 0 | 0 | 3 | 1 | 2 | 36 |
 | Time & structure | TL3/TL3b | 44 | 0 | 0 | 9 | 2 | 6 | 61 |
-| Randomness & conditionals | TL4 | 4 | 6 | 22 | 8 | 1 | 3 | 44 |
+| Randomness & conditionals | TL4/TL4b | 27 | 0 | 6 | 8 | 1 | 2 | 44 |
 | Layering, pitch & harmony | TL5 | 4 | 3 | 12 | 5 | 0 | 2 | 26 |
 | Sample manipulation | TL6 | 3 | 1 | 11 | 2 | 1 | 2 | 20 |
 | Control parameters & effects | TL7 | 4 | 14 | 20 | 4 | 7 | 9 | 58 |
-| Mini-notation | TL1/TL3/TL4 | 13 | 0 | 4 | 0 | 0 | 0 | 17 |
-| Tidal-only functions | TL3–TL5 | 4 | 0 | 4 | 3 | 0 | 2 | 13 |
+| Mini-notation | TL1/TL3/TL4 | 15 | 0 | 2 | 0 | 0 | 0 | 17 |
+| Tidal-only functions | TL3–TL5 | 5 | 0 | 3 | 3 | 0 | 2 | 13 |
 | Visuals, I/O & JS-specific | — | 4 | 2 | 1 | 1 | 13 | 3 | 24 |
-| **Total** | | **119** | **28** | **98** | **42** | **29** | **37** | **353** |
+| **Total** | | **151** | **22** | **73** | **42** | **29** | **36** | **353** |
 
 Rows grouped in one line (e.g. `sine2 / cosine2 / …`) count once.
 
@@ -145,15 +145,15 @@ signals (the voice shortcuts `(saw :c4)` / `(square :c4)` give way to `(synth :s
 | `rand` | `rand` | ✅ | TL2 | Tidal `timeToRand` exactly (64-bit); sampled at span start like Strudel |
 | `rand2` | `rand2` | ✅ | TL2 |  |
 | `irand` | `irand` | ✅ | TL2 |  |
-| `brand` | `brand` | 📋 | TL4 | Random booleans; moved from TL2 (TL2 spec) |
-| `brandBy` | `brand-by` | 📋 | TL4 | moved from TL2 (TL2 spec) |
+| `brand` | `brand` | ✅ | TL4 | Boolean signal, `true` when `rand < 0.5` |
+| `brandBy` | `brand-by` | ✅ | TL4 | `rand < p`; patterned p |
 | `perlin` | `perlin` | ✅ | TL2 |  |
-| `berlin` | `berlin` | 📋 | TL4 | moved from TL2 (TL2 spec) |
+| `berlin` | `berlin` | ✅ | TL4 | Strudel `_berlin` on TL2 `rand` |
 | `run` | `run` | ✅ | TL2 | `0 1 2 … n-1` — discrete, but defined with the signals |
 | `binary` / `binaryN` | `binary`, `binary-n` | ✅ | TL3b | Number → boolean step pattern; Strudel arg order, default 16 bits |
 | `binaryL` / `binaryNL` | — | ⛔ | — | Returns a list, not a pattern; `binary-n` covers the use case (TL3b decision) |
-| `randL` | `rand-l` | 📋 | TL4 | moved from TL2 (TL2 spec) |
-| `randrun` | `randrun` | 📋 | TL4 | Random permutation of `0..n-1`; moved from TL2 (TL2 spec) |
+| `randL` | `rand-l` | ✅ | TL4 | Signal of a vector of n floats (Tidal `timeToRands`) |
+| `randrun` | `randrun` | ✅ | TL4 | Random permutation of `0..n-1` per cycle (Tidal `timeToRands`, sampled at `c + 1/2`) |
 | `segment` / `seg` | `segment` | ✅ | TL2 | Sample a signal n times per cycle |
 | `seg` | `segment` | 🔁 | — | |
 | `range` | `range` | ✅ | TL2 | Dispatches on the last argument: pattern → Tidal `range`, otherwise the Lisp collection `range` |
@@ -162,7 +162,7 @@ signals (the voice shortcuts `(saw :c4)` / `(square :c4)` give way to `(synth :s
 | `toBipolar` | `to-bipolar` | ✅ | TL2 |  |
 | `fromBipolar` | `from-bipolar` | ✅ | TL2 |  |
 | `mousex` / `mousey` | — | ❓ | — | UI-driven signals; app layer, not `core` |
-| `withSeed` / `seed` | `with-seed` | 📋 | TL4 | moved from TL2 (TL2 spec); until then vary randomness with `(early 7 rand)` |
+| `withSeed` / `seed` | `with-seed` | ✅ | TL4 | Per-pattern time offset on every random read (Strudel legacy `seed`); no global seed |
 | `useRNG` / `getRandsAtTime` | — | ❓ | — | Internal RNG plumbing |
 | `envelope` signals (`lfo`, `env` modulators) | — | 🔁 | — | See TL7 modulators; T1 `tween` covers parameter ramps |
 | `discretise` (Tidal) | `segment` | 🔁 | — | |
@@ -239,53 +239,53 @@ signals (the voice shortcuts `(saw :c4)` / `(square :c4)` give way to `(synth :s
 
 ## Randomness & conditionals — TL4
 
-**Semantics warning:** REPuLse's `sometimes-by` / `sometimes` / `often` / `rarely`
-decide **per cycle** (they behave like Strudel `someCyclesBy`). Strudel's
-`sometimesBy` decides **per event**. TL4 should switch them to per-event semantics
-and add `some-cycles-by` for the current behaviour. The REPuLse hash
-(`cycle-hash` in `core.cljs`) is also a linear `(c·48271 + 12345) mod 100`, so
-consecutive cycles follow a visible pattern and only 100 probability levels exist;
-TL2's seeded `rand` should replace it.
+**Resolved in TL4:** `sometimes-by` / `sometimes` / `often` / `rarely` now decide
+**per event** like Strudel's `sometimesBy`; the old per-cycle behaviour lives in
+`some-cycles-by` / `some-cycles`. Every random decision reads Tidal's exact
+`timeToRand` (TL2) instead of the old linear 0–99 hash (deleted). `choose` / `wchoose`
+are continuous signals (Strudel) and keep REPuLse's **vector** argument with **weight
+first**; the old one-pick-per-cycle behaviour is `choose-cycles` / `wchoose-cycles`.
+The `pick` family, `inhabit` and Tidal `fix` are deferred to **TL4b**.
 
 | Strudel | REPuLse | Status | Phase | Notes |
 |---|---|---|---|---|
-| `degradeBy` | `degrade-by` | ✅ | — | Per event, deterministic |
+| `degradeBy` | `degrade-by` | ✅ | TL4 | Per event; Tidal `>=` comparison on TL2 `rand` (Strudel uses `>`) |
 | `degrade` | `degrade` | ✅ | — | |
-| `undegradeBy` | `undegrade-by` | 📋 | TL4 | |
-| `undegrade` | `undegrade` | 📋 | TL4 | |
-| `degradeByWith` | — | ❓ | — | Takes a custom random pattern |
-| `sometimesBy` | `sometimes-by` | 🟡 | TL4 | Per-cycle today; Strudel is per-event |
-| `sometimes` | `sometimes` | 🟡 | TL4 | Same |
-| `often` | `often` | 🟡 | TL4 | Same |
-| `rarely` | `rarely` | 🟡 | TL4 | Same |
-| `almostNever` | `almost-never` | 📋 | TL4 | |
-| `almostAlways` | `almost-always` | 📋 | TL4 | |
-| `never` | `never` | 📋 | TL4 | |
-| `always` | `always` | 📋 | TL4 | |
-| `someCyclesBy` | `some-cycles-by` | 📋 | TL4 | = today's `sometimes-by` behaviour |
-| `someCycles` | `some-cycles` | 📋 | TL4 | |
-| `choose` | `choose` | 🟡 | TL4 | REPuLse `choose` returns one value per cycle; Strudel `choose` is a continuous signal you `segment`. Keep REPuLse behaviour under `choose-cycles`, align `choose` |
-| `chooseWith` / `chooseInWith` | `choose-with` | 📋 | TL4 | |
-| `chooseIn` | `choose-in` | 📋 | TL4 | |
-| `chooseCycles` / `randcat` | `randcat` | 📋 | TL4 | Random pattern per cycle |
+| `undegradeBy` | `undegrade-by` | ✅ | TL4 | Tidal parameter: keeps `rand < x`; = Strudel `undegradeBy(1−x)` |
+| `undegrade` | `undegrade` | ✅ | TL4 | |
+| `degradeByWith` | `degrade-by-with` | ✅ | TL4 | Custom random pattern sampled at the event start |
+| `sometimesBy` | `sometimes-by` | ✅ | TL4 | Per event (was per cycle before TL4) |
+| `sometimes` | `sometimes` | ✅ | TL4 | Per event |
+| `often` | `often` | ✅ | TL4 | Per event |
+| `rarely` | `rarely` | ✅ | TL4 | Per event |
+| `almostNever` | `almost-never` | ✅ | TL4 | |
+| `almostAlways` | `almost-always` | ✅ | TL4 | |
+| `never` | `never` | ✅ | TL4 | |
+| `always` | `always` | ✅ | TL4 | |
+| `someCyclesBy` | `some-cycles-by` | ✅ | TL4 | Tidal `somecyclesBy`; the pre-TL4 `sometimes-by` behaviour |
+| `someCycles` | `some-cycles` | ✅ | TL4 | |
+| `choose` | `choose` | ✅ | TL4 | Signal; vector argument. Silent unless sampled (`segment`, `struct`); old behaviour is `choose-cycles` |
+| `chooseWith` / `chooseInWith` | `choose-with`, `choose-in-with` | ✅ | TL4 | Outer / inner join |
+| `chooseIn` | `choose-in` | ✅ | TL4 | Inner join; depends on the query start |
+| `chooseCycles` / `randcat` | `choose-cycles`, `randcat` | ✅ | TL4 | Random pattern per cycle; `randcat` is variadic |
 | `randcat` | `randcat` | 🔁 | — | |
-| `wchoose` | `wchoose` | 🟡 | TL4 | Same per-cycle vs signal difference as `choose` |
-| `wchooseCycles` / `wrandcat` | `wrandcat` | 📋 | TL4 | |
+| `wchoose` | `wchoose` | ✅ | TL4 | Signal; vector of `[weight value]` — weight first |
+| `wchooseCycles` / `wrandcat` | `wchoose-cycles`, `wrandcat` | ✅ | TL4 | Weight first |
 | `wrandcat` | `wrandcat` | 🔁 | — | |
-| `shuffle` | `shuffle` | 📋 | TL4 | Lisp-level name clash check needed |
-| `scramble` | `scramble` | 📋 | TL4 | |
-| `when` | `when-pat` | 📋 | TL4 | Lisp `when` would collide if added as a special form |
+| `shuffle` | `shuffle` | ✅ | TL4 | Each cycle a random permutation of the n slices |
+| `scramble` | `scramble` | ✅ | TL4 | n random slices with repetition |
+| `when` | `when-pat` | ✅ | TL4 | Patterned boolean condition; also the Tidal fn-of-cycle form. `when` stays free |
 | `firstOf` / `every` | `every` | ✅ | — | |
 | `firstOf` | `every` | 🔁 | — | |
 | `lastOf` | `last-of` | ✅ | TL3 | Exact Tidal `_lastOf` (moved from TL4); delivered in TL3 |
-| `applyN` | `apply-n` | 📋 | TL4 | |
-| `pick` | `pick` | 📋 | TL4 | Select patterns by index/name pattern |
-| `pickmod` | `pick-mod` | 📋 | TL4 | |
-| `pickF` / `pickmodF` | `pick-f` | 📋 | TL4 | Pick a function |
+| `applyN` | `apply-n` | ✅ | TL4 | |
+| `pick` | `pick` | 📋 | TL4b | Select patterns by index/name pattern |
+| `pickmod` | `pick-mod` | 📋 | TL4b | |
+| `pickF` / `pickmodF` | `pick-f` | 📋 | TL4b | Pick a function |
 | `pickmodF` | `pick-f` | 🔁 | — | Modulo variant as option |
-| `pickOut` / `pickmodOut` | `pick-out` | 📋 | TL4 | |
-| `pickRestart` / `pickReset` (+ `mod` variants) | `pick-restart`, `pick-reset` | 📋 | TL4 | |
-| `inhabit` / `pickSqueeze` | `inhabit` | 📋 | TL4 | |
+| `pickOut` / `pickmodOut` | `pick-out` | 📋 | TL4b | |
+| `pickRestart` / `pickReset` (+ `mod` variants) | `pick-restart`, `pick-reset` | 📋 | TL4b | |
+| `inhabit` / `pickSqueeze` | `inhabit` | 📋 | TL4b | |
 | `pickSqueeze`, `pickmodSqueeze` | `inhabit` | 🔁 | — | |
 | `inhabitmod` | `inhabit` | 🔁 | — | Option |
 | `whenKey` / `keyDown` | — | ⛔ | — | Computer-keyboard triggers; REPuLse's editor owns the keyboard |
@@ -442,7 +442,7 @@ REPuLse's `~` parser (`packages/lisp/src/repulse/lisp/mini.cljs`) supports
 | `< >` alternation | ✅ | ✅ | — | |
 | `*n` | ✅ | ✅ | — | |
 | `?` | ✅ | ✅ | — | |
-| `?0.3` probability | — | 📋 | TL4 | Only bare `?` (50%) is parsed today |
+| `?0.3` probability | — | ✅ | TL4 | `x?` and `x?0.3` are deterministic (seeded per string, Strudel krill rule); the number must touch the `?` |
 | `:n` | ✅ | ✅ | — | |
 | `@n` | ✅ | ✅ | — | |
 | `~` rest | ✅ | ✅ | — | |
@@ -453,7 +453,7 @@ REPuLse's `~` parser (`packages/lisp/src/repulse/lisp/mini.cljs`) supports
 | `{ }` polymeter, `{ }%n` | — | ✅ | TL3 | delivered in TL3 |
 | `(k,n,r)` euclid | — | ✅ | TL3 |  |
 | `.` grouping | — | ✅ | TL3 |  |
-| `\|` random choice | — | 📋 | TL4 | |
+| `\|` random choice | — | ✅ | TL4 | One alternative per cycle; top level and inside `[ ]` |
 
 ---
 
@@ -463,12 +463,12 @@ Not in Strudel, but common in Tidal tutorials.
 
 | Tidal | REPuLse | Status | Phase | Notes |
 |---|---|---|---|---|
-| `whenmod` | `whenmod` | 📋 | TL4 | |
+| `whenmod` | `whenmod` | ✅ | TL4 | Tidal `whenmod a b`; `c mod a >= b`; patterned a, b |
 | `rot` | `rot` | ✅ | TL3 | Rotate values, keep structure; rests keep their place |
 | `stutter` | `stutter` | 📋 | TL5 | |
 | `sew` | `sew` | ✅ | TL3b | |
 | `stitch` | `stitch` | ✅ | TL3b | |
-| `fix` | `fix` | 📋 | TL4 | Apply a function to events matching control values |
+| `fix` | `fix` | 📋 | TL4b | Apply a function to events matching control values |
 | `trunc` | `trunc` | ✅ | TL3b | |
 | `rolled` / `rolledBy` | `rolled` | 📋 | TL5 | Strum chords |
 | `toScale` | `scale` | 🔁 | — | |

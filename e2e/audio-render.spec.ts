@@ -178,3 +178,18 @@ test('stitch "t f t t" over bd/sd has four onsets', async ({ page }) => {
   const mono = mixMono(result.left, result.right);
   expect(countOnsets(mono, result.sampleRate)).toBe(4);
 });
+
+// TL4: randomness & conditionals (deterministic, so onset counts are exact)
+for (const [name, code, expected] of [
+  // :cp is a multi-burst clap that the simple onset detector counts as 2, so :bd :sd :hh :bd is used
+  ['shuffle 4 plays all four steps once', '(shuffle 4 (seq :bd :sd :hh :bd))', 4],
+  ['mini-notation ? is deterministic: bd*4? has one onset', '(~ "bd*4?")', 1],
+  ['mini-notation | picks one alternative per cycle', '(~ "[bd bd] | sd")', 2],
+  ['segment 4 (choose ...) samples four onsets', '(segment 4 (choose [:bd :sd]))', 4],
+] as [string, string, number][]) {
+  test(`TL4 ${name}`, async ({ page }) => {
+    const result = await render(page, code);
+    const mono = mixMono(result.left, result.right);
+    expect(countOnsets(mono, result.sampleRate)).toBe(expected);
+  });
+}

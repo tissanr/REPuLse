@@ -133,6 +133,10 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(swing 4 pat)` / `(polymeter [:a :b :c] [:d :e])` | Groove, polymeter |
 | `(zoom 1/4 3/4 pat)` / `(compress 1/4 3/4 pat)` | Play a window / squeeze into a window |
 | `(sew "t f" a b)` / `(struct (binary 5) pat)` | Switch patterns, binary rhythm |
+| `(sometimes f pat)` / `(some-cycles f pat)` | Random transform per event / per cycle |
+| `(randcat a b c)` / `(shuffle 4 pat)` | Random pattern per cycle / random slice order |
+| `(whenmod 8 6 f pat)` / `(when-pat "<0 1>" f pat)` | Conditional transforms |
+| `(segment 4 (choose [:bd :sd]))` | `choose` is a random signal; `choose-cycles` picks once per cycle |
 | `(fmap f pat)` | Apply a function to every event value |
 | `(scale :minor :c4 pat)` | Map degree integers in pat to Hz using a named scale |
 | `(chord :major7 :c4)` | Stack chord tones as a pattern of Hz values |

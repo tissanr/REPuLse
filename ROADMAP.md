@@ -37,7 +37,7 @@ without a human:
 | 2 | TL2 | Continuous signals | 🤖 | full | sonnet |
 | 3 | TL3 | Time & structure combinators | 🤖 | full | sonnet |
 | 4 | TL3b | Zoom, compress & structure extras | 🤖 | full | sonnet |
-| 5 | TL4 | Randomness & conditionals | 🤖 | outline | sonnet |
+| 5 | TL4 | Randomness & conditionals | 🤖 | full | sonnet |
 | 6 | TL5 | Layering, pitch & harmony | 🤖 | outline | sonnet |
 | 7 | TL6 | Sample slicing & playback control | 🤖👂 | outline | opus |
 | 8 | TL7 | Per-event effects & control parameters | 🤖👂 | outline | opus |
@@ -1904,18 +1904,60 @@ See full spec: [PROMPTS/PHASE-TL3b.md](PROMPTS/PHASE-TL3b.md)
 
 ---
 
-## Phase TL4 — Randomness & Conditionals 📋 *planned*
+## Phase TL4 — Randomness & Conditionals ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖 auto
 
 Controlled unpredictability with Tidal semantics; replaces the coarse `cycle-hash`.
 
 **Key additions:**
-- Existing random functions re-based on `time->rand` (probabilities preserved)
-- `some-cycles-by randcat wrandcat shuffle scramble when when-mod almost-always almost-never`, seeds
-- Mini-notation `?p` and `|` random choice where missing
+- Existing random functions re-based on `time->rand` (probabilities preserved); `sometimes*`
+  per event (Strudel), per-cycle behaviour as `some-cycles*`; `choose`/`wchoose` become signals
+- `randcat wrandcat choose-cycles shuffle scramble randrun brand berlin when-pat whenmod apply-n`,
+  per-pattern seeds via `with-seed`
+- Mini-notation: deterministic `?`, `?0.3` and `|` random choice
+
+**Delivered:**
+- `packages/core/src/repulse/core.cljs` — seeded RNG (`*rand-seed*`, `seed->rand`,
+  `time->rands`, `rand-at`; `rand`/`perlin` seed-aware); `cycle-hash` and `event-hash` deleted.
+  New TL4 block: `degrade-by degrade undegrade-by undegrade degrade-by-with` (Tidal `>=`),
+  per-event `sometimes-by sometimes often rarely almost-never almost-always always never`,
+  per-cycle `some-cycles-by some-cycles`, signal-based `choose wchoose choose-with
+  choose-in-with choose-in`, per-cycle `choose-cycles wchoose-cycles randcat wrandcat`,
+  `brand brand-by berlin rand-l randrun`, `with-seed`, `shuffle scramble`, `when-pat whenmod
+  apply-n`. 27 new built-ins, 8 re-based ones
+- Mini-notation — deterministic `?` (Strudel seeding, no more `Math/random`), `?0.3`
+  amounts and `|` random choice with a per-string seed counter; parse errors for `|` inside
+  `< >`/`{ }` and for mixing `,` and `|`
+- Lisp — new `builtins/random.cljs` (curried forms for `->>`); `brand`/`berlin` in
+  `builtins/signals.cljs`; `choose`/`wchoose` keep the vector, weight-first signature
+- Rule 3/5 artefacts: grammar + `parser.js`, `completions.js`, `hover.js`,
+  `builtin_meta.edn`, `docs/ai/builtins.json`; USAGE rewritten sections plus the "Random
+  sequences changed in TL4" note, README rows, STRUDEL-PARITY rows and summary
+- Tests: every spec vector in `core_test`/`mini_test`/`integration_test`, statistics over
+  1000 cycles, `tl4-documented-examples-evaluate`, four Playwright onset-count tests. Existing
+  tests migrated to the new semantics: `choose`/`wchoose` per-cycle tests moved to
+  `choose-cycles`/`wchoose-cycles`, `choose-attaches-source`, `lisp-choose-attaches-source`,
+  `degrade-produces-subset` (mini `?` is now deterministic) and
+  `sometimes-by-multi-cycle-span` (the per-event stack lists branch by branch)
+- Deferred to TL4b: `pick*`, `inhabit`, `fix`
 
 See full spec: [PROMPTS/PHASE-TL4.md](PROMPTS/PHASE-TL4.md)
+
+---
+
+## Phase TL4b — Pick & Fix 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖 auto
+
+The selection and matching functions deferred from TL4.
+
+**Key additions:**
+- `pick pick-mod pick-f pick-out pick-restart pick-reset inhabit` — choose patterns or
+  functions from a lookup by an index/name pattern
+- Tidal `fix` — apply a function to events matching control values
+
+See full spec: [PROMPTS/PHASE-TL4b.md](PROMPTS/PHASE-TL4b.md)
 
 ---
 

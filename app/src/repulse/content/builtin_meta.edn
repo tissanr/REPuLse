@@ -40,19 +40,7 @@
                          "(alt (seq :hh :hh :hh) (seq :oh :_ :hh))"]
               :see-also ["cat" "seq"]}
 
- :choose     {:category "source"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(choose [:bd :sd :hh :oh])"
-                         "(track :perc (choose [:bd :sd :hh]))"]
-              :see-also ["wchoose" "seq"]}
 
- :wchoose    {:category "source"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(wchoose [[:bd 3] [:sd 1] [:hh 2]])"
-                         "(wchoose [[:c4 4] [:e4 2] [:g4 1]])"]
-              :see-also ["choose" "seq"]}
 
  "~"         {:category "source"
               :returns "Pattern"
@@ -129,49 +117,222 @@
                          "(early (seq 0 1/8) (seq :hh :oh :hh :oh))"]
               :see-also ["late" "off"]}
 
- :sometimes  {:category "transform"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(sometimes (fast 2) (seq :bd :sd))"
-                         "(sometimes rev (seq :bd :sd :hh :oh))"]
-              :see-also ["often" "rarely" "sometimes-by" "every"]}
 
- :often      {:category "transform"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(often rev (seq :bd :sd :hh :oh))"
-                         "(often (fast 2) (seq :hh))"]
-              :see-also ["sometimes" "rarely" "every"]}
 
- :rarely     {:category "transform"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(rarely (fast 2) (seq :bd :sd))"
-                         "(rarely rev (seq :bd :sd :hh :oh))"]
-              :see-also ["sometimes" "often" "sometimes-by"]}
+
+
+
+
+;; ── Phase TL4: Randomness & conditionals ──────────────────────────────────
+ :sometimes {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(sometimes (fast 2) (seq :bd :sd :hh :cp))" "(sometimes rev (seq :bd :sd :hh :oh))"]
+  :see-also ["often" "rarely" "sometimes-by" "some-cycles" "every"]}
+
+ :often {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(often rev (seq :bd :sd :hh :oh))" "(often (fast 2) (seq :hh))"]
+  :see-also ["sometimes" "rarely" "every"]}
+
+ :rarely {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(rarely (fast 2) (seq :bd :sd))" "(rarely rev (seq :bd :sd :hh :oh))"]
+  :see-also ["sometimes" "often" "sometimes-by"]}
 
  :sometimes-by {:category "transform"
-                :returns "Pattern"
-                :side-effects []
-                :examples ["(sometimes-by 0.3 rev (seq :bd :sd :hh :oh))"
-                           "(sometimes-by 0.8 (fast 2) (seq :hh))"
-                           "(sometimes-by \"<0.2 0.8>\" rev (seq :bd :sd :hh :oh))"]
-                :see-also ["sometimes" "often" "rarely"]}
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(sometimes-by 0.3 rev (seq :bd :sd :hh :oh))" "(sometimes-by 0.8 (fast 2) (seq :hh))" "(sometimes-by \"<0.2 0.8>\" rev (seq :bd :sd :hh :oh))"]
+  :see-also ["sometimes" "often" "rarely" "some-cycles-by"]}
 
- :degrade    {:category "transform"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(degrade (seq :hh :hh :hh :hh))"
-                         "(degrade (euclidean 5 8 :bd))"]
-              :see-also ["degrade-by" "sometimes"]}
+ :degrade {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(degrade (seq :hh :hh :hh :hh))" "(degrade (euclidean 5 8 :bd))"]
+  :see-also ["degrade-by" "undegrade" "sometimes"]}
 
  :degrade-by {:category "transform"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(degrade-by 0.3 (seq :hh :hh :hh :hh))"
-                         "(degrade-by 0.7 (fast 2 (seq :bd :sd)))"
-                         "(degrade-by \"<0 0.5>\" (fast 8 (pure :hh)))"]
-              :see-also ["degrade" "sometimes-by"]}
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(degrade-by 0.3 (seq :hh :hh :hh :hh))" "(degrade-by 0.7 (fast 2 (seq :bd :sd)))" "(degrade-by \"<0 0.5>\" (fast 8 (pure :hh)))"]
+  :see-also ["degrade" "undegrade-by" "sometimes-by"]}
+
+ :choose {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (choose [:bd :sd :hh :oh]))" "(struct \"t ~ t t\" (choose [:bd :sd :hh]))"]
+  :see-also ["choose-cycles" "wchoose" "randcat" "segment"]}
+
+ :wchoose {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (wchoose [[3 :bd] [1 :sd] [2 :hh]]))" "(segment 8 (wchoose [[4 :c4] [2 :e4] [1 :g4]]))"]
+  :see-also ["wchoose-cycles" "choose" "wrandcat"]}
+
+ :undegrade-by {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(undegrade-by 0.3 (seq :a :b :c :d))" "(undegrade-by \"<0.2 0.6>\" (seq :a :b :c :d))"]
+  :see-also ["undegrade" "degrade-by" "sometimes-by"]}
+
+ :undegrade {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(undegrade (seq :a :b :c :d))"]
+  :see-also ["degrade" "undegrade-by"]}
+
+ :degrade-by-with {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(degrade-by-with saw 0.5 (fast 8 (pure :hh)))" "(degrade-by-with (segment 1 rand) \"<0.2 0.6>\" (fast 8 (pure :hh)))"]
+  :see-also ["degrade-by" "rand" "sometimes-by"]}
+
+ :almost-never {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(almost-never rev (seq :a :b :c :d))"]
+  :see-also ["sometimes-by" "rarely" "almost-always"]}
+
+ :almost-always {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(almost-always rev (seq :a :b :c :d))"]
+  :see-also ["sometimes-by" "often" "almost-never"]}
+
+ :always {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(always rev (seq :a :b))"]
+  :see-also ["never" "sometimes"]}
+
+ :never {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(never rev (seq :a :b))"]
+  :see-also ["always" "sometimes"]}
+
+ :some-cycles-by {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(some-cycles-by 0.3 (fast 2) (seq :bd :sd))" "(some-cycles-by \"<0 1>\" rev (seq :bd :sd))"]
+  :see-also ["some-cycles" "sometimes-by" "every"]}
+
+ :some-cycles {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(some-cycles rev (seq :bd :sd))"]
+  :see-also ["some-cycles-by" "sometimes"]}
+
+ :choose-with {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (choose-with sine [:a :b :c]))"]
+  :see-also ["choose" "choose-in-with"]}
+
+ :choose-in-with {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(choose-in-with (segment 1 rand) [(seq :a :b) (pure :c)])"]
+  :see-also ["choose-in" "randcat" "choose-with"]}
+
+ :choose-in {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(choose-in [(seq :a :b) (seq :c :d)])"]
+  :see-also ["randcat" "choose-in-with"]}
+
+ :choose-cycles {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(choose-cycles [:bd :sd :hh])" "(track :perc (choose-cycles [:bd :sd :hh]))"]
+  :see-also ["randcat" "choose" "wchoose-cycles"]}
+
+ :wchoose-cycles {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(wchoose-cycles [[3 :bd] [1 :sd]])"]
+  :see-also ["wrandcat" "choose-cycles" "wchoose"]}
+
+ :randcat {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(randcat (seq :bd :sd) (seq :hh :hh :oh) (seq :cp))"]
+  :see-also ["wrandcat" "choose-cycles" "cat"]}
+
+ :wrandcat {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(wrandcat [3 (seq :bd :sd)] [1 (pure :cp)])"]
+  :see-also ["randcat" "wchoose-cycles"]}
+
+ :brand {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 brand)" "(struct (segment 8 brand) (pure :hh))"]
+  :see-also ["brand-by" "rand"]}
+
+ :brand-by {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (brand-by 0.25))" "(segment 1 (brand-by \"<0.2 0.6>\"))"]
+  :see-also ["brand" "rand"]}
+
+ :berlin {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 8 berlin)"]
+  :see-also ["rand" "perlin"]}
+
+ :rand-l {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(fmap (fn [v] (first v)) (segment 4 (rand-l 3)))" "(segment 1 (rand-l \"<2 3>\"))"]
+  :see-also ["rand" "randrun"]}
+
+ :randrun {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(randrun 4)" "(randrun \"<3 4>\")"]
+  :see-also ["shuffle" "irand" "run"]}
+
+ :with-seed {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(with-seed 7 (shuffle 4 (seq :a :b :c :d)))" "(with-seed \"<0 1>\" (segment 4 rand))"]
+  :see-also ["rand" "shuffle" "degrade-by"]}
+
+ :shuffle {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(shuffle 4 (seq :a :b :c :d))" "(shuffle \"<2 4>\" (seq :a :b :c :d))"]
+  :see-also ["scramble" "randrun" "with-seed"]}
+
+ :scramble {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(scramble 4 (seq :a :b :c :d))" "(scramble \"<2 4>\" (seq :a :b :c :d))"]
+  :see-also ["shuffle" "irand"]}
+
+ :when-pat {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(when-pat \"<0 1>\" rev (seq :a :b))" "(when-pat (fn [c] (> c 3)) rev (seq :a :b))"]
+  :see-also ["whenmod" "sew" "every"]}
+
+ :whenmod {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(whenmod 8 6 rev (seq 0 2 4 7))" "(whenmod \"<4 2>\" 1 rev (seq :a :b))"]
+  :see-also ["every" "when-pat"]}
+
+ :apply-n {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(apply-n 2 (fast 2) (seq :a :b))" "(apply-n \"<1 2>\" (fast 2) (seq :a :b))"]
+  :see-also ["every" "fast"]}
 
  :jux        {:category "transform"
               :returns "Pattern"
@@ -462,7 +623,7 @@
  :rand {:category "signal"
   :returns "Pattern"
   :side-effects []
-  :examples ["(segment 8 (range 1 8 rand))" "(segment 4 (early 7 rand))"]
+  :examples ["(segment 8 (range 1 8 rand))" "(segment 4 (with-seed 7 rand))"]
   :see-also ["irand" "rand2" "perlin" "segment"]}
 
  :irand {:category "signal"

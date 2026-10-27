@@ -381,17 +381,18 @@
     "returns": "Pattern",
     "side-effects": [],
     "examples": [
-      "(sometimes (fast 2) (seq :bd :sd))",
+      "(sometimes (fast 2) (seq :bd :sd :hh :cp))",
       "(sometimes rev (seq :bd :sd :hh :oh))"
     ],
     "see-also": [
       "often",
       "rarely",
       "sometimes-by",
+      "some-cycles",
       "every"
     ],
-    "detail": "(sometimes f pat) — apply transform on ~50% of cycles",
-    "description": "Apply transform f on approximately 50% of cycles (deterministic per cycle)."
+    "detail": "(sometimes f pat) — apply f to ~50% of events (per event)",
+    "description": "Apply transform f to each event with probability 0.5 (per event, deterministic). For whole cycles use some-cycles."
   },
   "often": {
     "category": "transform",
@@ -407,8 +408,8 @@
       "rarely",
       "every"
     ],
-    "detail": "(often f pat) — apply transform on ~75% of cycles",
-    "description": "Apply transform f on approximately 75% of cycles."
+    "detail": "(often f pat) — apply f to ~75% of events (per event)",
+    "description": "Apply transform f to each event with probability 0.75."
   },
   "rarely": {
     "category": "transform",
@@ -424,8 +425,8 @@
       "often",
       "sometimes-by"
     ],
-    "detail": "(rarely f pat) — apply transform on ~25% of cycles",
-    "description": "Apply transform f on approximately 25% of cycles."
+    "detail": "(rarely f pat) — apply f to ~25% of events (per event)",
+    "description": "Apply transform f to each event with probability 0.25."
   },
   "sometimes-by": {
     "category": "transform",
@@ -440,10 +441,11 @@
     "see-also": [
       "sometimes",
       "often",
-      "rarely"
+      "rarely",
+      "some-cycles-by"
     ],
-    "detail": "(sometimes-by prob f pat) — apply transform with probability 0.0–1.0; prob may be a pattern",
-    "description": "Apply transform f with probability prob (0.0–1.0) per cycle. prob may be a pattern."
+    "detail": "(sometimes-by prob f pat) — per event, apply f with probability prob; prob may be a pattern",
+    "description": "Each event goes through f with probability prob (0.0–1.0), independently and deterministically. prob may be a pattern."
   },
   "degrade": {
     "category": "transform",
@@ -456,10 +458,11 @@
     ],
     "see-also": [
       "degrade-by",
+      "undegrade",
       "sometimes"
     ],
     "detail": "(degrade pat) — randomly drop ~50% of events",
-    "description": "Randomly drop approximately 50% of events per cycle."
+    "description": "Randomly drop about half of the events (deterministic; keeps an event when rand at its start is >= 0.5)."
   },
   "degrade-by": {
     "category": "transform",
@@ -473,10 +476,11 @@
     ],
     "see-also": [
       "degrade",
+      "undegrade-by",
       "sometimes-by"
     ],
-    "detail": "(degrade-by prob pat) — drop events with probability 0.0–1.0; prob may be a pattern",
-    "description": "Drop events with the given probability (0.0 = keep all, 1.0 = drop all). prob may be a pattern."
+    "detail": "(degrade-by prob pat) — drop events with probability prob; prob may be a pattern",
+    "description": "Drop events with the given probability (0.0 = keep all, 1.0 = drop all). An event is kept when rand at its start is >= prob. prob may be a pattern."
   },
   "choose": {
     "category": "source",
@@ -484,31 +488,466 @@
     "returns": "Pattern",
     "side-effects": [],
     "examples": [
-      "(choose [:bd :sd :hh :oh])",
-      "(track :perc (choose [:bd :sd :hh]))"
+      "(segment 4 (choose [:bd :sd :hh :oh]))",
+      "(struct \"t ~ t t\" (choose [:bd :sd :hh]))"
     ],
     "see-also": [
+      "choose-cycles",
       "wchoose",
-      "seq"
+      "randcat",
+      "segment"
     ],
-    "detail": "(choose [vals]) — pick one value per cycle (deterministic)",
-    "description": "Pick one value from the vector per cycle. Deterministic: same cycle always picks the same value."
+    "detail": "(choose [vals]) — random signal; sample it: (segment 4 (choose [:bd :sd]))",
+    "description": "A random signal picking from the vector. It has no onsets of its own, so it is silent unless sampled: (segment 4 (choose [:bd :sd])) or (struct \"t ~ t t\" (choose ...)). For one pick per cycle use choose-cycles."
   },
   "wchoose": {
     "category": "source",
-    "signature": "(wchoose [[val weight] ...])",
+    "signature": "(wchoose [[weight val] ...])",
     "returns": "Pattern",
     "side-effects": [],
     "examples": [
-      "(wchoose [[:bd 3] [:sd 1] [:hh 2]])",
-      "(wchoose [[:c4 4] [:e4 2] [:g4 1]])"
+      "(segment 4 (wchoose [[3 :bd] [1 :sd] [2 :hh]]))",
+      "(segment 8 (wchoose [[4 :c4] [2 :e4] [1 :g4]]))"
+    ],
+    "see-also": [
+      "wchoose-cycles",
+      "choose",
+      "wrandcat"
+    ],
+    "detail": "(wchoose [[weight val] …]) — weighted random signal; sample it with segment",
+    "description": "Weighted random signal, weight first: (wchoose [[3 :bd] [1 :sd]]). Silent unless sampled: (segment 4 (wchoose ...)). For one pick per cycle use wchoose-cycles."
+  },
+  "undegrade-by": {
+    "category": "transform",
+    "signature": "(undegrade-by prob pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(undegrade-by 0.3 (seq :a :b :c :d))",
+      "(undegrade-by \"<0.2 0.6>\" (seq :a :b :c :d))"
+    ],
+    "see-also": [
+      "undegrade",
+      "degrade-by",
+      "sometimes-by"
+    ],
+    "detail": "(undegrade-by prob pat) — keep events with probability prob (complement of degrade-by); prob may be a pattern",
+    "description": "Keep only the events degrade-by would drop: an event survives when rand at its start is < prob. (stack (degrade-by x p) (undegrade-by x p)) equals p. prob may be a pattern."
+  },
+  "undegrade": {
+    "category": "transform",
+    "signature": "(undegrade pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(undegrade (seq :a :b :c :d))"
+    ],
+    "see-also": [
+      "degrade",
+      "undegrade-by"
+    ],
+    "detail": "(undegrade pat) — keep the ~50% of events degrade would drop",
+    "description": "(undegrade-by 0.5 pat): the complement of degrade."
+  },
+  "degrade-by-with": {
+    "category": "transform",
+    "signature": "(degrade-by-with rpat prob pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(degrade-by-with saw 0.5 (fast 8 (pure :hh)))",
+      "(degrade-by-with (segment 1 rand) \"<0.2 0.6>\" (fast 8 (pure :hh)))"
+    ],
+    "see-also": [
+      "degrade-by",
+      "rand",
+      "sometimes-by"
+    ],
+    "detail": "(degrade-by-with rpat prob pat) — keep events where rpat (sampled at the event start) >= prob",
+    "description": "Like degrade-by with your own random source: keep an event when the value of rpat at its start is >= prob. Non-numeric values drop the event. rpat and prob may be patterns."
+  },
+  "almost-never": {
+    "category": "transform",
+    "signature": "(almost-never f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(almost-never rev (seq :a :b :c :d))"
+    ],
+    "see-also": [
+      "sometimes-by",
+      "rarely",
+      "almost-always"
+    ],
+    "detail": "(almost-never f pat) — apply f to ~10% of events",
+    "description": "Apply transform f to each event with probability 0.1."
+  },
+  "almost-always": {
+    "category": "transform",
+    "signature": "(almost-always f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(almost-always rev (seq :a :b :c :d))"
+    ],
+    "see-also": [
+      "sometimes-by",
+      "often",
+      "almost-never"
+    ],
+    "detail": "(almost-always f pat) — apply f to ~90% of events",
+    "description": "Apply transform f to each event with probability 0.9."
+  },
+  "always": {
+    "category": "transform",
+    "signature": "(always f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(always rev (seq :a :b))"
+    ],
+    "see-also": [
+      "never",
+      "sometimes"
+    ],
+    "detail": "(always f pat) — apply f (same as (f pat))",
+    "description": "Always apply f; useful as a switch-able end of the sometimes family."
+  },
+  "never": {
+    "category": "transform",
+    "signature": "(never f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(never rev (seq :a :b))"
+    ],
+    "see-also": [
+      "always",
+      "sometimes"
+    ],
+    "detail": "(never f pat) — leave pat unchanged",
+    "description": "Never apply f; returns pat unchanged."
+  },
+  "some-cycles-by": {
+    "category": "transform",
+    "signature": "(some-cycles-by prob f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(some-cycles-by 0.3 (fast 2) (seq :bd :sd))",
+      "(some-cycles-by \"<0 1>\" rev (seq :bd :sd))"
+    ],
+    "see-also": [
+      "some-cycles",
+      "sometimes-by",
+      "every"
+    ],
+    "detail": "(some-cycles-by prob f pat) — per cycle, apply f with probability prob; prob may be a pattern",
+    "description": "Whole-cycle randomness: cycle c is answered by (f pat) when rand at c is < prob, otherwise by pat. This is the pre-TL4 behaviour of sometimes-by. prob may be a pattern."
+  },
+  "some-cycles": {
+    "category": "transform",
+    "signature": "(some-cycles f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(some-cycles rev (seq :bd :sd))"
+    ],
+    "see-also": [
+      "some-cycles-by",
+      "sometimes"
+    ],
+    "detail": "(some-cycles f pat) — apply f to ~50% of whole cycles",
+    "description": "(some-cycles-by 0.5 f pat): the whole cycle is either transformed or not."
+  },
+  "choose-with": {
+    "category": "source",
+    "signature": "(choose-with sig [val ...])",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(segment 4 (choose-with sine [:a :b :c]))"
     ],
     "see-also": [
       "choose",
-      "seq"
+      "choose-in-with"
     ],
-    "detail": "(wchoose [[weight val] …]) — weighted random choice per cycle",
-    "description": "Weighted random choice: pick one value per cycle, biased by weights."
+    "detail": "(choose-with sig [vals]) — pick from vals using signal sig (0..1); structure from sig",
+    "description": "Pick from the vector using the value of the signal sig (in [0,1)); the result takes its structure from sig. sig may be a pattern."
+  },
+  "choose-in-with": {
+    "category": "source",
+    "signature": "(choose-in-with sig [pat ...])",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(choose-in-with (segment 1 rand) [(seq :a :b) (pure :c)])"
+    ],
+    "see-also": [
+      "choose-in",
+      "randcat",
+      "choose-with"
+    ],
+    "detail": "(choose-in-with sig [pats]) — like choose-with, but the chosen pattern keeps its own structure",
+    "description": "Pick a pattern with the signal sig and let it keep its own structure (inner join). sig may be a pattern."
+  },
+  "choose-in": {
+    "category": "source",
+    "signature": "(choose-in [pat ...])",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(choose-in [(seq :a :b) (seq :c :d)])"
+    ],
+    "see-also": [
+      "randcat",
+      "choose-in-with"
+    ],
+    "detail": "(choose-in [pats]) — random pattern signal; chosen pattern keeps its structure",
+    "description": "(choose-in-with rand pats). The pick depends on the query start, so use randcat for a stable per-cycle choice."
+  },
+  "choose-cycles": {
+    "category": "source",
+    "signature": "(choose-cycles [val ...])",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(choose-cycles [:bd :sd :hh])",
+      "(track :perc (choose-cycles [:bd :sd :hh]))"
+    ],
+    "see-also": [
+      "randcat",
+      "choose",
+      "wchoose-cycles"
+    ],
+    "detail": "(choose-cycles [vals]) — one random pick per cycle (the pre-TL4 choose)",
+    "description": "One random value (or pattern) per cycle, deterministic. Values may be patterns."
+  },
+  "wchoose-cycles": {
+    "category": "source",
+    "signature": "(wchoose-cycles [[weight val] ...])",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(wchoose-cycles [[3 :bd] [1 :sd]])"
+    ],
+    "see-also": [
+      "wrandcat",
+      "choose-cycles",
+      "wchoose"
+    ],
+    "detail": "(wchoose-cycles [[weight val] …]) — weighted pick per cycle (the pre-TL4 wchoose)",
+    "description": "Weighted random pick, one per cycle; weight first."
+  },
+  "randcat": {
+    "category": "source",
+    "signature": "(randcat pat ...)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(randcat (seq :bd :sd) (seq :hh :hh :oh) (seq :cp))"
+    ],
+    "see-also": [
+      "wrandcat",
+      "choose-cycles",
+      "cat"
+    ],
+    "detail": "(randcat pat …) — play one randomly chosen pattern per cycle",
+    "description": "Each cycle plays one of the given patterns, picked at random (deterministically)."
+  },
+  "wrandcat": {
+    "category": "source",
+    "signature": "(wrandcat [weight pat] ...)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(wrandcat [3 (seq :bd :sd)] [1 (pure :cp)])"
+    ],
+    "see-also": [
+      "randcat",
+      "wchoose-cycles"
+    ],
+    "detail": "(wrandcat [w pat] …) — weighted random pattern per cycle",
+    "description": "Like randcat with weights: (wrandcat [3 (seq :bd :sd)] [1 (pure :cp)])."
+  },
+  "brand": {
+    "category": "signal",
+    "signature": "brand",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(segment 4 brand)",
+      "(struct (segment 8 brand) (pure :hh))"
+    ],
+    "see-also": [
+      "brand-by",
+      "rand"
+    ],
+    "detail": "brand — random boolean signal (true ~50%); (struct brand (pure :hh))",
+    "description": "Random boolean signal: true when rand < 0.5. Usable with struct, mask, sew and when-pat."
+  },
+  "brand-by": {
+    "category": "signal",
+    "signature": "(brand-by p)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(segment 4 (brand-by 0.25))",
+      "(segment 1 (brand-by \"<0.2 0.6>\"))"
+    ],
+    "see-also": [
+      "brand",
+      "rand"
+    ],
+    "detail": "(brand-by p) — random boolean signal, true with probability p; p may be a pattern",
+    "description": "Random boolean signal: true when rand < p. p may be a pattern."
+  },
+  "berlin": {
+    "category": "signal",
+    "signature": "berlin",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(segment 8 berlin)"
+    ],
+    "see-also": [
+      "rand",
+      "perlin"
+    ],
+    "detail": "berlin — sawtooth-like random ridge signal 0..1; (segment 8 berlin)",
+    "description": "Signal in [0,1): rand at the cycle start blended towards rand at the next cycle start, Strudel's berlin."
+  },
+  "rand-l": {
+    "category": "signal",
+    "signature": "(rand-l n)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(fmap (fn [v] (first v)) (segment 4 (rand-l 3)))",
+      "(segment 1 (rand-l \"<2 3>\"))"
+    ],
+    "see-also": [
+      "rand",
+      "randrun"
+    ],
+    "detail": "(rand-l n) — signal of n random floats (vector); n may be a pattern",
+    "description": "Signal whose value is a vector of n random floats; use fmap to pick from it."
+  },
+  "randrun": {
+    "category": "source",
+    "signature": "(randrun n)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(randrun 4)",
+      "(randrun \"<3 4>\")"
+    ],
+    "see-also": [
+      "shuffle",
+      "irand",
+      "run"
+    ],
+    "detail": "(randrun n) — a random permutation of 0..n-1 each cycle; n may be a pattern",
+    "description": "n events per cycle: a random permutation of 0 to n-1 (each number once per cycle)."
+  },
+  "with-seed": {
+    "category": "transform",
+    "signature": "(with-seed n pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(with-seed 7 (shuffle 4 (seq :a :b :c :d)))",
+      "(with-seed \"<0 1>\" (segment 4 rand))"
+    ],
+    "see-also": [
+      "rand",
+      "shuffle",
+      "degrade-by"
+    ],
+    "detail": "(with-seed n pat) — shift every random read inside pat by n cycles; n may be a pattern",
+    "description": "Every random function inside pat reads its random number at time t + n instead of t, giving a different but still deterministic variation. Innermost with-seed wins."
+  },
+  "shuffle": {
+    "category": "transform",
+    "signature": "(shuffle n pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(shuffle 4 (seq :a :b :c :d))",
+      "(shuffle \"<2 4>\" (seq :a :b :c :d))"
+    ],
+    "see-also": [
+      "scramble",
+      "randrun",
+      "with-seed"
+    ],
+    "detail": "(shuffle n pat) — each cycle, the n slices of pat in random order; n may be a pattern",
+    "description": "Cut each cycle into n slices and play every slice exactly once, in a random order."
+  },
+  "scramble": {
+    "category": "transform",
+    "signature": "(scramble n pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(scramble 4 (seq :a :b :c :d))",
+      "(scramble \"<2 4>\" (seq :a :b :c :d))"
+    ],
+    "see-also": [
+      "shuffle",
+      "irand"
+    ],
+    "detail": "(scramble n pat) — n slots each play a random slice of pat; n may be a pattern",
+    "description": "Like shuffle but with repetition: each of n slots plays a randomly chosen slice."
+  },
+  "when-pat": {
+    "category": "transform",
+    "signature": "(when-pat on f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(when-pat \"<0 1>\" rev (seq :a :b))",
+      "(when-pat (fn [c] (> c 3)) rev (seq :a :b))"
+    ],
+    "see-also": [
+      "whenmod",
+      "sew",
+      "every"
+    ],
+    "detail": "(when-pat on f pat) — apply f where boolean pattern on is true; or on = fn of the cycle number",
+    "description": "Where the boolean pattern on is true the events come from (f pat), elsewhere from pat. on may also be a Lisp function called with the cycle number: (when-pat (fn [c] (> c 3)) rev pat)."
+  },
+  "whenmod": {
+    "category": "transform",
+    "signature": "(whenmod a b f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(whenmod 8 6 rev (seq 0 2 4 7))",
+      "(whenmod \"<4 2>\" 1 rev (seq :a :b))"
+    ],
+    "see-also": [
+      "every",
+      "when-pat"
+    ],
+    "detail": "(whenmod a b f pat) — apply f in cycles where (cycle mod a) >= b; a, b may be patterns",
+    "description": "In cycle c apply f when c mod a >= b: (whenmod 8 6 rev pat) reverses cycles 6 and 7 of every 8. a and b may be patterns."
+  },
+  "apply-n": {
+    "category": "transform",
+    "signature": "(apply-n n f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(apply-n 2 (fast 2) (seq :a :b))",
+      "(apply-n \"<1 2>\" (fast 2) (seq :a :b))"
+    ],
+    "see-also": [
+      "every",
+      "fast"
+    ],
+    "detail": "(apply-n n f pat) — apply f n times; n may be a pattern",
+    "description": "Apply the transform f n times in a row."
   },
   "jux": {
     "category": "transform",
@@ -2791,7 +3230,7 @@
     "side-effects": [],
     "examples": [
       "(segment 8 (range 1 8 rand))",
-      "(segment 4 (early 7 rand))"
+      "(segment 4 (with-seed 7 rand))"
     ],
     "see-also": [
       "irand",
@@ -2800,7 +3239,7 @@
       "segment"
     ],
     "detail": "rand — deterministic random signal 0..1 (Tidal timeToRand); (segment 4 rand)",
-    "description": "Deterministic random signal in [0,1): Tidal's timeToRand of the sampling time, so it is identical on every run. It is exactly 0 at t = 0. Vary it with a time offset: (early 7 rand)."
+    "description": "Deterministic random signal in [0,1): Tidal's timeToRand of the sampling time, so it is identical on every run. It is exactly 0 at t = 0. Vary it with (with-seed 7 …)."
   },
   "irand": {
     "category": "signal",

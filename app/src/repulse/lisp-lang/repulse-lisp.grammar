@@ -35,6 +35,7 @@ Map    { OpenBrace expr* CloseBrace }
     "sometimes" | "often" | "rarely" | "sometimes-by" |
     "degrade" | "degrade-by" |
     "choose" | "wchoose" |
+    "undegrade-by" | "undegrade" | "degrade-by-with" | "almost-never" | "almost-always" | "always" | "never" | "some-cycles-by" | "some-cycles" | "choose-with" | "choose-in-with" | "choose-in" | "choose-cycles" | "wchoose-cycles" | "randcat" | "wrandcat" | "brand" | "brand-by" | "berlin" | "rand-l" | "randrun" | "with-seed" | "shuffle" | "scramble" | "when-pat" | "whenmod" | "apply-n" |
     "jux" | "jux-by" | "off" |
     "add" | "sub" | "mul" | "div" | "set" |
     "def" | "defn" | "let" | "fn" | "lambda" | "if" | "do" |
