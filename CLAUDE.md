@@ -193,6 +193,7 @@ A phase is delivered only when **all** of these hold:
 3. **Marked delivered.** In `ROADMAP.md`, `📋 *planned*` → `✅ *delivered*` plus a
    **Delivered:** section matching the existing style.
 4. Docs are committed with (or immediately after) the implementation.
+5. **Test protocol in the PR** (Rule 5). Its PR description ends with a `## Test protocol` section.
 
 "The code works" is necessary but not sufficient.
 
@@ -222,3 +223,53 @@ A broken script masquerades as a data problem. If a script hangs or exits 1 with
 output, **the script is broken — don't fix the input data first.** Isolate each step
 with explicit prints and a subprocess wrapper capturing stderr and exit code.
 `setTimeout` can't detect synchronous infinite loops — use an iteration-counter guard.
+
+### Rule 5 — Test protocol at the end of every PR
+
+Every PR that changes behaviour (every phase PR, manual or auto-phase, and every
+feature or fix PR) ends its description with a `## Test protocol` section, placed last
+and followed only by the 🤖 attribution line. It is a GitHub task list that the reviewer
+works through in the browser and ticks off in the PR. No separate document or file.
+
+Format: one checkbox per test, grouped under `###` headings (new features, warnings and
+errors, regressions, editor), each with a pasteable snippet and its concrete expected
+outcome:
+
+````markdown
+## Test protocol
+
+Setup: `npm run dev:full`, open http://localhost:3000, headphones on. Evaluate each
+snippet with Alt+Enter (macOS Option+Enter); stop playback between tests.
+
+### New features
+- [ ] **1. Stereo sweep.** `(pan sine2 (fast 8 (seq :hh)))`
+  Expected: 8 hats per cycle moving centre → right → centre → left, smoothly.
+
+### Warnings and errors
+- [ ] **2. Old voice shortcut.** `(saw :c4)`
+  Expected: eval error `saw is a signal (a continuous pattern), not a function. …`
+
+### Regressions
+- [ ] **3. Saw voice.** `(->> (seq :c3 :e3 :g3) (synth :saw))`
+  Expected: buzzy 3-note arpeggio, as before.
+
+### Known issues (not blockers)
+- `sinewave` highlights as `sine` + `wave`; evaluates correctly.
+````
+
+Rules:
+
+- Cover every new built-in, effect or parameter, every new error or warning message,
+  every removed or changed behaviour (and its replacement), and at least two
+  regressions in nearby features. Multi-line snippets go in an indented ```` ```lisp ````
+  block under the checkbox.
+- "Expected" is concrete: what you hear (note names, hits per cycle, sweep direction,
+  louder/quieter over how many cycles) and what you see (exact message text, output
+  line). Never "works correctly".
+- Values must be real. Check pattern snippets with the TEST1 harness
+  (`window.__REPULSE_TEST__.evalToEvents(code, cycles)` on `test-harness.html`, from a
+  scratch Playwright spec deleted before committing) and copy note names and values
+  from its output; take message texts from the code. Use only built-ins, demos and synth
+  voices that exist.
+- For 🤖👂 phases the spec's listen or hardware check is part of the protocol.
+- When updating a PR description later, keep the protocol as the last section.

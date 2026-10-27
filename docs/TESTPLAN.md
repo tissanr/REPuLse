@@ -68,3 +68,7 @@ When adding a feature, update the closest layer:
 
 If a phase adds user-facing syntax, also update README/USAGE docs and keep the
 syntax highlighting/completion/AI-docs workflows in sync.
+
+Manual checks (how it sounds, what the app shows) go in the PR, not in a file: every
+PR's description ends with a `## Test protocol` task list that the reviewer ticks off on
+GitHub. Format and rules: `CLAUDE.md`, Rule 5.
