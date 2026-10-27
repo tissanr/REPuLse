@@ -1,15 +1,6 @@
 (ns repulse.lisp.mini
   (:require [repulse.core :as core]))
 
-;;; ── Helpers ─────────────────────────────────────────────────────────
-
-(defn- float->rat
-  "Convert a floating-point number to a rational [n d].
-   Uses denominator 100000 — sufficient precision for music timing."
-  [f]
-  (let [n (int (Math/round (* f 100000)))]
-    (core/rat n 100000)))
-
 ;;; ── Tokeniser ──────────────────────────────────────────────────────
 
 ;; Token types:
@@ -27,7 +18,7 @@
   (contains? #{\space \tab \newline \return} ch))
 
 (defn- special? [ch]
-  (contains? #{\[ \] \< \> \* \? \: \@} ch))
+  (contains? #{\[ \] \< \> \* \? \: \@ \, \! \% \( \) \{ \}} ch))
 
 (defn- tokenise
   "Scan a mini-notation string into a flat sequence of tokens.
@@ -49,6 +40,13 @@
           (= ch \?) (recur (inc i) (conj tokens {:type :question}))
           (= ch \:) (recur (inc i) (conj tokens {:type :colon}))
           (= ch \@) (recur (inc i) (conj tokens {:type :at}))
+          (= ch \,) (recur (inc i) (conj tokens {:type :comma}))
+          (= ch \!) (recur (inc i) (conj tokens {:type :bang :str-from i}))
+          (= ch \%) (recur (inc i) (conj tokens {:type :percent}))
+          (= ch \() (recur (inc i) (conj tokens {:type :open-paren}))
+          (= ch \)) (recur (inc i) (conj tokens {:type :close-paren}))
+          (= ch \{) (recur (inc i) (conj tokens {:type :open-brace}))
+          (= ch \}) (recur (inc i) (conj tokens {:type :close-brace}))
 
           :else
           ;; Accumulate word characters until whitespace or special
@@ -59,30 +57,35 @@
                         j
                         (recur (inc j))))
                 word (subs s i end)]
-            (recur end (conj tokens {:type :atom :text word
-                                     :str-from i :str-to end}))))))))
+            (recur end (conj tokens (if (= word ".")
+                                      {:type :dot}
+                                      {:type :atom :text word
+                                       :str-from i :str-to end})))))))))
 
 ;;; ── Parser ─────────────────────────────────────────────────────────
 
-;; Recursive-descent parser over the token stream.
-;; Returns an AST node and the remaining token index.
+;; Recursive-descent parser over the token stream. Every parse fn returns
+;; [ast-node next-pos].
 ;;
 ;; Grammar (informal):
-;;   sequence = element+
-;;   element  = group | alt-group | atom-expr
-;;   group    = "[" sequence "]"
-;;   alt      = "<" sequence ">"  (children are alternatives, not subsequence)
-;;   atom-expr = atom suffix*
-;;   suffix   = "*" number | "?" | ":" number | "@" number
+;;   layers   = sequence ("," sequence)*       — stack of layers
+;;   sequence = step+, split into groups by "." tokens
+;;   step     = element suffix* | "!" (repeat the previous step)
+;;   element  = "[" layers "]" | "<" layers ">" | "{" layers "}" ("%" n)? | atom
+;;   suffix   = "*" n | "?" | ":" n (atoms) | "@" n | "(" seq "," seq ["," seq] ")"
 ;;
-;; Precedence: suffixes bind tighter than sequencing.
-;; Sequence is implicit — space-separated elements form a seq.
+;; Precedence: "," (lowest) splits layers, "." splits groups, spaces split steps.
 
-(declare parse-sequence)
+(declare parse-layers parse-sequence)
+
+(defn- parse-error [msg]
+  (ex-info msg {:type :mini-parse-error}))
 
 (defn- peek-token [tokens pos]
   (when (< pos (count tokens))
     (nth tokens pos)))
+
+(defn- tok-type [tokens pos] (:type (peek-token tokens pos)))
 
 (defn- parse-number-text
   "Parse a string as a number. Returns nil if not a number."
@@ -108,131 +111,146 @@
     (note-name? text)               (keyword text)
     :else                           (keyword text)))
 
-(defn- parse-atom
-  "Parse a single atom token (not brackets/angles), then consume any suffixes.
-   Returns [ast-node next-pos].
-   :str-from/:str-to on the node are the character offsets of the base atom within
-   the mini-notation string (used to compute per-token highlight ranges)."
-  [tokens pos]
-  (let [tok      (nth tokens pos)
-        base-val (atom-value (:text tok))
-        str-from (:str-from tok)
-        str-to   (:str-to tok)
-        pos      (inc pos)]
-    ;; Consume suffixes: * ? : @
-    (loop [node {:type :atom :value base-val :weight 1
-                 :str-from str-from :str-to str-to}
-           p    pos]
-      (let [tok (peek-token tokens p)]
-        (cond
-          ;; *N — repetition
-          (and tok (= (:type tok) :star))
-          (let [next-tok (peek-token tokens (inc p))]
-            (if (and next-tok (= (:type next-tok) :atom))
-              (let [n (or (parse-number-text (:text next-tok)) 1)]
-                (recur {:type :repeat :child node :times (int n) :weight (:weight node)}
-                       (+ p 2)))
-              ;; bare * with no number — treat as *2
-              (recur {:type :repeat :child node :times 2 :weight (:weight node)}
-                     (inc p))))
+(defn- parse-atom [tokens pos]
+  (let [tok (nth tokens pos)]
+    [{:type :atom :value (atom-value (:text tok)) :weight 1
+      :str-from (:str-from tok) :str-to (:str-to tok)}
+     (inc pos)]))
 
-          ;; ? — probability (50% chance of rest)
-          (and tok (= (:type tok) :question))
-          (recur {:type :degrade :child node :weight (:weight node)}
-                 (inc p))
+(defn- parse-suffixes
+  "Consume suffixes (* ? : @ and euclid arguments) after an element."
+  [tokens node pos]
+  (loop [node node p pos]
+    (let [tok (peek-token tokens p)
+          nxt (peek-token tokens (inc p))]
+      (case (:type tok)
+        :star
+        (if (= (:type nxt) :atom)
+          (recur {:type :repeat :child node :times (int (or (parse-number-text (:text nxt)) 1))
+                  :weight (:weight node 1)}
+                 (+ p 2))
+          (recur {:type :repeat :child node :times 2 :weight (:weight node 1)} (inc p)))
 
-          ;; :N — sample index
-          (and tok (= (:type tok) :colon))
-          (let [next-tok (peek-token tokens (inc p))]
-            (if (and next-tok (= (:type next-tok) :atom))
-              (let [n (or (parse-number-text (:text next-tok)) 0)]
-                (recur (assoc node :sample-index (int n))
-                       (+ p 2)))
-              [node p]))
+        :question
+        (recur {:type :degrade :child node :weight (:weight node 1)} (inc p))
 
-          ;; @N — weight / elongation
-          (and tok (= (:type tok) :at))
-          (let [next-tok (peek-token tokens (inc p))]
-            (if (and next-tok (= (:type next-tok) :atom))
-              (let [w (or (parse-number-text (:text next-tok)) 1)]
-                (recur (assoc node :weight (int w))
-                       (+ p 2)))
-              [node p]))
+        :colon
+        (if (and (= (:type node) :atom) (= (:type nxt) :atom))
+          (recur (assoc node :sample-index (int (or (parse-number-text (:text nxt)) 0)))
+                 (+ p 2))
+          [node p])
 
-          ;; No more suffixes
-          :else
-          [node p])))))
+        :at
+        (if (= (:type nxt) :atom)
+          (recur (assoc node :weight (int (or (parse-number-text (:text nxt)) 1))) (+ p 2))
+          [node p])
 
-(defn- parse-element
-  "Parse one element: a bracketed group, an angle-bracket alternation, or an atom."
-  [tokens pos]
+        :open-paren
+        (let [[a p1] (parse-sequence tokens (inc p))
+              _      (when-not (= :comma (tok-type tokens p1)) (throw (parse-error "Expected ,")))
+              [b p2] (parse-sequence tokens (inc p1))
+              [c p3] (if (= :comma (tok-type tokens p2))
+                       (parse-sequence tokens (inc p2))
+                       [nil p2])]
+          (when-not (= :close-paren (tok-type tokens p3))
+            (throw (parse-error "Expected )")))
+          (recur {:type :euclid :child node :args (if c [a b c] [a b])
+                  :weight (:weight node 1)}
+                 (inc p3)))
+
+        [node p]))))
+
+(defn- layers->vec [node]
+  (if (= :stack (:type node)) (:layers node) [node]))
+
+(defn- parse-element [tokens pos]
   (let [tok (peek-token tokens pos)]
-    (cond
-      ;; [ ... ] — subdivision group
-      (= (:type tok) :open-bracket)
-      (let [[seq-node next-pos] (parse-sequence tokens (inc pos))
-            close               (peek-token tokens next-pos)]
-        (when-not (and close (= (:type close) :close-bracket))
-          (throw (ex-info "Expected ]" {:type :mini-parse-error})))
-        ;; After the ], check for suffixes on the group
-        (loop [node seq-node p (inc next-pos)]
-          (let [tok (peek-token tokens p)]
-            (cond
-              (and tok (= (:type tok) :star))
-              (let [next-tok (peek-token tokens (inc p))]
-                (if (and next-tok (= (:type next-tok) :atom))
-                  (let [n (or (parse-number-text (:text next-tok)) 2)]
-                    (recur {:type :repeat :child node :times (int n) :weight 1} (+ p 2)))
-                  (recur {:type :repeat :child node :times 2 :weight 1} (inc p))))
+    (case (:type tok)
+      :open-bracket
+      (let [[node p] (parse-layers tokens (inc pos))]
+        (when-not (= :close-bracket (tok-type tokens p)) (throw (parse-error "Expected ]")))
+        [node (inc p)])
 
-              (and tok (= (:type tok) :question))
-              (recur {:type :degrade :child node :weight 1} (inc p))
+      :open-angle
+      (let [[node p] (parse-layers tokens (inc pos))]
+        (when-not (= :close-angle (tok-type tokens p)) (throw (parse-error "Expected >")))
+        (let [alts (mapv (fn [l] {:type :alt :children (:children l)}) (layers->vec node))]
+          [(if (= 1 (count alts)) (first alts) {:type :stack :layers alts}) (inc p)]))
 
-              (and tok (= (:type tok) :at))
-              (let [next-tok (peek-token tokens (inc p))]
-                (if (and next-tok (= (:type next-tok) :atom))
-                  (let [w (or (parse-number-text (:text next-tok)) 1)]
-                    (recur (assoc node :weight (int w)) (+ p 2)))
-                  [node p]))
+      :open-brace
+      (let [[node p] (parse-layers tokens (inc pos))]
+        (when-not (= :close-brace (tok-type tokens p)) (throw (parse-error "Expected }")))
+        (let [p (inc p)
+              layers (layers->vec node)]
+          (if (= :percent (tok-type tokens p))
+            (let [nt (peek-token tokens (inc p))
+                  n  (when (= :atom (:type nt)) (parse-number-text (:text nt)))]
+              (when-not n (throw (parse-error "Expected a number after %")))
+              [{:type :polymeter :layers layers :steps n} (+ p 2)])
+            [{:type :polymeter :layers layers :steps nil} p])))
 
-              :else
-              [node p]))))
-
-      ;; < ... > — alternation
-      (= (:type tok) :open-angle)
-      (let [[seq-node next-pos] (parse-sequence tokens (inc pos))
-            close               (peek-token tokens next-pos)]
-        (when-not (and close (= (:type close) :close-angle))
-          (throw (ex-info "Expected >" {:type :mini-parse-error})))
-        [{:type :alt :children (:children seq-node)} (inc next-pos)])
-
-      ;; atom
-      (= (:type tok) :atom)
+      :atom
       (parse-atom tokens pos)
 
-      :else
-      (throw (ex-info (str "Unexpected token: " (pr-str tok))
-                      {:type :mini-parse-error})))))
+      (throw (parse-error (str "Unexpected token: " (pr-str tok)))))))
+
+(defn- adjacent-int
+  "If the token after the bang at pos is an integer atom directly adjacent to it, return it."
+  [tokens pos]
+  (let [bang (nth tokens pos)
+        nxt  (peek-token tokens (inc pos))]
+    (when (and nxt (= :atom (:type nxt))
+               (= (:str-from nxt) (inc (:str-from bang)))
+               (re-matches #"\d+" (:text nxt)))
+      (js/parseInt (:text nxt) 10))))
 
 (defn- parse-sequence
-  "Parse a sequence of elements until we hit ], >, or end of tokens.
-   Returns [{:type :seq :children [...]} next-pos]."
+  "Parse steps until a closing token, comma or end. Standalone dots split the
+   steps into groups. Returns [{:type :seq :children [...]} next-pos]."
   [tokens pos]
-  (loop [children [] p pos]
-    (let [tok (peek-token tokens p)]
-      (if (or (nil? tok)
-              (= (:type tok) :close-bracket)
-              (= (:type tok) :close-angle))
-        [{:type :seq :children children} p]
-        (let [[node next-pos] (parse-element tokens p)]
-          (recur (conj children node) next-pos))))))
+  (loop [groups [] cur [] p pos]
+    (let [tok (peek-token tokens p)
+          t   (:type tok)]
+      (cond
+        (or (nil? tok)
+            (contains? #{:close-bracket :close-angle :close-brace :close-paren :comma} t))
+        (let [groups (if (seq cur) (conj groups cur) groups)]
+          [(if (<= (count groups) 1)
+             {:type :seq :children (or (first groups) [])}
+             {:type :seq
+              :children (mapv (fn [g] {:type :seq :children g :weight 1}) groups)})
+           p])
+
+        (= t :dot)
+        (recur (if (seq cur) (conj groups cur) groups) [] (inc p))
+
+        (= t :bang)
+        (do
+          (when (empty? cur) (throw (parse-error "Nothing to repeat before !")))
+          (let [n (adjacent-int tokens p)
+                copies (if n (max 0 (dec n)) 1)]
+            (recur groups (into cur (repeat copies (peek cur))) (if n (+ p 2) (inc p)))))
+
+        :else
+        (let [[el p1]   (parse-element tokens p)
+              [node p2] (parse-suffixes tokens el p1)]
+          (recur groups (conj cur node) p2))))))
+
+(defn- parse-layers
+  "sequence (\",\" sequence)* — a single layer is returned as is."
+  [tokens pos]
+  (loop [layers [] p pos]
+    (let [[node p1] (parse-sequence tokens p)
+          layers    (conj layers node)]
+      (if (= :comma (tok-type tokens p1))
+        (recur layers (inc p1))
+        [(if (= 1 (count layers)) (first layers) {:type :stack :layers layers}) p1]))))
 
 ;;; ── Compiler: AST → Pattern ─────────────────────────────────────────
 
 ;; NOTE: Every compiled node returns a Pattern (a map with :query fn).
-;; We cannot use core/seq* for sequences of patterns because core/seq*
-;; stores its arguments as event *values*, not as child patterns to be
-;; queried. We need seq-of-pats which sequences patterns in time slots.
+;; Sequences compile to core/timecat, which squeezes child patterns into
+;; exact rational slots and plays child cycle c in result cycle c.
 ;;
 ;; base-offset: absolute editor position of the first character inside the
 ;; mini-notation string (position after the opening "). When non-nil, each
@@ -252,84 +270,19 @@
                     (core/query (nth pats idx) piece)))
                 (core/split-cycles sp))))))
 
-(defn- scale-events
-  "Query pat within [0,1) and scale/shift event times into [slot-sf, slot-ef).
-   Clips the :part span to [sp-sf, sp-ef). Preserves :source on events."
-  [pat slot-sf slot-ef sp-sf sp-ef]
-  (let [raw-evs (core/query pat {:start [0 1] :end [1 1]})
-        dur     (- slot-ef slot-sf)]
-    (keep
-      (fn [ev]
-        (let [ws-f  (core/rat->float (:start (:whole ev)))
-              we-f  (core/rat->float (:end   (:whole ev)))
-              ps-f  (core/rat->float (:start (:part  ev)))
-              pe-f  (core/rat->float (:end   (:part  ev)))
-              nws-f (+ slot-sf (* ws-f dur))
-              nwe-f (+ slot-sf (* we-f dur))
-              nps-f (+ slot-sf (* ps-f dur))
-              npe-f (+ slot-sf (* pe-f dur))
-              cls-f (max nps-f sp-sf)
-              cle-f (min npe-f sp-ef)]
-          (when (< cls-f cle-f)
-            (assoc ev
-              :whole {:start (float->rat nws-f) :end (float->rat nwe-f)}
-              :part  {:start (float->rat cls-f) :end (float->rat cle-f)}))))
-      raw-evs)))
-
-(defn- seq-of-pats
-  "Sequence n patterns: pattern i plays in slot [i/n, (i+1)/n) of each cycle.
-   Queries each child as if it owns [0,1), then scales event times to its slot."
-  [pats]
-  (let [n (count pats)]
-    (core/pattern
-      (fn [sp]
-        (let [sp-sf (core/rat->float (:start sp))
-              sp-ef (core/rat->float (:end sp))
-              c0    (int (Math/floor sp-sf))
-              c1    (int (Math/ceil  sp-ef))]
-          (mapcat
-            (fn [c]
-              (mapcat
-                (fn [[i pat]]
-                  (let [slot-sf (/ (+ (* c n) i)       n)
-                        slot-ef (/ (+ (* c n) (inc i)) n)
-                        ol-sf   (max slot-sf sp-sf)
-                        ol-ef   (min slot-ef sp-ef)]
-                    (when (< ol-sf ol-ef)
-                      (scale-events pat slot-sf slot-ef sp-sf sp-ef))))
-                (map-indexed vector pats)))
-            (range c0 c1)))))))
-
-(defn- weighted-seq*
-  "Proportional sequence: child i plays for (weight_i / total) of the cycle."
-  [pairs total-weight]
-  (core/pattern
-    (fn [sp]
-      (let [sp-sf       (core/rat->float (:start sp))
-            sp-ef       (core/rat->float (:end sp))
-            cycle-start (Math/floor sp-sf)]
-        (loop [remaining pairs
-               offset-f  0.0
-               result    []]
-          (if (empty? remaining)
-            result
-            (let [{:keys [pat weight]} (first remaining)
-                  frac    (/ weight total-weight)
-                  slot-sf (+ cycle-start offset-f)
-                  slot-ef (+ cycle-start offset-f frac)]
-              (recur (rest remaining)
-                     (+ offset-f frac)
-                     (into result
-                           (if (and (< slot-sf sp-ef) (> slot-ef sp-sf))
-                             (scale-events pat slot-sf slot-ef sp-sf sp-ef)
-                             []))))))))))
-
 (defn- degrade
   "Randomly gate events — each event has a ~50% chance of being dropped."
   [pat]
   (core/pattern
     (fn [sp]
       (filter (fn [_] (> (Math/random) 0.5)) (core/query pat sp)))))
+
+(defn- step-count
+  "Steps in a polymeter layer: the sum of its children's weights."
+  [node]
+  (if (= :seq (:type node))
+    (reduce + (map #(:weight % 1) (:children node)))
+    1))
 
 (defn- compile-ast
   "Compile an AST node to a Pattern.
@@ -360,15 +313,28 @@
         (compile-ast (first children) base-offset)
 
         :else
-        (let [total-weight (reduce + (map #(or (:weight %) 1) children))
-              all-unit?    (every? #(= 1 (or (:weight %) 1)) children)]
-          (if all-unit?
-            (seq-of-pats (mapv #(compile-ast % base-offset) children))
-            (let [pairs (mapv (fn [child]
-                                {:pat    (compile-ast child base-offset)
-                                 :weight (or (:weight child) 1)})
-                              children)]
-              (weighted-seq* pairs total-weight))))))
+        (core/timecat (mapv (fn [c] [(:weight c 1) (compile-ast c base-offset)])
+                            children))))
+
+    :stack
+    (core/stack* (mapv #(compile-ast % base-offset) (:layers node)))
+
+    :polymeter
+    (core/polymeter-pats
+     (:steps node)
+     (mapv (fn [l] [(compile-ast l base-offset) (step-count l)]) (:layers node)))
+
+    :euclid
+    (let [arg (fn [n]
+                (let [kids (:children n)
+                      only (when (and (= :seq (:type n)) (= 1 (count kids))) (first kids))]
+                  (if (and only (= :atom (:type only)) (number? (:value only))
+                           (not (:sample-index only)))
+                    (:value only)
+                    (compile-ast n base-offset))))
+          [k n r] (:args node)]
+      (core/euclidean (arg k) (arg n) (compile-ast (:child node) base-offset)
+                      (if r (arg r) 0)))
 
     :alt
     (let [children (:children node)]
@@ -400,5 +366,5 @@
   ([s] (parse s nil))
   ([s base-offset]
    (let [tokens  (tokenise s)
-         [ast _] (parse-sequence tokens 0)]
+         [ast _] (parse-layers tokens 0)]
      (compile-ast ast base-offset))))
