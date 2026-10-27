@@ -550,7 +550,7 @@ are exact rationals. One `deftest` per bullet.
       patterned `(linger "<1/4 1/2>" (seq 0 1 2 3 4 5 6 7))` cycle 1 → `0 1 2 3 0 1 2 3` at eighths.
 - [ ] `ribbon`: `(ribbon 1 2 (cat (pure :a) (pure :b) (pure :c) (pure :d)))` cycles 0–3 → `b [0,1)`, `c [1,2)`, `b [2,3)`, `c [3,4)`;
       `(ribbon 1/2 1 (seq :a :b))` cycle 0 → `b [0,1/2)`, `a [1/2,1)`;
-      patterned `(ribbon "<0 1>" 1 (cat (pure :a) (pure :b) (pure :c)))` cycle 0 → `a [0,1)`, cycle 1 → `c [1,2)`.
+      patterned `(ribbon "<0 1>" 1 (cat (pure :a) (pure :b) (pure :c)))` cycle 0 → `a [0,1)`, cycle 1 → `b [1,2)` (offset 1 at cycle 1 plays source time `1 + (t − 1)`).
 - [ ] `trunc`: `(trunc 3/4 (seq :a :b :c :d))` → `a [0,1/4)`, `b [1/4,1/2)`, `c [1/2,3/4)`;
       `(trunc 1/2 (seq :a :b :c))` → `a [0,1/3)`, `b` whole `[1/3,2/3)` part `[1/3,1/2)` (an onset);
       patterned `(trunc "<1 1/2>" (seq :a :b :c :d))` cycle 1 → `a [1,5/4)`, `b [5/4,3/2)`.
@@ -608,7 +608,7 @@ are exact rationals. One `deftest` per bullet.
 **`hurry`** (`params_test.cljs`)
 - [ ] `(hurry 2 (seq :bd :sd))` → `{:note :bd :rate 2} [0,1/4)`, `{:note :sd :rate 2} [1/4,1/2)`, `{:note :bd :rate 2} [1/2,3/4)`,
       `{:note :sd :rate 2} [3/4,1)`; `(hurry 2 (rate 1.5 (seq :bd)))` → `{:note :bd :rate 3}` at `[0,1/2)` and `[1/2,1)`;
-      `(hurry 1/2 (seq :a :b))` cycle 0 → only `{:note :a :rate 0.5}` whole `[0,2)` part `[0,1)`; `(hurry 2 (seq :bd :_))` keeps `:_` as `:_`;
+      `(hurry 1/2 (seq :a :b))` cycle 0 → only `{:note :a :rate 0.5}` whole `[0,1)` (cycle 1 → only `:b`); `(hurry 2 (seq :bd :_))` keeps `:_` as `:_`;
       patterned `(hurry "<1 2>" (seq :bd :sd))` cycle 0 → 2 events with `:rate 1`, cycle 1 → 4 events with `:rate 2`.
 
 **Registration, docs, verification**

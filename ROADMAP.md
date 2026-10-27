@@ -36,7 +36,7 @@ without a human:
 | 1 | TL1 | Patterned arguments & pattern arithmetic | 🤖 | full | opus |
 | 2 | TL2 | Continuous signals | 🤖 | full | sonnet |
 | 3 | TL3 | Time & structure combinators | 🤖 | full | sonnet |
-| 4 | TL3b | Zoom, compress & structure extras | 🤖 | outline | sonnet |
+| 4 | TL3b | Zoom, compress & structure extras | 🤖 | full | sonnet |
 | 5 | TL4 | Randomness & conditionals | 🤖 | outline | sonnet |
 | 6 | TL5 | Layering, pitch & harmony | 🤖 | outline | sonnet |
 | 7 | TL6 | Sample slicing & playback control | 🤖👂 | outline | opus |
@@ -1866,7 +1866,7 @@ See full spec: [PROMPTS/PHASE-TL3.md](PROMPTS/PHASE-TL3.md)
 
 ---
 
-## Phase TL3b — Zoom, Compress & Structure Extras 📋 *planned*
+## Phase TL3b — Zoom, Compress & Structure Extras ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖 auto
 
@@ -1880,6 +1880,25 @@ structure helpers.
 - `hurry` in `params.cljs` (fast + multiplies `rate`; no `speed` alias), `ply-for-each`
 - `filter-events filter-when bypass sew stitch binary binary-n` (`binary-l` dropped; Strudel
   `binaryN` argument order, default 16 bits)
+
+**Delivered:**
+- `packages/core/src/repulse/core.cljs` — 24 functions on TL3's private helpers (`compress*`,
+  `slowcat-held*`, `within*`, `fastcat*`) plus new private `zoom*`: `compress zoom focus
+  fast-gap linger bite ribbon revv repeat-cycles trunc press press-by chunk-into
+  chunk-back-into euclidish ply-for-each filter-events filter-when bypass beat sew stitch
+  binary binary-n`. Exact rational time throughout; patterned numeric arguments via
+  `patternify`/`patternify2`/`patternify3`
+- `packages/core/src/repulse/params.cljs` — `hurry` (`fast` + multiplies the `rate` control;
+  no `speed` alias)
+- Lisp — 25 builtins in `builtins/structure.cljs` with curried forms for `->>` (except
+  `sew`, `stitch`, `binary`, `binary-n`); `filter-events` / `filter-when` take Lisp closures
+- Rule 3/5 artefacts: grammar + `parser.js`, `completions.js`, `hover.js`,
+  `builtin_meta.edn`, `docs/ai/builtins.json`; USAGE "Windows, switches & binary rhythms",
+  README rows, STRUDEL-PARITY rows and summary
+- Tests: every spec vector in `core_test`/`params_test`/`integration_test` (one patterned
+  test per numeric argument), `tl3b-documented-examples-evaluate`, three Playwright
+  onset-count tests; two hand-computed spec vectors corrected (`ribbon` patterned offset,
+  `hurry 1/2` whole)
 
 See full spec: [PROMPTS/PHASE-TL3b.md](PROMPTS/PHASE-TL3b.md)
 

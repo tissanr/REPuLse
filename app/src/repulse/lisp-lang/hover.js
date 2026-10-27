@@ -249,6 +249,131 @@ const DOCS = {
     description: "Apply f on the last cycle of every n (cycles n-1, 2n-1 …). n may be a pattern.",
     example: "(last-of 4 (add 10) (seq 0 1))",
   },
+  "compress": {
+    signature: "(compress s e pat)",
+    description: "Squeeze each cycle into the window [s, e) of the cycle (0 <= s < e <= 1); silence elsewhere. s and e may be patterns.",
+    example: "(compress 1/4 3/4 (seq :bd :sd))",
+  },
+  "zoom": {
+    signature: "(zoom s e pat)",
+    description: "Play only the window [s, e) of each cycle, stretched to fill the whole cycle. s and e may be patterns.",
+    example: "(zoom 1/4 3/4 (seq :a :b :c :d))",
+  },
+  "focus": {
+    signature: "(focus s e pat)",
+    description: "Squeeze the cycle into [s, e) and keep playing, so neighbouring cycles fill the rest (no gaps, unlike compress). s and e may be patterns.",
+    example: "(focus 1/4 3/4 (seq :a :b :c :d))",
+  },
+  "fast-gap": {
+    signature: "(fast-gap n pat)",
+    description: "Play n times faster, then stay silent until the next cycle. n may be a pattern.",
+    example: "(fast-gap 2 (seq :bd :sd))",
+  },
+  "linger": {
+    signature: "(linger n pat)",
+    description: "Repeat the first n of every cycle to fill it (the last |n| for negative n). Restarts every cycle. n may be a pattern.",
+    example: "(linger 1/4 (seq 0 1 2 3 4 5 6 7))",
+  },
+  "bite": {
+    signature: "(bite n ipat pat)",
+    description: "Cut each cycle of pat into n slices; each event of ipat (an index) plays that slice squeezed into its own length. n may be a pattern.",
+    example: "(bite 4 (seq 0 2) (seq :a :b :c :d :e :f :g :h))",
+  },
+  "ribbon": {
+    signature: "(ribbon offset cycles pat)",
+    description: "Loop `cycles` cycles of pat starting at cycle `offset`. offset and cycles may be patterns.",
+    example: "(ribbon 1 2 (cat (pure :a) (pure :b) (pure :c) (pure :d)))",
+  },
+  "hurry": {
+    signature: "(hurry r pat)",
+    description: "Like fast, and also multiplies every event's :rate by r (a missing rate counts as 1), so samples speed up in pitch too. r may be a pattern.",
+    example: "(hurry 2 (seq :bd :sd))",
+  },
+  "revv": {
+    signature: "(revv pat)",
+    description: "Reverse time across cycles (t becomes -t): cycle c plays source cycle -c-1 reversed.",
+    example: "(revv (seq :a :b :c))",
+  },
+  "repeat-cycles": {
+    signature: "(repeat-cycles n pat)",
+    description: "Play each source cycle n times before moving to the next. n may be a pattern.",
+    example: "(repeat-cycles 2 (cat (seq :a) (seq :b)))",
+  },
+  "trunc": {
+    signature: "(trunc t pat)",
+    description: "Play only the first t of every cycle; events crossing the cut keep their length but are cut short. t may be a pattern.",
+    example: "(trunc 3/4 (seq :a :b :c :d))",
+  },
+  "press": {
+    signature: "(press pat)",
+    description: "Shift every event to start half way through its own length: (press-by 1/2 pat).",
+    example: "(press (seq :a :b))",
+  },
+  "press-by": {
+    signature: "(press-by r pat)",
+    description: "Shift every event to start r of the way through its own length and shorten it accordingly. r may be a pattern.",
+    example: "(press-by 1/4 (seq :a :b))",
+  },
+  "chunk-into": {
+    signature: "(chunk-into n f pat)",
+    description: "Like chunk, but f is applied to the chunk as if it were a full looping cycle, then squeezed back. Chunk index is c mod n. n may be a pattern.",
+    example: "(chunk-into 2 rev (seq 0 1 2 3))",
+  },
+  "chunk-back-into": {
+    signature: "(chunk-back-into n f pat)",
+    description: "Like chunk-into, but the chunk moves backwards: n-1, n-2 \u2026 0. n may be a pattern.",
+    example: "(chunk-back-into 2 rev (seq 0 1 2 3))",
+  },
+  "euclidish": {
+    signature: "(euclidish k n g pat)",
+    description: "A Euclidean rhythm whose hits are morphed towards perfectly even spacing by g (0 = euclidean, 1 = even). k, n and g may be patterns.",
+    example: "(euclidish 3 8 1/2 (pure :x))",
+  },
+  "ply-for-each": {
+    signature: "(ply-for-each n f pat)",
+    description: "Each event becomes ceil(n) sub-steps; sub-step i >= 1 is (f (pure v) i), where f takes the pattern and the integer index. n may be a pattern.",
+    example: "(ply-for-each 3 (fn [p i] (add (* i 12) p)) (seq 0 7))",
+  },
+  "filter-events": {
+    signature: "(filter-events pred pat)",
+    description: "Keep only the events whose value satisfies pred. (Named filter-events because filter works on sequences.)",
+    example: "(filter-events (fn [v] (> v 2)) (seq 1 2 3 4))",
+  },
+  "filter-when": {
+    signature: "(filter-when pred pat)",
+    description: "Keep only the events whose start time satisfies pred. The time is an integer when whole, otherwise an exact rational like 1/4.",
+    example: "(filter-when (fn [t] (< t 1/2)) (seq :a :b :c :d))",
+  },
+  "bypass": {
+    signature: "(bypass on pat)",
+    description: "When on is true (1), silence pat; otherwise play it unchanged. on may be a pattern.",
+    example: "(bypass 0 (seq :a :b))",
+  },
+  "beat": {
+    signature: "(beat t div pat)",
+    description: "Place every value of pat on step t (mod div) of div steps in the cycle. t may be stacked: \"0,7,10\". t and div may be patterns.",
+    example: "(beat \"0,7,10\" 16 (pure :bd))",
+  },
+  "sew": {
+    signature: "(sew bools a b)",
+    description: "Switch between patterns a and b: a plays where bools is true, b where it is false. Rests in bools select neither.",
+    example: "(sew \"t f\" (seq :a :a :a :a) (seq :b :b :b :b))",
+  },
+  "stitch": {
+    signature: "(stitch bools a b)",
+    description: "Structure from bools: true steps take a's value, false steps take b's. Rests select neither.",
+    example: "(stitch \"t f t t\" (pure :bd) (pure :sn))",
+  },
+  "binary": {
+    signature: "(binary n)",
+    description: "The bits of n, most significant first, as a true/false step sequence: (binary 5) = true false true. n may be a pattern.",
+    example: "(struct (binary 5) (pure :x))",
+  },
+  "binary-n": {
+    signature: "(binary-n n [bits])",
+    description: "The low `bits` bits of n (default 16), most significant first, as a true/false step sequence. n and bits may be patterns.",
+    example: "(struct (binary-n 5 4) (pure :x))",
+  },
   "~": {
     signature: "(~ \"mini-notation\")",
     description: "Parse a mini-notation string into a pattern: [ ] groups, < > alternation, * ? : @, bd!3 repeats, a . b groups, a, b layers, {a b c}%4 polymeter, bd(3,8,2) euclid. _ and ~ are rests; use @ to elongate.",

@@ -1,5 +1,5 @@
 (ns repulse.params-test
-  (:require [cljs.test :refer-macros [deftest is]]
+  (:require [cljs.test :refer-macros [deftest is testing]]
             [repulse.core :as core]
             [repulse.params :as params]))
 
@@ -179,3 +179,38 @@
         pans (set (map #(get (:value %) :pan) evs))]
     (is (contains? pans -0.5))
     (is (contains? pans 0.5))))
+
+;;; ── Phase TL3b: hurry ────────────────────────────────────────────────
+
+(defn- hurry-evs [pat c]
+  (->> (core/query pat (core/cycle-span c))
+       (sort-by #(core/rat->float (:start (:whole %))))
+       (mapv (fn [e] [(:value e) (:whole e) (:part e)]))))
+
+(deftest tl3b-hurry
+  (testing "hurry 2 doubles speed and rate"
+    (is (= [[{:note :bd :rate 2} (core/span [0 1] [1 4]) (core/span [0 1] [1 4])]
+            [{:note :sd :rate 2} (core/span [1 4] [1 2]) (core/span [1 4] [1 2])]
+            [{:note :bd :rate 2} (core/span [1 2] [3 4]) (core/span [1 2] [3 4])]
+            [{:note :sd :rate 2} (core/span [3 4] [1 1]) (core/span [3 4] [1 1])]]
+           (hurry-evs (params/hurry 2 (core/seq* [:bd :sd])) 0))))
+  (testing "multiplies an existing rate"
+    (is (= [[{:note :bd :rate 3.0} (core/span [0 1] [1 2])]
+            [{:note :bd :rate 3.0} (core/span [1 2] [1 1])]]
+           (mapv (fn [[v w _]] [v w])
+                 (hurry-evs (params/hurry 2 (params/rate 1.5 (core/seq* [:bd]))) 0)))))
+  (testing "slowing: (hurry 1/2 …) plays :a in cycle 0 and :b in cycle 1"
+    (let [evs (hurry-evs (params/hurry [1 2] (core/seq* [:a :b])) 0)]
+      (is (= 1 (count evs)))
+      (is (= [{:note :a :rate 0.5} (core/span [0 1] [1 1]) (core/span [0 1] [1 1])]
+             (first evs)))))
+  (testing "rests pass through"
+    (is (= [:bd :_ :bd :_]
+           (mapv (fn [[v _ _]] (if (map? v) (:note v) v))
+                 (hurry-evs (params/hurry 2 (core/seq* [:bd :_])) 0)))))
+  (testing "patterned rate"
+    (let [p (params/hurry (core/cat* [(core/pure 1) (core/pure 2)]) (core/seq* [:bd :sd]))]
+      (is (= [1 1] (mapv (comp :rate first) (hurry-evs p 0))))
+      (is (= [2 2 2 2] (mapv (comp :rate first) (hurry-evs p 1))))))
+  (testing "curried"
+    (is (= 4 (count (hurry-evs ((params/hurry 2) (core/seq* [:bd :sd])) 0))))))

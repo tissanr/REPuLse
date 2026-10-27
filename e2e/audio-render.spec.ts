@@ -159,3 +159,22 @@ test('ply 2 doubles a two-step sequence to four onsets', async ({ page }) => {
   const mono = mixMono(result.left, result.right);
   expect(countOnsets(mono, result.sampleRate)).toBe(4);
 });
+
+// TL3b: zoom, compress & structure extras
+test('compress 1/4 3/4 over a two-step sequence has two onsets', async ({ page }) => {
+  const result = await render(page, '(compress 1/4 3/4 (seq :bd :sd))');
+  const mono = mixMono(result.left, result.right);
+  expect(countOnsets(mono, result.sampleRate)).toBe(2);
+});
+
+test('hurry 2 over a two-step sequence has four onsets', async ({ page }) => {
+  const result = await render(page, '(hurry 2 (seq :bd :sd))');
+  const mono = mixMono(result.left, result.right);
+  expect(countOnsets(mono, result.sampleRate)).toBe(4);
+});
+
+test('stitch "t f t t" over bd/sd has four onsets', async ({ page }) => {
+  const result = await render(page, '(stitch "t f t t" (pure :bd) (pure :sd))');
+  const mono = mixMono(result.left, result.right);
+  expect(countOnsets(mono, result.sampleRate)).toBe(4);
+});
