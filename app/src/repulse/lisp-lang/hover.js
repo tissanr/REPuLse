@@ -27,12 +27,12 @@ const DOCS = {
   // --- Transformations ---
   "fast": {
     signature: "(fast factor pat)",
-    description: "Speed up a pattern by the given factor. 2 = twice as fast.",
+    description: "Speed up a pattern by the given factor. 2 = twice as fast. The factor may be a pattern or a mini-notation string: (fast \"<1 2>\" pat).",
     example: "(fast 2 (seq :bd :sd))",
   },
   "slow": {
     signature: "(slow factor pat)",
-    description: "Slow down a pattern by the given factor. 2 = half speed.",
+    description: "Slow down a pattern by the given factor. 2 = half speed. The factor may be a pattern or a mini-notation string.",
     example: "(slow 2 (seq :bd :sd :hh :oh))",
   },
   "rev": {
@@ -42,7 +42,7 @@ const DOCS = {
   },
   "every": {
     signature: "(every n transform pat)",
-    description: "Apply a transformation every nth cycle. Other cycles play unmodified.",
+    description: "Apply a transformation every nth cycle. Other cycles play unmodified. n may be a pattern.",
     example: "(every 4 (fast 2) (seq :bd :sd))",
   },
   "fmap": {
@@ -54,7 +54,7 @@ const DOCS = {
   // --- Pattern combinators ---
   "euclidean": {
     signature: "(euclidean k n val) or (euclidean k n val rot)",
-    description: "Distribute k onsets evenly across n steps using the Björklund algorithm. Optional rot rotates the pattern.",
+    description: "Distribute k onsets evenly across n steps (Tidal's Björklund). Optional rot rotates left. val a pattern gives the rhythm to that pattern: (euclidean 3 8 (seq :bd :sd)). k, n and rot may be patterns: (euclidean \"<3 5>\" 8 :bd).",
     example: "(euclidean 5 8 :bd)",
   },
   "cat": {
@@ -64,53 +64,188 @@ const DOCS = {
   },
   "late": {
     signature: "(late amount pat)",
-    description: "Shift events forward in time by a fraction of a cycle.",
+    description: "Shift events forward in time by a fraction of a cycle. The amount may be a pattern: (late \"<0 1/8>\" pat).",
     example: "(late 0.25 (seq :hh :hh :hh :hh))",
   },
   "early": {
     signature: "(early amount pat)",
-    description: "Shift events backward in time by a fraction of a cycle.",
+    description: "Shift events backward in time by a fraction of a cycle. The amount may be a pattern.",
     example: "(early 0.125 (seq :sd :_ :sd :_))",
   },
   "sometimes": {
     signature: "(sometimes f pat)",
-    description: "Apply transform f on approximately 50% of cycles (deterministic per cycle).",
-    example: "(sometimes (fast 2) (seq :bd :sd))",
+    description: "Apply transform f to each event with probability 0.5 (per event, deterministic). For whole cycles use some-cycles.",
+    example: "(sometimes (fast 2) (seq :bd :sd :hh :cp))",
   },
   "often": {
     signature: "(often f pat)",
-    description: "Apply transform f on approximately 75% of cycles.",
+    description: "Apply transform f to each event with probability 0.75.",
     example: "(often rev (seq :bd :sd :hh :oh))",
   },
   "rarely": {
     signature: "(rarely f pat)",
-    description: "Apply transform f on approximately 25% of cycles.",
+    description: "Apply transform f to each event with probability 0.25.",
     example: "(rarely (fast 2) (seq :bd :sd))",
   },
   "sometimes-by": {
     signature: "(sometimes-by prob f pat)",
-    description: "Apply transform f with probability prob (0.0–1.0) per cycle.",
+    description: "Each event goes through f with probability prob (0.0–1.0), independently and deterministically. prob may be a pattern.",
     example: "(sometimes-by 0.3 rev (seq :bd :sd :hh :oh))",
   },
   "degrade": {
     signature: "(degrade pat)",
-    description: "Randomly drop approximately 50% of events per cycle.",
+    description: "Randomly drop about half of the events (deterministic; keeps an event when rand at its start is >= 0.5).",
     example: "(degrade (seq :hh :hh :hh :hh))",
   },
   "degrade-by": {
     signature: "(degrade-by prob pat)",
-    description: "Drop events with the given probability (0.0 = keep all, 1.0 = drop all).",
+    description: "Drop events with the given probability (0.0 = keep all, 1.0 = drop all). An event is kept when rand at its start is >= prob. prob may be a pattern.",
     example: "(degrade-by 0.3 (seq :hh :hh :hh :hh))",
   },
   "choose": {
     signature: "(choose [val ...])",
-    description: "Pick one value from the vector per cycle. Deterministic: same cycle always picks the same value.",
-    example: "(choose [:bd :sd :hh :oh])",
+    description: "A random signal picking from the vector. It has no onsets of its own, so it is silent unless sampled: (segment 4 (choose [:bd :sd])) or (struct \"t ~ t t\" (choose ...)). For one pick per cycle use choose-cycles.",
+    example: "(segment 4 (choose [:bd :sd :hh :oh]))",
   },
   "wchoose": {
-    signature: "(wchoose [[val weight] ...])",
-    description: "Weighted random choice: pick one value per cycle, biased by weights.",
-    example: "(wchoose [[:bd 3] [:sd 1] [:hh 2]])",
+    signature: "(wchoose [[weight val] ...])",
+    description: "Weighted random signal, weight first: (wchoose [[3 :bd] [1 :sd]]). Silent unless sampled: (segment 4 (wchoose ...)). For one pick per cycle use wchoose-cycles.",
+    example: "(segment 4 (wchoose [[3 :bd] [1 :sd] [2 :hh]]))",
+  },
+  "undegrade-by": {
+    signature: "(undegrade-by prob pat)",
+    description: "Keep only the events degrade-by would drop: an event survives when rand at its start is < prob. (stack (degrade-by x p) (undegrade-by x p)) equals p. prob may be a pattern.",
+    example: "(undegrade-by 0.3 (seq :a :b :c :d))",
+  },
+  "undegrade": {
+    signature: "(undegrade pat)",
+    description: "(undegrade-by 0.5 pat): the complement of degrade.",
+    example: "(undegrade (seq :a :b :c :d))",
+  },
+  "degrade-by-with": {
+    signature: "(degrade-by-with rpat prob pat)",
+    description: "Like degrade-by with your own random source: keep an event when the value of rpat at its start is >= prob. Non-numeric values drop the event. rpat and prob may be patterns.",
+    example: "(degrade-by-with saw 0.5 (fast 8 (pure :hh)))",
+  },
+  "almost-never": {
+    signature: "(almost-never f pat)",
+    description: "Apply transform f to each event with probability 0.1.",
+    example: "(almost-never rev (seq :a :b :c :d))",
+  },
+  "almost-always": {
+    signature: "(almost-always f pat)",
+    description: "Apply transform f to each event with probability 0.9.",
+    example: "(almost-always rev (seq :a :b :c :d))",
+  },
+  "always": {
+    signature: "(always f pat)",
+    description: "Always apply f; useful as a switch-able end of the sometimes family.",
+    example: "(always rev (seq :a :b))",
+  },
+  "never": {
+    signature: "(never f pat)",
+    description: "Never apply f; returns pat unchanged.",
+    example: "(never rev (seq :a :b))",
+  },
+  "some-cycles-by": {
+    signature: "(some-cycles-by prob f pat)",
+    description: "Whole-cycle randomness: cycle c is answered by (f pat) when rand at c is < prob, otherwise by pat. This is the pre-TL4 behaviour of sometimes-by. prob may be a pattern.",
+    example: "(some-cycles-by 0.3 (fast 2) (seq :bd :sd))",
+  },
+  "some-cycles": {
+    signature: "(some-cycles f pat)",
+    description: "(some-cycles-by 0.5 f pat): the whole cycle is either transformed or not.",
+    example: "(some-cycles rev (seq :bd :sd))",
+  },
+  "choose-with": {
+    signature: "(choose-with sig [val ...])",
+    description: "Pick from the vector using the value of the signal sig (in [0,1)); the result takes its structure from sig. sig may be a pattern.",
+    example: "(segment 4 (choose-with sine [:a :b :c]))",
+  },
+  "choose-in-with": {
+    signature: "(choose-in-with sig [pat ...])",
+    description: "Pick a pattern with the signal sig and let it keep its own structure (inner join). sig may be a pattern.",
+    example: "(choose-in-with (segment 1 rand) [(seq :a :b) (pure :c)])",
+  },
+  "choose-in": {
+    signature: "(choose-in [pat ...])",
+    description: "(choose-in-with rand pats). The pick depends on the query start, so use randcat for a stable per-cycle choice.",
+    example: "(choose-in [(seq :a :b) (seq :c :d)])",
+  },
+  "choose-cycles": {
+    signature: "(choose-cycles [val ...])",
+    description: "One random value (or pattern) per cycle, deterministic. Values may be patterns.",
+    example: "(choose-cycles [:bd :sd :hh])",
+  },
+  "wchoose-cycles": {
+    signature: "(wchoose-cycles [[weight val] ...])",
+    description: "Weighted random pick, one per cycle; weight first.",
+    example: "(wchoose-cycles [[3 :bd] [1 :sd]])",
+  },
+  "randcat": {
+    signature: "(randcat pat ...)",
+    description: "Each cycle plays one of the given patterns, picked at random (deterministically).",
+    example: "(randcat (seq :bd :sd) (seq :hh :hh :oh) (seq :cp))",
+  },
+  "wrandcat": {
+    signature: "(wrandcat [weight pat] ...)",
+    description: "Like randcat with weights: (wrandcat [3 (seq :bd :sd)] [1 (pure :cp)]).",
+    example: "(wrandcat [3 (seq :bd :sd)] [1 (pure :cp)])",
+  },
+  "brand": {
+    signature: "brand",
+    description: "Random boolean signal: true when rand < 0.5. Usable with struct, mask, sew and when-pat.",
+    example: "(segment 4 brand)",
+  },
+  "brand-by": {
+    signature: "(brand-by p)",
+    description: "Random boolean signal: true when rand < p. p may be a pattern.",
+    example: "(segment 4 (brand-by 0.25))",
+  },
+  "berlin": {
+    signature: "berlin",
+    description: "Signal in [0,1): rand at the cycle start blended towards rand at the next cycle start, Strudel's berlin.",
+    example: "(segment 8 berlin)",
+  },
+  "rand-l": {
+    signature: "(rand-l n)",
+    description: "Signal whose value is a vector of n random floats; use fmap to pick from it.",
+    example: "(fmap (fn [v] (first v)) (segment 4 (rand-l 3)))",
+  },
+  "randrun": {
+    signature: "(randrun n)",
+    description: "n events per cycle: a random permutation of 0 to n-1 (each number once per cycle).",
+    example: "(randrun 4)",
+  },
+  "with-seed": {
+    signature: "(with-seed n pat)",
+    description: "Every random function inside pat reads its random number at time t + n instead of t, giving a different but still deterministic variation. Innermost with-seed wins.",
+    example: "(with-seed 7 (shuffle 4 (seq :a :b :c :d)))",
+  },
+  "shuffle": {
+    signature: "(shuffle n pat)",
+    description: "Cut each cycle into n slices and play every slice exactly once, in a random order.",
+    example: "(shuffle 4 (seq :a :b :c :d))",
+  },
+  "scramble": {
+    signature: "(scramble n pat)",
+    description: "Like shuffle but with repetition: each of n slots plays a randomly chosen slice.",
+    example: "(scramble 4 (seq :a :b :c :d))",
+  },
+  "when-pat": {
+    signature: "(when-pat on f pat)",
+    description: "Where the boolean pattern on is true the events come from (f pat), elsewhere from pat. on may also be a Lisp function called with the cycle number: (when-pat (fn [c] (> c 3)) rev pat).",
+    example: "(when-pat \"<0 1>\" rev (seq :a :b))",
+  },
+  "whenmod": {
+    signature: "(whenmod a b f pat)",
+    description: "In cycle c apply f when c mod a >= b: (whenmod 8 6 rev pat) reverses cycles 6 and 7 of every 8. a and b may be patterns.",
+    example: "(whenmod 8 6 rev (seq 0 2 4 7))",
+  },
+  "apply-n": {
+    signature: "(apply-n n f pat)",
+    description: "Apply the transform f n times in a row.",
+    example: "(apply-n 2 (fast 2) (seq :a :b))",
   },
   "jux": {
     signature: "(jux f pat)",
@@ -119,13 +254,292 @@ const DOCS = {
   },
   "jux-by": {
     signature: "(jux-by width f pat)",
-    description: "Like jux with adjustable stereo width (0.0 = mono, 1.0 = hard pan).",
+    description: "Like jux with adjustable stereo width (0.0 = mono, 1.0 = hard pan). width may be a pattern.",
     example: "(jux-by 0.5 rev (seq :bd :sd))",
   },
   "off": {
     signature: "(off amount f pat)",
     description: "Layer the original with a time-shifted transformed copy: (stack pat (late amount (f pat))).",
     example: "(off 0.25 (fast 2) (seq :bd :sd))",
+  },
+
+  // --- Time & structure (TL3) ---
+  "struct": {
+    signature: "(struct bools pat)",
+    description: "Structure from a boolean pattern: every true step of bools plays the value(s) of pat over that step. false, 0, ~, f steps are silent. bools may be a mini-notation string.",
+    example: "(struct \"t ~ t t\" (pure :bd))",
+  },
+  "mask": {
+    signature: "(mask bools pat)",
+    description: "Keep the structure of pat, but only the parts that overlap true steps of bools.",
+    example: "(mask \"1 0 1 1\" (fast 8 (pure :hh)))",
+  },
+  "invert": {
+    signature: "(invert pat)",
+    description: "Boolean not on every value: true becomes false and the other way round. Rests stay rests.",
+    example: "(struct (invert \"t f t f\") (pure :x))",
+  },
+  "euclid-legato": {
+    signature: "(euclid-legato k n pat)",
+    description: "Euclidean rhythm where each hit lasts until the next hit (the last one to the end of the cycle). k and n may be patterns.",
+    example: "(euclid-legato 3 8 (pure :x))",
+  },
+  "euclid-legato-rot": {
+    signature: "(euclid-legato-rot k n r pat)",
+    description: "euclid-legato with the rhythm rotated left by r steps; steps before the first hit rest. k, n and r may be patterns.",
+    example: "(euclid-legato-rot 3 8 2 (pure :x))",
+  },
+  "ply": {
+    signature: "(ply n pat)",
+    description: "Repeat every event n times inside its own slot. n may be a pattern.",
+    example: "(ply 2 (seq :bd :sd))",
+  },
+  "ply-with": {
+    signature: "(ply-with n f pat)",
+    description: "Like ply, but repetition i has f applied i times: each event becomes ceil(n) sub-steps. n may be a pattern.",
+    example: "(ply-with 3 (add 12) (seq 0 7))",
+  },
+  "inside": {
+    signature: "(inside n f pat)",
+    description: "Apply f as if each 1/n of a cycle were a whole cycle: (fast n (f (slow n pat))). n may be a pattern.",
+    example: "(inside 2 rev (seq 0 1 2 3 4 5 6 7))",
+  },
+  "outside": {
+    signature: "(outside n f pat)",
+    description: "Apply f across n cycles at once: (inside 1/n f pat). n may be a pattern.",
+    example: "(outside 2 rev (cat (seq :a :b) (seq :c :d)))",
+  },
+  "within": {
+    signature: "(within start end f pat)",
+    description: "Apply f only to the events whose start lies in the cycle window [start, end); the others play unchanged. start and end may be patterns.",
+    example: "(within 0 1/2 (fast 2) (seq :a :b :c :d))",
+  },
+  "swing-by": {
+    signature: "(swing-by x n pat)",
+    description: "Delay events in the second half of each 1/n slice by x of that slice. x and n may be patterns.",
+    example: "(swing-by 1/3 4 (fast 8 (pure :hh)))",
+  },
+  "swing": {
+    signature: "(swing n pat)",
+    description: "Shuffle feel: (swing-by 1/3 n pat). n may be a pattern.",
+    example: "(swing 4 (fast 8 (pure :hh)))",
+  },
+  "brak": {
+    signature: "(brak pat)",
+    description: "Breakbeat feel: on every odd cycle squeeze the cycle into its first half and shift it right by a quarter.",
+    example: "(brak (seq :bd :sd))",
+  },
+  "iter": {
+    signature: "(iter n pat)",
+    description: "Shift the start of the pattern earlier by 1/n each cycle, so it rotates through n positions. A cycle-varying pat is held for n cycles. n may be a pattern.",
+    example: "(iter 4 (seq :a :b :c :d))",
+  },
+  "iter-back": {
+    signature: "(iter-back n pat)",
+    description: "Like iter, but rotating the other way (the start moves later each cycle). n may be a pattern.",
+    example: "(iter-back 4 (seq :a :b :c :d))",
+  },
+  "palindrome": {
+    signature: "(palindrome pat)",
+    description: "Alternate pat and (rev pat) cycle by cycle. A cycle-varying pat is held for two cycles.",
+    example: "(palindrome (seq :a :b :c))",
+  },
+  "rot": {
+    signature: "(rot n pat)",
+    description: "Rotate the values of each cycle n places to the left while keeping the rhythm. Rests keep their place. n may be a pattern.",
+    example: "(rot 1 (seq :a :b :c :d))",
+  },
+  "chunk": {
+    signature: "(chunk n f pat)",
+    description: "Apply f to one n-th of the cycle, moving to the next chunk every cycle (cycle c transforms chunk c mod n). n may be a pattern.",
+    example: "(chunk 4 (add 10) (seq 0 1 2 3))",
+  },
+  "chunk-back": {
+    signature: "(chunk-back n f pat)",
+    description: "Like chunk, but the transformed chunk moves backwards: 0, n-1, n-2 … n may be a pattern.",
+    example: "(chunk-back 4 (add 10) (seq 0 1 2 3))",
+  },
+  "fast-chunk": {
+    signature: "(fast-chunk n f pat)",
+    description: "Like chunk, but a cycle-varying pat is not held: it plays at the real cycle. n may be a pattern.",
+    example: "(fast-chunk 2 (add 10) (cat (seq 0 1) (seq 4 5)))",
+  },
+  "polymeter": {
+    signature: "(polymeter [steps] layer ...)",
+    description: "Layer step vectors of different lengths against one steps-per-cycle grid. Each layer is a vector of values or patterns. An optional leading number, string or pattern gives the steps per cycle (default: the first layer's length).",
+    example: "(polymeter [:bd :sd :hh] [:c3 :e3])",
+  },
+  "timecat": {
+    signature: "(timecat [weight x] ...)",
+    description: "Concatenate within one cycle, each entry taking a share of the cycle proportional to its weight. x is a value or a pattern.",
+    example: "(timecat [3 :e3] [1 :g3])",
+  },
+  "first-of": {
+    signature: "(first-of n f pat)",
+    description: "Apply f on cycles 0, n, 2n … (a synonym of every). n may be a pattern.",
+    example: "(first-of 4 (add 10) (seq 0 1))",
+  },
+  "last-of": {
+    signature: "(last-of n f pat)",
+    description: "Apply f on the last cycle of every n (cycles n-1, 2n-1 …). n may be a pattern.",
+    example: "(last-of 4 (add 10) (seq 0 1))",
+  },
+  "compress": {
+    signature: "(compress s e pat)",
+    description: "Squeeze each cycle into the window [s, e) of the cycle (0 <= s < e <= 1); silence elsewhere. s and e may be patterns.",
+    example: "(compress 1/4 3/4 (seq :bd :sd))",
+  },
+  "zoom": {
+    signature: "(zoom s e pat)",
+    description: "Play only the window [s, e) of each cycle, stretched to fill the whole cycle. s and e may be patterns.",
+    example: "(zoom 1/4 3/4 (seq :a :b :c :d))",
+  },
+  "focus": {
+    signature: "(focus s e pat)",
+    description: "Squeeze the cycle into [s, e) and keep playing, so neighbouring cycles fill the rest (no gaps, unlike compress). s and e may be patterns.",
+    example: "(focus 1/4 3/4 (seq :a :b :c :d))",
+  },
+  "fast-gap": {
+    signature: "(fast-gap n pat)",
+    description: "Play n times faster, then stay silent until the next cycle. n may be a pattern.",
+    example: "(fast-gap 2 (seq :bd :sd))",
+  },
+  "linger": {
+    signature: "(linger n pat)",
+    description: "Repeat the first n of every cycle to fill it (the last |n| for negative n). Restarts every cycle. n may be a pattern.",
+    example: "(linger 1/4 (seq 0 1 2 3 4 5 6 7))",
+  },
+  "bite": {
+    signature: "(bite n ipat pat)",
+    description: "Cut each cycle of pat into n slices; each event of ipat (an index) plays that slice squeezed into its own length. n may be a pattern.",
+    example: "(bite 4 (seq 0 2) (seq :a :b :c :d :e :f :g :h))",
+  },
+  "ribbon": {
+    signature: "(ribbon offset cycles pat)",
+    description: "Loop `cycles` cycles of pat starting at cycle `offset`. offset and cycles may be patterns.",
+    example: "(ribbon 1 2 (cat (pure :a) (pure :b) (pure :c) (pure :d)))",
+  },
+  "hurry": {
+    signature: "(hurry r pat)",
+    description: "Like fast, and also multiplies every event's :rate by r (a missing rate counts as 1), so samples speed up in pitch too. r may be a pattern.",
+    example: "(hurry 2 (seq :bd :sd))",
+  },
+  "revv": {
+    signature: "(revv pat)",
+    description: "Reverse time across cycles (t becomes -t): cycle c plays source cycle -c-1 reversed.",
+    example: "(revv (seq :a :b :c))",
+  },
+  "repeat-cycles": {
+    signature: "(repeat-cycles n pat)",
+    description: "Play each source cycle n times before moving to the next. n may be a pattern.",
+    example: "(repeat-cycles 2 (cat (seq :a) (seq :b)))",
+  },
+  "trunc": {
+    signature: "(trunc t pat)",
+    description: "Play only the first t of every cycle; events crossing the cut keep their length but are cut short. t may be a pattern.",
+    example: "(trunc 3/4 (seq :a :b :c :d))",
+  },
+  "press": {
+    signature: "(press pat)",
+    description: "Shift every event to start half way through its own length: (press-by 1/2 pat).",
+    example: "(press (seq :a :b))",
+  },
+  "press-by": {
+    signature: "(press-by r pat)",
+    description: "Shift every event to start r of the way through its own length and shorten it accordingly. r may be a pattern.",
+    example: "(press-by 1/4 (seq :a :b))",
+  },
+  "chunk-into": {
+    signature: "(chunk-into n f pat)",
+    description: "Like chunk, but f is applied to the chunk as if it were a full looping cycle, then squeezed back. Chunk index is c mod n. n may be a pattern.",
+    example: "(chunk-into 2 rev (seq 0 1 2 3))",
+  },
+  "chunk-back-into": {
+    signature: "(chunk-back-into n f pat)",
+    description: "Like chunk-into, but the chunk moves backwards: n-1, n-2 \u2026 0. n may be a pattern.",
+    example: "(chunk-back-into 2 rev (seq 0 1 2 3))",
+  },
+  "euclidish": {
+    signature: "(euclidish k n g pat)",
+    description: "A Euclidean rhythm whose hits are morphed towards perfectly even spacing by g (0 = euclidean, 1 = even). k, n and g may be patterns.",
+    example: "(euclidish 3 8 1/2 (pure :x))",
+  },
+  "ply-for-each": {
+    signature: "(ply-for-each n f pat)",
+    description: "Each event becomes ceil(n) sub-steps; sub-step i >= 1 is (f (pure v) i), where f takes the pattern and the integer index. n may be a pattern.",
+    example: "(ply-for-each 3 (fn [p i] (add (* i 12) p)) (seq 0 7))",
+  },
+  "filter-events": {
+    signature: "(filter-events pred pat)",
+    description: "Keep only the events whose value satisfies pred. (Named filter-events because filter works on sequences.)",
+    example: "(filter-events (fn [v] (> v 2)) (seq 1 2 3 4))",
+  },
+  "filter-when": {
+    signature: "(filter-when pred pat)",
+    description: "Keep only the events whose start time satisfies pred. The time is an integer when whole, otherwise an exact rational like 1/4.",
+    example: "(filter-when (fn [t] (< t 1/2)) (seq :a :b :c :d))",
+  },
+  "bypass": {
+    signature: "(bypass on pat)",
+    description: "When on is true (1), silence pat; otherwise play it unchanged. on may be a pattern.",
+    example: "(bypass 0 (seq :a :b))",
+  },
+  "beat": {
+    signature: "(beat t div pat)",
+    description: "Place every value of pat on step t (mod div) of div steps in the cycle. t may be stacked: \"0,7,10\". t and div may be patterns.",
+    example: "(beat \"0,7,10\" 16 (pure :bd))",
+  },
+  "sew": {
+    signature: "(sew bools a b)",
+    description: "Switch between patterns a and b: a plays where bools is true, b where it is false. Rests in bools select neither.",
+    example: "(sew \"t f\" (seq :a :a :a :a) (seq :b :b :b :b))",
+  },
+  "stitch": {
+    signature: "(stitch bools a b)",
+    description: "Structure from bools: true steps take a's value, false steps take b's. Rests select neither.",
+    example: "(stitch \"t f t t\" (pure :bd) (pure :sn))",
+  },
+  "binary": {
+    signature: "(binary n)",
+    description: "The bits of n, most significant first, as a true/false step sequence: (binary 5) = true false true. n may be a pattern.",
+    example: "(struct (binary 5) (pure :x))",
+  },
+  "binary-n": {
+    signature: "(binary-n n [bits])",
+    description: "The low `bits` bits of n (default 16), most significant first, as a true/false step sequence. n and bits may be patterns.",
+    example: "(struct (binary-n 5 4) (pure :x))",
+  },
+  "~": {
+    signature: "(~ \"mini-notation\")",
+    description: "Parse a mini-notation string into a pattern: [ ] groups, < > alternation, * ? : @, bd!3 repeats, a . b groups, a, b layers, {a b c}%4 polymeter, bd(3,8,2) euclid. _ and ~ are rests; use @ to elongate.",
+    example: "(~ \"bd!3 sd . hh hh hh, cp(3,8)\")",
+  },
+
+  // --- Pattern arithmetic (TL1) ---
+  "add": {
+    signature: "(add [mode] amt pat)",
+    description: "Add amt to every value. amt may be a number, a pattern or a mini-notation string. Note keywords move by semitones; maps change :note; rests pass through. mode picks where the rhythm comes from: :in (default, from pat), :out (from amt), :mix (both), :squeeze.",
+    example: "(->> (seq 1 3 5 8) (add \"<0 2 4>\") (scale :minor :c3))",
+  },
+  "sub": {
+    signature: "(sub [mode] amt pat)",
+    description: "Subtract amt from every value. Same modes and argument types as add.",
+    example: "(sub 12 (seq :c4 :e4 :g4))",
+  },
+  "mul": {
+    signature: "(mul [mode] amt pat)",
+    description: "Multiply every value by amt. Same modes and argument types as add.",
+    example: "(mul 2 (seq 220 330))",
+  },
+  "div": {
+    signature: "(div [mode] amt pat)",
+    description: "Divide every value by amt (division by zero leaves the value unchanged). Same modes as add.",
+    example: "(div 2 (seq 440 660))",
+  },
+  "set": {
+    signature: "(set [mode] ctrl pat)",
+    description: "Merge control maps into every event; ctrl values win (Tidal #). ctrl may be a map or a pattern of maps.",
+    example: "(set {:amp 0.5 :pan -0.5} (seq :c4 :e4))",
   },
 
   // --- Music theory ---
@@ -143,6 +557,158 @@ const DOCS = {
     signature: "(transpose semitones pat)",
     description: "Shift all Hz values in a pattern up or down by n semitones. Note keywords pass through. Non-note keywords (drums, rests) are unchanged.",
     example: "(transpose 7 (scale :major :c4 (seq 0 1 2 3)))",
+  },
+
+  // --- Continuous signals (TL2) ---
+  "signal": {
+    signature: "(signal f)",
+    description: "Build a continuous pattern from a function of absolute cycle time (a number, e.g. 0.25 for a quarter into cycle 0). Sampled at the start of each structure event.",
+    example: "(segment 4 (signal (fn [t] (* t 2))))",
+  },
+  "steady": {
+    signature: "(steady v)",
+    description: "A continuous pattern that always has the value v.",
+    example: "(segment 4 (steady 3))",
+  },
+  "time": {
+    signature: "time",
+    description: "Continuous signal whose value is the absolute cycle time: 0, 0.25, 0.5, 0.75 in cycle 0 and 1, 1.25, ... in cycle 1.",
+    example: "(segment 4 time)",
+  },
+  "sine": {
+    signature: "sine",
+    description: "Continuous signal: sine wave 0..1, 0.5 at t=0. Values at t = 0, 1/4, 1/2, 3/4: 0.5 1 0.5 0. Has no rhythm of its own: give it structure with (segment n sine) or use it as a parameter, e.g. (pan sine pat).",
+    example: "(segment 8 (range 200 2000 sine))",
+  },
+  "cosine": {
+    signature: "cosine",
+    description: "Continuous signal: cosine wave 0..1 (0 at t=0, Tidal phase). Values at t = 0, 1/4, 1/2, 3/4: 0 0.5 1 0.5. Has no rhythm of its own: give it structure with (segment n cosine) or use it as a parameter, e.g. (pan cosine pat).",
+    example: "(segment 8 cosine)",
+  },
+  "isaw": {
+    signature: "isaw",
+    description: "Continuous signal: inverted saw, 1→0 each cycle. Values at t = 0, 1/4, 1/2, 3/4: 1 0.75 0.5 0.25. Has no rhythm of its own: give it structure with (segment n isaw) or use it as a parameter, e.g. (pan isaw pat).",
+    example: "(segment 4 isaw)",
+  },
+  "itri": {
+    signature: "itri",
+    description: "Continuous signal: inverted triangle wave. Values at t = 0, 1/4, 1/2, 3/4: 1 0.5 0 0.5. Has no rhythm of its own: give it structure with (segment n itri) or use it as a parameter, e.g. (pan itri pat).",
+    example: "(segment 4 itri)",
+  },
+  "isquare": {
+    signature: "isquare",
+    description: "Continuous signal: inverted square wave, 1 then 0. Values at t = 0, 1/4, 1/2, 3/4: 1 1 0 0. Has no rhythm of its own: give it structure with (segment n isquare) or use it as a parameter, e.g. (pan isquare pat).",
+    example: "(segment 4 isquare)",
+  },
+  "sine2": {
+    signature: "sine2",
+    description: "Bipolar (-1..1) version of sine: (to-bipolar sine). Handy for pan and other signed parameters.",
+    example: "(pan sine2 (fast 8 (seq :hh)))",
+  },
+  "cosine2": {
+    signature: "cosine2",
+    description: "Bipolar (-1..1) version of cosine: (to-bipolar cosine). Handy for pan and other signed parameters.",
+    example: "(pan cosine2 (fast 8 (seq :hh)))",
+  },
+  "saw2": {
+    signature: "saw2",
+    description: "Bipolar (-1..1) version of saw: (to-bipolar saw). Handy for pan and other signed parameters.",
+    example: "(pan saw2 (fast 8 (seq :hh)))",
+  },
+  "isaw2": {
+    signature: "isaw2",
+    description: "Bipolar (-1..1) version of isaw: (to-bipolar isaw). Handy for pan and other signed parameters.",
+    example: "(pan isaw2 (fast 8 (seq :hh)))",
+  },
+  "tri2": {
+    signature: "tri2",
+    description: "Bipolar (-1..1) version of tri: (to-bipolar tri). Handy for pan and other signed parameters.",
+    example: "(pan tri2 (fast 8 (seq :hh)))",
+  },
+  "itri2": {
+    signature: "itri2",
+    description: "Bipolar (-1..1) version of itri: (to-bipolar itri). Handy for pan and other signed parameters.",
+    example: "(pan itri2 (fast 8 (seq :hh)))",
+  },
+  "square2": {
+    signature: "square2",
+    description: "Bipolar (-1..1) version of square: (to-bipolar square). Handy for pan and other signed parameters.",
+    example: "(pan square2 (fast 8 (seq :hh)))",
+  },
+  "isquare2": {
+    signature: "isquare2",
+    description: "Bipolar (-1..1) version of isquare: (to-bipolar isquare). Handy for pan and other signed parameters.",
+    example: "(pan isquare2 (fast 8 (seq :hh)))",
+  },
+  "rand2": {
+    signature: "rand2",
+    description: "Bipolar (-1..1) version of rand: (to-bipolar rand). Handy for pan and other signed parameters.",
+    example: "(pan rand2 (fast 8 (seq :hh)))",
+  },
+  "rand": {
+    signature: "rand",
+    description: "Deterministic random signal in [0,1): Tidal's timeToRand of the sampling time, so it is identical on every run. It is exactly 0 at t = 0. Vary it with (with-seed 7 …).",
+    example: "(segment 8 (range 1 8 rand))",
+  },
+  "irand": {
+    signature: "(irand n)",
+    description: "Random integers 0 to n-1 as a continuous signal (floor of rand times n). n may be a pattern.",
+    example: "(segment 8 (irand 8))",
+  },
+  "perlin": {
+    signature: "perlin",
+    description: "Smooth random signal in [0,1): Perlin-style noise that interpolates between one random value per cycle with a smootherstep curve.",
+    example: "(pan (range -0.5 0.5 perlin) (fast 4 (seq :hh)))",
+  },
+  "segment": {
+    signature: "(segment n pat)",
+    description: "Discretise a pattern or signal: n events per cycle, each with the value of pat at its onset. n may be a pattern; one-arg form returns a transformer.",
+    example: "(segment 4 saw)",
+  },
+  "rangex": {
+    signature: "(rangex lo hi pat)",
+    description: "Scale a 0..1 signal exponentially from lo to hi (good for frequencies). lo and hi must be positive. Two-argument form returns a transformer.",
+    example: "(segment 4 (rangex 20 2000 saw))",
+  },
+  "range2": {
+    signature: "(range2 lo hi pat)",
+    description: "Like range but for a bipolar -1..1 input such as sine2. Two-argument form returns a transformer.",
+    example: "(segment 4 (range2 200 2000 sine2))",
+  },
+  "to-bipolar": {
+    signature: "(to-bipolar pat)",
+    description: "Convert numeric values from 0..1 to -1..1.",
+    example: "(segment 4 (to-bipolar saw))",
+  },
+  "from-bipolar": {
+    signature: "(from-bipolar pat)",
+    description: "Convert numeric values from -1..1 to 0..1.",
+    example: "(segment 4 (from-bipolar sine2))",
+  },
+  "run": {
+    signature: "(run n)",
+    description: "Plays the integers 0 to n-1, one per step, in one cycle. n may be a pattern.",
+    example: "(run 4)",
+  },
+  "saw": {
+    signature: "saw",
+    description: "Continuous signal: rising ramp 0→1 each cycle (values 0 0.25 0.5 0.75 at quarter points). Not a function: use it bare. The saw synth voice is (synth :saw pat); inside defsynth, (saw freq) is the sawtooth UGen.",
+    example: "(segment 4 saw)",
+  },
+  "square": {
+    signature: "square",
+    description: "Continuous signal: 0 for the first half of the cycle, 1 for the second. Not a function: use it bare. The square synth voice is (synth :square pat), with :pw for pulse width; inside defsynth, (square freq) is the UGen.",
+    example: "(segment 4 square)",
+  },
+  "tri": {
+    signature: "tri",
+    description: "Continuous signal: triangle wave rising 0→1 in the first half-cycle and falling back in the second. Top-level tri is the signal; inside defsynth bodies (tri freq) is the triangle-wave UGen.",
+    example: "(segment 4 tri)",
+  },
+  "range": {
+    signature: "(range n) / (range a b step) / (range lo hi pat)",
+    description: "With numbers, the Lisp number sequence (range 8), (range 0 8 2). With a pattern or signal as the last argument it is Tidal's range: scale values from 0..1 to lo..hi, e.g. (range 200 2000 saw). lo and hi may be patterns.",
+    example: "(segment 4 (range 200 2000 saw))",
   },
 
   // --- Per-event parameters ---

@@ -13,25 +13,54 @@ REPuLse is developed in **phases**. A phase is one self-contained feature or cha
 written spec.
 
 - [ROADMAP.md](../ROADMAP.md) lists every phase and its status (`📋 *planned*` or
-  `✅ *delivered*`). It is the single source of truth — there is no other status table.
+  `✅ *delivered*`). It is the single source of truth — there is no other status table. Its
+  top section groups the phases into four milestones and defines the *Implementation order*.
 - [PROMPTS/](../PROMPTS/) holds one spec per phase (`PROMPTS/PHASE-<ID>.md`): background,
   files to change, and a definition-of-done checklist.
 
-`main` is protected: every change, phase or not, goes through a pull request.
+Every phase carries an **automation marker** (defined at the top of ROADMAP.md):
+
+| Marker | Meaning |
+|---|---|
+| 🤖 auto | Can be implemented and verified unattended |
+| 🤖👂 auto + human check | Implemented unattended, but delivered only after a human listen or hardware check |
+| 🧑 human-in-loop | Needs hardware or external software throughout |
+
+### Branches
+
+| Branch | Role | Who updates it |
+|---|---|---|
+| `dev` | Integration branch. All work — phases, fixes, docs — goes here by PR. | Anyone, by PR with green CI (auto-merge allowed) |
+| `main` | Released state. | Only `dev` → `main` release PRs, merged by a maintainer |
+
+Work branches start from the latest `dev`: `feat/phase-<id>` for a phase, `docs/phase-<id>`
+for a spec, `fix/<slug>` or `docs/<slug>` otherwise. The automated pipeline uses `auto/<id>`.
+
+`main`'s ruleset restricts updates to maintainers, so **auto-merge cannot merge into `main`**
+— a PR against `main` fails with "Cannot update this protected ref". Target `dev`.
 
 ### Workflow
 
 | Step | What to do |
 |---|---|
 | 1. Propose | Open an [issue](https://github.com/tissanr/REPuLse/issues) describing the idea, or comment on an existing one to claim a planned phase. |
-| 2. Spec | For a new phase, write `PROMPTS/PHASE-<ID>.md` and add a `## Phase <ID> — Title 📋 *planned*` section to ROADMAP.md (2–4 bullets and a link to the spec). Commit both together. |
-| 3. Branch | Create a branch off the latest `main`: `feat/phase-<id>` for a phase, `docs/phase-<id>` for a spec, `fix/<slug>` or `docs/<slug>` otherwise. |
+| 2. Spec | For a new phase, write `PROMPTS/PHASE-<ID>.md` with milestone, automation marker and dependencies, add a `## Phase <ID> — Title 📋 *planned*` section and a row in the *Implementation order* table to ROADMAP.md, and open a PR against `dev`. |
+| 3. Branch | Create a work branch from the latest `dev` (names above). |
 | 4. Implement | Follow the spec's "Files to change" table and the conventions in CLAUDE.md. |
 | 5. Finish | Meet the [definition of done](#definition-of-done) below. |
-| 6. Pull request | Open a PR against `main` (format below). CI must be green before merging. |
+| 6. Pull request | Open a PR against `dev` (format below). It merges once CI is green. |
+| 7. Release | A maintainer merges `dev` → `main` and tags a release (`/create-release`). |
 
 Small fixes that are not part of a phase (typos, bug fixes, dependency updates) skip steps 2
-and 5 — branch, fix, open a PR.
+and 5 — branch from `dev`, fix, open a PR against `dev`.
+
+### Automated pipeline
+
+`/auto-phase` implements the next eligible 🤖 phase from the *Implementation order* table —
+one phase per run, in its own worktree on `auto/<id>`. It expands outline specs, implements,
+verifies, and opens a PR labelled `auto-phase` against `dev` that auto-merges when CI is
+green. It runs from a usage-gated scheduled task and stops for a human on the
+`needs-human` label. The full rules are in `.claude/commands/auto-phase.md`.
 
 ### Definition of done
 
@@ -42,31 +71,39 @@ A phase is delivered only when **all** of these hold:
 2. **Documented.** [USAGE.md](USAGE.md) lists every new built-in, effect or parameter with at
    least one example. README.md is updated if user-facing syntax or the quick start changed.
 3. **Marked delivered.** In ROADMAP.md, `📋 *planned*` becomes `✅ *delivered*`, followed by a
-   **Delivered:** list matching the style of the existing phases.
+   **Delivered:** list matching the style of the existing phases. A 🤖👂 phase is marked
+   delivered only after its human check.
 4. Docs are committed together with (or immediately after) the implementation.
+5. **Test protocol.** The PR description ends with a `## Test protocol` section (below).
 
 ### Commits and pull requests
 
 Commit messages use conventional-commit prefixes: `feat:`, `fix:`, `refactor:`, `docs:`, … A
 phase implementation is committed as `feat: implement Phase <ID> — <short title>`.
 
-The PR description has two parts:
+The PR description starts with a `## Summary` (1–3 bullets: what changed and why) and ends
+with a `## Test protocol`: a task list the reviewer works through in the browser and ticks off
+on GitHub. One checkbox per test, each with a pasteable snippet and a concrete expected
+outcome:
 
 ```markdown
-## Summary
-1–3 bullets: what changed and why.
+## Test protocol
 
-## Test plan
+Setup: `npm run dev:full`, open http://localhost:3000. Evaluate each snippet with Alt+Enter.
 
-### Functional tests
-- [ ] Checks for the new behaviour, with concrete REPuLse-Lisp expressions
+### New features
+- [ ] **1. Stereo sweep.** `(pan sine2 (fast 8 (seq :hh)))`
+  Expected: 8 hats per cycle moving centre → right → centre → left, smoothly.
 
-### Regression tests
-- [ ] `npm test` passes
-- [ ] `(seq :bd :sd :bd :sd)` plays; `(stop)` stops cleanly
-- [ ] Alt+Enter, the command bar and the context panel still work
-- [ ] No console errors on page load
+### Regressions
+- [ ] **2. Basic playback.** `(seq :bd :sd :bd :sd)`
+  Expected: kick and snare alternate, 4 hits per cycle.
 ```
+
+Cover every new built-in, message and changed behaviour plus at least two nearby
+regressions. "Expected" must be concrete — what you hear and see, never "works correctly".
+For changes without runtime behaviour (docs, tooling), write `No runtime behaviour changed.`
+and the commands that verify it. The full rules are Rule 5 in [CLAUDE.md](../CLAUDE.md).
 
 ### Claude Code commands
 
@@ -76,11 +113,12 @@ The repository ships [Claude Code](https://claude.com/claude-code) slash command
 | Command | Does |
 |---|---|
 | `/evaluate-idea <idea>` | Assesses an idea and suggests where it fits in the roadmap |
-| `/create-phase <idea>` | Writes the PROMPTS spec and the planned ROADMAP section (step 2) |
-| `/implement-phase <ID>` | Implements a phase, updates the docs and marks it delivered (steps 4–5) |
-| `/commit-push-pr` | Commits, pushes and opens a PR in the format above (step 6) |
+| `/create-phase <idea>` | Writes the spec and the planned ROADMAP entries, opens a PR against `dev` (step 2) |
+| `/implement-phase <ID>` | Implements a phase on its own branch, updates the docs, marks it delivered and opens a PR against `dev` (steps 3–6) |
+| `/auto-phase` | Unattended: implements the next eligible 🤖 phase end to end |
+| `/commit-push-pr` | Verifies, commits, pushes and opens a PR against `dev` in the format above |
 | `/update-docs` | Brings README, ROADMAP and `docs/` in line with the code |
-| `/create-release` | Drafts release notes from delivered phases and bumps the version |
+| `/create-release` | Drafts release notes, bumps the version via PR and tags the release on `main` (step 7) |
 
 ---
 

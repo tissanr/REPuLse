@@ -1,5 +1,5 @@
 (ns repulse.lisp.mini-test
-  (:require [cljs.test :refer-macros [deftest is]]
+  (:require [cljs.test :refer-macros [deftest is testing]]
             [repulse.lisp.mini :as mini]
             [repulse.core :as core]))
 
@@ -101,14 +101,46 @@
 
 ;;; ── Probability ─────────────────────────────────────────────────────
 
-(deftest degrade-produces-subset
-  ;; Run the pattern many times — sometimes events are dropped.
-  ;; With 50% probability over 100 trials, we should see both 0 and 1 events.
-  (let [pat    (mini/parse "bd?")
-        counts (map (fn [_] (count (core/query pat one-cycle))) (range 100))
-        has-0  (some zero? counts)
-        has-1  (some #(= 1 %) counts)]
-    (is (or has-0 has-1) "degrade should sometimes drop events")))
+(defn- vc [pat n]
+  (mapv :value (sort-by #(core/rat->float (:start (:whole %)))
+                        (core/query-onsets pat (core/cycle-span n)))))
+
+(defn- vcs [s from to] (mapv #(vc (mini/parse s) %) (range from to)))
+
+(defn- parse-msg [s]
+  (try (mini/parse s) nil (catch :default e (ex-message e))))
+
+(deftest tl4-degrade-deterministic
+  (is (= [[] [:bd] [] [:bd]] (vcs "bd?" 0 4)))
+  (is (= (vcs "hh*8?" 0 4) (vcs "hh*8?" 0 4)))
+  (is (= (vc (mini/parse "hh*8?") 0) (vc (mini/parse "hh*8?") 0)))
+  (is (= [[:c :d] [:a :d] [:c :d] [:a :d]] (vcs "a? b? c? d?" 0 4)))
+  (is (= [[:b] [:a :d] [:c :d] [:a :c :d]] (vcs "[a b c d]?" 0 4)))
+  (is (= [2 5] (mapv #(count (vc (mini/parse "hh*8?") %)) [0 1]))))
+
+(deftest tl4-degrade-amount
+  (is (= [4 7] (mapv #(count (vc (mini/parse "hh*8?0.3") %)) [0 1])))
+  (is (= [[:b] [:a :b] [:b] [:a :b]] (vcs "a?0.3 b" 0 4)))
+  (testing "a space after ? makes 0.3 a separate step"
+    (is (= [[0.3]] (vcs "a? 0.3" 0 1)))
+    (is (= [[:a 0.3]] (vcs "a? 0.3" 1 2)))))
+
+(deftest tl4-random-choice
+  (is (= [[:a] [:b] [:a] [:b] [:a] [:a] [:b] [:a]] (vcs "a | b" 0 8)))
+  (is (= [[:bd] [:sd :sd] [:bd] [:hh :hh :hh] [:bd] [:bd]] (vcs "[bd | sd sd | hh*3]" 0 6)))
+  (is (= [[] [:a] [] [:a] [:b] [] [:a] []] (vcs "a? | b" 0 8))))
+
+(deftest tl4-random-choice-errors
+  (is (= "| is only allowed at top level and inside [ ]" (parse-msg "<a | b>")))
+  (is (= "| is only allowed at top level and inside [ ]" (parse-msg "{a | b}")))
+  (is (= "Cannot mix , and | in one group" (parse-msg "[a, b | c]")))
+  (is (nil? (parse-msg "[a | b] c"))))
+
+(deftest tl4-seed-numbering
+  (testing "feet groups consume a seed after their children (post-order)"
+    (is (= (vcs "a? . b?" 0 4) (vcs "a? . b?" 0 4))))
+  (testing "different positions use different seeds"
+    (is (not= (vcs "a? a? a? a?" 0 8) (vcs "a? a? a? a?" 8 16)))))
 
 ;;; ── Weight / elongation ─────────────────────────────────────────────
 
@@ -149,3 +181,79 @@
   ;; "[bd sd]*2" — the group is repeated twice
   (let [evs (core/query (mini/parse "[bd sd]*2") one-cycle)]
     (is (= 4 (count evs)))))
+
+(deftest rational-atoms-are-exact
+  ;; TL1: "1/8" used to parse as the float 1 (parseFloat stops at "/")
+  (is (= [[1 8] [1 4]] (values (mini/parse "1/8 2/8"))))
+  (is (= [[-1 2]] (values (mini/parse "-1/2")))))
+
+;;; ── Phase TL3: nested alternation, !, ., ",", {}%n, (k,n,r) ─────────
+
+(defn- cyc-evs [s c]
+  (sort-by (juxt #(core/rat->float (:start (:whole %))) #(str (:value %)))
+           (core/query (mini/parse s) (core/cycle-span c))))
+
+(defn- tuples
+  "[value whole-start whole-end part-start part-end] with rationals as vectors"
+  [evs]
+  (mapv (fn [e] [(:value e) (:start (:whole e)) (:end (:whole e))
+                 (:start (:part e)) (:end (:part e))])
+        evs))
+
+(defn- wh [evs] (mapv (fn [e] [(:value e) (:start (:whole e)) (:end (:whole e))]) evs))
+
+(defn- onset-starts [s c]
+  (mapv #(:start (:whole %))
+        (sort-by #(core/rat->float (:start (:whole %)))
+                 (core/query-onsets (mini/parse s) (core/cycle-span c)))))
+
+(deftest tl3-exact-sequence-times
+  (is (= [[:a [0 1] [1 3]] [:b [1 3] [2 3]] [:c [2 3] [1 1]]]
+         (wh (cyc-evs "a b c" 0)))))
+
+(deftest tl3-nested-alternation-alternates
+  (is (= [[:b [1 1] [3 2]] [:c [3 2] [2 1]]] (wh (cyc-evs "<a b> c" 1))))
+  (is (= [[:a [0 1] [1 2]] [:c [1 2] [1 1]]] (wh (cyc-evs "<a b> c" 0)))))
+
+(deftest tl3-bang-replicate
+  (is (= (wh (cyc-evs "bd bd bd sd" 0)) (wh (cyc-evs "bd!3 sd" 0))))
+  (is (= (wh (cyc-evs "bd bd sd" 0)) (wh (cyc-evs "bd ! sd" 0))))
+  (is (= (wh (cyc-evs "[bd sd] [bd sd]" 0)) (wh (cyc-evs "[bd sd]!2" 0))))
+  (let [src (fn [s] (mapv :source (core/query (mini/parse s 10) (core/cycle-span 0))))]
+    (is (= [{:from 10 :to 12} {:from 10 :to 12} {:from 10 :to 12}]
+           (take 3 (src "bd!3 sd"))))))
+
+(deftest tl3-dot-grouping
+  (is (= [[:bd [0 1] [1 4]] [:sd [1 4] [1 2]] [:hh [1 2] [2 3]] [:hh [2 3] [5 6]] [:hh [5 6] [1 1]]]
+         (wh (cyc-evs "bd sd . hh hh hh" 0))))
+  (is (= [0.5 1] (mapv :value (cyc-evs "0.5 1" 0)))))
+
+(deftest tl3-comma-layers
+  (is (= [[:bd [0 1] [1 1]] [:hh [0 1] [1 2]] [:hh [1 2] [1 1]]]
+         (wh (cyc-evs "[bd, hh hh]" 0))))
+  (is (= 3 (count (cyc-evs "[c3,e3,g3]" 0))))
+  (is (every? #(= [[0 1] [1 1]] [(:start (:whole %)) (:end (:whole %))]) (cyc-evs "[c3,e3,g3]" 0)))
+  (is (= 5 (count (cyc-evs "bd sd, hh hh hh" 0)))))
+
+(deftest tl3-polymeter-braces
+  (is (= [:a :b :c :a] (mapv :value (cyc-evs "{a b c}%4" 0))))
+  (is (= [:b :c :a :b] (mapv :value (cyc-evs "{a b c}%4" 1))))
+  (is (= [[:a [0 1] [1 4]] [:b [1 4] [1 2]] [:c [1 2] [3 4]] [:a [3 4] [1 1]]]
+         (wh (cyc-evs "{a b c}%4" 0))))
+  (is (= (wh (cyc-evs "{a b c, d e}" 1))
+         (wh (sort-by (juxt #(core/rat->float (:start (:whole %))) #(str (:value %)))
+                      (core/query (core/polymeter nil [[:a :b :c] [:d :e]]) (core/cycle-span 1)))))))
+
+(deftest tl3-euclid-suffix
+  (is (= [[0 1] [3 8] [3 4]] (onset-starts "bd(3,8)" 0)))
+  (is (= [[1 8] [1 2] [3 4]] (onset-starts "bd(3,8,2)" 0)))
+  (is (= [[1 1] [5 4] [11 8] [13 8] [7 4]] (onset-starts "bd(<3 5>,8)" 1)))
+  (is (every? #(= [1 8] (core/rat- (:end (:whole %)) (:start (:whole %))))
+              (cyc-evs "bd(3,8)" 0))))
+
+(deftest tl3-parse-errors
+  (doseq [s ["{a b" "bd(3,8" "! bd" "[a b" "<a b"]]
+    (is (= :mini-parse-error
+           (try (mini/parse s) nil
+                (catch :default e (:type (ex-data e)))))
+        s)))

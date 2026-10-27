@@ -6,7 +6,7 @@ description: Update README, ROADMAP, and docs/ to match current codebase state
 ## Context
 
 - Recent commits since last docs update: !`git log --oneline -20`
-- Files changed on this branch: !`git diff origin/main...HEAD --name-only`
+- Files changed on this branch: !`git diff origin/dev...HEAD --name-only`
 
 ## Your task
 
@@ -73,4 +73,4 @@ The README is deliberately short: pitch, quick start, documentation index. Refer
 
 ### Finish
 
-`main` is protected. Commit the doc changes on a branch (`docs/<short-slug>` off `origin/main` if you are on `main`) and open a PR against `main` following `.claude/commands/commit-push-pr.md`. Return the PR URL.
+Commit the doc changes on a branch (`docs/<short-slug>` off `origin/dev` if you are on `dev` or `main`) and open a PR against `dev` following `.claude/commands/commit-push-pr.md`. Return the PR URL.

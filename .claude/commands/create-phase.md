@@ -30,7 +30,21 @@ State the chosen ID and one sentence explaining why it fits.
 
 ## Step 3 — Write `PROMPTS/PHASE-{ID}.md`
 
-Follow the style of `PROMPTS/phase-m-lisp-superpowers.md` exactly. The file must contain:
+Follow the style of `PROMPTS/phase-m-lisp-superpowers.md` exactly. Start the file with the
+header block used by the current specs (see `PROMPTS/PHASE-TL5.md`):
+
+```markdown
+# Phase {ID} — {Title}
+
+> **Automation:** <🤖 auto | 🤖👂 auto + human check | 🧑 human-in-loop> — one sentence why
+> (markers are defined at the top of `ROADMAP.md`).
+
+**Milestone:** <1–4> — <milestone name>
+**Depends on:** <hard dependencies, or "none">
+```
+
+Add `> **Spec status:** outline — expand into a full spec before implementing.` only if you
+deliberately write an outline instead of a full spec. The file must contain:
 
 ### `## Goal`
 3–6 sentences describing what the phase adds. Include a **before/after code example** in REPuLse-Lisp showing the concrete user-facing change.
@@ -55,14 +69,25 @@ A checklist of 8–15 acceptance criteria written as `- [ ] …` items. Each ite
 - Specific to this phase (not generic boilerplate)
 - Include at least 3 REPuLse-Lisp expressions that should produce the described behaviour
 
+Always end the list with `- [ ] The PR description ends with a test protocol (CLAUDE.md Rule 5)`.
+
 ### `## What NOT to do`
 3–6 bullet points scoping the phase — explicitly name adjacent features that are out of scope and belong to follow-on phases.
 
 ## Step 4 — Register the phase (Rule 1 from CLAUDE.md)
 
-**`ROADMAP.md`** — add a new section near related phases:
+**`ROADMAP.md`** — two changes:
+
+1. Add a row to the **Implementation order** table at the top, in its milestone block, with
+   the marker, spec status (`full` / `outline`) and build model (`sonnet` for routine work,
+   `opus` for design-heavy work). The auto-phase pipeline picks phases from this table in
+   order, so the position matters.
+2. Add a new section near related phases:
+
 ```markdown
 ## Phase {ID} — {Title} 📋 *planned*
+
+> **Milestone {n}** · **Automation:** {marker} {auto | auto + human check | human-in-loop}
 
 One-sentence goal description.
 
@@ -77,16 +102,17 @@ See full spec: [PROMPTS/PHASE-{ID}.md](PROMPTS/PHASE-{ID}.md)
 
 ## Step 5 — Commit and open a PR
 
-`main` is protected — the spec goes in through a pull request like every other change.
+The spec goes in through a pull request against `dev`, like all phase work.
 
 ```bash
-git fetch origin main
-git switch -c docs/phase-{id} origin/main     # {id} in lowercase, e.g. docs/phase-syn5
+git fetch origin dev
+git switch -c docs/phase-{id} origin/dev      # {id} in lowercase, e.g. docs/phase-syn5
 git add PROMPTS/PHASE-{ID}.md ROADMAP.md
 git commit -m "docs: add Phase {ID} prompt — {short title}"
 git push -u origin docs/phase-{id}
 ```
 
-Then open the PR with `gh pr create` against `main`, using the Summary / Test plan structure
-from `.claude/commands/commit-push-pr.md` (docs-only: the test plan is a review checklist for the
-spec). Return the PR URL. The phase can be implemented once this PR is merged.
+Then open the PR with `gh pr create --base dev`, in the format of
+`.claude/commands/commit-push-pr.md` (docs only: the test protocol says
+`No runtime behaviour changed.`). Return the PR URL. The phase can be implemented once this PR
+is merged.

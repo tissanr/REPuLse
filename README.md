@@ -43,8 +43,11 @@ and **when** — not **how** synthesis works internally.
 
 - **Sounds:** sample keywords (`:bd`, `:sd`), note keywords (`:c4`), frequencies (`440`), or
   synth voices (`(synth :saw)`, `(synth :fm :index 4)`, `(synth :guitar)`)
-- **Rhythm and structure:** `seq`, `stack`, `fast`, `slow`, `every`, `cat`, `euclidean`, and
-  Tidal-style mini-notation: `(~ "bd [sd hh] bd sd")`
+- **Rhythm and structure:** `seq`, `stack`, `fast`, `slow`, `every`, `euclidean`, `struct`,
+  `ply`, `chunk`, and Tidal-style mini-notation: `(~ "bd [sd hh] bd sd")`
+- **Patterns everywhere:** arguments can themselves be patterns (`(fast "<1 2 4>" pat)`),
+  patterns combine arithmetically (`(add 7 pat)`), and continuous signals (`sine`, `rand`,
+  `perlin`) modulate parameters (`(pan sine pat)`)
 - **Expression:** `amp`, `attack`, `decay`, `pan`, … chained with `->>`
 - **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`, `(fx :cab :ir :4x12)`
 - **Performance:** named tracks you can mute, solo and replace live; MIDI in/out; WAV and
@@ -113,7 +116,7 @@ Contributions are welcome:
   happened instead.
 - **Code:** the [PROMPTS/](PROMPTS/) folder contains specs for planned phases. Read
   [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for setup and conventions, then open a pull
-  request against `main`.
+  request against `dev`.
 
 ---
 

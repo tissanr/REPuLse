@@ -1,5 +1,82 @@
 # REPuLse — Roadmap
 
+## Direction & milestones (from 2026-10-26)
+
+REPuLse is a **Tidal-style Lisp** for writing **full songs in code**, which can also
+**play alongside other gear** and works as a **sketchpad** that hands ideas on to a DAW.
+The four goals form layers, each depending on the one below, so the implementation
+order follows the layers:
+
+```
+M4  Sketchpad          capture ideas (incl. MIDI keyboard → code), export, snapshots
+M3  Plays with others  MIDI CC, Ableton Link, OSC, latency, outputs
+M2  Full songs         sections, song form, automation, navigation, multi-buffer projects
+M1  Tidal-Lisp core    the pattern language: Strudel/Tidal parity, effects, drum kits
+```
+
+Strudel parity is tracked function by function in
+[docs/STRUDEL-PARITY.md](docs/STRUDEL-PARITY.md) and is the yardstick for M1.
+
+### Automation markers
+
+Every planned phase carries one marker saying how far it can be implemented and verified
+without a human:
+
+| Marker | Meaning |
+|---|---|
+| 🤖 **auto** | Claude can implement it and verify it end to end with unit tests, offline-render tests and Playwright. Safe to run unattended. |
+| 🤖👂 **auto + human check** | Implementable and mostly testable automatically, but final acceptance needs a human listen or real hardware (MIDI keyboard). |
+| 🧑 **human-in-loop** | Needs hardware or external software (Ableton, other apps, audio interfaces) in the loop throughout. |
+
+### Implementation order
+
+| # | Phase | Title | Marker | Spec | Build model |
+|---|---|---|---|---|---|
+| **M1** | | **Tidal-Lisp core** | | | |
+| 1 | TL1 | Patterned arguments & pattern arithmetic | 🤖 | full | opus |
+| 2 | TL2 | Continuous signals | 🤖 | full | sonnet |
+| 3 | TL3 | Time & structure combinators | 🤖 | full | sonnet |
+| 4 | TL3b | Zoom, compress & structure extras | 🤖 | full | sonnet |
+| 5 | TL4 | Randomness & conditionals | 🤖 | full | sonnet |
+| 6 | TL5 | Layering, pitch & harmony | 🤖 | outline | sonnet |
+| 7 | TL6 | Sample slicing & playback control | 🤖👂 | outline | opus |
+| 8 | TL7 | Per-event effects & control parameters | 🤖👂 | outline | opus |
+| 9 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
+| **M2** | | **Full songs** | | | |
+| 10 | SONG1 | Sections, song form & full-song render | 🤖 | outline | opus |
+| 11 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
+| 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | outline | sonnet |
+| 13 | SONG4 | Multi-buffer projects | 🤖 | outline | opus |
+| **M3** | | **Plays with others** | | | |
+| 14 | N1 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
+| 15 | LIVE1 | Companion bridge: Ableton Link & OSC | 🧑 | outline | opus |
+| 16 | LIVE2 | Latency compensation, nudge & per-track outputs | 🧑 | outline | sonnet |
+| **M4** | | **Sketchpad** | | | |
+| 17 | SK1 | Stem export & full-song MIDI export | 🤖 | outline | sonnet |
+| 18 | SK2 | Session snapshots & eval history | 🤖 | outline | sonnet |
+| 19 | SK3 | MIDI capture 1: click, fixed grid, velocity → code | 🤖👂 | outline | sonnet |
+| 20 | SK4 | MIDI capture 2: always-on capture | 🤖👂 | outline | sonnet |
+| 21 | SK5 | MIDI capture 3: grid & feel detection | 🤖👂 | outline | opus |
+
+**Models.** Expanding an outline into a full spec is always done with **Opus**: it makes
+the design decisions and writes reference test cases. The *Build model* column is the
+model that implements the phase from its full spec: **sonnet** where the spec leaves no
+judgment calls, **opus** where the design keeps needing decisions during the build
+(foundation code, the audio engine, cross-cutting state). If Sonnet can't get the tests
+green, the phase is escalated to Opus. Haiku isn't used for phases.
+
+**Outline** specs settle goal, scope, open questions and acceptance criteria. Expand an
+outline into a full spec (exact code paths, step-by-step implementation, files to change)
+before implementing it. Dependencies are listed at the top of each spec.
+
+**Side track** (not on the critical path, can run any time): DOC1, TEST2, UI1, R3,
+PLUG1, O2.
+
+**Deferred** (⏸, outside the four milestones; revisit after M2): AI4b, AI5,
+SYN3, SYN4, SYN5, P2, O3, O4.
+
+---
+
 ## Phase 1 — First Sound ✅ *delivered*
 
 Browser REPL with ClojureScript pattern engine and Web Audio synthesis.
@@ -559,6 +636,8 @@ See full spec: [PROMPTS/phase-n-midi-io.md](PROMPTS/phase-n-midi-io.md)
 
 ## Phase N1 — MIDI CC → Parameter Mapping 📋 *planned*
 
+> **Milestone 3** · **Automation:** 🤖👂 auto + human check — CC handling is testable with synthetic MIDI messages; a real controller check is needed for acceptance.
+
 Bind any MIDI controller knob or fader to any numeric parameter in REPuLse for
 hands-on live performance control.
 
@@ -627,7 +706,9 @@ See full spec: [PROMPTS/PHASE-O2-PWA-OFFLINE.md](PROMPTS/PHASE-O2-PWA-OFFLINE.md
 
 ---
 
-## Phase O3 — Collaborative Sessions 📋 *planned*
+## Phase O3 — Collaborative Sessions ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Shared live-coding editor sessions.
 
@@ -641,7 +722,9 @@ See full spec: [PROMPTS/PHASE-O3-COLLAB.md](PROMPTS/PHASE-O3-COLLAB.md)
 
 ---
 
-## Phase O4 — Mobile Layout 📋 *planned*
+## Phase O4 — Mobile Layout ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Touch-friendly responsive layout for phones and tablets.
 
@@ -735,7 +818,9 @@ See full spec: [PROMPTS/phase-p-modular-routing.md](PROMPTS/phase-p-modular-rout
 
 ---
 
-## Phase P2 — Modular Effect Routing 📋 *planned*
+## Phase P2 — Modular Effect Routing ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Advanced routing for the global and per-track effect chains: reorderable master
 bus, parallel effect paths, and "Aux Sends" that route audio to named busses.
@@ -926,7 +1011,9 @@ See full spec: [PROMPTS/PHASE-SYN2.md](PROMPTS/PHASE-SYN2.md)
 
 ---
 
-## Phase SYN3 — Bowed String Waveguide 📋 *planned*
+## Phase SYN3 — Bowed String Waveguide ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Add a full bi-directional digital waveguide bowed-string voice to the WASM engine,
 unlocking `:violin`, `:viola`, `:cello`, and `:bass-arco` as continuously sustaining
@@ -946,7 +1033,9 @@ See full spec: [PROMPTS/PHASE-SYN3.md](PROMPTS/PHASE-SYN3.md)
 
 ---
 
-## Phase SYN4 — Electric Guitar Voices 📋 *planned*
+## Phase SYN4 — Electric Guitar Voices ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Add five electric guitar presets — `:strat`, `:tele`, `:es335`, `:sg`, `:lp` — to the
 SYN1 Karplus-Strong engine with per-instrument body resonance IIR filters and two new
@@ -966,7 +1055,9 @@ See full spec: [PROMPTS/PHASE-SYN4.md](PROMPTS/PHASE-SYN4.md)
 
 ---
 
-## Phase SYN5 — Lo-Fi Piano 📋 *planned*
+## Phase SYN5 — Lo-Fi Piano ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Add `(synth :piano)` and `(synth :piano-felt)` using an extended Karplus-Strong model
 with a bi-linear decay filter that approximates hammer-struck string character — bright
@@ -1592,7 +1683,9 @@ See full spec: [PROMPTS/PHASE-AI4.md](PROMPTS/PHASE-AI4.md)
 
 ---
 
-## Phase AI4b — Encrypted AI Key Relay 📋 *planned*
+## Phase AI4b — Encrypted AI Key Relay ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Optional backend-backed AI provider key storage and request relay for users who do not
 want provider keys stored in browser localStorage.
@@ -1608,7 +1701,9 @@ See full spec: [PROMPTS/PHASE-AI4B-KEY-RELAY.md](PROMPTS/PHASE-AI4B-KEY-RELAY.md
 
 ---
 
-## Phase AI5 — Variation Workflows & Live Audition 📋 *planned*
+## Phase AI5 — Variation Workflows & Live Audition ⏸ *deferred*
+
+> **Deferred (2026-10-26):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
 Extend the AI3 agent so it can generate multiple code variants for any named def (or
 the full buffer), then let the user hear each one live before committing — turning AI
@@ -1647,6 +1742,448 @@ entire application — chrome, panels, and CodeMirror editor — instantly on se
 - Gear button (⚙) added to the header in `app/src/repulse/app.cljs`
 
 See full spec: [PROMPTS/PHASE-UI1.md](PROMPTS/PHASE-UI1.md)
+
+---
+
+## Phase TL1 — Patterned Arguments & Pattern Arithmetic ✅ *delivered*
+
+> **Milestone 1** · **Automation:** 🤖 auto
+
+Make every numeric argument patternable and add arithmetic on patterns with an explicit
+choice of rhythm source; fix onset retriggering and rational precision on the way.
+
+**Key additions:**
+- Scheduler, export and MIDI paths trigger only onsets (fixes events that cross a cycle
+  boundary firing twice, e.g. `(slow 4 …)`)
+- `->rat` float → rational coercion; `1/3` stays exact through `fast`/`slow`/`late`; dev overflow guard
+- `app-left` / `app-right` / `app-both`, `inner-join` / `outer-join` / `squeeze-join`, `patternify`
+- Patterned args for `fast slow late early every euclidean sometimes-by degrade-by off jux-by`;
+  mini-notation strings accepted as pattern arguments (`(fast "<1 2>" pat)`)
+- `add sub mul div set` with modes `:in` (default) / `:out` / `:mix` / `:squeeze`
+
+**Delivered:**
+- `packages/core/src/repulse/core.cljs` — `onset?` / `query-onsets`; `->rat` (continued
+  fractions, denominator ≤ 1 000 000) used by `fast` `slow` `late` `early`; `goog.DEBUG`-only
+  `:rational-overflow` guard in `rat`; `app-left` / `app-right` / `app-both` ported from
+  Tidal (`combine` is now `app-right`); `inner-join` / `outer-join` / `squeeze-join`;
+  `patternify` / `patternify2` / `patternify3`; patterned arguments for `fast slow late
+  early every euclidean sometimes-by degrade-by off` (scalars keep the old fast path);
+  `silence`; `fast 0` / `slow 0` are silence
+- `params.cljs` — `apply-param` uses `app-right`; `jux-by` width is patternable;
+  `theory/midi->note` for note-keyword arithmetic
+- `app/` — the scheduler, MIDI out, WAV `export`, `midi-export` and the offline test
+  harness trigger only onsets, timed and sized by the event whole (fixes `(slow 4 …)` and
+  `(late 1/2 (pure :bd))` re-triggering at cycle boundaries)
+- Lisp — time arguments pass through raw (`1/3` stays `[1 3]`); strings in patterned
+  positions are mini-notation (with editor highlighting); mini-notation `"1/8"` atoms are
+  exact rationals; new `builtins/arith.cljs` with `add sub mul div set`, mode keywords and
+  curried forms
+- Rule 5 artefacts: grammar + `parser.js`, `completions.js`, `hover.js`,
+  `builtin_meta.edn` (patterned examples), `docs/ai/builtins.json`; USAGE "Patterned
+  arguments" and "Pattern arithmetic" sections; STRUDEL-PARITY TL1 rows updated
+- Tests: core (onsets, `->rat`, overflow guard, `fast 1/3` over 3000 cycles, Tidal
+  `|+` / `+|` / `|+|` event lists, joins, patterned combinators), Lisp integration
+  (all DoD examples), mini-notation rationals, two Playwright offline-render onset tests
+
+See full spec: [PROMPTS/PHASE-TL1.md](PROMPTS/PHASE-TL1.md)
+
+---
+
+## Phase TL2 — Continuous Signals ✅ *delivered*
+
+> **Milestone 1** · **Automation:** 🤖 auto
+
+Continuous patterns sampled by rhythmic structure, for smooth movement and randomness.
+
+**Key additions:**
+- Analog (whole-less) events in `core.cljs`
+- `sine cosine saw isaw tri square rand irand perlin`, `range rangex segment`
+- Tidal-compatible deterministic `time->rand` (reused by TL4 and KIT1)
+
+**Delivered:**
+- `packages/core/src/repulse/core.cljs` — analog (whole-less) events: `analog?`, nil-whole
+  safety in `fast`/`slow`/`rev`/`late`/`early`/`arrange` via `map-spans`; `signal` / `steady`
+  (one event over the query span, sampled at its start); `time saw isaw sine cosine tri itri
+  square isquare perlin`, bipolar `…2` variants, `to-bipolar` / `from-bipolar`; `run`,
+  `segment`, `range-pat` / `rangex-pat` / `range2-pat`; `core/specs` accepts analog events
+- Tidal-exact RNG: `xorwise`, `time->int-seed`, `time->rand` (64-bit semantics via BigInt),
+  `rand`, `rand2`, `irand`; `cycle-hash` untouched (TL4 replaces it)
+- Lisp — new `builtins/signals.cljs` (signals are bare values; `signal steady segment rangex
+  range2 irand run …`); `range` dispatches on a pattern last argument; the `saw`/`square`
+  voice shortcuts are removed in favour of `(synth :saw …)`; calling a pattern gives a
+  helpful eval error
+- App — a track that is a bare signal (no rhythm) plays nothing and shows an output warning
+  plus one `console.warn` per evaluation (`sound_check/has-analog-events?`); test API reports
+  nil whole times for analog events
+- Rule 5 artefacts: grammar + `parser.js`, `completions.js`, `hover.js`, `builtin_meta.edn`
+  (new `"signal"` category), `docs/ai/builtins.json`, `docs/ai/concepts.json`; USAGE "Signals"
+  and "Signals vs. tween" sections; STRUDEL-PARITY TL2 rows (23 done)
+- Tests: core (shape, waveforms, `time->rand` reference table, perlin, range, nil-whole
+  safety), Lisp integration (DoD examples, helpful error, documented examples), sound-check
+  guard, two Playwright offline-render tests (bare `sine` is silent, `pan sine2` has 8 onsets)
+
+See full spec: [PROMPTS/PHASE-TL2.md](PROMPTS/PHASE-TL2.md)
+
+---
+
+## Phase TL3 — Time & Structure Combinators ✅ *delivered*
+
+> **Milestone 1** · **Automation:** 🤖 auto
+
+Tidal's core rhythmic vocabulary (25 functions from `docs/STRUDEL-PARITY.md`); the
+zoom/compress family moved to TL3b.
+
+**Key additions:**
+- `struct mask invert ply ply-with inside outside within swing swing-by brak`
+- `iter iter-back palindrome rot chunk chunk-back fast-chunk polymeter timecat first-of last-of`
+- `euclidean` fixed to Tidal's `bjorklund` (today all hits bunch at the start), struct form
+  `(euclidean 3 8 pat)`, `euclid-legato` / `euclid-legato-rot`
+- Mini-notation `!`, `.`, `,`, `{ }%n`, `(k,n,r)`; sub-sequences via exact `timecat`
+  (fixes `"<a b> c"` never alternating)
+
+**Delivered:**
+- `packages/core/src/repulse/core.cljs` — 25 functions: `struct mask invert euclid-legato
+  euclid-legato-rot ply ply-with inside outside within swing-by swing brak iter iter-back
+  palindrome rot chunk chunk-back fast-chunk polymeter timecat first-of last-of`, plus
+  `bjorklund` and `step-true?`; private `compress*`, `slowcat-held*` (Tidal `cat` offsets),
+  `within*`, `fastcat*` reserved for TL3b
+- **Björklund fix:** `euclidean` now uses a literal port of Tidal's `bjorklund` — `(euclidean
+  3 8 :bd)` is `x . . x . . x .` (before, all hits bunched at the start; existing patterns
+  using `euclidean` change sound). A pattern third argument gives the struct form;
+  negative `k` inverts; rotation is a left rotation
+- Mini-notation: `!`, `.`, `,`, `{ }%n`, `x(k,n,r)`; sub-sequences compile through exact
+  `core/timecat` (no more float rounding). **Nested-alternation fix:** `"<a b> c"` now
+  alternates (before it always played `a`)
+- Lisp — new `builtins/structure.cljs` with curried forms for `->>`; numeric args accept
+  patterns / mini-notation strings
+- Rule 5 artefacts: grammar + `parser.js`, `completions.js`, `hover.js`,
+  `builtin_meta.edn`, `docs/ai/builtins.json`; USAGE "Time & structure" section,
+  `euclidean` and mini-notation updates; README rows; STRUDEL-PARITY TL3 rows
+- Tests: Björklund table, per-function Tidal/Strudel vectors (core, mini, Lisp integration),
+  documented-examples evaluation, three Playwright onset-count tests
+
+See full spec: [PROMPTS/PHASE-TL3.md](PROMPTS/PHASE-TL3.md)
+
+---
+
+## Phase TL3b — Zoom, Compress & Structure Extras ✅ *delivered*
+
+> **Milestone 1** · **Automation:** 🤖 auto
+
+The time & structure functions deferred from TL3: windows of a cycle and the remaining
+structure helpers.
+
+**Key additions:**
+- Windows: `compress fast-gap press press-by euclidish beat` on TL3's private `compress*`; new
+  private `zoom*` (Tidal `zoomArc`) for `zoom bite chunk-into chunk-back-into`; `focus linger
+  ribbon trunc revv`; `repeat-cycles` on `slowcat-held*`
+- `hurry` in `params.cljs` (fast + multiplies `rate`; no `speed` alias), `ply-for-each`
+- `filter-events filter-when bypass sew stitch binary binary-n` (`binary-l` dropped; Strudel
+  `binaryN` argument order, default 16 bits)
+
+**Delivered:**
+- `packages/core/src/repulse/core.cljs` — 24 functions on TL3's private helpers (`compress*`,
+  `slowcat-held*`, `within*`, `fastcat*`) plus new private `zoom*`: `compress zoom focus
+  fast-gap linger bite ribbon revv repeat-cycles trunc press press-by chunk-into
+  chunk-back-into euclidish ply-for-each filter-events filter-when bypass beat sew stitch
+  binary binary-n`. Exact rational time throughout; patterned numeric arguments via
+  `patternify`/`patternify2`/`patternify3`
+- `packages/core/src/repulse/params.cljs` — `hurry` (`fast` + multiplies the `rate` control;
+  no `speed` alias)
+- Lisp — 25 builtins in `builtins/structure.cljs` with curried forms for `->>` (except
+  `sew`, `stitch`, `binary`, `binary-n`); `filter-events` / `filter-when` take Lisp closures
+- Rule 3/5 artefacts: grammar + `parser.js`, `completions.js`, `hover.js`,
+  `builtin_meta.edn`, `docs/ai/builtins.json`; USAGE "Windows, switches & binary rhythms",
+  README rows, STRUDEL-PARITY rows and summary
+- Tests: every spec vector in `core_test`/`params_test`/`integration_test` (one patterned
+  test per numeric argument), `tl3b-documented-examples-evaluate`, three Playwright
+  onset-count tests; two hand-computed spec vectors corrected (`ribbon` patterned offset,
+  `hurry 1/2` whole)
+
+See full spec: [PROMPTS/PHASE-TL3b.md](PROMPTS/PHASE-TL3b.md)
+
+---
+
+## Phase TL4 — Randomness & Conditionals ✅ *delivered*
+
+> **Milestone 1** · **Automation:** 🤖 auto
+
+Controlled unpredictability with Tidal semantics; replaces the coarse `cycle-hash`.
+
+**Key additions:**
+- Existing random functions re-based on `time->rand` (probabilities preserved); `sometimes*`
+  per event (Strudel), per-cycle behaviour as `some-cycles*`; `choose`/`wchoose` become signals
+- `randcat wrandcat choose-cycles shuffle scramble randrun brand berlin when-pat whenmod apply-n`,
+  per-pattern seeds via `with-seed`
+- Mini-notation: deterministic `?`, `?0.3` and `|` random choice
+
+**Delivered:**
+- `packages/core/src/repulse/core.cljs` — seeded RNG (`*rand-seed*`, `seed->rand`,
+  `time->rands`, `rand-at`; `rand`/`perlin` seed-aware); `cycle-hash` and `event-hash` deleted.
+  New TL4 block: `degrade-by degrade undegrade-by undegrade degrade-by-with` (Tidal `>=`),
+  per-event `sometimes-by sometimes often rarely almost-never almost-always always never`,
+  per-cycle `some-cycles-by some-cycles`, signal-based `choose wchoose choose-with
+  choose-in-with choose-in`, per-cycle `choose-cycles wchoose-cycles randcat wrandcat`,
+  `brand brand-by berlin rand-l randrun`, `with-seed`, `shuffle scramble`, `when-pat whenmod
+  apply-n`. 27 new built-ins, 8 re-based ones
+- Mini-notation — deterministic `?` (Strudel seeding, no more `Math/random`), `?0.3`
+  amounts and `|` random choice with a per-string seed counter; parse errors for `|` inside
+  `< >`/`{ }` and for mixing `,` and `|`
+- Lisp — new `builtins/random.cljs` (curried forms for `->>`); `brand`/`berlin` in
+  `builtins/signals.cljs`; `choose`/`wchoose` keep the vector, weight-first signature
+- Rule 3/5 artefacts: grammar + `parser.js`, `completions.js`, `hover.js`,
+  `builtin_meta.edn`, `docs/ai/builtins.json`; USAGE rewritten sections plus the "Random
+  sequences changed in TL4" note, README rows, STRUDEL-PARITY rows and summary
+- Tests: every spec vector in `core_test`/`mini_test`/`integration_test`, statistics over
+  1000 cycles, `tl4-documented-examples-evaluate`, four Playwright onset-count tests. Existing
+  tests migrated to the new semantics: `choose`/`wchoose` per-cycle tests moved to
+  `choose-cycles`/`wchoose-cycles`, `choose-attaches-source`, `lisp-choose-attaches-source`,
+  `degrade-produces-subset` (mini `?` is now deterministic) and
+  `sometimes-by-multi-cycle-span` (the per-event stack lists branch by branch)
+- Deferred to TL4b: `pick*`, `inhabit`, `fix`
+
+See full spec: [PROMPTS/PHASE-TL4.md](PROMPTS/PHASE-TL4.md)
+
+---
+
+## Phase TL4b — Pick & Fix 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖 auto
+
+The selection and matching functions deferred from TL4.
+
+**Key additions:**
+- `pick pick-mod pick-f pick-out pick-restart pick-reset inhabit` — choose patterns or
+  functions from a lookup by an index/name pattern
+- Tidal `fix` — apply a function to events matching control values
+
+See full spec: [PROMPTS/PHASE-TL4b.md](PROMPTS/PHASE-TL4b.md)
+
+---
+
+## Phase TL5 — Layering, Pitch & Harmony 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖 auto
+
+Layer a pattern on itself and work with harmony musically.
+
+**Key additions:**
+- `superimpose layer echo echo-with`
+- Chord-symbol parser (`"Cm7"`, `"F#7b9"`), `arp` modes, `voicing`, `root-notes`, `scale-transpose`
+
+See full spec: [PROMPTS/PHASE-TL5.md](PROMPTS/PHASE-TL5.md)
+
+---
+
+## Phase TL6 — Sample Slicing & Playback Control 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+
+Cut, rearrange and fit samples, the core of breakbeat live coding.
+
+**Key additions:**
+- `chop striate slice splice fit loop-at legato clip n speed unit`
+- `cut` choke groups in the playback path (identical in offline render)
+
+See full spec: [PROMPTS/PHASE-TL6.md](PROMPTS/PHASE-TL6.md)
+
+---
+
+## Phase TL7 — Per-Event Effects & Control Parameters 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+
+Effects become part of the pattern: per-event filter and distortion, and send-based
+reverb/delay per orbit, all patternable.
+
+**Key additions:**
+- Per-voice inserts in WASM (allocation-free): `lpf hpf bpf resonance shape crush coarse vowel`
+- Send effects per `orbit`: `room size delay delay-time delay-feedback`
+- Same behaviour for samples and synth voices, and in offline render
+
+See full spec: [PROMPTS/PHASE-TL7.md](PROMPTS/PHASE-TL7.md)
+
+---
+
+## Phase KIT1 — High-Quality Drum Kits 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+
+Studio-quality multisampled drum kits with velocity layers and round-robin, from
+openly licensed sources only (no proprietary Roland module samples).
+
+**Key additions:**
+- Manifest extension for velocity layers and round-robin groups (backwards compatible)
+- `velocity` per-event parameter (layer selection + gain); `(kit :name)`
+- One or two curated kits with documented licences, lazily loaded
+
+See full spec: [PROMPTS/PHASE-KIT1.md](PROMPTS/PHASE-KIT1.md)
+
+---
+
+## Phase SONG1 — Sections, Song Form & Full-Song Render 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖 auto
+
+Songs with a beginning and an end: tracks defined top to bottom, one arrangement block
+at the bottom with named sections.
+
+**Key additions:**
+- `song` / `section` form: named sections with bar lengths and per-section track selection
+- Song position in the scheduler; end behaviour `:stop` / `:loop`; start from a section
+- Full-song WAV render sized from the song form; progress in the context panel
+- `arrange` and `play-scenes` keep working unchanged
+
+See full spec: [PROMPTS/PHASE-SONG1.md](PROMPTS/PHASE-SONG1.md)
+
+---
+
+## Phase SONG2 — Song-Time Automation & Transitions 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖 auto
+
+Parameters that follow curves over the song timeline, plus fills, risers and drops.
+
+**Key additions:**
+- Automation lanes scoped to sections or bar ranges; linear/exp/hold curves or TL2 signals
+- Deterministic in song time (seeking gives the same values as playing through)
+- Fill/riser/drop helpers built from ordinary patterns; works in full-song render
+
+See full spec: [PROMPTS/PHASE-SONG2.md](PROMPTS/PHASE-SONG2.md)
+
+---
+
+## Phase SONG3 — Editor Navigation: Outline & Go-to-Definition 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖 auto
+
+Make define-before-use songs navigable: the arrangement sits at the bottom, one click
+away from every definition.
+
+**Key additions:**
+- Pure outline extraction of `def defn defsynth track song section` (tolerates invalid code)
+- Outline panel with click-to-jump and current-entry highlight
+- Cmd/Ctrl-click go-to-definition for symbols and track keywords, with "back"
+
+See full spec: [PROMPTS/PHASE-SONG3.md](PROMPTS/PHASE-SONG3.md)
+
+---
+
+## Phase SONG4 — Multi-Buffer Projects 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖 auto
+
+Projects with several named buffers; a one-file song is a project with only `main`.
+
+**Key additions:**
+- Buffer tabs; one `main` buffer; `(use :drums :bass)` evaluates buffers top to bottom (cycle detection)
+- Project-wide duplicate-track check and buffer-aware error locations
+- Session schema v3 with migration from v2; outline/go-to-definition across buffers
+
+See full spec: [PROMPTS/PHASE-SONG4.md](PROMPTS/PHASE-SONG4.md)
+
+---
+
+## Phase LIVE1 — Companion Bridge: Ableton Link & OSC 📋 *planned*
+
+> **Milestone 3** · **Automation:** 🧑 human-in-loop
+
+A small local helper app so REPuLse can sync with DAWs and drive other tools.
+
+**Key additions:**
+- Localhost WebSocket bridge with Ableton Link (tempo, phase, start/stop) and OSC UDP send
+- `osc-out` with timestamped OSC bundles; connection status in the context panel
+- REPuLse stays fully usable without the bridge
+
+See full spec: [PROMPTS/PHASE-LIVE1.md](PROMPTS/PHASE-LIVE1.md)
+
+---
+
+## Phase LIVE2 — Latency Compensation, Nudge & Per-Track Outputs 📋 *planned*
+
+> **Milestone 3** · **Automation:** 🧑 human-in-loop
+
+Sit tight with external gear and route tracks to separate outputs where browsers allow.
+
+**Key additions:**
+- Per-path offsets (audio, MIDI, clock, OSC/Link), live nudge (key/command/MIDI CC), calibration helper
+- Per-track output routing on multi-channel devices with clear fallback; latency readout
+
+See full spec: [PROMPTS/PHASE-LIVE2.md](PROMPTS/PHASE-LIVE2.md)
+
+---
+
+## Phase SK1 — Stem Export & Full-Song MIDI Export 📋 *planned*
+
+> **Milestone 4** · **Automation:** 🤖 auto
+
+Hand a song to a DAW: one WAV per track and one multi-track MIDI file.
+
+**Key additions:**
+- Fix `midi-export` (events from every cycle are currently stacked on cycle 0)
+- Stems for the full song length with identical frame counts; FX included if feasible
+- Format-1 MIDI with one track per REPuLse track, velocity, tempo and section markers; drums on channel 10
+
+See full spec: [PROMPTS/PHASE-SK1.md](PROMPTS/PHASE-SK1.md)
+
+---
+
+## Phase SK2 — Session Snapshots & Eval History 📋 *planned*
+
+> **Milestone 4** · **Automation:** 🤖 auto
+
+Never lose an idea: every evaluation is kept, and named takes can be restored.
+
+**Key additions:**
+- Append-only eval history (deduplicated, bounded) with preview, restore and diff
+- Named project snapshots ("take A / take B"); restore auto-snapshots the current state
+
+See full spec: [PROMPTS/PHASE-SK2.md](PROMPTS/PHASE-SK2.md)
+
+---
+
+## Phase SK3 — MIDI Capture 1: Click, Fixed Grid, Velocity → Code 📋 *planned*
+
+> **Milestone 4** · **Automation:** 🤖👂 auto + human check
+
+Play a part on a MIDI keyboard and get REPuLse code.
+
+**Key additions:**
+- MIDI Note On/Off input (today only CC is handled)
+- Capture dialog / `capture!`: tempo, bars, grid, count-in, click, target (cursor or new buffer)
+- Pure fixed-grid quantiser and code generator: mini-notation, scale degrees when a scale is active,
+  optional `velocity` pattern; preview before insert
+
+See full spec: [PROMPTS/PHASE-SK3.md](PROMPTS/PHASE-SK3.md)
+
+---
+
+## Phase SK4 — MIDI Capture 2: Always-On Capture 📋 *planned*
+
+> **Milestone 4** · **Automation:** 🤖👂 auto + human check
+
+Keep listening; turn the last N bars you played into code after the fact.
+
+**Key additions:**
+- Bar-aligned ring buffer of note events while capture mode is on
+- `grab!` (command, key, button or MIDI trigger) → SK3 quantiser + generator → insert
+
+See full spec: [PROMPTS/PHASE-SK4.md](PROMPTS/PHASE-SK4.md)
+
+---
+
+## Phase SK5 — MIDI Capture 3: Grid & Feel Detection 📋 *planned*
+
+> **Milestone 4** · **Automation:** 🤖👂 auto + human check
+
+Detect the grid and keep the human feel as `swing`/`nudge` instead of snapping it away.
+
+**Key additions:**
+- Pure grid detection (8/16/32/triplets) with a complexity penalty
+- Swing ratio and timing offset extraction; optional tempo detection
+- Simplest-code-that-matches generation; "keep feel" toggle and strictness setting
+
+See full spec: [PROMPTS/PHASE-SK5.md](PROMPTS/PHASE-SK5.md)
 
 ---
 

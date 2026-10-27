@@ -90,27 +90,35 @@ Then ask: **"Shall I create this release with the above details?"**
 
 Wait for confirmation ("yes", "go ahead", "do it", etc.) before changing anything.
 
-### Step 7 — Bump the version in package.json (via PR)
+### Step 7 — Get the version onto `main`
 
-The version in `package.json` must match the tag without the leading `v` (tag `v0.2.0-alpha` →
-version `0.2.0-alpha`). `main` is protected, so the bump goes in through a pull request.
+Releases are cut from `main`. Changes reach it only as `dev` → `main` PRs, which a human
+merges (CLAUDE.md, "Phase workflow"; the `main` ruleset blocks every other update). The
+version in `package.json` must match the tag without the leading `v` (tag `v0.2.0-alpha` →
+version `0.2.0-alpha`).
 
-1. `git fetch origin main` and read the version on `main`: `git show origin/main:package.json`.
-2. **If it already matches**, the bump PR has been merged — continue with Step 8.
-3. **Otherwise**, open the bump PR:
+Run `git fetch origin dev main`, then read `git show origin/main:package.json` and
+`git show origin/dev:package.json`, and take the first matching case:
+
+1. **`main` already has the version** → continue with Step 8.
+2. **`dev` has it, `main` does not** → the release PR is missing or unmerged. If there is no
+   open `dev` → `main` PR, open one:
+   `gh pr create --base main --head dev --title "Release <tag>" --body "<draft notes from Step 5>"`.
+   Stop: return the PR URL and ask the user to merge it, then run `/create-release` again.
+3. **Neither has it** → open the version-bump PR against `dev`:
 
    ```bash
-   git switch -c chore/release-<tag> origin/main
+   git switch -c chore/release-<tag> origin/dev
    npm version <version> --no-git-tag-version   # updates package.json and package-lock.json
    git add package.json package-lock.json
    git commit -m "chore: bump version to <version>"
    git push -u origin chore/release-<tag>
-   gh pr create --base main --title "chore: release <tag>" --body "<draft release notes from Step 5>"
+   gh pr create --base dev --title "chore: bump version to <version>" --body "Version bump for release <tag>."
    ```
 
-   Then **stop**. Return the PR URL and tell the user: merge this PR once CI is green, then run
-   `/create-release` again with the same arguments — the version will match and the release is
-   created. Do not tag before the bump is on `main`.
+   Stop: return the PR URL. Once it is merged, run `/create-release` again (→ case 2).
+
+Never tag before the version is on `main`.
 
 ### Step 8 — Create the release
 

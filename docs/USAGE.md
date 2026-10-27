@@ -22,44 +22,48 @@ them loop in real time.
 7. [Language basics](#language-basics)
 8. [Pattern functions](#pattern-functions)
 9. [Pattern combinators](#pattern-combinators)
-10. [Combining patterns](#combining-patterns)
-11. [Mini-notation](#mini-notation)
+10. [Patterned arguments](#patterned-arguments)
+11. [Pattern arithmetic — `add` `sub` `mul` `div` `set`](#pattern-arithmetic--add-sub-mul-div-set)
+12. [Signals — `sine` `saw` `rand` `perlin` `segment` `range`](#signals--sine-saw-rand-perlin-segment-range)
+13. [Time & structure — `struct` `ply` `chunk` `iter` `swing` `polymeter`](#time--structure--struct-ply-chunk-iter-swing-polymeter)
+14. [Combining patterns](#combining-patterns)
+15. [Mini-notation](#mini-notation)
 
 **Sound**
 
-12. [Music theory](#music-theory)
-13. [Sound and samples](#sound-and-samples)
-14. [Available sample banks](#available-sample-banks)
-15. [Per-event parameters](#per-event-parameters)
-16. [Transitions](#transitions)
+16. [Music theory](#music-theory)
+17. [Sound and samples](#sound-and-samples)
+18. [Available sample banks](#available-sample-banks)
+19. [Per-event parameters](#per-event-parameters)
+20. [Transitions](#transitions)
 
 **Performing**
 
-17. [Tempo control](#tempo-control)
-18. [Named tracks](#named-tracks)
-19. [Song arrangement](#song-arrangement)
-20. [Effect plugins](#effect-plugins)
-21. [Visual plugins](#visual-plugins)
+21. [Tempo control](#tempo-control)
+22. [Named tracks](#named-tracks)
+23. [Song arrangement](#song-arrangement)
+24. [Effect plugins](#effect-plugins)
+25. [Visual plugins](#visual-plugins)
 
 **Going further**
 
-22. [Advanced language features](#advanced-language-features)
-23. [Standard library](#standard-library)
-24. [MIDI & External I/O](#midi--external-io)
+26. [Advanced language features](#advanced-language-features)
+27. [Standard library](#standard-library)
+28. [MIDI & External I/O](#midi--external-io)
 
 **Saving and sharing**
 
-25. [Session persistence and sharing](#session-persistence-and-sharing)
-26. [AI assistant](#ai-assistant)
-27. [Snippet library](#snippet-library)
-28. [User accounts & community](#user-accounts--community)
-29. [Embeddable component](#embeddable-component)
+29. [Session persistence and sharing](#session-persistence-and-sharing)
+30. [AI assistant](#ai-assistant)
+31. [Snippet library](#snippet-library)
+32. [User accounts & community](#user-accounts--community)
+33. [Embeddable component](#embeddable-component)
 
 **Reference**
 
-30. [Error messages](#error-messages)
-31. [Grammar summary](#grammar-summary)
-32. [Examples](#examples)
+34. [Error messages](#error-messages)
+35. [Grammar summary](#grammar-summary)
+36. [Examples](#examples)
 
 ---
 
@@ -264,6 +268,22 @@ These patterns are **wrong** in REPuLse. If you see AI-generated code that looks
 ;; LFO-like variation: use (every), (sometimes), patterned params
 (amp (seq 0.9 0.4 0.9 0.4) pat)          ; patterned amplitude
 ```
+
+### ❌ Calling a signal
+
+```clojure
+;; WRONG - signals are values, not functions
+(saw :c4)        ; error: saw is a signal ... use (synth :saw ...)
+(sine)           ; error: use it without parentheses
+
+;; RIGHT
+(synth :saw (seq :c4 :e4))               ; the saw voice
+(pan sine (fast 8 (seq :hh)))            ; a signal as a parameter
+(segment 8 sine)                         ; a signal discretised into events
+```
+
+A bare signal as a track (`sine` on its own) plays nothing: it has no rhythm. Give it
+structure with `segment` or use it inside `pan`, `amp`, `range` and friends.
 
 ### ❌ Keyword arguments on pattern functions
 
@@ -555,6 +575,8 @@ One value repeated every cycle:
 ```lisp
 (fast 2 (seq :hh :hh))    ; double speed — 4 hats per bar
 (fast 0.5 (seq :bd :sd))  ; half speed — one hit every 2 bars
+(fast 1/3 (seq :bd :sd))  ; rationals stay exact — no float drift
+(fast "<1 2 4>" (seq :bd :sd))  ; patterned factor — see Patterned arguments
 ```
 
 ### `slow` — slow down
@@ -562,7 +584,11 @@ One value repeated every cycle:
 ```lisp
 (slow 2 (seq :bd :sd :bd :sd))    ; half speed
 (slow 3 (pure :bd))               ; one kick every 3 bars
+(slow (seq 1 2) (seq :bd :sd :hh :oh))  ; factor may be a pattern
 ```
+
+A sound whose event spans several cycles (as in `(slow 3 (pure :bd))`) triggers once,
+at its start — not again at every cycle boundary.
 
 ### `rev` — reverse
 
@@ -579,6 +605,7 @@ Apply a transformation every nth cycle, leave pattern unchanged otherwise:
 ```lisp
 (every 4 (fast 2) (seq :bd :sd))   ; double speed on every 4th bar
 (every 2 rev (seq :bd :hh :sd :hh)) ; reverse every other bar
+(every "<2 4>" rev (seq :bd :sd))   ; n may be a pattern
 ```
 
 ### `fmap` — transform values
@@ -599,15 +626,36 @@ stochastic variation, and spatial layering.
 
 ### `euclidean` — Euclidean rhythms
 
-Distribute `k` onsets across `n` steps as evenly as possible (Björklund algorithm):
+Distribute `k` onsets across `n` steps as evenly as possible. Since TL3 this is Tidal's
+exact `bjorklund` algorithm — `(euclidean 3 8 :bd)` is `bd . . bd . . bd .`. (Before TL3
+all hits bunched at the start of the cycle: `bd bd bd . . . . .`. Existing patterns that
+use `euclidean` now sound different — and correct.)
 
 ```lisp
-(euclidean 5 8 :bd)      ; 5 onsets in 8 steps — Afro-Cuban clave feel
-(euclidean 3 8 :sd)      ; tresillo
+(euclidean 5 8 :bd)      ; x . x x . x x .  — Afro-Cuban clave feel
+(euclidean 3 8 :sd)      ; x . . x . . x .  — tresillo
 (euclidean 7 16 :hh)     ; complex subdivision
 
-; Optional rotation — shift the pattern left by r steps:
-(euclidean 5 8 :bd 2)    ; same rhythm, rotated 2 steps
+; Optional rotation — shift the pattern LEFT by r steps (Tidal's direction):
+(euclidean 3 8 :x 2)     ; . x . . x . x .
+
+; k, n and rotation may be patterns:
+(euclidean "<3 5>" 8 :bd)  ; 3 hits on even cycles, 5 on odd
+
+; A negative k gives the inverted rhythm; k > n clamps to n:
+(euclidean -3 8 :x)
+
+; Struct form — when the third argument is a PATTERN it receives the rhythm
+; (steps that are not hits produce no events), like Strudel's euclid:
+(euclidean 3 8 (seq :bd :sd))   ; bd [0,1/8)  bd [3/8,1/2)  sd [3/4,7/8)
+```
+
+`euclid-legato` / `euclid-legato-rot` make each hit last until the next one (the last hit
+lasts to the end of the cycle):
+
+```lisp
+(euclid-legato 3 8 (pure :x))             ; [0,3/8) [3/8,3/4) [3/4,1)
+(euclid-legato-rot 3 8 2 (pure :x))       ; rotated; steps before the first hit rest
 ```
 
 ### `cat` — sequential concatenation
@@ -626,42 +674,101 @@ Shift all events forward (`late`) or backward (`early`) within the cycle:
 ```lisp
 (late  0.25  (seq :bd :sd :bd :sd))   ; delay by ¼ cycle
 (early 0.125 hihat)                    ; advance by ⅛ cycle
+(late "<0 1/8>" (seq :hh :hh :hh :hh)) ; nudge every other cycle
 ```
 
-### `sometimes` / `often` / `rarely` — probabilistic transforms
+Amounts may be integers, rationals (`1/3` is exact) or floats; floats become the
+nearest rational with a denominator up to 1 000 000, so `0.3333333` is exactly `1/3`.
 
-Apply a transformation with a given probability. The result is deterministic — the same
-cycle always gets the same decision:
+> **Random sequences changed in TL4.** Randomness now uses Tidal's exact `timeToRand`
+> (see [Randomness](#randomness---rand-irand-perlin)), so the old, visibly periodic 0–99
+> hash is gone and **which cycles/events are picked is different from before**:
+>
+> | Before TL4 | Now |
+> |---|---|
+> | `sometimes` / `often` / `rarely` / `sometimes-by` transformed whole **cycles** | They decide **per event**. The old behaviour is `some-cycles` / `some-cycles-by` |
+> | `choose` / `wchoose` gave one value per cycle | They are **signals** (silent on their own): `(segment 4 (choose [:bd :sd]))`. The old behaviour is `choose-cycles` / `wchoose-cycles` (or `randcat`) |
+> | `degrade` / `degrade-by` used a coarse hash of the event time | They keep an event when `rand` at its start is `>= prob` — different events survive |
+> | `(~ "bd?")` was truly random on every query | `?` is deterministic and repeats identically each time you evaluate it; `?0.3` sets the amount |
+>
+> There is no legacy flag. Use `(with-seed n pat)` to get a different (still
+> deterministic) variation.
+
+### `sometimes` family — per-event probabilistic transforms
+
+Each **event** independently goes through the transform with a given probability. The
+result is deterministic — the same event time always gets the same decision:
 
 ```lisp
-(sometimes rev (seq :c4 :e4 :g4 :c5))   ; reverse ~50% of cycles
-(often (fast 2) (seq :hh :oh))           ; speed up ~75% of cycles
-(rarely rev melody)                       ; reverse ~25% of cycles
+(sometimes (fast 2) (seq :bd :sd :hh :cp))   ; each event: 50% through (fast 2)
+(often (fast 2) (seq :hh :oh))               ; 75%
+(rarely rev melody)                          ; 25%
+(sometimes-by 0.2 (fast 4) fill)             ; custom probability
+(sometimes-by "<0.1 0.9>" rev fill)          ; probability may be a pattern
 ```
 
-Use `sometimes-by` for custom probability:
+| Name | Probability |
+|---|---|
+| `almost-never` | 0.1 |
+| `rarely` | 0.25 |
+| `sometimes` | 0.5 |
+| `often` | 0.75 |
+| `almost-always` | 0.9 |
+| `always` | 1 (`(always f pat)` ≡ `(f pat)`) |
+| `never` | 0 (`(never f pat)` ≡ `pat`) |
+
+`(sometimes-by x f pat)` is `(stack (degrade-by x pat) (f (undegrade-by x pat)))`: every
+event takes exactly one of the two branches *before* `f` is applied.
+
+### `some-cycles` / `some-cycles-by` — per-cycle probabilistic transforms
+
+The whole cycle is either transformed or not (this is the pre-TL4 behaviour of
+`sometimes`). Cycle `c` is answered by `(f pat)` when `rand` at `c` is `< prob`:
 
 ```lisp
-(sometimes-by 0.2 (fast 4) fill)   ; double-time 20% of cycles
+(some-cycles rev (seq :c4 :e4 :g4 :c5))      ; reverse ~50% of cycles
+(some-cycles-by 0.3 (fast 2) (seq :bd :sd))  ; ~30% of cycles
+(some-cycles-by "<0 1>" rev (seq :a :b))     ; probability may be a pattern
 ```
 
-### `degrade` / `degrade-by` — probabilistic event removal
+### `degrade` / `undegrade` / `degrade-by-with` — probabilistic event removal
 
-Randomly drop events from a pattern each cycle:
+An event is kept when `rand` at the start of the event is `>= prob`; `undegrade-by` keeps
+the complement (`rand < prob`), so `(stack (degrade-by x p) (undegrade-by x p))` ≡ `p`:
 
 ```lisp
-(degrade (seq :hh :hh :hh :hh))           ; drop ~50% of hi-hats
-(degrade-by 0.3 (fast 4 (seq :hh :oh)))   ; drop 30% of events
+(degrade (seq :hh :hh :hh :hh))             ; drop ~50% of hi-hats
+(degrade-by 0.3 (fast 4 (seq :hh :oh)))     ; drop 30% of events
+(degrade-by "<0 0.5>" (fast 8 (pure :hh)))  ; patterned probability
+(undegrade-by 0.3 (fast 8 (pure :hh)))      ; keep the 30% degrade-by 0.3 would drop
+(degrade-by-with saw 0.5 (fast 8 (pure :hh))) ; your own random source: keep where saw >= 0.5
 ```
 
-### `choose` / `wchoose` — random selection per cycle
+### Random choice — `choose` `wchoose` `choose-cycles` `randcat`
 
-Pick one value from a list each cycle (deterministic per cycle):
+`choose` and `wchoose` are **continuous signals** (like `rand`): they have no onsets of
+their own, so sample them with `segment` or `struct`. Weights come first in `wchoose`:
 
 ```lisp
-(choose [:bd :sd :hh :oh])                    ; uniform probability
-(wchoose [[0.5 :bd] [0.3 :sd] [0.2 :hh]])    ; weighted — bd most likely
+(segment 4 (choose [:bd :sd :hh :oh]))         ; four random picks per cycle
+(struct "t ~ t t" (choose [:bd :sd]))
+(segment 4 (wchoose [[3 :bd] [1 :sd]]))        ; weighted: bd is 3x as likely
+(segment 4 (choose-with sine [:a :b :c]))      ; pick with your own 0..1 signal
 ```
+
+> A bare `(choose [:bd :sd])` is silent after TL4. Use `choose-cycles` for one pick per
+> cycle (the old behaviour).
+
+```lisp
+(choose-cycles [:bd :sd :hh])                  ; one value per cycle
+(wchoose-cycles [[3 :bd] [1 :sd]])             ; weighted, one per cycle
+(randcat (seq :bd :sd) (seq :hh :hh :oh) (seq :cp))   ; a random pattern per cycle
+(wrandcat [3 (seq :bd :sd)] [1 (pure :cp)])    ; weighted random pattern per cycle
+(choose-in [(seq :a :b) (seq :c :d)])          ; chosen pattern keeps its own structure
+```
+
+`choose-in` and `choose-in-with` depend on where a query starts, so they can differ
+between scheduler chunks; prefer `randcat` for a stable per-cycle choice.
 
 ### `jux` / `jux-by` — stereo spatial layering
 
@@ -671,6 +778,7 @@ Stack the original pattern (panned left) with a transformed copy (panned right):
 (jux rev (seq :c4 :e4 :g4))    ; original left, reversed right
 (jux (fast 2) (seq :hh :oh))   ; normal left, double-speed right
 (jux-by 0.5 rev melody)        ; half stereo width
+(jux-by "<0.3 1>" rev melody)  ; width may be a pattern
 ```
 
 ### `off` — time-offset layering
@@ -680,6 +788,7 @@ Layer the original with a time-shifted, transformed copy:
 ```lisp
 (off 0.125 (fast 2) (seq :c4 :e4 :g4))   ; original + shifted double-speed copy
 (off 0.25  rev      (seq :bd :sd :hh))    ; original + ¼-cycle offset reversed copy
+(off "<1/8 1/4>" (fast 2) (seq :bd :sd))  ; amount may be a pattern
 ```
 
 Combines freely with all other combinators:
@@ -690,6 +799,374 @@ Combines freely with all other combinators:
      (jux (fast 2))
      (amp 0.8))
 ```
+
+---
+
+## Patterned arguments
+
+Every numeric argument of a pattern transformer may itself be a pattern — REPuLse is
+"patterns all the way down", like Tidal. Where a number is expected you can pass:
+
+- a number or rational: `(fast 2 pat)`, `(late 1/8 pat)`
+- a pattern: `(fast (seq 1 2) pat)`
+- a mini-notation string, parsed as if wrapped in `~`: `(fast "<1 2 4>" pat)`
+
+```lisp
+(fast (seq 1 2) (seq :bd :sd))          ; 1× in the first half, 2× in the second
+(fast "<1 2 4>" (seq :bd :sd))          ; one factor per cycle
+(late "<0 1/8>" (seq :hh :hh :hh :hh))  ; nudge every other cycle
+(euclidean "<3 5>" 8 :bd)               ; alternate 3 and 5 hits per 8 steps
+```
+
+Functions with patternable arguments: `fast`, `slow`, `late`, `early`, `every` (n),
+`euclidean` (k, n, rotation), `sometimes-by` (probability), `degrade-by`
+(probability), `off` (amount), `jux-by` (width). The curried forms still work:
+`(fast "<1 2>")` returns a transformer for `->>`.
+
+The argument pattern decides *which value is in force when*; the rhythm still comes
+from the pattern being transformed (Tidal's `innerJoin`). With `(fast (seq 1 2) …)`
+the first half of each cycle plays at normal speed and the second half at double speed.
+Rational atoms such as `1/8` are exact inside mini-notation strings.
+
+---
+
+## Pattern arithmetic — `add` `sub` `mul` `div` `set`
+
+Combine a pattern's values with a number, a pattern or a mini-notation string:
+
+| Built-in | Meaning |
+|---|---|
+| `(add [mode] amt pat)` | value + amt |
+| `(sub [mode] amt pat)` | value − amt |
+| `(mul [mode] amt pat)` | value × amt |
+| `(div [mode] amt pat)` | value ÷ amt (÷ 0 leaves the value unchanged) |
+| `(set [mode] ctrl pat)` | merge control maps into each event; `ctrl` wins (Tidal `#`) |
+
+```lisp
+(add 12 (seq :c3 :e3 :g3))                ; note keywords move by semitones → :c4 :e4 :g4
+(->> (seq 1 3 5 8)
+     (add "<0 2 4>")                       ; shift scale degrees per cycle
+     (scale :minor :c3))
+(mul 2 (seq 220 330))                      ; Hz numbers
+(set {:amp 0.5 :pan -0.5} (seq :c4 :e4))  ; like (->> … (amp 0.5) (pan -0.5))
+(set (seq {:amp 1.0} {:amp 0.4}) (seq :bd :hh :sd :hh))
+```
+
+Values: numbers are combined directly; note keywords (`:c4`) go through MIDI note
+numbers and back; parameter maps apply the operation to `:note`; anything else —
+rests `:_`, drum names — passes through unchanged.
+
+### Choosing where the rhythm comes from
+
+The optional leading mode keyword picks which side supplies the event structure (the
+Tidal `|+` / `+|` / `|+|` family, Strudel `.add.in` / `.out` / `.mix` / `.squeeze`):
+
+| Mode | Rhythm from | Tidal |
+|---|---|---|
+| `:in` (default) | the pattern (last argument) | `\|+` |
+| `:out` | the amount | `+\|` |
+| `:mix` | both — event boundaries of either side | `\|+\|` |
+| `:squeeze` | the pattern; a whole cycle of the amount is squeezed into each event | `\|\|+` |
+
+```lisp
+(add :in  (seq 10 20) (seq 1 2 3))   ; rhythm of (seq 1 2 3)   → 11 12 23
+(add :out (seq 10 20) (seq 1 2 3))   ; rhythm of (seq 10 20)   → 11 22
+(add :mix (seq 10 20) (seq 1 2 3))   ; both rhythms intersect  → 11 12 22 23
+(add :squeeze (seq 0 7) (seq :c3 :g3)) ; each note becomes a two-note figure
+```
+
+Every form has a curried version for `->>`: `(add 7)` and `(add :out "<0 12>")` return
+transformers.
+
+Only the *start* of an event triggers a sound. When a value changes in the middle of an
+event (the `12 → 22` change of the second step under `:in` above), the later fragment
+updates nothing audible — exactly like Tidal.
+
+---
+
+## Signals — `sine` `saw` `rand` `perlin` `segment` `range`
+
+A **signal** is a *continuous* pattern: it has a value at every moment but no rhythm of
+its own. A rhythmic pattern gives it structure by sampling it, and the sampled value is
+the signal at the **start** of each event. This is how you get smooth movement (filter
+sweeps, panning, swells) and deterministic random variation.
+
+Signals are **values**, not functions. Write `sine`, never `(sine)`.
+
+```lisp
+(pan sine2 (fast 8 (seq :hh)))                                  ; smooth L<->R sweep every cycle
+(->> (fast 16 (seq :hh)) (amp (range 0.3 0.9 (slow 4 saw))))    ; 4-cycle swell
+(->> (segment 8 (range 1 8 rand)) (scale :minor :c4))           ; 8 random degrees per cycle
+(pan (range -0.5 0.5 perlin) (fast 4 (seq :hh)))                ; smooth random drift
+(segment 4 saw)                                                 ; 0 0.25 0.5 0.75 as events
+```
+
+### Signal reference
+
+Values are floats; `t` is the position in the cycle. "At t = 0" is the value a rhythm
+starting on the downbeat samples.
+
+| Signal | Range | Shape | At t = 0 |
+|---|---|---|---|
+| `saw` | 0..1 | rising ramp, `t` | 0 |
+| `isaw` | 0..1 | falling ramp | 1 |
+| `sine` | 0..1 | sine wave | 0.5 |
+| `cosine` | 0..1 | sine shifted a quarter cycle later (Tidal phase) | 0 |
+| `tri` | 0..1 | triangle, up then down | 0 |
+| `itri` | 0..1 | inverted triangle | 1 |
+| `square` | 0 / 1 | 0 for the first half, 1 for the second | 0 |
+| `isquare` | 0 / 1 | 1 for the first half, 0 for the second | 1 |
+| `rand` | 0..1 | deterministic random | 0 |
+| `perlin` | 0..1 | smooth random (interpolates one random value per cycle) | 0 |
+| `time` | any | absolute cycle time: 0, 0.25 ... 1, 1.25 ... | 0 |
+| `sine2` `cosine2` `saw2` `isaw2` `tri2` `itri2` `square2` `isquare2` `rand2` | -1..1 | bipolar versions | |
+
+Samples of `(segment 4 sig)` in cycle 0: `saw` 0 0.25 0.5 0.75, `sine` 0.5 1 0.5 0, `tri`
+0 0.5 1 0.5, `square` 0 0 1 1.
+
+### `segment` - turn a signal into events
+
+`(segment n sig)` samples a signal `n` times per cycle and returns `n` ordinary events.
+`n` may be a pattern. A bare signal plays nothing, because it has no events to trigger.
+
+```lisp
+(segment 4 saw)                       ; 0 0.25 0.5 0.75
+(->> saw (segment 4))                 ; same, curried
+(segment "<4 8>" sine)
+```
+
+### `range` `rangex` `range2` - scale a 0..1 signal
+
+| Form | Meaning |
+|---|---|
+| `(range lo hi sig)` | scale 0..1 to `lo`..`hi` linearly |
+| `(rangex lo hi sig)` | exponential scaling; `lo` and `hi` must be > 0. Good for frequencies |
+| `(range2 lo hi sig)` | like `range` for a bipolar (-1..1) input such as `sine2` |
+| `(to-bipolar sig)` / `(from-bipolar sig)` | convert 0..1 to -1..1 and back |
+
+`lo` and `hi` may be numbers, mini-notation strings or patterns. `range` only means
+Tidal's `range` when the **last argument is a pattern**; with plain numbers it is still
+the collection function `(range 0 8 2)`.
+
+```lisp
+(segment 4 (range 200 2000 saw))
+(->> sine (rangex 100 1000) (segment 2))
+(->> saw (range 2 6))                 ; works in ->> as well
+```
+
+### Randomness - `rand` `irand` `perlin`
+
+`rand` is deterministic: it is Tidal's `timeToRand` of the sampling time, so a given
+position in the song always yields the same number, on every run. `rand` is exactly `0` at
+time 0 (and every 300 cycles). `(irand n)` gives random integers `0 .. n-1`, and `perlin`
+is smooth noise that glides between random values. To get a different stream use
+`(with-seed n pat)`: every random function inside `pat` reads its random number at time
+`t + n` instead of `t` (structure is not shifted; the innermost `with-seed` wins; `n` may
+be a pattern). A per-track seed is just `(track :x (with-seed 3 ...))`.
+
+```lisp
+(segment 8 (irand 8))                 ; 0 5 2 1 ... (deterministic)
+(segment 4 (with-seed 7 rand))        ; another random stream
+(with-seed 7 (shuffle 4 (seq :a :b :c :d)))   ; a different, still deterministic, permutation
+```
+
+More random sources:
+
+| Name | Meaning |
+|---|---|
+| `brand` / `(brand-by p)` | Boolean signal: `true` when `rand < 0.5` / `< p` (use with `struct`, `mask`, `sew`, `when-pat`) |
+| `berlin` | Sawtooth-like ridge noise in 0..1 (`rand` at the cycle start blended into the next) |
+| `(rand-l n)` | Signal whose value is a vector of `n` random floats |
+| `(randrun n)` | A random permutation of `0 .. n-1` each cycle, `n` events per cycle |
+
+```lisp
+(segment 4 brand)                     ; true false true true
+(struct (segment 8 (brand-by 0.25)) (pure :hh))
+(randrun 4)                           ; each of 0 1 2 3 once per cycle (shuffled)
+```
+
+### `shuffle` / `scramble` — random slice order
+
+```lisp
+(shuffle 4 (seq :a :b :c :d))   ; each cycle: the 4 slices in random order, each exactly once
+(scramble 4 (seq :a :b :c :d))  ; each of 4 slots plays a random slice (repeats possible)
+(shuffle "<2 4>" pat)           ; n may be a pattern
+```
+
+### Conditionals — `when-pat` `whenmod` `apply-n`
+
+```lisp
+(when-pat "<0 1>" rev (seq :a :b))            ; where the boolean pattern is true, apply rev
+(when-pat (fn [c] (> c 3)) rev (seq :a :b))   ; or a function of the cycle number (Tidal when)
+(whenmod 8 6 rev (seq 0 2 4 7))               ; rev in cycles 6 and 7 of every 8 (c mod 8 >= 6)
+(whenmod "<4 2>" 1 rev (seq :a :b))           ; a and b may be patterns
+(apply-n 2 (fast 2) (seq :a :b))              ; (fast 2 (fast 2 ...)) — apply f n times
+(always rev pat)  (never rev pat)             ; ≡ (rev pat) / pat
+```
+
+`when-pat` is Strudel's `when` (named so to keep `when` free); Tidal's `while` is the same
+thing with a pattern condition, so it has no separate name.
+
+### `run` `signal` `steady` `time`
+
+```lisp
+(run 4)                               ; the discrete pattern 0 1 2 3 in one cycle
+(segment 4 (signal (fn [t] (* t 2)))) ; your own signal: f gets the cycle time as a number
+(segment 4 (steady 3))                ; constant 3
+(segment 4 time)                      ; 0 0.25 0.5 0.75, then 1 1.25 ... in cycle 1
+```
+
+### `saw` and `square` are signals now
+
+Before TL2, `(saw :c4)` and `(square :c4)` were synth-voice shortcuts. They are signals
+now. Use `(synth :saw pat)` and `(synth :square :pw 0.25 pat)` for the voices. Calling a
+signal gives a helpful error. Inside `defsynth`, `saw`, `square` and `tri` remain UGens.
+
+---
+
+## Time & structure — `struct` `ply` `chunk` `iter` `swing` `polymeter`
+
+Tidal's rhythmic vocabulary for reshaping time. Every function with a trailing `pat`
+also has a **curried form** (all arguments except `pat`) for `->>`, and numeric arguments
+accept patterns or mini-notation strings (see [Patterned arguments](#patterned-arguments)).
+
+| Function | Meaning | Patterned args |
+|---|---|---|
+| `(struct bools pat)` | Rhythm from `bools`: every true step plays the value(s) of `pat` | `bools` |
+| `(mask bools pat)` | Keep the structure of `pat`, only where `bools` is true | `bools` |
+| `(invert pat)` | Boolean `not` of each value (rests stay rests) | — |
+| `(euclidean k n x [r])` | Björklund rhythm; a pattern `x` gets the rhythm (struct form) | `k n r` |
+| `(euclid-legato k n pat)` | Euclidean hits that last until the next hit | `k n` |
+| `(euclid-legato-rot k n r pat)` | The same, rotated left by `r` | `k n r` |
+| `(ply n pat)` | Repeat each event `n` times inside its own slot | `n` |
+| `(ply-with n f pat)` | `ceil(n)` repeats; repeat `i` has `f` applied `i` times | `n` |
+| `(inside n f pat)` | Apply `f` as if each 1/n of a cycle were a cycle | `n` |
+| `(outside n f pat)` | Apply `f` across `n` cycles at once | `n` |
+| `(within s e f pat)` | Apply `f` to events that start in `[s, e)` of the cycle | `s e` |
+| `(swing-by x n pat)` | Delay the second half of each 1/n slice by `x` of the slice | `x n` |
+| `(swing n pat)` | `(swing-by 1/3 n pat)` | `n` |
+| `(brak pat)` | Breakbeat feel on odd cycles (squeezed, shifted by 1/4) | — |
+| `(iter n pat)` | Start `1/n` earlier each cycle | `n` |
+| `(iter-back n pat)` | Start `1/n` later each cycle | `n` |
+| `(palindrome pat)` | `pat`, then `(rev pat)`, alternating | — |
+| `(rot n pat)` | Rotate the values `n` places left, keeping the rhythm | `n` |
+| `(chunk n f pat)` | Apply `f` to chunk `c mod n` of cycle `c` | `n` |
+| `(chunk-back n f pat)` | As `chunk`, chunk index `0, n-1, n-2 …` | `n` |
+| `(fast-chunk n f pat)` | As `chunk`, without cycle-holding | `n` |
+| `(polymeter [steps] layer…)` | Layers of different step counts on one grid | `steps` |
+| `(timecat [w x]…)` | Weighted concatenation inside one cycle | — |
+| `(first-of n f pat)` | Apply `f` on cycles 0, n, 2n … (same as `every`) | `n` |
+| `(last-of n f pat)` | Apply `f` on cycles n-1, 2n-1 … | `n` |
+| `(compress s e pat)` | Squeeze each cycle into the window `[s, e)` (`0 ≤ s < e ≤ 1`), silence elsewhere | `s e` |
+| `(zoom s e pat)` | Play only the window `[s, e)` of each cycle, stretched to fill the cycle (Tidal `zoomArc`) | `s e` |
+| `(focus s e pat)` | Squeeze the cycle into `[s, e)` and keep playing — neighbouring cycles fill the rest | `s e` |
+| `(fast-gap n pat)` | `n` times faster, then silence until the next cycle | `n` |
+| `(linger n pat)` | Repeat the first `n` of every cycle (last `|n|` for negative `n`); restarts every cycle | `n` |
+| `(bite n ipat pat)` | Cut each cycle into `n` slices; each event of `ipat` (an index) plays its slice | `n` |
+| `(ribbon offset cycles pat)` | Loop `cycles` cycles of `pat` starting at cycle `offset` | `offset cycles` |
+| `(hurry r pat)` | `(fast r pat)` and multiply every event's `:rate` by `r` (missing rate = 1) | `r` |
+| `(revv pat)` | Reverse time across cycles (cycle `c` plays source cycle `-c-1` reversed) | — |
+| `(repeat-cycles n pat)` | Play each source cycle `n` times before moving on | `n` |
+| `(trunc t pat)` | Only the first `t` of each cycle plays; events crossing the cut are cut short | `t` |
+| `(press pat)` | Every event starts half way through its own length (`(press-by 1/2 pat)`) | — |
+| `(press-by r pat)` | Every event starts `r` of the way through its own length | `r` |
+| `(chunk-into n f pat)` | Like `chunk`, but `f` sees the chunk as a looping full cycle; chunk `c mod n` | `n` |
+| `(chunk-back-into n f pat)` | As `chunk-into`, chunk index `n-1, n-2 … 0` | `n` |
+| `(euclidish k n g pat)` | Euclidean rhythm morphed towards even spacing by `g` (0 = `euclidean`, 1 = even) | `k n g` |
+| `(ply-for-each n f pat)` | `ceil(n)` sub-steps per event; sub-step `i ≥ 1` is `(f (pure v) i)` | `n` |
+| `(filter-events pred pat)` | Keep events whose **value** satisfies `pred` | — |
+| `(filter-when pred pat)` | Keep events whose start time satisfies `pred` | — |
+| `(bypass on pat)` | `on` true (`1`) silences `pat`, false plays it | `on` |
+| `(beat t div pat)` | Place every value of `pat` on step `t mod div` of `div` (`"0,7,10"` stacks steps) | `t div` |
+| `(sew bools a b)` | `a` where `bools` is true, `b` where it is false (structure from `a`/`b`) | `bools` |
+| `(stitch bools a b)` | Structure from `bools`; true steps take `a`, false steps take `b` | `bools` |
+| `(binary n)` | Bits of `n`, most significant first, as `true`/`false` steps: `5` → `1 0 1` | `n` |
+| `(binary-n n [bits])` | The low `bits` bits of `n` (default 16), most significant first | `n bits` |
+
+```lisp
+(struct "t ~ t t" (pure :bd))                  ; bd at 0, 1/2, 3/4
+(mask "1 0 1 1" (fast 8 (pure :hh)))           ; gate a hi-hat stream
+(ply 2 (seq :bd :sd))                          ; bd bd sd sd
+(ply-with 3 (add 12) (seq 0 7))                ; 0 12 24 | 7 19 31
+(inside 2 rev (seq 0 1 2 3 4 5 6 7))           ; 3 2 1 0 7 6 5 4
+(within 0 1/2 (fast 2) (seq :a :b :c :d))      ; speed up the first half only
+(swing 4 (fast 8 (pure :hh)))                  ; every 2nd hat of each quarter delayed by 1/12
+(chunk 4 (add 10) (seq 0 1 2 3))               ; a different quarter is transformed each cycle
+(iter 4 (seq :a :b :c :d))                     ; a b c d | b c d a | c d a b | d a b c
+(rot 1 (seq :a :b :c :d))                      ; b c d a — same rhythm, shifted values
+(brak (seq :bd :sd))                           ; odd cycles: squeezed and delayed
+(polymeter [:bd :sd :hh] [:c3 :e3])            ; 3 against 2
+(polymeter 4 [:a :b :c])                       ; a b c a | b c a b …
+(timecat [3 :e3] [1 :g3])                      ; e3 for 3/4 of the cycle, g3 for 1/4
+(->> (seq :bd :sd) (ply 2) (iter 4) (swing 4)) ; curried forms in ->>
+```
+
+**Boolean values.** A step is *false* when it is `false`, `nil`, `0`, `~`/`_` (a rest),
+`f` or `:false`; everything else is true. So `"t ~ t t"`, `"1 0 1 1"`, `"x ~ x x"` and
+`(seq true false true true)` all describe the same rhythm.
+
+**Cycle-holding.** `iter`, `iter-back`, `palindrome`, `chunk` and `chunk-back` follow
+Tidal's `cat`: a cycle-varying input such as `(cat a b)` is *held* — the source advances
+one cycle every `n` cycles, not every cycle. `(iter 2 (cat (seq :a :b) (seq :c :d)))`
+plays `a b | b c | c d | d a`. Use `fast-chunk` for the non-holding variant. The public
+`cat` is unchanged.
+
+### Windows, switches & binary rhythms
+
+`zoom`, `focus` and `compress` all take a window `[s, e)` of the cycle, but do different
+things with the same input `(seq :a :b :c :d)`:
+
+```lisp
+(zoom 1/4 3/4 (seq :a :b :c :d))      ; b c — the middle half, stretched to fill the cycle
+(focus 1/4 3/4 (seq :a :b :c :d))     ; c d a b c d a b — the cycle squeezed into [1/4, 3/4), no gaps
+(compress 1/4 3/4 (seq :a :b :c :d))  ; silence, a b c d in the middle half, silence
+(fast-gap 2 (seq :bd :sd))            ; bd sd in the first half, then silence
+(linger 1/4 (seq 0 1 2 3 4 5 6 7))    ; 0 1 0 1 0 1 0 1 — the first quarter repeated
+(trunc 3/4 (seq :a :b :c :d))         ; a b c then silence
+(bite 4 (seq 0 2) (seq :a :b :c :d :e :f :g :h))  ; a b e f — slices 0 and 2
+(ribbon 1 2 (cat (pure :a) (pure :b) (pure :c) (pure :d)))  ; b c b c — loop cycles 1–2
+(repeat-cycles 2 (cat (pure :a) (pure :b)))       ; a a b b
+(press (seq :a :b))                   ; a and b each start half way into their step
+(chunk-into 2 rev (seq 0 1 2 3))      ; 1 0 2 3 | 0 1 3 2
+(euclidish 3 8 1/2 (pure :x))         ; 3 hits halfway between euclidean and perfectly even
+(ply-for-each 3 (fn [p i] (add (* i 12) p)) (seq 0 7))  ; 0 12 24 | 7 19 31
+```
+
+**`hurry` multiplies `rate`.** `(hurry 2 (seq :bd :sd))` is `(fast 2 …)` and sets
+`:rate 2` on every event, so samples also play an octave up; an existing rate is
+multiplied (`(hurry 2 (rate 1.5 pat))` → rate 3). There is no `speed` alias.
+
+**Switching between patterns.** `sew` and `stitch` choose between two patterns with a
+boolean pattern; rests in the boolean pattern select neither side:
+
+```lisp
+(sew "t f" (seq :a :a :a :a) (seq :b :b :b :b))  ; a a b b — structure from a and b
+(stitch "t f t t" (pure :bd) (pure :sn))         ; bd sn bd bd — structure from the booleans
+(bypass "<0 1>" (seq :a :b))                     ; plays on even cycles, silent on odd ones
+```
+
+**Filtering.** `filter-events` (named so because `filter` works on sequences) receives the
+event **value**; `filter-when` receives the event's start time — a plain integer when it
+is whole (`0`, `1`), otherwise an exact rational such as `1/4`, so `(= t 0)` and
+`(< t 1/2)` both work:
+
+```lisp
+(filter-events (fn [v] (> v 2)) (seq 1 2 3 4))        ; 3 4
+(filter-when (fn [t] (< t 1/2)) (seq :a :b :c :d))    ; a b, then nothing
+```
+
+**Binary rhythms.** `binary` turns a number into `true`/`false` steps (Strudel semantics:
+most significant bit first, argument order `n` then `bits`, default 16 bits for `binary-n`):
+
+```lisp
+(struct (binary 5) (pure :x))          ; 5 = 101 → x ~ x
+(binary-n 5 4)                         ; false true false true
+(beat "0,7,10" 16 (pure :bd))          ; hits on steps 0, 7 and 10 of 16
+(->> (seq :bd :sd) (fast-gap 2) (linger 1/2) (hurry 2) (zoom 0 1/2))  ; curried forms
+```
+
+`sew`, `stitch`, `binary` and `binary-n` have no curried form. Numeric arguments of all
+the functions above accept patterns or mini-notation strings, e.g. `(zoom 0 "<1 1/2>" pat)`.
 
 ---
 
@@ -729,12 +1206,39 @@ Lisp is the host language and `~` is just another function returning a Pattern.
 (~ "bd [sd hh]")     ; subdivision — sd and hh share one step
 (~ "hh*4 sd")        ; repetition — four hats then a snare
 (~ "<bd sd cp>")     ; alternation — cycles through bd → sd → cp
-(~ "bd? sd")         ; 50% probability — bd plays on ~half of cycles
+(~ "bd? sd")         ; 50% probability — deterministic: the same events every time
 (~ "bd:2 sd:0")      ; sample index — ≡ (sound :bd 2), (sound :sd 0)
 (~ "bd@3 sd")        ; elongation — bd takes ¾ of the cycle
 (~ "c4 e4 g4")       ; note names → keywords (:c4 :e4 :g4)
 (~ "440 330 220")    ; numbers pass through as Hz values
+(~ "0 1/8 1/4")      ; rationals stay exact — [1 8], [1 4]
+(~ "bd!3 sd")        ; replicate — ≡ (seq :bd :bd :bd :sd); "bd ! sd" repeats the previous step once
+(~ "bd sd . hh hh hh") ; "." groups — [bd sd] and [hh hh hh] share the cycle half and half
+(~ "[bd, hh hh]")    ; "," layers — bd under two hats (top level "a b, c d e" works too)
+(~ "{a b c}%4")      ; polymeter — 4 steps per cycle through a b c: a b c a | b c a b
+(~ "{a b c, d e}")   ; layers with different lengths on the first layer's grid
+(~ "bd(3,8)")        ; euclid — 3 hits in 8 steps; bd(3,8,2) rotates; bd(<3 5>,8) is patterned
+(~ "hh*8?0.3")       ; ?amount — drop 30% of the hats (the number must touch the ?)
+(~ "[bd | sd sd | hh*3]") ; "|" — one random alternative per cycle
 ```
+
+**Randomness is deterministic.** `x?` is `(degrade-by-with (early (* seed 3/10000) rand) 0.5 x)`
+and `a | b` picks with `(early (* seed 3/10000) rand)` sampled once per cycle, where `seed`
+is a counter that starts at 0 for each string and is incremented, in parse-completion
+order, for every `?`, every `|` group and every `.`-feet group (Strudel's krill `seed++`).
+So `"a? b? c? d?"` degrades the four steps independently, and evaluating the same string
+always gives the same events. `"a? 0.3"` (with a space) is two steps. `|` is allowed at top
+level and inside `[ ]`, but not inside `< >` or `{ }`, and not mixed with `,` in the same group.
+
+`_` is a **rest** (like `~`); use `@` to elongate a step (`bd@3`). This is a deliberate
+difference from Strudel, where `_` extends the previous step.
+
+Sub-sequences are exact since TL3: `"<a b> c"` now alternates between `a c` and `b c`
+(before, it always played `a`), and step times are exact rationals instead of rounded
+floats.
+
+Mini-notation strings are also accepted directly wherever an argument is patternable:
+`(fast "<1 2>" pat)` ≡ `(fast (~ "<1 2>") pat)` (see [Patterned arguments](#patterned-arguments)).
 
 ### Mini-notation inside Lisp
 
@@ -1241,8 +1745,10 @@ tuning needed — just name the instrument:
 already-transformed maps. All `amp`/`attack`/`decay`/`pan` parameters compose normally
 on top of it.
 
-The per-note forms `(saw :c4)`, `(square :c3 :pw 0.25)`, `(fm :c4 :index 4)` remain
-available when you need different voices on individual steps within the same `seq`.
+The per-note forms `(fm :c4 :index 4)` and `(noise)` remain available when you need
+different voices on individual steps within the same `seq`. Pulse width of the square
+voice goes through `synth`: `(synth :square :pw 0.25 pat)`. (`saw` and `square` on their
+own are [signals](#signals--sine-saw-rand-perlin-segment-range); `(saw :c4)` is an error.)
 
 ### Named voice presets
 
@@ -1289,7 +1795,9 @@ Loop the sample buffer continuously:
 ### Patterned parameters
 
 Parameters can be patterns themselves — they are combined with the note pattern
-cycle-aligned, so different densities create polyrhythmic parameter changes:
+cycle-aligned, so different densities create polyrhythmic parameter changes. The note
+pattern supplies the rhythm: each note takes the parameter value in force at its start
+(Tidal `#`, the same as `(set :in …)`):
 
 ```lisp
 ; 2-step amp pattern over a 3-step melody — creates shifting accents
@@ -1354,6 +1862,17 @@ complement each other:
      (synth :saw)
      (attack 0.3)                     ; each note swells in over 300ms
      (amp (tween :linear 0.0 1.0 4))) ; overall sequence fades in over 4 bars
+```
+
+### Signals vs. `tween`
+
+`tween` is a **one-shot ramp** that starts at the moment you evaluate and then holds its
+end value. A [signal](#signals--sine-saw-rand-perlin-segment-range) is a **cyclic**
+function of the cycle position: it is the same every time the cycle comes round, and the
+same on every evaluation. For a repeating 8-cycle sweep use `(slow 8 saw)`:
+
+```lisp
+(->> (fast 8 (seq :hh)) (pan (range -1 1 (slow 8 saw))))
 ```
 
 ---
@@ -2019,6 +2538,8 @@ Define custom instruments from Web Audio node graphs. UGen functions build the g
      (amp 0.7))
 ```
 
+Inside a `defsynth` body, `saw`, `square` and `tri` are the UGens below. They are independent of the top-level [signals](#signals--sine-saw-rand-perlin-segment-range) of the same name.
+
 Available UGens:
 
 | UGen | Description |
@@ -2210,7 +2731,7 @@ compute patterns instead of writing them out by hand.
 |---|---|---|
 | `list` | Create a list | `(list 1 2 3)` |
 | `vec` | Convert to a vector | `(vec (range 4))` |
-| `range` | Number sequence: `(range n)`, `(range a b)`, `(range a b step)` | `(range 8)` |
+| `range` | Number sequence: `(range n)`, `(range a b)`, `(range a b step)`. With a pattern as the last argument it scales a signal instead — see [Signals](#signals--sine-saw-rand-perlin-segment-range) | `(range 8)` |
 | `count` | Number of items | `(count [1 2 3])` → `3` |
 | `first` / `rest` | First item / all items except the first | `(first [1 2 3])` → `1` |
 | `nth` | Item at index (from 0) | `(nth [:bd :sd] 1)` → `:sd` |
@@ -2728,6 +3249,19 @@ track :boom playing — Warning: unknown sound :kick — did you mean :bd?
 
 See [Keywords as sounds](#keywords-as-sounds).
 
+Calling a signal as a function is an error with a hint:
+
+```
+Error: saw is a signal (a continuous pattern), not a function. Use it without parentheses ...
+```
+
+A track that contains a continuous signal with no rhythm plays nothing, and a warning is
+shown (once per evaluation):
+
+```
+Warning: track :_ contains a continuous signal with no rhythm, which plays nothing. A signal needs structure, e.g. (segment 8 ...) or (pan sine pat)
+```
+
 ---
 
 ## Grammar summary
@@ -2763,8 +3297,12 @@ transform  = "(fast"  number pattern ")"
            | "(early" number pattern ")"
            | "(jux"   fn pattern ")"
            | "(off"   number fn pattern ")"
-           | "(sometimes" fn pattern ")"
+           | "(sometimes" fn pattern ")"      ; per event
+           | "(some-cycles" fn pattern ")"    ; per cycle
            | "(degrade" pattern ")"
+           | "(randcat" pattern+ ")"
+           | "(shuffle" n pattern ")"
+           | "(whenmod" a b fn pattern ")"
            | "(fmap"  fn pattern ")"
 
 ;; Per-event parameters (value + pattern, or pattern → pattern transformer)
@@ -2892,11 +3430,13 @@ do-expr    = "(do" expr+ ")"
 (~ "bd [sd hh]")             ; subdivision: sd and hh share one slot
 (~ "hh*4 sd")                ; repetition: four hats then a snare
 (~ "<bd sd cp>")             ; alternation: cycles through bd → sd → cp
-(~ "bd? sd")                 ; bd plays with ~50% probability
+(~ "bd? sd")                 ; bd is deterministically dropped on ~half of the cycles
 (~ "bd:2 sd:0")              ; sample index: (sound :bd 2), (sound :sd 0)
 (~ "bd@3 sd")                ; elongation: bd takes ¾ of the cycle
 (~ "c4 e4 g4")               ; note names → keywords (:c4 :e4 :g4)
 (~ "440 330 220")            ; numbers pass through as Hz values
+(~ "bd!3 sd . hh hh hh, cp(3,8)")  ; ! repeat, . groups, , layers, (k,n,r) euclid
+(~ "{a b c}%4")              ; polymeter: 4 steps per cycle
 
 ;; Mini-notation composes with all Lisp functions:
 (fast 2 (~ "bd sd"))

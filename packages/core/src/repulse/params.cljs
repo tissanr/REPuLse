@@ -27,9 +27,10 @@
         note-pat' (if (pat? note-pat)
                     note-pat
                     (core/pure note-pat))]
-    (core/combine (fn [pv nv] (assoc (to-map nv) kw pv))
-                  param-pat
-                  note-pat')))
+    ;; Structure from the note pattern (Tidal `#`, Strudel `.set`).
+    (core/app-right (fn [pv nv] (assoc (to-map nv) kw pv))
+                    param-pat
+                    note-pat')))
 
 ;;; ── Parameter transformers ───────────────────────────────────────────
 
@@ -112,9 +113,12 @@
 (defn jux-by
   "Like jux but with adjustable stereo width.
    width 0.0 = both copies centre (mono), 1.0 = full left/right.
+   width may also be a pattern of widths.
    (jux-by 0.5 rev pat) — half stereo width"
   [width f pat]
-  (core/stack* [(pan (- width) pat) (pan width (f pat))]))
+  ((core/patternify
+    (fn [w p] (core/stack* [(pan (- w) p) (pan w (f p))])))
+   width pat))
 
 (defn midi-out
   "Tag events for MIDI note output on the given channel (1–16).
@@ -122,3 +126,20 @@
    (midi-out 1)      — return (pat → pat) transformer"
   ([ch]     (fn [pat] (midi-out ch pat)))
   ([ch pat] (apply-param :midi-ch ch pat)))
+
+;;; ── Phase TL3b: hurry ────────────────────────────────────────────────
+
+(defn- hurry* [r pat]
+  (let [f (core/rat->float (core/->rat r))]
+    (core/fmap (fn [v]
+                 (if (or (nil? v) (= :_ v))
+                   v
+                   (let [m (to-map v)] (assoc m :rate (* (or (:rate m) 1) f)))))
+               (core/fast r pat))))
+
+(defn hurry
+  "fast r, and multiply every event's :rate by r (missing :rate counts as 1).
+   (hurry 2 pat) — double speed and playback rate
+   (hurry 2)     — return transformer"
+  ([r]     (fn [pat] (hurry r pat)))
+  ([r pat] ((core/patternify hurry*) r pat)))

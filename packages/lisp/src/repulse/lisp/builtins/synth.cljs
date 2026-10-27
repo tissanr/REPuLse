@@ -1,18 +1,11 @@
 (ns repulse.lisp.builtins.synth
-  "Synth-voice builtins: saw, square, noise, fm, synth, sound, and waveshape curves."
+  "Synth-voice builtins: noise, fm, synth, sound, and waveshape curves."
   (:require [repulse.core :as core]
             [repulse.theory :as theory]
             [repulse.lisp.util :as u]))
 
 (defn make-builtins []
-  {"saw"    (fn [note]
-              {:note (u/unwrap note) :synth :saw})
-   "square" (fn [note & opts]
-              (let [n     (u/unwrap note)
-                    opts' (apply hash-map (mapv u/unwrap opts))
-                    pw    (get opts' :pw 0.5)]
-                {:note n :synth :square :pw pw}))
-   "noise"  (fn [] {:synth :noise})
+  {"noise"  (fn [] {:synth :noise})
    "fm"     (fn [note & opts]
               (let [n     (u/unwrap note)
                     opts' (apply hash-map (mapv u/unwrap opts))

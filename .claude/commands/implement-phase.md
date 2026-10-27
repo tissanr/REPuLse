@@ -17,14 +17,15 @@ Read it fully before doing anything else.
 
 ## Branch
 
-`main` is protected. Start every phase on a fresh branch from the latest `main`:
+Phase work targets `dev` (CLAUDE.md, "Phase workflow"). If you are already on a phase branch
+(e.g. `auto/<id>` in an auto-phase worktree), stay on it. Otherwise start from the latest `dev`:
 
 ```bash
-git fetch origin main
-git switch -c feat/phase-$ARGUMENTS origin/main   # lowercase id, e.g. feat/phase-syn4
+git fetch origin dev
+git switch -c feat/phase-$ARGUMENTS origin/dev   # lowercase id, e.g. feat/phase-syn4
 ```
 
-If the spec or its ROADMAP section is missing on `origin/main`, its spec PR has not been merged
+If the spec or its ROADMAP section is missing on `origin/dev`, its spec PR has not been merged
 yet — stop and say so instead of implementing against an unmerged spec.
 
 ## Your task
@@ -76,11 +77,22 @@ Update `README.md` too if the phase adds user-facing syntax or changes the quick
 - Change `📋 *planned*` → `✅ *delivered*` in the heading
 - Add a **Delivered:** section with 2–6 bullet points summarising what was built (match the style of existing delivered phases)
 
-### 7. Commit and open a PR
+### 7. Write the test protocol (Rule 5)
 
-Run `npm run test:all` and `npx shadow-cljs compile app` first (Rule 2, step 1; CLAUDE.md pre-push verification). If the full suite cannot run, state the exact blocker and run the strongest subset. Commit implementation + docs + ROADMAP.md together on the phase branch. Message format:
+Write the `## Test protocol` section for the PR as described in **Rule 5** of `CLAUDE.md`:
+a GitHub task list with one checkbox per test, each with a pasteable snippet and its
+concrete expected outcome. Check pattern snippets with the TEST1 harness and copy values
+from its output; never invent them. It is not a file in the repo.
+
+- If a PR for this branch already exists (`gh pr view`), append the section to its
+  description with `gh pr edit --body-file`, as the last section before the 🤖 line.
+- Otherwise put it at the end of the description when opening the PR (`/commit-push-pr`).
+
+### 8. Commit, push and open the PR
+
+Run `npm run test:all` and `npx shadow-cljs compile app` first (Rule 2, step 1; CLAUDE.md pre-push verification). If the full suite cannot run, state the exact blocker and run the strongest subset. Commit implementation + docs + ROADMAP.md together. Message format:
 ```
 feat: implement Phase $ARGUMENTS — <short title>
 ```
 
-Push the branch (`git push -u origin feat/phase-<id>`) and open a PR against `main` with `gh pr create`, using the Summary / Test plan structure from `.claude/commands/commit-push-pr.md`. The functional tests come from the spec's Definition of done. Return the PR URL — the phase is delivered when that PR is merged with green CI.
+Push the branch. If a PR for it already exists (e.g. the auto-phase draft PR), the push updates it. Otherwise open one against **`dev`** (`gh pr create --base dev`) in the format of `.claude/commands/commit-push-pr.md`, ending with the test protocol from step 7. Return the PR URL.

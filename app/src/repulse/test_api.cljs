@@ -40,8 +40,8 @@
     {:value      (safe-value (:value ev))
      :start      (core/rat->float (:start part))
      :end        (core/rat->float (:end part))
-     :wholeStart (core/rat->float (:start whole))
-     :wholeEnd   (core/rat->float (:end whole))}))
+     :wholeStart (when whole (core/rat->float (:start whole)))
+     :wholeEnd   (when whole (core/rat->float (:end whole)))}))
 
 (defn- eval-to-events
   ([code] (eval-to-events code 1))
@@ -57,8 +57,8 @@
 (defn- schedule-pattern! [offline pattern cycles cycle-dur]
   (doseq [c (range cycles)]
     (let [span {:start [c 1] :end [(inc c) 1]}]
-      (doseq [ev (core/query pattern span)]
-        (let [part-start (core/rat->float (:start (:part ev)))
+      (doseq [ev (core/query-onsets pattern span)]
+        (let [part-start (core/rat->float (:start (:whole ev)))
               abs-t      (* part-start cycle-dur)]
           (when (>= abs-t 0)
             (audio/play-event offline abs-t (:value ev))))))))

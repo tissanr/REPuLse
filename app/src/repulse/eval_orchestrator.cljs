@@ -114,6 +114,26 @@
                         r           (sound-check/keyword-ranges code (:name entry))]
                     (assoc r :message msg))))))))))))
 
+;;; Continuous signals without structure
+
+(defn- report-structureless-signals!
+  "Warn about tracks (just evaluated) whose pattern yields continuous signal
+   events: those have no onsets, so nothing sounds. Runs once per evaluation.
+   Appends to the current output line, like the unknown-sound warning."
+  [track-names last-output set-output!]
+  (let [tracks (:tracks @audio/scheduler-state)
+        bad    (filter (fn [tn]
+                         (when-let [pat (get tracks tn)]
+                           (try (sound-check/has-analog-events? pat)
+                                (catch :default _ false))))
+                       track-names)
+        msgs   (map sound-check/structure-warning-message bad)]
+    (when (seq msgs)
+      (doseq [m msgs] (js/console.warn "[REPuLse]" m))
+      (set-output! (str (when @last-output (str @last-output " — "))
+                        "Warning: " (cstr/join "; " msgs))
+                   :warning))))
+
 ;;; Evaluation
 
 (defn evaluate! [code]
@@ -163,8 +183,8 @@
               (set-playing! true)
               (set-output! "playing pattern — Alt+Enter to re-evaluate, (stop) to stop" :success))
 
-            ;; Plain event-value map: (saw :c4), (sound :tabla 0), (noise), etc.
-            ;; Auto-wrap in pure so users don't need to write (pure (saw :c4)).
+            ;; Plain event-value map: (sound :tabla 0), (noise), (fm :c4), etc.
+            ;; Auto-wrap in pure so users don't need to write (pure (fm :c4)).
             (and (map? val) (or (:note val) (:bank val) (:synth val)))
             (do
               (audio/stop!)
@@ -208,6 +228,10 @@
                   (when (contains? tracks tk)
                     (audio/mute-track! tk)))
                 (reset! pending-mutes #{}))))
+
+          ;; ── Continuous signals with no rhythm ─────────────────────────────
+          (report-structureless-signals! (sort (conj @builtins/seen-tracks :_))
+                                         last-output set-output!)
 
           ;; ── Unknown sound names ───────────────────────────────────────────
           ;; Tracks defined by this evaluation, plus the anonymous :_ track.

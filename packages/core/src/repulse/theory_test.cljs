@@ -172,3 +172,12 @@
     (is (map? v))
     (is (= 0.8 (:amp v)))
     (is (< (js/Math.abs (- (* 2.0 c4-hz) (:note v))) 0.01))))
+
+(deftest midi->note-round-trips
+  (is (= :c4 (theory/midi->note 60)))
+  (is (= :cs4 (theory/midi->note 61)))
+  (is (= :ds3 (theory/midi->note 51)))
+  (is (= :c-1 (theory/midi->note 0)))
+  (doseq [kw [:c3 :e3 :g5 :a4 :b0]]
+    (is (= kw (theory/midi->note (theory/note->midi kw)))))
+  (is (number? (theory/midi->note 60.5)) "non-integer MIDI has no name → Hz"))

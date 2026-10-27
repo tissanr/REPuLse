@@ -21,8 +21,10 @@
  :euclidean  {:category "source"
               :returns "Pattern"
               :side-effects []
-              :examples ["(euclidean 5 8 :bd)" "(euclidean 3 8 :sd 2)"]
-              :see-also ["seq" "degrade"]}
+              :examples ["(euclidean 5 8 :bd)" "(euclidean 3 8 :sd 2)"
+                         "(euclidean \"<3 5>\" 8 :bd)"
+                         "(euclidean 3 8 (seq :bd :sd))"]
+              :see-also ["seq" "degrade" "struct" "euclid-legato"]}
 
  :cat        {:category "source"
               :returns "Pattern"
@@ -38,25 +40,15 @@
                          "(alt (seq :hh :hh :hh) (seq :oh :_ :hh))"]
               :see-also ["cat" "seq"]}
 
- :choose     {:category "source"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(choose [:bd :sd :hh :oh])"
-                         "(track :perc (choose [:bd :sd :hh]))"]
-              :see-also ["wchoose" "seq"]}
 
- :wchoose    {:category "source"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(wchoose [[:bd 3] [:sd 1] [:hh 2]])"
-                         "(wchoose [[:c4 4] [:e4 2] [:g4 1]])"]
-              :see-also ["choose" "seq"]}
 
  "~"         {:category "source"
               :returns "Pattern"
               :side-effects []
               :examples ["(~ \"bd sd [hh hh] bd\")"
-                         "(~ \"bd*4 sd <oh hh>\")"]
+                         "(~ \"bd*4 sd <oh hh>\")"
+                         "(~ \"bd!3 sd . hh hh hh, cp(3,8)\")"
+                         "(~ \"{a b c}%4\")"]
               :see-also ["seq" "stack"]}
 
  :arrange    {:category "source"
@@ -77,13 +69,15 @@
  :fast       {:category "transform"
               :returns "Pattern"
               :side-effects []
-              :examples ["(fast 2 (seq :bd :sd))" "(fast 3 (seq :hh :oh :hh))"]
+              :examples ["(fast 2 (seq :bd :sd))" "(fast 3 (seq :hh :oh :hh))"
+                         "(fast \"<1 2 4>\" (seq :bd :sd))"]
               :see-also ["slow" "every" "rev"]}
 
  :slow       {:category "transform"
               :returns "Pattern"
               :side-effects []
-              :examples ["(slow 2 (seq :bd :sd :hh :oh))" "(slow 4 (seq :c4 :e4 :g4))"]
+              :examples ["(slow 2 (seq :bd :sd :hh :oh))" "(slow 4 (seq :c4 :e4 :g4))"
+                         "(slow (seq 1 2) (seq :bd :sd :hh :oh))"]
               :see-also ["fast" "every"]}
 
  :rev        {:category "transform"
@@ -96,7 +90,8 @@
               :returns "Pattern"
               :side-effects []
               :examples ["(every 4 (fast 2) (seq :bd :sd))"
-                         "(every 3 rev (seq :bd :sd :hh :oh))"]
+                         "(every 3 rev (seq :bd :sd :hh :oh))"
+                         "(every \"<2 4>\" rev (seq :bd :sd :hh :oh))"]
               :see-also ["sometimes" "fast" "slow"]}
 
  :fmap       {:category "transform"
@@ -110,57 +105,234 @@
               :returns "Pattern"
               :side-effects []
               :examples ["(late 0.25 (seq :hh :hh :hh :hh))"
-                         "(late 0.5 (euclidean 3 8 :sd))"]
+                         "(late 0.5 (euclidean 3 8 :sd))"
+                         "(late \"<0 1/8>\" (seq :hh :hh :hh :hh))"]
               :see-also ["early" "off"]}
 
  :early      {:category "transform"
               :returns "Pattern"
               :side-effects []
               :examples ["(early 0.125 (seq :sd :_ :sd :_))"
-                         "(early 0.25 (seq :hh :oh))"]
+                         "(early 0.25 (seq :hh :oh))"
+                         "(early (seq 0 1/8) (seq :hh :oh :hh :oh))"]
               :see-also ["late" "off"]}
 
- :sometimes  {:category "transform"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(sometimes (fast 2) (seq :bd :sd))"
-                         "(sometimes rev (seq :bd :sd :hh :oh))"]
-              :see-also ["often" "rarely" "sometimes-by" "every"]}
 
- :often      {:category "transform"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(often rev (seq :bd :sd :hh :oh))"
-                         "(often (fast 2) (seq :hh))"]
-              :see-also ["sometimes" "rarely" "every"]}
 
- :rarely     {:category "transform"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(rarely (fast 2) (seq :bd :sd))"
-                         "(rarely rev (seq :bd :sd :hh :oh))"]
-              :see-also ["sometimes" "often" "sometimes-by"]}
+
+
+
+
+;; ── Phase TL4: Randomness & conditionals ──────────────────────────────────
+ :sometimes {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(sometimes (fast 2) (seq :bd :sd :hh :cp))" "(sometimes rev (seq :bd :sd :hh :oh))"]
+  :see-also ["often" "rarely" "sometimes-by" "some-cycles" "every"]}
+
+ :often {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(often rev (seq :bd :sd :hh :oh))" "(often (fast 2) (seq :hh))"]
+  :see-also ["sometimes" "rarely" "every"]}
+
+ :rarely {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(rarely (fast 2) (seq :bd :sd))" "(rarely rev (seq :bd :sd :hh :oh))"]
+  :see-also ["sometimes" "often" "sometimes-by"]}
 
  :sometimes-by {:category "transform"
-                :returns "Pattern"
-                :side-effects []
-                :examples ["(sometimes-by 0.3 rev (seq :bd :sd :hh :oh))"
-                           "(sometimes-by 0.8 (fast 2) (seq :hh))"]
-                :see-also ["sometimes" "often" "rarely"]}
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(sometimes-by 0.3 rev (seq :bd :sd :hh :oh))" "(sometimes-by 0.8 (fast 2) (seq :hh))" "(sometimes-by \"<0.2 0.8>\" rev (seq :bd :sd :hh :oh))"]
+  :see-also ["sometimes" "often" "rarely" "some-cycles-by"]}
 
- :degrade    {:category "transform"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(degrade (seq :hh :hh :hh :hh))"
-                         "(degrade (euclidean 5 8 :bd))"]
-              :see-also ["degrade-by" "sometimes"]}
+ :degrade {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(degrade (seq :hh :hh :hh :hh))" "(degrade (euclidean 5 8 :bd))"]
+  :see-also ["degrade-by" "undegrade" "sometimes"]}
 
  :degrade-by {:category "transform"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(degrade-by 0.3 (seq :hh :hh :hh :hh))"
-                         "(degrade-by 0.7 (fast 2 (seq :bd :sd)))"]
-              :see-also ["degrade" "sometimes-by"]}
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(degrade-by 0.3 (seq :hh :hh :hh :hh))" "(degrade-by 0.7 (fast 2 (seq :bd :sd)))" "(degrade-by \"<0 0.5>\" (fast 8 (pure :hh)))"]
+  :see-also ["degrade" "undegrade-by" "sometimes-by"]}
+
+ :choose {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (choose [:bd :sd :hh :oh]))" "(struct \"t ~ t t\" (choose [:bd :sd :hh]))"]
+  :see-also ["choose-cycles" "wchoose" "randcat" "segment"]}
+
+ :wchoose {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (wchoose [[3 :bd] [1 :sd] [2 :hh]]))" "(segment 8 (wchoose [[4 :c4] [2 :e4] [1 :g4]]))"]
+  :see-also ["wchoose-cycles" "choose" "wrandcat"]}
+
+ :undegrade-by {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(undegrade-by 0.3 (seq :a :b :c :d))" "(undegrade-by \"<0.2 0.6>\" (seq :a :b :c :d))"]
+  :see-also ["undegrade" "degrade-by" "sometimes-by"]}
+
+ :undegrade {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(undegrade (seq :a :b :c :d))"]
+  :see-also ["degrade" "undegrade-by"]}
+
+ :degrade-by-with {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(degrade-by-with saw 0.5 (fast 8 (pure :hh)))" "(degrade-by-with (segment 1 rand) \"<0.2 0.6>\" (fast 8 (pure :hh)))"]
+  :see-also ["degrade-by" "rand" "sometimes-by"]}
+
+ :almost-never {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(almost-never rev (seq :a :b :c :d))"]
+  :see-also ["sometimes-by" "rarely" "almost-always"]}
+
+ :almost-always {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(almost-always rev (seq :a :b :c :d))"]
+  :see-also ["sometimes-by" "often" "almost-never"]}
+
+ :always {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(always rev (seq :a :b))"]
+  :see-also ["never" "sometimes"]}
+
+ :never {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(never rev (seq :a :b))"]
+  :see-also ["always" "sometimes"]}
+
+ :some-cycles-by {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(some-cycles-by 0.3 (fast 2) (seq :bd :sd))" "(some-cycles-by \"<0 1>\" rev (seq :bd :sd))"]
+  :see-also ["some-cycles" "sometimes-by" "every"]}
+
+ :some-cycles {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(some-cycles rev (seq :bd :sd))"]
+  :see-also ["some-cycles-by" "sometimes"]}
+
+ :choose-with {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (choose-with sine [:a :b :c]))"]
+  :see-also ["choose" "choose-in-with"]}
+
+ :choose-in-with {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(choose-in-with (segment 1 rand) [(seq :a :b) (pure :c)])"]
+  :see-also ["choose-in" "randcat" "choose-with"]}
+
+ :choose-in {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(choose-in [(seq :a :b) (seq :c :d)])"]
+  :see-also ["randcat" "choose-in-with"]}
+
+ :choose-cycles {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(choose-cycles [:bd :sd :hh])" "(track :perc (choose-cycles [:bd :sd :hh]))"]
+  :see-also ["randcat" "choose" "wchoose-cycles"]}
+
+ :wchoose-cycles {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(wchoose-cycles [[3 :bd] [1 :sd]])"]
+  :see-also ["wrandcat" "choose-cycles" "wchoose"]}
+
+ :randcat {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(randcat (seq :bd :sd) (seq :hh :hh :oh) (seq :cp))"]
+  :see-also ["wrandcat" "choose-cycles" "cat"]}
+
+ :wrandcat {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(wrandcat [3 (seq :bd :sd)] [1 (pure :cp)])"]
+  :see-also ["randcat" "wchoose-cycles"]}
+
+ :brand {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 brand)" "(struct (segment 8 brand) (pure :hh))"]
+  :see-also ["brand-by" "rand"]}
+
+ :brand-by {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (brand-by 0.25))" "(segment 1 (brand-by \"<0.2 0.6>\"))"]
+  :see-also ["brand" "rand"]}
+
+ :berlin {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 8 berlin)"]
+  :see-also ["rand" "perlin"]}
+
+ :rand-l {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(fmap (fn [v] (first v)) (segment 4 (rand-l 3)))" "(segment 1 (rand-l \"<2 3>\"))"]
+  :see-also ["rand" "randrun"]}
+
+ :randrun {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(randrun 4)" "(randrun \"<3 4>\")"]
+  :see-also ["shuffle" "irand" "run"]}
+
+ :with-seed {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(with-seed 7 (shuffle 4 (seq :a :b :c :d)))" "(with-seed \"<0 1>\" (segment 4 rand))"]
+  :see-also ["rand" "shuffle" "degrade-by"]}
+
+ :shuffle {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(shuffle 4 (seq :a :b :c :d))" "(shuffle \"<2 4>\" (seq :a :b :c :d))"]
+  :see-also ["scramble" "randrun" "with-seed"]}
+
+ :scramble {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(scramble 4 (seq :a :b :c :d))" "(scramble \"<2 4>\" (seq :a :b :c :d))"]
+  :see-also ["shuffle" "irand"]}
+
+ :when-pat {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(when-pat \"<0 1>\" rev (seq :a :b))" "(when-pat (fn [c] (> c 3)) rev (seq :a :b))"]
+  :see-also ["whenmod" "sew" "every"]}
+
+ :whenmod {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(whenmod 8 6 rev (seq 0 2 4 7))" "(whenmod \"<4 2>\" 1 rev (seq :a :b))"]
+  :see-also ["every" "when-pat"]}
+
+ :apply-n {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(apply-n 2 (fast 2) (seq :a :b))" "(apply-n \"<1 2>\" (fast 2) (seq :a :b))"]
+  :see-also ["every" "fast"]}
 
  :jux        {:category "transform"
               :returns "Pattern"
@@ -173,15 +345,54 @@
               :returns "Pattern"
               :side-effects []
               :examples ["(jux-by 0.5 rev (seq :bd :sd))"
-                         "(jux-by 0.8 (fast 2) (seq :hh :oh))"]
+                         "(jux-by 0.8 (fast 2) (seq :hh :oh))"
+                         "(jux-by \"<0.3 1>\" rev (seq :bd :sd))"]
               :see-also ["jux" "pan"]}
 
  :off        {:category "transform"
               :returns "Pattern"
               :side-effects []
               :examples ["(off 0.25 (fast 2) (seq :bd :sd))"
-                         "(off 0.125 rev (seq :hh :oh))"]
+                         "(off 0.125 rev (seq :hh :oh))"
+                         "(off \"<1/8 1/4>\" (fast 2) (seq :bd :sd))"]
               :see-also ["late" "jux"]}
+
+ ;; ── Pattern arithmetic (TL1) ─────────────────────────────────────────────
+ :add        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(add 12 (seq :c3 :e3 :g3))"
+                         "(->> (seq 1 3 5 8) (add \"<0 2 4>\") (scale :minor :c3))"
+                         "(add :out (seq 10 20) (seq 1 2 3))"]
+              :see-also ["sub" "mul" "div" "set" "transpose"]}
+
+ :sub        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(sub 12 (seq :c4 :e4 :g4))"
+                         "(->> (seq 8 7 5) (sub \"<0 1>\") (scale :major :c4))"]
+              :see-also ["add" "mul" "div"]}
+
+ :mul        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(mul 2 (seq 220 330))"
+                         "(mul :mix (seq 1 2) (seq 110 220 330))"]
+              :see-also ["add" "div"]}
+
+ :div        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(div 2 (seq 440 660))"
+                         "(div \"<1 2>\" (seq 440 880))"]
+              :see-also ["mul" "sub"]}
+
+ :set        {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(set {:amp 0.5 :pan -0.5} (seq :c4 :e4))"
+                         "(set (seq {:amp 1.0} {:amp 0.4}) (seq :bd :hh :sd :hh))"]
+              :see-also ["amp" "pan" "add"]}
 
  :comp       {:category "transform"
               :returns "fn"
@@ -304,32 +515,195 @@
               :examples ["(->> (seq :c4 :eb4) (synth :saw))"
                          "(->> (scale :minor :c3 (seq 0 2 4)) (synth :fm :index 3))"
                          "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :western))"]
-              :see-also ["saw" "square" "noise" "fm" "western" "nylon" "harp" "koto" "pizz" "lute" "mandolin" "defsynth"]}
+              :see-also ["noise" "fm" "western" "nylon" "harp" "koto" "pizz" "lute" "mandolin" "defsynth"]}
 
- :saw        {:category "source"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(saw :c4)" "(->> (seq :c4 :e4) (synth :saw))"]
-              :see-also ["square" "noise" "fm" "synth"]}
+;; ── Continuous signals (TL2) ────────────────────────────────────────────────
+ :signal {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (signal (fn [t] (* t 2))))"]
+  :see-also ["steady" "time" "segment"]}
 
- :square     {:category "source"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(square :c4)" "(square :c4 :pw 0.25)"]
-              :see-also ["saw" "noise" "synth"]}
+ :steady {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (steady 3))"]
+  :see-also ["signal" "segment"]}
+
+ :time {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 time)"]
+  :see-also ["signal" "saw"]}
+
+ :sine {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 8 (range 200 2000 sine))"]
+  :see-also ["cosine" "sine2" "saw" "range"]}
+
+ :cosine {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 8 cosine)"]
+  :see-also ["sine" "cosine2"]}
+
+ :isaw {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 isaw)"]
+  :see-also ["saw" "isaw2"]}
+
+ :itri {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 itri)"]
+  :see-also ["tri" "itri2"]}
+
+ :isquare {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 isquare)"]
+  :see-also ["square" "isquare2"]}
+
+ :sine2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan sine2 (fast 8 (seq :hh)))"]
+  :see-also ["sine" "to-bipolar" "range2"]}
+
+ :cosine2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan cosine2 (fast 8 (seq :hh)))"]
+  :see-also ["cosine" "to-bipolar" "range2"]}
+
+ :saw2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan saw2 (fast 8 (seq :hh)))"]
+  :see-also ["saw" "to-bipolar" "range2"]}
+
+ :isaw2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan isaw2 (fast 8 (seq :hh)))"]
+  :see-also ["isaw" "to-bipolar" "range2"]}
+
+ :tri2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan tri2 (fast 8 (seq :hh)))"]
+  :see-also ["tri" "to-bipolar" "range2"]}
+
+ :itri2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan itri2 (fast 8 (seq :hh)))"]
+  :see-also ["itri" "to-bipolar" "range2"]}
+
+ :square2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan square2 (fast 8 (seq :hh)))"]
+  :see-also ["square" "to-bipolar" "range2"]}
+
+ :isquare2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan isquare2 (fast 8 (seq :hh)))"]
+  :see-also ["isquare" "to-bipolar" "range2"]}
+
+ :rand2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan rand2 (fast 8 (seq :hh)))"]
+  :see-also ["rand" "to-bipolar" "range2"]}
+
+ :rand {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 8 (range 1 8 rand))" "(segment 4 (with-seed 7 rand))"]
+  :see-also ["irand" "rand2" "perlin" "segment"]}
+
+ :irand {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 8 (irand 8))"]
+  :see-also ["rand" "segment"]}
+
+ :perlin {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pan (range -0.5 0.5 perlin) (fast 4 (seq :hh)))"]
+  :see-also ["rand" "sine" "range"]}
+
+ :segment {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 saw)" "(->> sine (rangex 100 1000) (segment 2))"]
+  :see-also ["saw" "range" "rand"]}
+
+ :rangex {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (rangex 20 2000 saw))"]
+  :see-also ["range" "range2" "segment"]}
+
+ :range2 {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (range2 200 2000 sine2))"]
+  :see-also ["range" "rangex" "from-bipolar"]}
+
+ :to-bipolar {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (to-bipolar saw))"]
+  :see-also ["from-bipolar" "sine2"]}
+
+ :from-bipolar {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 (from-bipolar sine2))"]
+  :see-also ["to-bipolar" "range2"]}
+
+ :run {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(run 4)" "(->> (run 8) (scale :minor :c3))"]
+  :see-also ["segment" "seq"]}
+
+ :saw {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 saw)" "(->> (fast 8 (seq :hh)) (amp (range 0.3 1 saw)))"]
+  :see-also ["isaw" "saw2" "segment" "synth"]}
+
+ :square {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 square)" "(synth :square :pw 0.25 (seq :c3 :e3))"]
+  :see-also ["isquare" "square2" "segment" "synth"]}
+
+ :tri {:category "signal"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(segment 4 tri)"]
+  :see-also ["itri" "tri2" "segment" "defsynth"]}
 
  :noise      {:category "source"
               :returns "Pattern"
               :side-effects []
               :examples ["(noise)" "(->> (noise) (amp 0.5) (decay 0.1))"]
-              :see-also ["saw" "square"]}
+              :see-also ["synth" "fm"]}
 
  :fm         {:category "source"
               :returns "Pattern"
               :side-effects []
               :examples ["(fm :c4 :index 3 :ratio 2)"
                          "(->> (scale :minor :c2 (seq 0 2 4)) (synth :fm :index 5))"]
-              :see-also ["saw" "synth" "defsynth"]}
+              :see-also ["synth" "noise" "defsynth"]}
 
  ;; ── Karplus-Strong plucked strings ──────────────────────────────────────────
  :western    {:category "synth"
@@ -486,12 +860,6 @@
               :side-effects []
               :examples ["(sin freq)" "(->> (sin (* 2 freq)) (gain 0.5))"]
               :see-also ["tri" "lpf" "env-perc" "defsynth"]}
-
- :tri        {:category "ugen"
-              :returns "UGen"
-              :side-effects []
-              :examples ["(tri freq)" "(->> (tri freq) (lpf 2000))"]
-              :see-also ["sin" "lpf" "defsynth"]}
 
  :lpf        {:category "ugen"
               :returns "UGen"
@@ -1010,8 +1378,8 @@
  :range      {:category "util"
               :returns "sequence"
               :side-effects []
-              :examples ["(range 8)" "(range 2 8)" "(range 0 8 2)"]
-              :see-also ["count" "map" "filter"]}
+              :examples ["(range 8)" "(range 2 8)" "(range 0 8 2)" "(segment 4 (range 200 2000 saw))"]
+              :see-also ["count" "map" "filter" "segment" "rangex"]}
 
  :mod        {:category "util"
               :returns "number"
@@ -1228,4 +1596,299 @@
                           "groq (llama-3.3-70b-versatile)"
                           "xai (grok-3)"]
               :see-also ["help-export"]}
+
+ ;; --- Time & structure (TL3) ---
+ :struct {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(struct \"t ~ t t\" (pure :bd))" "(struct \"t*4\" (seq :c3 :e3))"]
+  :see-also ["mask" "euclidean" "invert"]}
+
+ :mask {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(mask \"1 0 1 1\" (fast 8 (pure :hh)))" "(mask \"t f\" (seq :a :b :c))"]
+  :see-also ["struct" "invert"]}
+
+ :invert {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(struct (invert \"t f t f\") (pure :x))"]
+  :see-also ["struct" "mask"]}
+
+ :euclid-legato {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(euclid-legato 3 8 (pure :x))" "(euclid-legato \"<3 5>\" 8 (pure :x))"]
+  :see-also ["euclidean" "euclid-legato-rot"]}
+
+ :euclid-legato-rot {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(euclid-legato-rot 3 8 2 (pure :x))" "(euclid-legato-rot 3 8 \"<0 2>\" (pure :x))"]
+  :see-also ["euclid-legato" "euclidean"]}
+
+ :ply {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(ply 2 (seq :bd :sd))" "(ply \"<2 3>\" (seq :a :b))"]
+  :see-also ["ply-with" "fast"]}
+
+ :ply-with {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(ply-with 3 (add 12) (seq 0 7))" "(ply-with \"<1 2>\" (add 12) (seq 0 7))"]
+  :see-also ["ply" "add"]}
+
+ :inside {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(inside 2 rev (seq 0 1 2 3 4 5 6 7))" "(inside \"<1 2>\" rev (seq 0 1 2 3))"]
+  :see-also ["outside" "within"]}
+
+ :outside {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(outside 2 rev (cat (seq :a :b) (seq :c :d)))" "(outside \"<1 2>\" rev (cat (seq :a :b) (seq :c :d)))"]
+  :see-also ["inside" "rev"]}
+
+ :within {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(within 0 1/2 (fast 2) (seq :a :b :c :d))" "(within \"<0 1/2>\" 1 (add 10) (seq 0 1))"]
+  :see-also ["inside" "chunk"]}
+
+ :swing-by {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(swing-by 1/3 4 (fast 8 (pure :hh)))" "(swing-by \"<0 1/3>\" 4 (fast 8 (pure :hh)))"]
+  :see-also ["swing" "late" "inside"]}
+
+ :swing {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(swing 4 (fast 8 (pure :hh)))" "(swing \"<2 4>\" (fast 8 (pure :hh)))"]
+  :see-also ["swing-by" "late"]}
+
+ :brak {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(brak (seq :bd :sd))"]
+  :see-also ["every" "fast"]}
+
+ :iter {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(iter 4 (seq :a :b :c :d))" "(iter \"<4 2>\" (seq :a :b :c :d))"]
+  :see-also ["iter-back" "rot" "palindrome"]}
+
+ :iter-back {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(iter-back 4 (seq :a :b :c :d))" "(iter-back \"<4 2>\" (seq :a :b :c :d))"]
+  :see-also ["iter" "late"]}
+
+ :palindrome {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(palindrome (seq :a :b :c))"]
+  :see-also ["rev" "iter"]}
+
+ :rot {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(rot 1 (seq :a :b :c :d))" "(rot \"<0 1 2>\" (seq :a :b :c))"]
+  :see-also ["iter" "rev"]}
+
+ :chunk {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(chunk 4 (add 10) (seq 0 1 2 3))" "(chunk \"<2 4>\" (add 10) (seq 0 1 2 3))"]
+  :see-also ["chunk-back" "fast-chunk" "within"]}
+
+ :chunk-back {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(chunk-back 4 (add 10) (seq 0 1 2 3))" "(chunk-back \"<4 2>\" (add 10) (seq 0 1 2 3))"]
+  :see-also ["chunk" "fast-chunk"]}
+
+ :fast-chunk {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(fast-chunk 2 (add 10) (cat (seq 0 1) (seq 4 5)))" "(fast-chunk \"<4 2>\" (add 10) (seq 0 1 2 3))"]
+  :see-also ["chunk" "chunk-back"]}
+
+ :polymeter {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(polymeter [:bd :sd :hh] [:c3 :e3])" "(polymeter 4 [:a :b :c])" "(polymeter \"<2 4>\" [:a :b :c :d])"]
+  :see-also ["timecat" "cat" "seq"]}
+
+ :timecat {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(timecat [3 :e3] [1 :g3])" "(timecat [1 (seq :bd :sd)] [2 :hh])"]
+  :see-also ["seq" "polymeter" "cat"]}
+
+ :first-of {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(first-of 4 (add 10) (seq 0 1))" "(first-of \"<2 3>\" (add 10) (seq 0 1))"]
+  :see-also ["every" "last-of"]}
+
+ :last-of {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(last-of 4 (add 10) (seq 0 1))" "(last-of \"<4 2>\" (add 10) (seq 0 1))"]
+  :see-also ["every" "first-of"]}
+
+ :compress {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(compress 1/4 3/4 (seq :bd :sd))" "(compress \"<0 1/2>\" 1 (seq :a :b))"]
+  :see-also ["zoom" "focus" "fast-gap"]}
+
+ :zoom {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(zoom 1/4 3/4 (seq :a :b :c :d))" "(zoom 0 \"<1 1/2>\" (seq :a :b :c :d))"]
+  :see-also ["focus" "compress" "linger"]}
+
+ :focus {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(focus 1/4 3/4 (seq :a :b :c :d))" "(focus 0 \"<1 1/2>\" (seq :a :b))"]
+  :see-also ["zoom" "compress"]}
+
+ :fast-gap {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(fast-gap 2 (seq :bd :sd))" "(fast-gap \"<1 2>\" (seq :a :b))"]
+  :see-also ["compress" "fast"]}
+
+ :linger {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(linger 1/4 (seq 0 1 2 3 4 5 6 7))" "(linger \"<1/4 1/2>\" (seq 0 1 2 3 4 5 6 7))"]
+  :see-also ["zoom" "trunc" "ply"]}
+
+ :bite {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(bite 4 (seq 0 2) (seq :a :b :c :d :e :f :g :h))" "(bite \"<4 2>\" (seq 0 1) (seq :a :b :c :d :e :f :g :h))"]
+  :see-also ["zoom" "chunk-into"]}
+
+ :ribbon {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(ribbon 1 2 (cat (pure :a) (pure :b) (pure :c) (pure :d)))" "(ribbon \"<0 1>\" 1 (cat (pure :a) (pure :b) (pure :c)))"]
+  :see-also ["repeat-cycles" "early"]}
+
+ :hurry {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(hurry 2 (seq :bd :sd))" "(hurry \"<1 2>\" (seq :bd :sd))"]
+  :see-also ["fast" "rate"]}
+
+ :revv {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(revv (seq :a :b :c))"]
+  :see-also ["rev"]}
+
+ :repeat-cycles {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(repeat-cycles 2 (cat (seq :a) (seq :b)))" "(repeat-cycles \"<1 2>\" (cat (pure :a) (pure :b) (pure :c)))"]
+  :see-also ["ribbon" "cat"]}
+
+ :trunc {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(trunc 3/4 (seq :a :b :c :d))" "(trunc \"<1 1/2>\" (seq :a :b :c :d))"]
+  :see-also ["linger" "zoom"]}
+
+ :press {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(press (seq :a :b))"]
+  :see-also ["press-by"]}
+
+ :press-by {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(press-by 1/4 (seq :a :b))" "(press-by \"<0 1/2>\" (seq :a :b))"]
+  :see-also ["press" "compress"]}
+
+ :chunk-into {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(chunk-into 2 rev (seq 0 1 2 3))" "(chunk-into \"<4 2>\" rev (seq 0 1 2 3))"]
+  :see-also ["chunk" "chunk-back-into" "zoom"]}
+
+ :chunk-back-into {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(chunk-back-into 2 rev (seq 0 1 2 3))" "(chunk-back-into \"<4 2>\" rev (seq 0 1 2 3))"]
+  :see-also ["chunk-into" "chunk-back"]}
+
+ :euclidish {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(euclidish 3 8 1/2 (pure :x))" "(euclidish 3 8 \"<0 1>\" (pure :x))"]
+  :see-also ["euclidean" "struct"]}
+
+ :ply-for-each {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(ply-for-each 3 (fn [p i] (add (* i 12) p)) (seq 0 7))" "(ply-for-each \"<1 2>\" (fn [p i] (add i p)) (seq 0 7))"]
+  :see-also ["ply" "ply-with"]}
+
+ :filter-events {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(filter-events (fn [v] (> v 2)) (seq 1 2 3 4))"]
+  :see-also ["filter-when" "mask"]}
+
+ :filter-when {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(filter-when (fn [t] (< t 1/2)) (seq :a :b :c :d))"]
+  :see-also ["filter-events" "within"]}
+
+ :bypass {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(bypass 0 (seq :a :b))" "(bypass \"<0 1>\" (seq :a :b))"]
+  :see-also ["mask" "sew"]}
+
+ :beat {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(beat \"0,7,10\" 16 (pure :bd))" "(beat \"<0 1>\" 4 (pure :bd))"]
+  :see-also ["struct" "euclidean"]}
+
+ :sew {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(sew \"t f\" (seq :a :a :a :a) (seq :b :b :b :b))" "(sew \"<t f>\" (pure :a) (pure :b))"]
+  :see-also ["stitch" "mask"]}
+
+ :stitch {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(stitch \"t f t t\" (pure :bd) (pure :sn))"]
+  :see-also ["sew" "struct"]}
+
+ :binary {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(struct (binary 5) (pure :x))" "(struct (binary \"<5 3>\") (pure :x))"]
+  :see-also ["binary-n" "struct"]}
+
+ :binary-n {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(struct (binary-n 5 4) (pure :x))" "(binary-n 1 \"<2 4>\")"]
+  :see-also ["binary" "struct"]}
 }

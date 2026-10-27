@@ -44,6 +44,10 @@ An **event** is:
 }
 ```
 
+`:whole` is `nil` for **continuous (analog) events** produced by signals such as `sine`
+or `rand`: they exist at every point in time and have no onset, so they never trigger
+sound by themselves (see `core/analog?`, `core/query-onsets`).
+
 ### Core combinators
 
 | Function | Signature | Description |

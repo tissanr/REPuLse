@@ -35,7 +35,9 @@ Map    { OpenBrace expr* CloseBrace }
     "sometimes" | "often" | "rarely" | "sometimes-by" |
     "degrade" | "degrade-by" |
     "choose" | "wchoose" |
+    "undegrade-by" | "undegrade" | "degrade-by-with" | "almost-never" | "almost-always" | "always" | "never" | "some-cycles-by" | "some-cycles" | "choose-with" | "choose-in-with" | "choose-in" | "choose-cycles" | "wchoose-cycles" | "randcat" | "wrandcat" | "brand" | "brand-by" | "berlin" | "rand-l" | "randrun" | "with-seed" | "shuffle" | "scramble" | "when-pat" | "whenmod" | "apply-n" |
     "jux" | "jux-by" | "off" |
+    "add" | "sub" | "mul" | "div" | "set" |
     "def" | "defn" | "let" | "fn" | "lambda" | "if" | "do" |
     "defmacro" | "defsynth" | "loop" | "recur" | "quasiquote" |
     "bpm" | "stop" | "fx" | "load-plugin" | "unload-plugin" | "arrange" | "play-scenes" | "sound" |
@@ -46,8 +48,11 @@ Map    { OpenBrace expr* CloseBrace }
     "midi-map" | "midi-out" | "midi-clock-out!" | "midi-export" |
     "freesound!" | "freesound-key!" |
     "upd" | "demo" | "tutorial" | "snippet" | "share!" |
+    "struct" | "mask" | "invert" | "euclid-legato" | "euclid-legato-rot" | "ply" | "ply-with" | "inside" | "outside" | "within" | "swing-by" | "swing" | "brak" | "iter" | "iter-back" | "palindrome" | "rot" | "chunk" | "chunk-back" | "fast-chunk" | "polymeter" | "timecat" | "first-of" | "last-of" |
+    "compress" | "zoom" | "focus" | "fast-gap" | "linger" | "bite" | "ribbon" | "hurry" | "revv" | "repeat-cycles" | "trunc" | "press" | "press-by" | "chunk-into" | "chunk-back-into" | "euclidish" | "ply-for-each" | "filter-events" | "filter-when" | "bypass" | "beat" | "sew" | "stitch" | "binary" | "binary-n" |
     "~" | "alt" | "load-gist" | "export" |
     "rate" | "begin" | "end" | "loop-sample" |
+    "signal" | "steady" | "time" | "sine" | "cosine" | "isaw" | "itri" | "isquare" | "sine2" | "cosine2" | "saw2" | "isaw2" | "tri2" | "itri2" | "square2" | "isquare2" | "rand2" | "rand" | "irand" | "perlin" | "segment" | "rangex" | "range2" | "to-bipolar" | "from-bipolar" | "run" |
     "saw" | "square" | "noise" | "fm" | "synth" |
     "western" | "nylon" | "guitar" | "harp" | "koto" | "pizz" | "lute" | "mandolin" |
     "sax" | "trumpet" | "trumpet-muted" | "trombone" | "synth-brass" |
