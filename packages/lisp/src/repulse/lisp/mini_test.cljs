@@ -154,3 +154,74 @@
   ;; TL1: "1/8" used to parse as the float 1 (parseFloat stops at "/")
   (is (= [[1 8] [1 4]] (values (mini/parse "1/8 2/8"))))
   (is (= [[-1 2]] (values (mini/parse "-1/2")))))
+
+;;; ── Phase TL3: nested alternation, !, ., ",", {}%n, (k,n,r) ─────────
+
+(defn- cyc-evs [s c]
+  (sort-by (juxt #(core/rat->float (:start (:whole %))) #(str (:value %)))
+           (core/query (mini/parse s) (core/cycle-span c))))
+
+(defn- tuples
+  "[value whole-start whole-end part-start part-end] with rationals as vectors"
+  [evs]
+  (mapv (fn [e] [(:value e) (:start (:whole e)) (:end (:whole e))
+                 (:start (:part e)) (:end (:part e))])
+        evs))
+
+(defn- wh [evs] (mapv (fn [e] [(:value e) (:start (:whole e)) (:end (:whole e))]) evs))
+
+(defn- onset-starts [s c]
+  (mapv #(:start (:whole %))
+        (sort-by #(core/rat->float (:start (:whole %)))
+                 (core/query-onsets (mini/parse s) (core/cycle-span c)))))
+
+(deftest tl3-exact-sequence-times
+  (is (= [[:a [0 1] [1 3]] [:b [1 3] [2 3]] [:c [2 3] [1 1]]]
+         (wh (cyc-evs "a b c" 0)))))
+
+(deftest tl3-nested-alternation-alternates
+  (is (= [[:b [1 1] [3 2]] [:c [3 2] [2 1]]] (wh (cyc-evs "<a b> c" 1))))
+  (is (= [[:a [0 1] [1 2]] [:c [1 2] [1 1]]] (wh (cyc-evs "<a b> c" 0)))))
+
+(deftest tl3-bang-replicate
+  (is (= (wh (cyc-evs "bd bd bd sd" 0)) (wh (cyc-evs "bd!3 sd" 0))))
+  (is (= (wh (cyc-evs "bd bd sd" 0)) (wh (cyc-evs "bd ! sd" 0))))
+  (is (= (wh (cyc-evs "[bd sd] [bd sd]" 0)) (wh (cyc-evs "[bd sd]!2" 0))))
+  (let [src (fn [s] (mapv :source (core/query (mini/parse s 10) (core/cycle-span 0))))]
+    (is (= [{:from 10 :to 12} {:from 10 :to 12} {:from 10 :to 12}]
+           (take 3 (src "bd!3 sd"))))))
+
+(deftest tl3-dot-grouping
+  (is (= [[:bd [0 1] [1 4]] [:sd [1 4] [1 2]] [:hh [1 2] [2 3]] [:hh [2 3] [5 6]] [:hh [5 6] [1 1]]]
+         (wh (cyc-evs "bd sd . hh hh hh" 0))))
+  (is (= [0.5 1] (mapv :value (cyc-evs "0.5 1" 0)))))
+
+(deftest tl3-comma-layers
+  (is (= [[:bd [0 1] [1 1]] [:hh [0 1] [1 2]] [:hh [1 2] [1 1]]]
+         (wh (cyc-evs "[bd, hh hh]" 0))))
+  (is (= 3 (count (cyc-evs "[c3,e3,g3]" 0))))
+  (is (every? #(= [[0 1] [1 1]] [(:start (:whole %)) (:end (:whole %))]) (cyc-evs "[c3,e3,g3]" 0)))
+  (is (= 5 (count (cyc-evs "bd sd, hh hh hh" 0)))))
+
+(deftest tl3-polymeter-braces
+  (is (= [:a :b :c :a] (mapv :value (cyc-evs "{a b c}%4" 0))))
+  (is (= [:b :c :a :b] (mapv :value (cyc-evs "{a b c}%4" 1))))
+  (is (= [[:a [0 1] [1 4]] [:b [1 4] [1 2]] [:c [1 2] [3 4]] [:a [3 4] [1 1]]]
+         (wh (cyc-evs "{a b c}%4" 0))))
+  (is (= (wh (cyc-evs "{a b c, d e}" 1))
+         (wh (sort-by (juxt #(core/rat->float (:start (:whole %))) #(str (:value %)))
+                      (core/query (core/polymeter nil [[:a :b :c] [:d :e]]) (core/cycle-span 1)))))))
+
+(deftest tl3-euclid-suffix
+  (is (= [[0 1] [3 8] [3 4]] (onset-starts "bd(3,8)" 0)))
+  (is (= [[1 8] [1 2] [3 4]] (onset-starts "bd(3,8,2)" 0)))
+  (is (= [[1 1] [5 4] [11 8] [13 8] [7 4]] (onset-starts "bd(<3 5>,8)" 1)))
+  (is (every? #(= [1 8] (core/rat- (:end (:whole %)) (:start (:whole %))))
+              (cyc-evs "bd(3,8)" 0))))
+
+(deftest tl3-parse-errors
+  (doseq [s ["{a b" "bd(3,8" "! bd" "[a b" "<a b"]]
+    (is (= :mini-parse-error
+           (try (mini/parse s) nil
+                (catch :default e (:type (ex-data e)))))
+        s)))

@@ -140,3 +140,22 @@ test('pan sine2 over eight hats has eight onsets', async ({ page }) => {
   expect(rms(mono)).toBeGreaterThan(NON_SILENT_RMS);
   expect(countOnsets(mono, result.sampleRate)).toBe(8);
 });
+
+// TL3: structure combinators
+test('struct "t ~ t t" over a pure kick has three onsets', async ({ page }) => {
+  const result = await render(page, '(struct "t ~ t t" (pure :bd))');
+  const mono = mixMono(result.left, result.right);
+  expect(countOnsets(mono, result.sampleRate)).toBe(3);
+});
+
+test('euclidean 3 8 has three onsets', async ({ page }) => {
+  const result = await render(page, '(euclidean 3 8 :bd)');
+  const mono = mixMono(result.left, result.right);
+  expect(countOnsets(mono, result.sampleRate)).toBe(3);
+});
+
+test('ply 2 doubles a two-step sequence to four onsets', async ({ page }) => {
+  const result = await render(page, '(ply 2 (seq :bd :sd))');
+  const mono = mixMono(result.left, result.right);
+  expect(countOnsets(mono, result.sampleRate)).toBe(4);
+});

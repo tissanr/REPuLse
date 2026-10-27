@@ -28,6 +28,7 @@ evaluate them with **Ctrl+Enter** (or the **▶ play** button), and hear them lo
    - [Patterned arguments](#patterned-arguments)
    - [Pattern arithmetic — `add` `sub` `mul` `div` `set`](#pattern-arithmetic--add-sub-mul-div-set)
    - [Signals — `sine` `saw` `rand` `perlin` `segment` `range`](#signals--sine-saw-rand-perlin-segment-range)
+   - [Time & structure — `struct` `ply` `chunk` `iter` `swing` `polymeter`](#time--structure--struct-ply-chunk-iter-swing-polymeter)
 6. [Music theory](#music-theory)
 7. [Per-event parameters](#per-event-parameters)
 8. [Sound and samples](#sound-and-samples)
@@ -636,18 +637,36 @@ stochastic variation, and spatial layering.
 
 ### `euclidean` — Euclidean rhythms
 
-Distribute `k` onsets across `n` steps as evenly as possible (Björklund algorithm):
+Distribute `k` onsets across `n` steps as evenly as possible. Since TL3 this is Tidal's
+exact `bjorklund` algorithm — `(euclidean 3 8 :bd)` is `bd . . bd . . bd .`. (Before TL3
+all hits bunched at the start of the cycle: `bd bd bd . . . . .`. Existing patterns that
+use `euclidean` now sound different — and correct.)
 
 ```lisp
-(euclidean 5 8 :bd)      ; 5 onsets in 8 steps — Afro-Cuban clave feel
-(euclidean 3 8 :sd)      ; tresillo
+(euclidean 5 8 :bd)      ; x . x x . x x .  — Afro-Cuban clave feel
+(euclidean 3 8 :sd)      ; x . . x . . x .  — tresillo
 (euclidean 7 16 :hh)     ; complex subdivision
 
-; Optional rotation — shift the pattern left by r steps:
-(euclidean 5 8 :bd 2)    ; same rhythm, rotated 2 steps
+; Optional rotation — shift the pattern LEFT by r steps (Tidal's direction):
+(euclidean 3 8 :x 2)     ; . x . . x . x .
 
 ; k, n and rotation may be patterns:
 (euclidean "<3 5>" 8 :bd)  ; 3 hits on even cycles, 5 on odd
+
+; A negative k gives the inverted rhythm; k > n clamps to n:
+(euclidean -3 8 :x)
+
+; Struct form — when the third argument is a PATTERN it receives the rhythm
+; (steps that are not hits produce no events), like Strudel's euclid:
+(euclidean 3 8 (seq :bd :sd))   ; bd [0,1/8)  bd [3/8,1/2)  sd [3/4,7/8)
+```
+
+`euclid-legato` / `euclid-legato-rot` make each hit last until the next one (the last hit
+lasts to the end of the cycle):
+
+```lisp
+(euclid-legato 3 8 (pure :x))             ; [0,3/8) [3/8,3/4) [3/4,1)
+(euclid-legato-rot 3 8 2 (pure :x))       ; rotated; steps before the first hit rest
 ```
 
 ### `cat` — sequential concatenation
@@ -920,6 +939,68 @@ noise that glides between random values.
 Before TL2, `(saw :c4)` and `(square :c4)` were synth-voice shortcuts. They are signals
 now. Use `(synth :saw pat)` and `(synth :square :pw 0.25 pat)` for the voices. Calling a
 signal gives a helpful error. Inside `defsynth`, `saw`, `square` and `tri` remain UGens.
+
+## Time & structure — `struct` `ply` `chunk` `iter` `swing` `polymeter`
+
+Tidal's rhythmic vocabulary for reshaping time. Every function with a trailing `pat`
+also has a **curried form** (all arguments except `pat`) for `->>`, and numeric arguments
+accept patterns or mini-notation strings (see [Patterned arguments](#patterned-arguments)).
+
+| Function | Meaning | Patterned args |
+|---|---|---|
+| `(struct bools pat)` | Rhythm from `bools`: every true step plays the value(s) of `pat` | `bools` |
+| `(mask bools pat)` | Keep the structure of `pat`, only where `bools` is true | `bools` |
+| `(invert pat)` | Boolean `not` of each value (rests stay rests) | — |
+| `(euclidean k n x [r])` | Björklund rhythm; a pattern `x` gets the rhythm (struct form) | `k n r` |
+| `(euclid-legato k n pat)` | Euclidean hits that last until the next hit | `k n` |
+| `(euclid-legato-rot k n r pat)` | The same, rotated left by `r` | `k n r` |
+| `(ply n pat)` | Repeat each event `n` times inside its own slot | `n` |
+| `(ply-with n f pat)` | `ceil(n)` repeats; repeat `i` has `f` applied `i` times | `n` |
+| `(inside n f pat)` | Apply `f` as if each 1/n of a cycle were a cycle | `n` |
+| `(outside n f pat)` | Apply `f` across `n` cycles at once | `n` |
+| `(within s e f pat)` | Apply `f` to events that start in `[s, e)` of the cycle | `s e` |
+| `(swing-by x n pat)` | Delay the second half of each 1/n slice by `x` of the slice | `x n` |
+| `(swing n pat)` | `(swing-by 1/3 n pat)` | `n` |
+| `(brak pat)` | Breakbeat feel on odd cycles (squeezed, shifted by 1/4) | — |
+| `(iter n pat)` | Start `1/n` earlier each cycle | `n` |
+| `(iter-back n pat)` | Start `1/n` later each cycle | `n` |
+| `(palindrome pat)` | `pat`, then `(rev pat)`, alternating | — |
+| `(rot n pat)` | Rotate the values `n` places left, keeping the rhythm | `n` |
+| `(chunk n f pat)` | Apply `f` to chunk `c mod n` of cycle `c` | `n` |
+| `(chunk-back n f pat)` | As `chunk`, chunk index `0, n-1, n-2 …` | `n` |
+| `(fast-chunk n f pat)` | As `chunk`, without cycle-holding | `n` |
+| `(polymeter [steps] layer…)` | Layers of different step counts on one grid | `steps` |
+| `(timecat [w x]…)` | Weighted concatenation inside one cycle | — |
+| `(first-of n f pat)` | Apply `f` on cycles 0, n, 2n … (same as `every`) | `n` |
+| `(last-of n f pat)` | Apply `f` on cycles n-1, 2n-1 … | `n` |
+
+```lisp
+(struct "t ~ t t" (pure :bd))                  ; bd at 0, 1/2, 3/4
+(mask "1 0 1 1" (fast 8 (pure :hh)))           ; gate a hi-hat stream
+(ply 2 (seq :bd :sd))                          ; bd bd sd sd
+(ply-with 3 (add 12) (seq 0 7))                ; 0 12 24 | 7 19 31
+(inside 2 rev (seq 0 1 2 3 4 5 6 7))           ; 3 2 1 0 7 6 5 4
+(within 0 1/2 (fast 2) (seq :a :b :c :d))      ; speed up the first half only
+(swing 4 (fast 8 (pure :hh)))                  ; every 2nd hat of each quarter delayed by 1/12
+(chunk 4 (add 10) (seq 0 1 2 3))               ; a different quarter is transformed each cycle
+(iter 4 (seq :a :b :c :d))                     ; a b c d | b c d a | c d a b | d a b c
+(rot 1 (seq :a :b :c :d))                      ; b c d a — same rhythm, shifted values
+(brak (seq :bd :sd))                           ; odd cycles: squeezed and delayed
+(polymeter [:bd :sd :hh] [:c3 :e3])            ; 3 against 2
+(polymeter 4 [:a :b :c])                       ; a b c a | b c a b …
+(timecat [3 :e3] [1 :g3])                      ; e3 for 3/4 of the cycle, g3 for 1/4
+(->> (seq :bd :sd) (ply 2) (iter 4) (swing 4)) ; curried forms in ->>
+```
+
+**Boolean values.** A step is *false* when it is `false`, `nil`, `0`, `~`/`_` (a rest),
+`f` or `:false`; everything else is true. So `"t ~ t t"`, `"1 0 1 1"`, `"x ~ x x"` and
+`(seq true false true true)` all describe the same rhythm.
+
+**Cycle-holding.** `iter`, `iter-back`, `palindrome`, `chunk` and `chunk-back` follow
+Tidal's `cat`: a cycle-varying input such as `(cat a b)` is *held* — the source advances
+one cycle every `n` cycles, not every cycle. `(iter 2 (cat (seq :a :b) (seq :c :d)))`
+plays `a b | b c | c d | d a`. Use `fast-chunk` for the non-holding variant. The public
+`cat` is unchanged.
 
 ---
 
@@ -1473,7 +1554,20 @@ Lisp is the host language and `~` is just another function returning a Pattern.
 (~ "c4 e4 g4")       ; note names → keywords (:c4 :e4 :g4)
 (~ "440 330 220")    ; numbers pass through as Hz values
 (~ "0 1/8 1/4")      ; rationals stay exact — [1 8], [1 4]
+(~ "bd!3 sd")        ; replicate — ≡ (seq :bd :bd :bd :sd); "bd ! sd" repeats the previous step once
+(~ "bd sd . hh hh hh") ; "." groups — [bd sd] and [hh hh hh] share the cycle half and half
+(~ "[bd, hh hh]")    ; "," layers — bd under two hats (top level "a b, c d e" works too)
+(~ "{a b c}%4")      ; polymeter — 4 steps per cycle through a b c: a b c a | b c a b
+(~ "{a b c, d e}")   ; layers with different lengths on the first layer's grid
+(~ "bd(3,8)")        ; euclid — 3 hits in 8 steps; bd(3,8,2) rotates; bd(<3 5>,8) is patterned
 ```
+
+`_` is a **rest** (like `~`); use `@` to elongate a step (`bd@3`). This is a deliberate
+difference from Strudel, where `_` extends the previous step.
+
+Sub-sequences are exact since TL3: `"<a b> c"` now alternates between `a c` and `b c`
+(before, it always played `a`), and step times are exact rationals instead of rounded
+floats.
 
 Mini-notation strings are also accepted directly wherever an argument is patternable:
 `(fast "<1 2>" pat)` ≡ `(fast (~ "<1 2>") pat)` (see [Patterned arguments](#patterned-arguments)).
@@ -2952,6 +3046,8 @@ The app exposes a serverless REST API on Vercel:
 (~ "bd@3 sd")                ; elongation: bd takes ¾ of the cycle
 (~ "c4 e4 g4")               ; note names → keywords (:c4 :e4 :g4)
 (~ "440 330 220")            ; numbers pass through as Hz values
+(~ "bd!3 sd . hh hh hh, cp(3,8)")  ; ! repeat, . groups, , layers, (k,n,r) euclid
+(~ "{a b c}%4")              ; polymeter: 4 steps per cycle
 
 ;; Mini-notation composes with all Lisp functions:
 (fast 2 (~ "bd sd"))
