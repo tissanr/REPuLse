@@ -1113,3 +1113,273 @@
 (defn last-of
   "Apply f when c mod n = n - 1."
   [n f pat] ((patternify (fn [n' p] (last-of* n' f p))) n pat))
+
+;;; ── Phase TL3b: Zoom, compress & structure extras ───────────────────
+
+(defn compress
+  "Squeeze each cycle into [s, e) of the cycle (0 <= s < e <= 1), silence elsewhere."
+  [s e pat] ((patternify2 compress*) s e pat))
+
+(defn- zoom*
+  "Tidal zoomArc: window [c+s, c+e) of cycle c stretched onto [c, c+1)."
+  [s e pat]
+  (let [s (->rat s) e (->rat e) d (rat- e s)]
+    (if (rat<= e s)
+      silence
+      (pattern
+       (per-cycle
+        (fn [piece]
+          (let [c      (int->rat (cycle-of piece))
+                to-src (fn [t] (rat+ (rat+ c s) (rat* (rat- t c) d)))
+                to-res (fn [t] (rat+ c (rat-div (rat- t (rat+ c s)) d)))]
+            (map (fn [ev] (map-spans #(span (to-res (:start %)) (to-res (:end %))) ev))
+                 (query pat (span (to-src (:start piece)) (to-src (:end piece))))))))))))
+
+(defn zoom
+  "Play the window [s, e) of each cycle, stretched to fill the cycle."
+  [s e pat] ((patternify2 zoom*) s e pat))
+
+(defn- focus* [s e pat]
+  (let [s (->rat s) e (->rat e)]
+    (if (rat<= e s)
+      silence
+      (late* s (fast* (rat-div [1 1] (rat- e s))
+                      (late* (rat-neg (int->rat (cycle-of (span s s)))) pat))))))
+
+(defn focus
+  "Squeeze the cycle into [s, e) and keep playing (no gaps)."
+  [s e pat] ((patternify2 focus*) s e pat))
+
+(defn- fast-gap* [n pat]
+  (let [n (->rat n)]
+    (cond (zero? (first n)) silence
+          (rat< n [1 1])    pat
+          :else             (compress* [0 1] (rat-div [1 1] n) pat))))
+
+(defn fast-gap
+  "n times faster, then silence until the next cycle."
+  [n pat] ((patternify fast-gap*) n pat))
+
+(defn- linger* [n pat]
+  (let [n (->rat n) len (if (neg? (first n)) (rat-neg n) n)]
+    (cond
+      (zero? (first n))    silence
+      (rat>= len [1 1])    pat
+      :else
+      (let [off (if (neg? (first n)) (rat- [1 1] len) [0 1])
+            k   (int (Math/ceil (rat->float (rat-div [1 1] len))))]
+        (pattern
+         (per-cycle
+          (fn [piece]
+            (let [c (int->rat (cycle-of piece))]
+              (mapcat (fn [i]
+                        (let [ws  (rat+ c (rat* (int->rat i) len))
+                              win (span-intersect piece (span ws (rat-min (rat+ ws len) (rat+ c [1 1]))))]
+                          (when win
+                            (query (late* (rat- (rat* (int->rat i) len) off) pat) win))))
+                      (range k))))))))))
+
+(defn linger
+  "Repeat the first n of every cycle (last |n| for negative n)."
+  [n pat] ((patternify linger*) n pat))
+
+(defn- split-at-multiples
+  "Split span sp at multiples of the rational L: [[k piece] …]."
+  [L sp]
+  (let [k0 (int (Math/floor (rat->float (rat-div (:start sp) L))))
+        k1 (int (Math/ceil  (rat->float (rat-div (:end sp) L))))]
+    (keep (fn [k]
+            (when-let [piece (span-intersect sp (span (rat* (int->rat k) L)
+                                                      (rat* (int->rat (inc k)) L)))]
+              [k piece]))
+          (range k0 k1))))
+
+(defn- ribbon* [offset cycles pat]
+  (let [off (->rat offset) L (->rat cycles)]
+    (if (rat<= L [0 1])
+      silence
+      (pattern
+       (fn [sp]
+         (mapcat (fn [[k piece]]
+                   (query (late* (rat- (rat* (int->rat k) L) off) pat) piece))
+                 (split-at-multiples L sp)))))))
+
+(defn ribbon
+  "Loop `cycles` cycles of pat starting at `offset`."
+  [offset cycles pat] ((patternify2 ribbon*) offset cycles pat))
+
+(defn- trunc* [t pat]
+  (let [t (->rat t)]
+    (cond
+      (rat<= t [0 1]) silence
+      (rat>= t [1 1]) pat
+      :else
+      (pattern
+       (per-cycle
+        (fn [piece]
+          (let [c (int->rat (cycle-of piece))]
+            (when-let [w (span-intersect piece (span c (rat+ c t)))]
+              (query pat w)))))))))
+
+(defn trunc
+  "Only the first t of every cycle plays; wholes are kept, parts cut."
+  [t pat] ((patternify trunc*) t pat))
+
+(defn revv
+  "Reverse time across cycles (t -> -t)."
+  [pat]
+  (let [neg (fn [{s :start e :end}] (span (rat-neg e) (rat-neg s)))]
+    (pattern (fn [sp] (map #(map-spans neg %) (query pat (neg sp)))))))
+
+(defn- repeat-cycles* [n pat]
+  (let [n (->int n)]
+    (if (< n 1) pat (slowcat-held* n (constantly pat)))))
+
+(defn repeat-cycles
+  "Each source cycle plays n times before the next."
+  [n pat] ((patternify repeat-cycles*) n pat))
+
+(defn- press-by* [r pat]
+  (squeeze-join (fmap-event #(compress* r [1 1] (pure (:value %) (:source %))) pat)))
+
+(defn press-by
+  "Shift every event to start r of the way through its own whole."
+  [r pat] ((patternify press-by*) r pat))
+
+(defn press
+  "(press-by 1/2 pat)"
+  [pat] (press-by* [1 2] pat))
+
+(defn- bite* [n ipat pat]
+  (let [n (->int n)]
+    (if (< n 1)
+      silence
+      (squeeze-join
+       (pattern
+        (fn [sp]
+          (keep (fn [ev]
+                  (let [v (:value ev)]
+                    (when (or (number? v) (vector? v))
+                      (let [i (mod (->int v) n)]
+                        (assoc ev :value (zoom* (rat i n) (rat (inc i) n) pat))))))
+                (query ipat sp))))))))
+
+(defn bite
+  "Cut each cycle into n slices; each event of ipat plays its slice."
+  [n ipat pat] ((patternify (fn [n' p] (bite* n' (->pat ipat) p))) n pat))
+
+(defn- chunk-into* [n f pat idx-fn]
+  (let [n (->int n)]
+    (if (< n 1)
+      pat
+      (pattern
+       (per-cycle
+        (fn [sp]
+          (let [i (idx-fn (cycle-of sp) n) a (rat i n) b (rat (inc i) n)]
+            (query (within* a b #(compress* a b (f (zoom* a b %))) pat) sp))))))))
+
+(defn chunk-into
+  "Apply f to the looped sub-cycle of chunk (c mod n)."
+  [n f pat] ((patternify (fn [n' p] (chunk-into* n' f p #(mod %1 %2)))) n pat))
+
+(defn chunk-back-into
+  "As chunk-into, chunk index (mod (-(c+1)) n)."
+  [n f pat] ((patternify (fn [n' p] (chunk-into* n' f p #(mod (- (inc %1)) %2)))) n pat))
+
+(defn- ply-for-each* [n f pat]
+  (let [k (max 1 (int (Math/ceil (rat->float (->rat n)))))]
+    (squeeze-join
+     (fmap-event (fn [ev]
+                   (let [p0 (pure (:value ev) (:source ev))]
+                     (fastcat* (into [p0] (map #(f p0 %) (range 1 k))))))
+                 pat))))
+
+(defn ply-for-each
+  "Each event becomes ceil(n) sub-steps; sub-step i >= 1 is (f (pure v) i)."
+  [n f pat] ((patternify (fn [n' p] (ply-for-each* n' f p))) n pat))
+
+(defn- euclidish* [k n g pat]
+  (let [bs   (euclid-bools k n 0)
+        n'   (count bs)
+        idxs (vec (keep-indexed (fn [i b] (when b i)) bs))
+        k'   (count idxs)
+        g    (rat-max [0 1] (rat-min [1 1] (->rat g)))]
+    (if (or (<= (->int k) 0) (zero? n') (zero? k'))
+      silence
+      (struct (stack* (map-indexed
+                       (fn [j i]
+                         (let [p (rat i n') q (rat j k')
+                               b (rat+ p (rat* (rat- q p) g))]
+                           (compress* b (rat+ b (rat 1 n')) (pure true))))
+                       idxs))
+              pat))))
+
+(defn euclidish
+  "Euclidean rhythm morphed towards even spacing by g in [0,1]."
+  [k n g pat] ((patternify3 euclidish*) k n g pat))
+
+(defn filter-events
+  "Keep events whose value satisfies pred."
+  [pred pat] (keep-values (comp boolean pred) pat))
+
+(defn- lisp-time [[n d]] (if (= d 1) n [n d]))
+
+(defn filter-when
+  "Keep events whose whole start (integer or [n d]) satisfies pred."
+  [pred pat]
+  (pattern (fn [sp] (filter #(pred (lisp-time (:start (whole-or-part %)))) (query pat sp)))))
+
+(defn bypass
+  "on true -> silence, otherwise pat."
+  [on pat]
+  ((patternify (fn [o p] (if (step-true? o) silence p))) on pat))
+
+(defn- beat* [t div pat]
+  (let [div (->int div)]
+    (if (<= div 0)
+      silence
+      (let [t (mod (->int t) div)]
+        (inner-join (fmap-event #(compress* (rat t div) (rat (inc t) div)
+                                            (pure (:value %) (:source %)))
+                                pat))))))
+
+(defn beat
+  "Place every value of pat on step t mod div of div."
+  [t div pat] ((patternify2 beat*) t div pat))
+
+(defn sew
+  "Structure from a and b, cut to where bools is true / false."
+  [bools a b]
+  (let [bools (->pat bools)]
+    (stack* [(mask bools a) (mask (invert bools) b)])))
+
+(defn stitch
+  "Structure from bools; true steps take a, false steps take b."
+  [bools a b]
+  (let [bools (->pat bools)]
+    (stack* [(struct bools a) (struct (invert bools) b)])))
+
+(defn- bits->pat [n bits]
+  (seq* (mapv #(odd? (Math/floor (/ n (Math/pow 2 %)))) (range (dec bits) -1 -1))))
+
+(defn- binary* [n]
+  (let [n (->int n)]
+    (if (<= n 0) (seq* [false]) (bits->pat n (count (.toString n 2))))))
+
+(defn binary
+  "Bits of n, MSB first, minimal bit count, as a true/false step sequence."
+  [n] (if (pattern? n) (inner-join (fmap binary* n)) (binary* n)))
+
+(defn- binary-n* [n bits]
+  (let [bits (min 52 (->int bits))]
+    (if (<= bits 0)
+      silence
+      (bits->pat (mod (->int n) (Math/pow 2 bits)) bits))))
+
+(defn binary-n
+  "The low `bits` (default 16) bits of n, MSB first."
+  ([n] (binary-n n 16))
+  ([n bits]
+   (if (or (pattern? n) (pattern? bits))
+     (inner-join (app-both binary-n* (->pat n) (->pat bits)))
+     (binary-n* n bits))))

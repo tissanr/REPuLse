@@ -126,3 +126,20 @@
    (midi-out 1)      — return (pat → pat) transformer"
   ([ch]     (fn [pat] (midi-out ch pat)))
   ([ch pat] (apply-param :midi-ch ch pat)))
+
+;;; ── Phase TL3b: hurry ────────────────────────────────────────────────
+
+(defn- hurry* [r pat]
+  (let [f (core/rat->float (core/->rat r))]
+    (core/fmap (fn [v]
+                 (if (or (nil? v) (= :_ v))
+                   v
+                   (let [m (to-map v)] (assoc m :rate (* (or (:rate m) 1) f)))))
+               (core/fast r pat))))
+
+(defn hurry
+  "fast r, and multiply every event's :rate by r (missing :rate counts as 1).
+   (hurry 2 pat) — double speed and playback rate
+   (hurry 2)     — return transformer"
+  ([r]     (fn [pat] (hurry r pat)))
+  ([r pat] ((core/patternify hurry*) r pat)))

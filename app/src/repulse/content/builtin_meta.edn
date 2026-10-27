@@ -1580,4 +1580,154 @@
   :side-effects []
   :examples ["(last-of 4 (add 10) (seq 0 1))" "(last-of \"<4 2>\" (add 10) (seq 0 1))"]
   :see-also ["every" "first-of"]}
+
+ :compress {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(compress 1/4 3/4 (seq :bd :sd))" "(compress \"<0 1/2>\" 1 (seq :a :b))"]
+  :see-also ["zoom" "focus" "fast-gap"]}
+
+ :zoom {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(zoom 1/4 3/4 (seq :a :b :c :d))" "(zoom 0 \"<1 1/2>\" (seq :a :b :c :d))"]
+  :see-also ["focus" "compress" "linger"]}
+
+ :focus {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(focus 1/4 3/4 (seq :a :b :c :d))" "(focus 0 \"<1 1/2>\" (seq :a :b))"]
+  :see-also ["zoom" "compress"]}
+
+ :fast-gap {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(fast-gap 2 (seq :bd :sd))" "(fast-gap \"<1 2>\" (seq :a :b))"]
+  :see-also ["compress" "fast"]}
+
+ :linger {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(linger 1/4 (seq 0 1 2 3 4 5 6 7))" "(linger \"<1/4 1/2>\" (seq 0 1 2 3 4 5 6 7))"]
+  :see-also ["zoom" "trunc" "ply"]}
+
+ :bite {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(bite 4 (seq 0 2) (seq :a :b :c :d :e :f :g :h))" "(bite \"<4 2>\" (seq 0 1) (seq :a :b :c :d :e :f :g :h))"]
+  :see-also ["zoom" "chunk-into"]}
+
+ :ribbon {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(ribbon 1 2 (cat (pure :a) (pure :b) (pure :c) (pure :d)))" "(ribbon \"<0 1>\" 1 (cat (pure :a) (pure :b) (pure :c)))"]
+  :see-also ["repeat-cycles" "early"]}
+
+ :hurry {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(hurry 2 (seq :bd :sd))" "(hurry \"<1 2>\" (seq :bd :sd))"]
+  :see-also ["fast" "rate"]}
+
+ :revv {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(revv (seq :a :b :c))"]
+  :see-also ["rev"]}
+
+ :repeat-cycles {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(repeat-cycles 2 (cat (seq :a) (seq :b)))" "(repeat-cycles \"<1 2>\" (cat (pure :a) (pure :b) (pure :c)))"]
+  :see-also ["ribbon" "cat"]}
+
+ :trunc {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(trunc 3/4 (seq :a :b :c :d))" "(trunc \"<1 1/2>\" (seq :a :b :c :d))"]
+  :see-also ["linger" "zoom"]}
+
+ :press {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(press (seq :a :b))"]
+  :see-also ["press-by"]}
+
+ :press-by {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(press-by 1/4 (seq :a :b))" "(press-by \"<0 1/2>\" (seq :a :b))"]
+  :see-also ["press" "compress"]}
+
+ :chunk-into {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(chunk-into 2 rev (seq 0 1 2 3))" "(chunk-into \"<4 2>\" rev (seq 0 1 2 3))"]
+  :see-also ["chunk" "chunk-back-into" "zoom"]}
+
+ :chunk-back-into {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(chunk-back-into 2 rev (seq 0 1 2 3))" "(chunk-back-into \"<4 2>\" rev (seq 0 1 2 3))"]
+  :see-also ["chunk-into" "chunk-back"]}
+
+ :euclidish {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(euclidish 3 8 1/2 (pure :x))" "(euclidish 3 8 \"<0 1>\" (pure :x))"]
+  :see-also ["euclidean" "struct"]}
+
+ :ply-for-each {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(ply-for-each 3 (fn [p i] (add (* i 12) p)) (seq 0 7))" "(ply-for-each \"<1 2>\" (fn [p i] (add i p)) (seq 0 7))"]
+  :see-also ["ply" "ply-with"]}
+
+ :filter-events {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(filter-events (fn [v] (> v 2)) (seq 1 2 3 4))"]
+  :see-also ["filter-when" "mask"]}
+
+ :filter-when {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(filter-when (fn [t] (< t 1/2)) (seq :a :b :c :d))"]
+  :see-also ["filter-events" "within"]}
+
+ :bypass {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(bypass 0 (seq :a :b))" "(bypass \"<0 1>\" (seq :a :b))"]
+  :see-also ["mask" "sew"]}
+
+ :beat {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(beat \"0,7,10\" 16 (pure :bd))" "(beat \"<0 1>\" 4 (pure :bd))"]
+  :see-also ["struct" "euclidean"]}
+
+ :sew {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(sew \"t f\" (seq :a :a :a :a) (seq :b :b :b :b))" "(sew \"<t f>\" (pure :a) (pure :b))"]
+  :see-also ["stitch" "mask"]}
+
+ :stitch {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(stitch \"t f t t\" (pure :bd) (pure :sn))"]
+  :see-also ["sew" "struct"]}
+
+ :binary {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(struct (binary 5) (pure :x))" "(struct (binary \"<5 3>\") (pure :x))"]
+  :see-also ["binary-n" "struct"]}
+
+ :binary-n {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(struct (binary-n 5 4) (pure :x))" "(binary-n 1 \"<2 4>\")"]
+  :see-also ["binary" "struct"]}
 }

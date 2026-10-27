@@ -973,6 +973,31 @@ accept patterns or mini-notation strings (see [Patterned arguments](#patterned-a
 | `(timecat [w x]…)` | Weighted concatenation inside one cycle | — |
 | `(first-of n f pat)` | Apply `f` on cycles 0, n, 2n … (same as `every`) | `n` |
 | `(last-of n f pat)` | Apply `f` on cycles n-1, 2n-1 … | `n` |
+| `(compress s e pat)` | Squeeze each cycle into the window `[s, e)` (`0 ≤ s < e ≤ 1`), silence elsewhere | `s e` |
+| `(zoom s e pat)` | Play only the window `[s, e)` of each cycle, stretched to fill the cycle (Tidal `zoomArc`) | `s e` |
+| `(focus s e pat)` | Squeeze the cycle into `[s, e)` and keep playing — neighbouring cycles fill the rest | `s e` |
+| `(fast-gap n pat)` | `n` times faster, then silence until the next cycle | `n` |
+| `(linger n pat)` | Repeat the first `n` of every cycle (last `|n|` for negative `n`); restarts every cycle | `n` |
+| `(bite n ipat pat)` | Cut each cycle into `n` slices; each event of `ipat` (an index) plays its slice | `n` |
+| `(ribbon offset cycles pat)` | Loop `cycles` cycles of `pat` starting at cycle `offset` | `offset cycles` |
+| `(hurry r pat)` | `(fast r pat)` and multiply every event's `:rate` by `r` (missing rate = 1) | `r` |
+| `(revv pat)` | Reverse time across cycles (cycle `c` plays source cycle `-c-1` reversed) | — |
+| `(repeat-cycles n pat)` | Play each source cycle `n` times before moving on | `n` |
+| `(trunc t pat)` | Only the first `t` of each cycle plays; events crossing the cut are cut short | `t` |
+| `(press pat)` | Every event starts half way through its own length (`(press-by 1/2 pat)`) | — |
+| `(press-by r pat)` | Every event starts `r` of the way through its own length | `r` |
+| `(chunk-into n f pat)` | Like `chunk`, but `f` sees the chunk as a looping full cycle; chunk `c mod n` | `n` |
+| `(chunk-back-into n f pat)` | As `chunk-into`, chunk index `n-1, n-2 … 0` | `n` |
+| `(euclidish k n g pat)` | Euclidean rhythm morphed towards even spacing by `g` (0 = `euclidean`, 1 = even) | `k n g` |
+| `(ply-for-each n f pat)` | `ceil(n)` sub-steps per event; sub-step `i ≥ 1` is `(f (pure v) i)` | `n` |
+| `(filter-events pred pat)` | Keep events whose **value** satisfies `pred` | — |
+| `(filter-when pred pat)` | Keep events whose start time satisfies `pred` | — |
+| `(bypass on pat)` | `on` true (`1`) silences `pat`, false plays it | `on` |
+| `(beat t div pat)` | Place every value of `pat` on step `t mod div` of `div` (`"0,7,10"` stacks steps) | `t div` |
+| `(sew bools a b)` | `a` where `bools` is true, `b` where it is false (structure from `a`/`b`) | `bools` |
+| `(stitch bools a b)` | Structure from `bools`; true steps take `a`, false steps take `b` | `bools` |
+| `(binary n)` | Bits of `n`, most significant first, as `true`/`false` steps: `5` → `1 0 1` | `n` |
+| `(binary-n n [bits])` | The low `bits` bits of `n` (default 16), most significant first | `n bits` |
 
 ```lisp
 (struct "t ~ t t" (pure :bd))                  ; bd at 0, 1/2, 3/4
@@ -1001,6 +1026,63 @@ Tidal's `cat`: a cycle-varying input such as `(cat a b)` is *held* — the sourc
 one cycle every `n` cycles, not every cycle. `(iter 2 (cat (seq :a :b) (seq :c :d)))`
 plays `a b | b c | c d | d a`. Use `fast-chunk` for the non-holding variant. The public
 `cat` is unchanged.
+
+### Windows, switches & binary rhythms
+
+`zoom`, `focus` and `compress` all take a window `[s, e)` of the cycle, but do different
+things with the same input `(seq :a :b :c :d)`:
+
+```lisp
+(zoom 1/4 3/4 (seq :a :b :c :d))      ; b c — the middle half, stretched to fill the cycle
+(focus 1/4 3/4 (seq :a :b :c :d))     ; c d a b c d a b — the cycle squeezed into [1/4, 3/4), no gaps
+(compress 1/4 3/4 (seq :a :b :c :d))  ; silence, a b c d in the middle half, silence
+(fast-gap 2 (seq :bd :sd))            ; bd sd in the first half, then silence
+(linger 1/4 (seq 0 1 2 3 4 5 6 7))    ; 0 1 0 1 0 1 0 1 — the first quarter repeated
+(trunc 3/4 (seq :a :b :c :d))         ; a b c then silence
+(bite 4 (seq 0 2) (seq :a :b :c :d :e :f :g :h))  ; a b e f — slices 0 and 2
+(ribbon 1 2 (cat (pure :a) (pure :b) (pure :c) (pure :d)))  ; b c b c — loop cycles 1–2
+(repeat-cycles 2 (cat (pure :a) (pure :b)))       ; a a b b
+(press (seq :a :b))                   ; a and b each start half way into their step
+(chunk-into 2 rev (seq 0 1 2 3))      ; 1 0 2 3 | 0 1 3 2
+(euclidish 3 8 1/2 (pure :x))         ; 3 hits halfway between euclidean and perfectly even
+(ply-for-each 3 (fn [p i] (add (* i 12) p)) (seq 0 7))  ; 0 12 24 | 7 19 31
+```
+
+**`hurry` multiplies `rate`.** `(hurry 2 (seq :bd :sd))` is `(fast 2 …)` and sets
+`:rate 2` on every event, so samples also play an octave up; an existing rate is
+multiplied (`(hurry 2 (rate 1.5 pat))` → rate 3). There is no `speed` alias.
+
+**Switching between patterns.** `sew` and `stitch` choose between two patterns with a
+boolean pattern; rests in the boolean pattern select neither side:
+
+```lisp
+(sew "t f" (seq :a :a :a :a) (seq :b :b :b :b))  ; a a b b — structure from a and b
+(stitch "t f t t" (pure :bd) (pure :sn))         ; bd sn bd bd — structure from the booleans
+(bypass "<0 1>" (seq :a :b))                     ; plays on even cycles, silent on odd ones
+```
+
+**Filtering.** `filter-events` (named so because `filter` works on sequences) receives the
+event **value**; `filter-when` receives the event's start time — a plain integer when it
+is whole (`0`, `1`), otherwise an exact rational such as `1/4`, so `(= t 0)` and
+`(< t 1/2)` both work:
+
+```lisp
+(filter-events (fn [v] (> v 2)) (seq 1 2 3 4))        ; 3 4
+(filter-when (fn [t] (< t 1/2)) (seq :a :b :c :d))    ; a b, then nothing
+```
+
+**Binary rhythms.** `binary` turns a number into `true`/`false` steps (Strudel semantics:
+most significant bit first, argument order `n` then `bits`, default 16 bits for `binary-n`):
+
+```lisp
+(struct (binary 5) (pure :x))          ; 5 = 101 → x ~ x
+(binary-n 5 4)                         ; false true false true
+(beat "0,7,10" 16 (pure :bd))          ; hits on steps 0, 7 and 10 of 16
+(->> (seq :bd :sd) (fast-gap 2) (linger 1/2) (hurry 2) (zoom 0 1/2))  ; curried forms
+```
+
+`sew`, `stitch`, `binary` and `binary-n` have no curried form. Numeric arguments of all
+the functions above accept patterns or mini-notation strings, e.g. `(zoom 0 "<1 1/2>" pat)`.
 
 ---
 

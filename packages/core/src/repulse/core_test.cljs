@@ -686,3 +686,258 @@
   (is (= [:a :b :c :a] (cvals (c/polymeter 4 [[:a :b :c]]) 0)))
   (is (= [:b :c :a :b] (cvals (c/polymeter 4 [[:a :b :c]]) 1)))
   (is (= [] (c/query (c/polymeter 0 [[:a :b]]) (c/cycle-span 0)))))
+
+;;; ── Phase TL3b ───────────────────────────────────────────────────────
+
+(defn- tb-rs [[n d]] (if (= d 1) (str n) (str n "/" d)))
+
+(defn- tb-wop [e] (or (:whole e) (:part e)))
+
+(defn- tb-evs
+  "Events of cycles from..to as [value ws we] (part = whole) or
+   [value ws we ps pe]; rationals as strings; sorted by whole/part start."
+  ([pat c] (tb-evs pat c c))
+  ([pat from to]
+   (->> (mapcat #(c/query pat (c/cycle-span %)) (range from (inc to)))
+        (sort-by (juxt #(c/rat->float (:start (tb-wop %)))
+                       #(c/rat->float (:start (:part %)))
+                       #(str (:value %))))
+        (mapv (fn [e]
+                (let [w (:whole e) p (:part e)]
+                  (if (= w p)
+                    [(:value e) (tb-rs (:start w)) (tb-rs (:end w))]
+                    [(:value e) (tb-rs (:start w)) (tb-rs (:end w))
+                     (tb-rs (:start p)) (tb-rs (:end p))])))))))
+
+(defn- tb-vals [pat c] (mapv first (tb-evs pat c)))
+
+(defn- tb-onsets [pat c]
+  (->> (c/query-onsets pat (c/cycle-span c))
+       (sort-by #(c/rat->float (:start (:whole %))))
+       (mapv #(tb-rs (:start (:whole %))))))
+
+(defn- tb-alt
+  "<a b …>: one value per cycle."
+  [& xs] (c/cat* (mapv c/pure xs)))
+
+(defn- tb-pc [& xs] (c/seq* (vec xs)))
+(defn- tb-cat [& xs] (c/cat* (vec xs)))
+(defn- tb-q [n d] [n d])
+
+(deftest tl3b-compress
+  (let [p (c/seq* [:bd :sd])]
+    (is (= [[:bd "1/4" "1/2"] [:sd "1/2" "3/4"]] (tb-evs (c/compress [1 4] [3 4] p) 0)))
+    (is (= [[:bd "5/4" "3/2"] [:sd "3/2" "7/4"]] (tb-evs (c/compress [1 4] [3 4] p) 1)))
+    (is (= [] (tb-evs (c/compress [3 4] [1 4] p) 0)))
+    (is (= [] (tb-evs (c/compress [1 2] [3 2] p) 0)))
+    (is (= [[:a "0" "1/2"] [:b "1/2" "1"]]
+           (tb-evs (c/compress (tb-alt 0 [1 2]) 1 (c/seq* [:a :b])) 0)))
+    (is (= [[:a "3/2" "7/4"] [:b "7/4" "2"]]
+           (tb-evs (c/compress (tb-alt 0 [1 2]) 1 (c/seq* [:a :b])) 1)))))
+
+(deftest tl3b-zoom
+  (is (= [[:b "0" "1/2"] [:c "1/2" "1"]]
+         (tb-evs (c/zoom [1 4] [3 4] (c/seq* [:a :b :c :d])) 0)))
+  (is (= [[:b "0" "1/2"] [:c "1/2" "1"]]
+         (tb-evs (c/zoom [1 2] [3 2] (c/cat* [(c/seq* [:a :b]) (c/seq* [:c :d])])) 0)))
+  (let [evs (c/query (c/zoom [1 4] [3 4] (c/pure :x)) (c/cycle-span 0))]
+    (is (= [[:x "-1/2" "3/2" "0" "1"]] (tb-evs (c/zoom [1 4] [3 4] (c/pure :x)) 0)))
+    (is (= 1 (count evs)))
+    (is (not (c/onset? (first evs)))))
+  (is (= [[:a "1" "3/2"] [:b "3/2" "2"]]
+         (tb-evs (c/zoom 0 (tb-alt 1 [1 2]) (c/seq* [:a :b :c :d])) 1)))
+  (is (= [] (tb-evs (c/zoom [3 4] [1 4] (c/seq* [:a :b])) 0))))
+
+(deftest tl3b-focus
+  (let [p (c/focus [1 4] [3 4] (c/seq* [:a :b :c :d]))
+        evs (tb-evs p 0)]
+    (is (= [:c :d :a :b :c :d :a :b] (mapv first evs)))
+    (is (= [:c "0" "1/8"] (first evs)))
+    (is (= [:a "1/4" "3/8"] (nth evs 2))))
+  (is (= [[:b "-1/4" "1/4" "0" "1/4"] [:a "1/4" "3/4"] [:b "3/4" "5/4" "3/4" "1"]]
+         (tb-evs (c/focus [1 4] [3 4] (c/cat* [(c/pure :a) (c/pure :b)])) 0)))
+  (is (= [[:a "0" "1/2"] [:b "1/2" "1"]]
+         (tb-evs (c/focus 0 (tb-alt 1 [1 2]) (c/seq* [:a :b])) 0)))
+  (is (= [:a :b :a :b] (tb-vals (c/focus 0 (tb-alt 1 [1 2]) (c/seq* [:a :b])) 1)))
+  (is (= [] (tb-evs (c/focus [3 4] [1 4] (c/seq* [:a :b])) 0))))
+
+(deftest tl3b-fast-gap
+  (let [p (c/seq* [:bd :sd])]
+    (is (= [[:bd "0" "1/4"] [:sd "1/4" "1/2"]] (tb-evs (c/fast-gap 2 p) 0)))
+    (is (= [[:bd "1" "5/4"] [:sd "5/4" "3/2"]] (tb-evs (c/fast-gap 2 p) 1)))
+    (is (= (tb-evs p 0) (tb-evs (c/fast-gap [1 2] p) 0)))
+    (is (= [] (tb-evs (c/fast-gap 0 p) 0)))
+    (is (= [[:a "1" "5/4"] [:b "5/4" "3/2"]]
+           (tb-evs (c/fast-gap (tb-alt 1 2) (c/seq* [:a :b])) 1)))))
+
+(deftest tl3b-linger
+  (let [p (c/seq* [0 1 2 3 4 5 6 7])
+        eighths (fn [n vs] (mapv (fn [i v] [v (tb-rs (c/rat i 8)) (tb-rs (c/rat (inc i) 8))])
+                                 (range n) vs))]
+    (is (= (eighths 8 [0 1 0 1 0 1 0 1]) (tb-evs (c/linger [1 4] p) 0)))
+    (is (= [0 1 2 0 1 2 0 1] (tb-vals (c/linger [3 8] p) 0)))
+    (is (= [6 7 6 7 6 7 6 7] (tb-vals (c/linger [-1 4] p) 0)))
+    (is (= [[:c "1" "3/2"] [:c "3/2" "2"]]
+           (tb-evs (c/linger [1 2] (c/cat* [(c/seq* [:a :b]) (c/seq* [:c :d])])) 1)))
+    (is (= [0 1 2 3 0 1 2 3] (tb-vals (c/linger (tb-alt [1 4] [1 2]) p) 1)))
+    (is (= [] (tb-evs (c/linger 0 p) 0)))
+    (is (= (tb-evs p 0) (tb-evs (c/linger 1 p) 0)))))
+
+(deftest tl3b-ribbon
+  (let [p (c/cat* (mapv c/pure [:a :b :c :d]))]
+    (is (= [[:b "0" "1"] [:c "1" "2"] [:b "2" "3"] [:c "3" "4"]]
+           (tb-evs (c/ribbon 1 2 p) 0 3))))
+  (is (= [[:b "0" "1/2"] [:a "1/2" "1"]] (tb-evs (c/ribbon [1 2] 1 (c/seq* [:a :b])) 0)))
+  (let [p (c/ribbon (tb-alt 0 1) 1 (c/cat* (mapv c/pure [:a :b :c])))]
+    (is (= [[:a "0" "1"]] (tb-evs p 0)))
+    (is (= [[:b "1" "2"]] (tb-evs p 1)))))
+
+(deftest tl3b-trunc
+  (is (= [[:a "0" "1/4"] [:b "1/4" "1/2"] [:c "1/2" "3/4"]]
+         (tb-evs (c/trunc [3 4] (c/seq* [:a :b :c :d])) 0)))
+  (let [p (c/trunc [1 2] (c/seq* [:a :b :c]))]
+    (is (= [[:a "0" "1/3"] [:b "1/3" "2/3" "1/3" "1/2"]] (tb-evs p 0)))
+    (is (= ["0" "1/3"] (tb-onsets p 0))))
+  (is (= [[:a "1" "5/4"] [:b "5/4" "3/2"]]
+         (tb-evs (c/trunc (tb-alt 1 [1 2]) (c/seq* [:a :b :c :d])) 1)))
+  (is (= [] (tb-evs (c/trunc 0 (c/seq* [:a])) 0))))
+
+(deftest tl3b-revv
+  (is (= [[:c "0" "1/3"] [:b "1/3" "2/3"] [:a "2/3" "1"]] (tb-evs (c/revv (c/seq* [:a :b :c])) 0)))
+  (is (= [[:c "0" "1"] [:b "1" "2"] [:a "2" "3"]]
+         (tb-evs (c/revv (c/cat* (mapv c/pure [:a :b :c]))) 0 2))))
+
+(deftest tl3b-repeat-cycles
+  (let [cyc (fn [p] (mapv #(first (first (tb-evs p % %))) (range 4)))]
+    (is (= [:a :a :b :b] (cyc (c/repeat-cycles 2 (c/cat* [(c/pure :a) (c/pure :b)])))))
+    (is (= [:a :a :c :b]
+           (cyc (c/repeat-cycles (tb-alt 1 2) (c/cat* (mapv c/pure [:a :b :c]))))))))
+
+(deftest tl3b-press
+  (is (= [[:a "1/4" "1/2"] [:b "3/4" "1"]] (tb-evs (c/press (c/seq* [:a :b])) 0)))
+  (is (= [[:a "1/8" "1/2"] [:b "5/8" "1"]] (tb-evs (c/press-by [1 4] (c/seq* [:a :b])) 0)))
+  (is (= [] (tb-evs (c/press-by 1 (c/seq* [:a :b])) 0)))
+  (let [p (c/press-by (tb-alt 0 [1 2]) (c/seq* [:a :b]))]
+    (is (= [[:a "0" "1/2"] [:b "1/2" "1"]] (tb-evs p 0)))
+    (is (= [[:a "5/4" "3/2"] [:b "7/4" "2"]] (tb-evs p 1)))))
+
+(deftest tl3b-bite
+  (let [p (c/seq* [:a :b :c :d :e :f :g :h])
+        q (fn [& xs] (mapv (fn [i v] [v (tb-rs (c/rat i 4)) (tb-rs (c/rat (inc i) 4))]) (range) xs))]
+    (is (= (q :a :b :e :f) (tb-evs (c/bite 4 (c/seq* [0 2]) p) 0)))
+    (is (= (q :a :b :c :d) (tb-evs (c/bite 4 (c/seq* [0 5]) p) 0)))
+    (is (= (mapv (fn [i v] [v (tb-rs (c/rat (+ 8 i) 8)) (tb-rs (c/rat (+ 9 i) 8))])
+                 (range) [:a :b :c :d :e :f :g :h])
+           (tb-evs (c/bite (tb-alt 4 2) (c/seq* [0 1]) p) 1)))
+    (is (= [] (tb-evs (c/bite 0 (c/seq* [0]) p) 0)))))
+
+(deftest tl3b-chunk-into
+  (let [p (c/seq* [0 1 2 3])]
+    (is (= [[1 "0" "1/4"] [0 "1/4" "1/2"] [2 "1/2" "3/4"] [3 "3/4" "1"]]
+           (tb-evs (c/chunk-into 2 c/rev p) 0)))
+    (is (= [0 1 3 2] (tb-vals (c/chunk-into 2 c/rev p) 1)))
+    (is (= [0 1 3 2] (tb-vals (c/chunk-into (tb-alt 4 2) c/rev p) 1))))
+  (let [evs (tb-evs (c/chunk-into 4 #(c/fast 2 %) (c/seq* [0 1 2 3 4 5 6 7])) 0)]
+    (is (= [[0 "0" "1/16"] [1 "1/16" "1/8"] [0 "1/8" "3/16"] [1 "3/16" "1/4"]] (subvec evs 0 4)))
+    (is (= [[2 "1/4" "3/8"] [3 "3/8" "1/2"] [4 "1/2" "5/8"] [5 "5/8" "3/4"]
+            [6 "3/4" "7/8"] [7 "7/8" "1"]]
+           (subvec evs 4)))))
+
+(deftest tl3b-chunk-back-into
+  (let [p (c/seq* [0 1 2 3])]
+    (is (= [0 1 3 2] (tb-vals (c/chunk-back-into 2 c/rev p) 0)))
+    (is (= [1 0 2 3] (tb-vals (c/chunk-back-into 2 c/rev p) 1)))
+    (is (= [1 0 2 3] (tb-vals (c/chunk-back-into (tb-alt 4 2) c/rev p) 1)))))
+
+(deftest tl3b-euclidish
+  (let [x (c/pure :x)]
+    (is (= [[:x "0" "1/8"] [:x "3/8" "1/2"] [:x "3/4" "7/8"]] (tb-evs (c/euclidish 3 8 0 x) 0)))
+    (is (= (tb-evs (c/euclidean 3 8 x) 0) (tb-evs (c/euclidish 3 8 0 x) 0)))
+    (is (= [[:x "0" "1/8"] [:x "1/3" "11/24"] [:x "2/3" "19/24"]] (tb-evs (c/euclidish 3 8 1 x) 0)))
+    (is (= [[:x "0" "1/8"] [:x "17/48" "23/48"] [:x "17/24" "5/6"]]
+           (tb-evs (c/euclidish 3 8 [1 2] x) 0)))
+    (is (= ["1" "4/3" "5/3"] (tb-onsets (c/euclidish 3 8 (tb-alt 0 1) x) 1)))
+    (is (= ["1" "5/4" "11/8" "13/8" "7/4"] (tb-onsets (c/euclidish (tb-alt 3 5) 8 0 x) 1)))
+    (is (= [] (tb-evs (c/euclidish 0 8 0 x) 0)))))
+
+(deftest tl3b-ply-for-each
+  (let [f (fn [p i] (c/fmap #(+ % (* i 12)) p))]
+    (is (= [[0 "0" "1/6"] [12 "1/6" "1/3"] [24 "1/3" "1/2"]
+            [7 "1/2" "2/3"] [19 "2/3" "5/6"] [31 "5/6" "1"]]
+           (tb-evs (c/ply-for-each 3 f (c/seq* [0 7])) 0)))
+    (let [g (fn [p i] (c/fmap #(+ % i) p))
+          p (c/ply-for-each (tb-alt 1 2) g (c/seq* [0 7]))]
+      (is (= [[0 "0" "1/2"] [7 "1/2" "1"]] (tb-evs p 0)))
+      (is (= [[0 "1" "5/4"] [1 "5/4" "3/2"] [7 "3/2" "7/4"] [8 "7/4" "2"]] (tb-evs p 1))))))
+
+(deftest tl3b-filter-events
+  (is (= [[3 "1/2" "3/4"] [4 "3/4" "1"]]
+         (tb-evs (c/filter-events #(> % 2) (c/seq* [1 2 3 4])) 0)))
+  (is (= [[:bd "0" "1/3"] [:bd "2/3" "1"]]
+         (tb-evs (c/filter-events #(= % :bd) (c/seq* [:bd :sd :bd])) 0))))
+
+(deftest tl3b-filter-when
+  (let [p (c/filter-when (fn [t] (< (if (vector? t) (/ (first t) (second t)) t) 0.5))
+                         (c/seq* [:a :b :c :d]))]
+    (is (= [[:a "0" "1/4"] [:b "1/4" "1/2"]] (tb-evs p 0)))
+    (is (= [] (tb-evs p 1))))
+  (is (= [[:a "0" "1/2"]] (tb-evs (c/filter-when #(= % 0) (c/seq* [:a :b])) 0)))
+  (is (= [0 [1 2]] (let [seen (atom [])]
+                     (tb-evs (c/filter-when (fn [t] (swap! seen conj t) true) (c/seq* [:a :b])) 0)
+                     @seen))))
+
+(deftest tl3b-bypass
+  (let [p (c/seq* [:a :b])]
+    (is (= [] (tb-evs (c/bypass 1 p) 0)))
+    (is (= (tb-evs p 0) (tb-evs (c/bypass 0 p) 0)))
+    (is (= [:a :b] (tb-vals (c/bypass (tb-alt 0 1) p) 0)))
+    (is (= [] (tb-evs (c/bypass (tb-alt 0 1) p) 1)))
+    (is (= [[:a "0" "1/4"] [:b "1/4" "1/2"]]
+           (tb-evs (c/bypass (c/seq* [0 1]) (c/seq* [:a :b :c :d])) 0)))))
+
+(deftest tl3b-beat
+  (let [bd (c/pure :bd)
+        stack3 (c/stack* [(c/pure 0) (c/pure 7) (c/pure 10)])]
+    (is (= [[:bd "0" "1/16"] [:bd "7/16" "1/2"] [:bd "5/8" "11/16"]]
+           (tb-evs (c/beat stack3 16 bd) 0)))
+    (is (= [[:b "1/2" "3/4"]] (tb-evs (c/beat 2 4 (c/seq* [:a :b])) 0)))
+    (is (= [[:x "1/16" "1/8"]] (tb-evs (c/beat 17 16 (c/pure :x)) 0)))
+    (is (= [[:bd "5/4" "3/2"]] (tb-evs (c/beat (tb-alt 0 1) 4 bd) 1)))
+    (is (= [] (tb-evs (c/beat 0 0 bd) 0)))))
+
+(deftest tl3b-sew
+  (let [tf (c/seq* [:t :f])]
+    (is (= [[:a "0" "1/4"] [:a "1/4" "1/2"] [:b "1/2" "3/4"] [:b "3/4" "1"]]
+           (tb-evs (c/sew tf (c/seq* [:a :a :a :a]) (c/seq* [:b :b :b :b])) 0)))
+    (let [p (c/sew tf (c/seq* [:a :b :c]) (c/pure :x))]
+      (is (= [[:a "0" "1/3"] [:b "1/3" "2/3" "1/3" "1/2"] [:x "0" "1" "1/2" "1"]]
+             (vec (sort-by (fn [e] (.indexOf [:a :b :x] (first e))) (tb-evs p 0)))))
+      (is (= ["0" "1/3"] (tb-onsets p 0))))
+    (let [p (c/sew (tb-alt :t :f) (c/pure :a) (c/pure :b))]
+      (is (= [[:a "0" "1"]] (tb-evs p 0)))
+      (is (= [[:b "1" "2"]] (tb-evs p 1))))))
+
+(deftest tl3b-stitch
+  (is (= [[:bd "0" "1/4"] [:sn "1/4" "1/2"] [:bd "1/2" "3/4"] [:bd "3/4" "1"]]
+         (tb-evs (c/stitch (c/seq* [:t :f :t :t]) (c/pure :bd) (c/pure :sn)) 0)))
+  (is (= [[:a "0" "1/3"] [:b "2/3" "1"]]
+         (tb-evs (c/stitch (c/seq* [:t :_ :f]) (c/pure :a) (c/pure :b)) 0))))
+
+(deftest tl3b-binary
+  (is (= [[true "0" "1/3"] [false "1/3" "2/3"] [true "2/3" "1"]] (tb-evs (c/binary 5) 0)))
+  (is (= [[:x "0" "1/3"] [:x "2/3" "1"]] (tb-evs (c/struct (c/binary 5) (c/pure :x)) 0)))
+  (is (= [[true "0" "1"]] (tb-evs (c/binary 1) 0)))
+  (is (= [[false "0" "1"]] (tb-evs (c/binary 0) 0)))
+  (is (= [[true "1" "3/2"] [true "3/2" "2"]] (tb-evs (c/binary (tb-alt 5 3)) 1))))
+
+(deftest tl3b-binary-n
+  (is (= [false true false true] (tb-vals (c/binary-n 5 4) 0)))
+  (let [evs (tb-evs (c/binary-n 5) 0)]
+    (is (= 16 (count evs)))
+    (is (= [[true "13/16" "7/8"] [false "7/8" "15/16"] [true "15/16" "1"]] (subvec evs 13)))
+    (is (every? #(false? (first %)) (subvec evs 0 13))))
+  (is (= [true true true true] (tb-vals (c/binary-n -1 4) 0)))
+  (is (= [] (tb-evs (c/binary-n 5 0) 0)))
+  (is (= [[false "0" "1/2"] [true "1/2" "1"]] (tb-evs (c/binary-n 1 (tb-alt 2 4)) 0)))
+  (is (= [false false false true] (tb-vals (c/binary-n 1 (tb-alt 2 4)) 1)))
+  (is (= [false true false true] (tb-vals (c/binary-n 5 4) 1))))

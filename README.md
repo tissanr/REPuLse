@@ -131,6 +131,8 @@ function from a time span to a list of events — the same model used by TidalCy
 | `(struct "t ~ t t" (pure :bd))` | Boolean rhythm |
 | `(ply 2 pat)` / `(chunk 4 f pat)` / `(iter 4 pat)` | Repeat, rotating transform, rotate start |
 | `(swing 4 pat)` / `(polymeter [:a :b :c] [:d :e])` | Groove, polymeter |
+| `(zoom 1/4 3/4 pat)` / `(compress 1/4 3/4 pat)` | Play a window / squeeze into a window |
+| `(sew "t f" a b)` / `(struct (binary 5) pat)` | Switch patterns, binary rhythm |
 | `(fmap f pat)` | Apply a function to every event value |
 | `(scale :minor :c4 pat)` | Map degree integers in pat to Hz using a named scale |
 | `(chord :major7 :c4)` | Stack chord tones as a pattern of Hz values |
