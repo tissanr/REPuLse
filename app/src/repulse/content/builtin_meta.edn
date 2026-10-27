@@ -460,24 +460,119 @@
 
  ;; ── Music theory ────────────────────────────────────────────────────────────
  :scale      {:category "transform"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(scale :minor :c4 (seq 0 2 4 7))"
-                         "(scale :major :g3 (seq 1 3 5 8))"]
-              :see-also ["chord" "transpose" "seq"]}
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(scale :minor :c4 (seq 0 2 4 7))" "(scale :major :g3 (seq 0 2 4 7))" "(scale \"<major minor>\" :c4 (seq 0 2 4))" "(scale [0 2 4 5 7 9 11] :c4 (seq 0 1 2))" "(add 12 (scale :minor :c3 (seq 0)))"]
+  :see-also ["chord" "transpose" "scale-transpose" "seq"]}
 
- :chord      {:category "source"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(chord :minor7 :a3)" "(chord :major :c4)"]
-              :see-also ["scale" "transpose" "stack"]}
+ :chord {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(chord :minor7 :a3)" "(chord :major :c4)" "(chord \"Cm7\")" "(chord \"<C F>\")"]
+  :see-also ["scale" "transpose" "voicing" "stack"]}
 
- :transpose  {:category "transform"
-              :returns "Pattern"
-              :side-effects []
-              :examples ["(transpose 7 (scale :major :c4 (seq 0 1 2 3)))"
-                         "(transpose -12 (chord :minor :e4))"]
-              :see-also ["scale" "chord"]}
+ :transpose {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(transpose 7 (scale :major :c4 (seq 0 1 2 3)))" "(transpose -12 (chord :minor :e4))" "(transpose \"3M\" (seq :c4))" "(transpose \"<0 7>\" (seq :c4 :e4))"]
+  :see-also ["scale" "chord" "scale-transpose"]}
+
+ :scale-transpose {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(scale-transpose 2 :minor (seq 0 2 4))" "(scale-transpose \"<0 2>\" :minor (seq 0 2 4))" "(scale-transpose 1 [:dorian :d] (seq :d4 :e4))"]
+  :see-also ["scale" "transpose"]}
+
+ :voicing {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(voicing (seq \"C^7\" \"A7b13\" \"Dm7\" \"G7\"))" "(voicing \"<C^7 A7b13 Dm7 G7>\")" "(voicing {:mode :above :anchor :c4} \"C\")"]
+  :see-also ["chord" "arp" "root-notes"]}
+
+ :root-notes {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(root-notes \"<Cm7 F7>\")" "(root-notes 3 (seq \"Bb7\" \"Eb^7\"))"]
+  :see-also ["chord" "voicing"]}
+
+ :arp {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(arp :up (chord \"Cm7\"))" "(arp :up-down (chord \"Cm7\"))" "(arp \"0 2 1 3\" (chord \"Cm7\"))" "(arp \"<up down>\" (chord \"C\"))"]
+  :see-also ["arp-with" "chord" "voicing" "rolled"]}
+
+ :arp-with {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(arp-with (fn [ns] (seq (first ns) (nth ns 1))) (chord \"Cm7\"))"]
+  :see-also ["arp" "chord"]}
+
+ :rolled {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(rolled (chord \"C\"))"]
+  :see-also ["rolled-by" "arp" "chord"]}
+
+ :rolled-by {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(rolled-by 1/2 (chord \"Cm7\"))" "(rolled-by -1/4 (chord \"C\"))"]
+  :see-also ["rolled" "arp"]}
+
+;; ── Layering (TL5) ─────────────────────────────────────────────────────────
+ :superimpose {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(superimpose (fast 2) (seq :a :b))" "(superimpose (comp (fast 2) (add 12)) (seq :c3 :e3 :g3))"]
+  :see-also ["layer" "off" "stack"]}
+
+ :layer {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(layer rev (fast 2) (seq :a :b))"]
+  :see-also ["superimpose" "stack"]}
+
+ :echo {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(echo 3 1/8 0.6 (seq :cp))" "(echo \"<1 2>\" 1/4 0.5 (seq :cp))"]
+  :see-also ["stut" "echo-with" "stutter" "off"]}
+
+ :stut {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(stut 3 0.5 1/8 (seq :cp))"]
+  :see-also ["echo" "echo-with"]}
+
+ :echo-with {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(echo-with 3 1/8 (add 12) (seq :c3))"]
+  :see-also ["echo" "stutter" "superimpose"]}
+
+ :stutter {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(stutter 4 1/16 (seq :bd))"]
+  :see-also ["echo-with" "echo"]}
+
+ :jux-flip {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(jux-flip rev (seq :a :b))"]
+  :see-also ["jux" "jux-flip-by"]}
+
+ :jux-flip-by {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(jux-flip-by 0.5 rev (seq :a :b))"]
+  :see-also ["jux-by" "jux-flip"]}
+
+ :xfade {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(xfade (seq :bd :bd) 0.25 (seq :hh))" "(xfade (seq :bd) \"<0 0.5 1>\" (seq :hh))"]
+  :see-also ["amp" "stack"]}
 
  ;; ── Sample playback ─────────────────────────────────────────────────────────
  :rate       {:category "transform"

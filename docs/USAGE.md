@@ -32,6 +32,7 @@ them loop in real time.
 **Sound**
 
 16. [Music theory](#music-theory)
+    - [Harmony](#harmony)
 17. [Sound and samples](#sound-and-samples)
 18. [Available sample banks](#available-sample-banks)
 19. [Per-event parameters](#per-event-parameters)
@@ -191,7 +192,7 @@ Paste this into the editor and press **Alt+Enter**:
 
 ;; 3. Bass line — scale maps degree numbers to pitches
 (def bass
-  (->> (scale :minor :c2 (seq 1 :_ 5 :_))
+  (->> (scale :minor :c2 (seq 0 :_ 4 :_))
        (synth :saw)            ; sawtooth voice
        (amp 0.5)               ; loudness
        (decay 0.3)))           ; note length
@@ -800,6 +801,26 @@ Combines freely with all other combinators:
      (amp 0.8))
 ```
 
+### Layering — `superimpose` `layer` `echo` `stut` `echo-with` `stutter` `jux-flip` `xfade`
+
+```lisp
+(superimpose (fast 2) (seq :a :b))                       ; original + double-speed copy
+(superimpose (comp (fast 2) (add 12)) (seq :c3 :e3 :g3)) ; + octave-up double-speed copy
+(layer rev (fast 2) (seq :a :b))                         ; reversed + double-speed, no original
+(echo 3 1/8 0.6 (seq :cp))        ; 3 copies, 1/8 apart, amp 1 0.6 0.36 (multiplies existing amp)
+(stut 3 0.5 1/8 (seq :cp))        ; same, Tidal argument order: (stut times feedback time pat)
+(echo-with 3 1/8 (add 12) (seq :c3))   ; copies go up an octave each time (Tidal stutWith)
+(stutter 4 1/16 (seq :bd))        ; 4 unchanged copies, 1/16 apart
+(jux-flip rev (seq :a :b))        ; like jux, the sides swap every cycle
+(jux-flip-by 0.5 rev (seq :a :b)) ; narrower stereo width
+(xfade (seq :bd :bd) "<0 0.5 1>" (seq :hh))   ; crossfade a→b by scaling amp
+```
+
+`superimpose` and `layer` take any number of functions and the pattern last; with only
+functions they return a transformer for `->>`. `echo`, `stut`, `echo-with`, `stutter`,
+`jux-flip-by` and `xfade` accept patterns for their numbers. `xfade` position 0 plays only
+`a`, 1 only `b`; at 0.5 both are at full level.
+
 ---
 
 ## Patterned arguments
@@ -844,7 +865,7 @@ Combine a pattern's values with a number, a pattern or a mini-notation string:
 
 ```lisp
 (add 12 (seq :c3 :e3 :g3))                ; note keywords move by semitones → :c4 :e4 :g4
-(->> (seq 1 3 5 8)
+(->> (seq 0 2 4 7)
      (add "<0 2 4>")                       ; shift scale degrees per cycle
      (scale :minor :c3))
 (mul 2 (seq 220 330))                      ; Hz numbers
@@ -1303,57 +1324,104 @@ Note keywords play as sine tones by default. Use `synth` (see [Per-event paramet
 to apply a different voice — sawtooth, square, FM, or noise — to the whole pattern. Middle C is `:c4`,
 concert A is `:a4` (440 Hz). Drum keywords like `:bd` and `:sd` are unaffected.
 
+> **Changed in TL5:** `scale` degrees start at 0 and `scale`/`chord`/`transpose` return note
+> names (not Hz). Old code: subtract 1 from every degree. Note names are MIDI-note values, so
+> `(add 12 (scale …))` is exactly one octave. Plain numbers are still frequencies in Hz.
+
 ### `scale` — melodic patterns from scale degrees
 
-Map one-indexed degree integers to frequencies in a named scale:
+Map **0-based** degrees (0 = the root) to note names in a named scale:
 
 ```lisp
-(scale :major :c4 (seq 1 2 3 4 5 6 7))   ; C major scale
-(scale :minor :a3 (seq 1 3 5))            ; A minor triad
-(scale :pentatonic :g3 (fast 2 (seq 1 2 3 4 5)))
+(scale :major :c4 (seq 0 1 2 3 4 5 6))    ; C major scale
+(scale :minor :a3 (seq 0 2 4))             ; A minor triad
+(scale :pentatonic :g3 (fast 2 (seq 0 1 2 3 4)))
 
-;; Degrees wrap into higher octaves
-(scale :major :c4 (seq 1 8 15))           ; C4, C5, C6
+(scale :minor :c4 (seq 0 2 4 7))           ; :c4 :ds4 :g4 :c5
+(scale :minor :c4 (seq -1))                ; :as3 — negative degrees go below the root
+(scale :major :c4 (seq 0 7 14))            ; C4, C5, C6 — degrees wrap into octaves
+(add 12 (scale :minor :c3 (seq 0)))        ; :c4 — exactly one octave up
 ```
 
-Degree 1 = root, degree 2 = second scale tone, etc. Values beyond the scale length wrap
-into higher octaves; values below 1 wrap into lower octaves.
+Non-integer degrees are rounded down; rests and drum keywords pass through. The scale name and
+the root may be patterns, and `name` may be a **vector of semitone offsets** for a custom scale:
+
+```lisp
+(scale "<major minor>" :c4 (seq 0 2 4))             ; scale changes every cycle
+(scale [0 2 4 5 7 9 11] :c4 (seq 0 1 2))            ; custom scale from semitones
+(->> (seq 0 2 4) (scale :dorian :d3))               ; curried: (scale name root)
+```
 
 Available scales: `:major` (`:ionian`), `:minor` (`:aeolian`), `:dorian`, `:phrygian`,
-`:lydian`, `:mixolydian`, `:locrian`, `:pentatonic`, `:minor-pentatonic`, `:blues`.
+`:lydian`, `:mixolydian`, `:locrian`, `:pentatonic` (`:major-pentatonic`), `:minor-pentatonic`,
+`:blues`, `:harmonic-minor`, `:melodic-minor`, `:whole-tone`, `:chromatic`, `:hirajoshi`,
+`:phrygian-dominant`, `:lydian-dominant`, `:altered`, `:diminished`, `:bebop-dominant`.
 
 ### `chord` — stacked chord voicings
 
-Returns a `stack` of the chord tones as Hz values — all voices sound simultaneously for
-one full cycle:
+Returns a `stack` of the chord tones as note names — all voices sound simultaneously for
+one full cycle. Two forms: a chord keyword plus a root, or a **chord symbol string** (root in
+octave 4):
 
 ```lisp
 (chord :major :c4)              ; C E G
 (chord :minor7 :a3)             ; A C E G
-(chord :dom7 :g3)               ; G B D F
+(chord "Cm7")                   ; :c4 :ds4 :g4 :as4
+(chord "<C F G7>")              ; one chord per cycle
+(chord (seq "Dm7" "G7"))        ; two chords per cycle
 
 ;; Layer a chord under a melody
 (stack
   (slow 4 (chord :minor :a3))
-  (scale :minor :a3 (fast 2 (seq 1 3 5 6 5 3))))
+  (scale :minor :a3 (fast 2 (seq 0 2 4 5 4 2))))
 ```
 
-Available chords: `:major`, `:minor`, `:major7`, `:minor7`, `:dom7`, `:m7b5`
-(half-diminished), `:dim`, `:dim7`, `:aug`, `:aug7`, `:maj7s11`, `:sus2`, `:sus4`.
+Keyword chords: `:major`, `:minor`, `:major7`, `:minor7`, `:dom7`, `:m7b5` (half-diminished),
+`:dim`, `:dim7`, `:aug`, `:aug7`, `:maj7s11`, `:sus2`, `:sus4`.
+
+**Chord symbols** are a root `A`–`G` with an optional `#` or `b`, a quality, and an optional
+slash bass (`"C/E"` puts the E below the chord). 34 qualities are understood:
+
+| Quality | Symbols |
+|---|---|
+| major | `C` `CM` `Cmaj` |
+| minor | `Cm` `Cmin` `C-` |
+| diminished / augmented | `Cdim` `Co` / `Caug` `C+` |
+| suspended | `Csus2` / `Csus4` `Csus` |
+| power chord | `C5` |
+| sixths | `C6` `Cm6` `C-6` `C69` |
+| added tones | `Cadd9` `Cadd2` `Cmadd9` |
+| sevenths | `C7` `C^7` `Cmaj7` `CM7` `CΔ` `CΔ7` `Cm7` `C-7` `Cmin7` `Cm^7` `CmM7` `Cmmaj7` `C-^7` |
+| half-dim / dim7 | `Cm7b5` `Ch7` `Ch` `Cø` `Cø7` `C-7b5` / `Co7` `Cdim7` |
+| suspended 7 | `C7sus4` `C7sus` |
+| altered 7 | `C+7` `C7#5` `Caug7` `C7b5` `C7b9` `C7#9` `C7b13` `C7#11` `C^7#11` `Cmaj7#11` |
+| ninths | `C9` `C^9` `Cmaj9` `CM9` `Cm9` `C-9` `C9sus4` `C9sus` |
+| elevenths / thirteenths | `C11` `Cm11` `C-11` `C13` `Cm13` `C-13` |
+
+An unknown symbol in a string literal is an eval error with a suggestion:
+`unknown chord symbol "Cmj7" — did you mean "Cmaj7"?`.
 
 ### `transpose` — semitone shifting
 
-Shifts all numeric (Hz) values in a pattern up or down by `n` semitones. Keyword values
-(`:bd`, `:sd`, etc.) pass through unchanged:
+Shifts values in a pattern up or down by `n` semitones. **Note names stay note names**; plain
+numbers are frequencies and scale by 2^(n/12); maps shift their `:note`; drum keywords and
+rests pass through. `n` may be a pattern, or an **interval string** (number, then quality
+`P M m A d`):
 
 ```lisp
 (transpose 12 (seq :c4 :e4 :g4))          ; up one octave → C5 E5 G5
-(transpose -7 (scale :major :c5 (seq 1 2 3 4)))
+(transpose -7 (scale :major :c5 (seq 0 1 2 3)))
 (transpose 5 (chord :major :c4))           ; same voicing, up a fourth
+(transpose "3M" (seq :c4))                 ; :e4 (major third up)
+(transpose "-2M" (seq :c4))                ; :as3
+(transpose "<0 7>" (seq :c4 :e4))          ; patterned amount
+(transpose 12 (seq 440))                   ; 880 — numbers are Hz
 
 ;; drum keywords are untouched
 (transpose 12 (seq :bd :sd))               ; still :bd :sd
 ```
+
+An impossible interval such as `"3P"` or `"5M"` is an eval error.
 
 ### Putting it together
 
@@ -1366,10 +1434,102 @@ Shifts all numeric (Hz) values in a pattern up or down by `n` semitones. Keyword
                     [(chord :major :c4) 4]
                     [(chord :major :g3) 4]]))
   ;; melody over the top
-  (scale :minor :a3 (seq 1 3 5 6 5 3 1 3))
+  (scale :minor :a3 (seq 0 2 4 5 4 2 0 2))
   ;; drums
   (seq :bd :_ :bd :_)
   (seq :_ :sd :_ :sd))
+```
+
+---
+
+## Harmony
+
+Chord-symbol based tools. They take chord symbols (see [`chord`](#chord--stacked-chord-voicings))
+as strings or patterns and produce note names.
+
+### `voicing` — smooth voice leading
+
+Voices each chord symbol as a 3–4 note chord and picks the voicing closest to an anchor note,
+so consecutive chords move smoothly instead of jumping:
+
+```lisp
+(voicing (seq "Dm7" "G7" "C^7"))        ; D4 F4 A4 C5 | D4 F4 G4 B4 | E4 G4 B4 C5
+(voicing "<C^7 A7b13 Dm7 G7>")           ; one voiced chord per cycle
+(voicing {:mode :above :anchor :c4} "C") ; options map first
+(->> "<Dm7 G7>" (voicing {:anchor :c4})) ; curried
+```
+
+Options: `:anchor` (a note, default `:c5`), `:mode` (`:below` top note as high as possible but
+not above the anchor, default; `:above` lowest note as low as possible but not below it;
+`:duck` top note strictly below the anchor; `:root` root position with the root at or below the
+anchor) and `:offset` (move that many voicings up, negative = down). The voicing dictionary is
+built in (close-position inversions of the chord's 3–4 essential tones) and has no custom
+dictionaries.
+
+### `root-notes`
+
+The root of each chord symbol as a note in a given octave (default 2) — handy for bass lines:
+
+```lisp
+(root-notes "<Cm7 F7>")                   ; :c2 then :f2
+(root-notes 3 (seq "Bb7" "Eb^7"))         ; :as3 :ds3
+```
+
+### `scale-transpose`
+
+Move degrees (numbers) or notes (keywords) `n` steps *inside a scale*:
+
+```lisp
+(scale-transpose 2 :minor (seq 0 2 4))                      ; degrees 2 4 6
+(->> (seq 0 2 4) (scale-transpose "<0 2>" :minor) (scale :minor :c4))
+(scale-transpose 1 :minor (seq :c4 :eb4 :g4))               ; :d4 :f4 :gs4
+(scale-transpose 1 [:dorian :d] (seq :d4 :e4))              ; scale given as [name root]
+```
+
+Notes outside the scale snap down to the nearest scale tone before moving. `n` may be a pattern.
+
+### `arp` — arpeggios
+
+Plays the notes that sound together (a chord) one after the other, spread over the chord's
+time slot. Modes (Tidal names, plus the one-word spellings `updown` `thumbup` …):
+
+| Mode | Order for C E G Bb (low → high) |
+|---|---|
+| `:up` / `:down` | up / down |
+| `:up-down` / `:down-up` | up then back without repeating the ends |
+| `:up-and-down` / `:down-and-up` | up then down, ends repeated |
+| `:converge` / `:diverge` / `:disconverge` | outside-in / inside-out / both |
+| `:pinky-up` / `:pinky-up-down` | each note followed by the highest |
+| `:thumb-up` / `:thumb-up-down` | each note preceded by the lowest |
+
+```lisp
+(arp :up (chord "Cm7"))
+(arp :up-down (chord "Cm7"))
+(arp "<up down>" (chord "C"))            ; mode may be a pattern
+(arp "0 2 1 3" (chord "Cm7"))            ; index form: pick the i-th note (rhythm from the list)
+(->> "<Dm7 G7>" (voicing) (arp :up-down))
+```
+
+A single note is passed through unchanged. An unknown mode is an eval error that lists the modes.
+
+### `arp-with`
+
+Gives you the simultaneous values as a vector and plays the pattern your function returns:
+
+```lisp
+(arp-with (fn [ns] (seq (first ns) (nth ns 1) (first ns))) (chord "Cm7"))
+```
+
+### `rolled` / `rolled-by` — strum
+
+Staggers the starts of simultaneous notes while they keep their ends. `rolled` spreads the
+starts over a quarter of the event; `(rolled-by t pat)` over `t` of it (negative `t` strums from
+the top down, `0` leaves the chord alone, `t` may be a pattern):
+
+```lisp
+(rolled (chord "C"))
+(rolled-by -1/4 (chord "C"))
+(rolled-by 1/2 (chord "Cm7"))
 ```
 
 ---
@@ -1741,7 +1901,7 @@ tuning needed — just name the instrument:
      (synth :koto))
 ```
 
-`synth` works on any note-producing pattern: plain keywords, Hz values from `scale`, or
+`synth` works on any note-producing pattern: plain keywords, note names from `scale`, or
 already-transformed maps. All `amp`/`attack`/`decay`/`pan` parameters compose normally
 on top of it.
 
@@ -1761,7 +1921,7 @@ and `comp`:
 (def punchy (comp (amp 1.0) (attack 0.001) (decay 0.08)))
 
 (stack
-  (pluck (scale :minor :a3 (seq 1 3 5 8)))
+  (pluck (scale :minor :a3 (seq 0 2 4 7)))
   (pad   (chord :minor :a3))
   (punchy (seq :bd :_ :bd :_)))
 ```
@@ -1804,7 +1964,7 @@ pattern supplies the rhythm: each note takes the parameter value in force at its
 (amp (seq 0.9 0.4) (seq :c4 :e4 :g4))
 
 ; independent amp and attack patterns stacked with melody
-(->> (scale :dorian :d3 (fast 3 (seq 1 3 5 6 7)))
+(->> (scale :dorian :d3 (fast 3 (seq 0 2 4 5 6)))
      (amp (slow 2 (seq 0.8 0.5 1.0 0.3)))
      (attack 0.01))
 ```
@@ -1975,7 +2135,7 @@ others.
 (track :kick  (seq :bd :_ :bd :_))
 (track :snare (seq :_ :sd :_ :sd))
 (track :hats  (fast 2 (seq :hh :_)))
-(track :bass  (scale :minor :c2 (seq 1 :_ 8 :_ 1 :_ 6 :_)))
+(track :bass  (scale :minor :c2 (seq 0 :_ 7 :_ 0 :_ 5 :_)))
 ```
 
 ---
@@ -2062,7 +2222,7 @@ Route a track through its own private effect chain by placing `fx` inside the `-
        (fx :filter 1000)))              ; kick only goes through lowpass
 
 (track :lead
-  (->> (scale :minor :c3 (seq 1 3 5 8))
+  (->> (scale :minor :c3 (seq 0 2 4 7))
        (decay 1.0)
        (fx :reverb 0.4)))              ; lead gets its own reverb
 
@@ -2533,7 +2693,7 @@ Define custom instruments from Web Audio node graphs. UGen functions build the g
       (lpf 2000)
       (env-asr 0.3 0.8 1.0)))
 
-(->> (scale :minor :c4 (seq 1 3 5 8))
+(->> (scale :minor :c4 (seq 0 2 4 7))
      (synth :pluck)
      (amp 0.7))
 ```
@@ -2792,7 +2952,7 @@ Route pattern events as MIDI Note On/Off to external synths or DAWs:
 
 ```lisp
 (track :bass (midi-out 1 (seq :c4 :e4 :g4)))         ; channel 1
-(->> (scale :minor :c3 (seq 1 3 5 8)) (midi-out 2))  ; channel 2
+(->> (scale :minor :c3 (seq 0 2 4 7)) (midi-out 2))  ; channel 2
 
 ; Chains with other params — amp maps to MIDI velocity
 (->> (seq :c4 :e4 :g4) (midi-out 1) (amp 0.7))
@@ -3297,6 +3457,9 @@ transform  = "(fast"  number pattern ")"
            | "(early" number pattern ")"
            | "(jux"   fn pattern ")"
            | "(off"   number fn pattern ")"
+           | "(superimpose" fn+ pattern ")" | "(layer" fn+ pattern ")"
+           | "(echo" times time feedback pattern ")" | "(echo-with" n t fn pattern ")"
+           | "(arp" mode pattern ")" | "(rolled" pattern ")" | "(voicing" [opts] pattern ")"
            | "(sometimes" fn pattern ")"      ; per event
            | "(some-cycles" fn pattern ")"    ; per cycle
            | "(degrade" pattern ")"
@@ -3480,7 +3643,7 @@ do-expr    = "(do" expr+ ")"
 
 ;; Lead: its own reverb + delay, independent of the kick
 (track :lead
-  (->> (scale :minor :c3 (seq 1 3 5 8))
+  (->> (scale :minor :c3 (seq 0 2 4 7))
        (amp 0.6)
        (decay 0.8)
        (fx :reverb 0.5)

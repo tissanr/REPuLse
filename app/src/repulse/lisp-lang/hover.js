@@ -519,7 +519,7 @@ const DOCS = {
   "add": {
     signature: "(add [mode] amt pat)",
     description: "Add amt to every value. amt may be a number, a pattern or a mini-notation string. Note keywords move by semitones; maps change :note; rests pass through. mode picks where the rhythm comes from: :in (default, from pat), :out (from amt), :mix (both), :squeeze.",
-    example: "(->> (seq 1 3 5 8) (add \"<0 2 4>\") (scale :minor :c3))",
+    example: "(->> (seq 0 2 4 7) (add \"<0 2 4>\") (scale :minor :c3))",
   },
   "sub": {
     signature: "(sub [mode] amt pat)",
@@ -544,19 +544,101 @@ const DOCS = {
 
   // --- Music theory ---
   "scale": {
-    signature: "(scale scale-kw root pat)",
-    description: "Map degree integers (1, 2, 3, ...) to Hz frequencies using a named scale. 1 = root, 2 = second tone, etc. Degrees outside the scale wrap into higher/lower octaves.",
-    example: "(scale :minor :c4 (seq 1 3 5 8))",
+    signature: "(scale name root pat)",
+    description: "Map 0-based scale degrees (0 = root, negatives go below) to note names. name is a scale keyword (:minor, :dorian, :harmonic-minor, ...), a vector of semitone offsets, or a pattern of names; root is a note or pattern. Degrees beyond the scale wrap into octaves. Note names are MIDI-note values: (add 12 ...) is one octave.",
+    example: "(scale :minor :c4 (seq 0 2 4 7))",
   },
   "chord": {
-    signature: "(chord chord-kw root)",
-    description: "Stack the tones of a chord as simultaneous Hz values.",
-    example: "(chord :minor7 :a3)",
+    signature: "(chord chord-kw root) or (chord symbol)",
+    description: "Stack the tones of a chord as simultaneous note names. Takes a chord keyword and root, or chord-symbol strings/patterns like \"Cm7\", \"F#7b9\", \"C^7\", \"C/E\" (root in octave 4).",
+    example: "(chord \"<Cm7 F7>\")",
   },
   "transpose": {
-    signature: "(transpose semitones pat)",
-    description: "Shift all Hz values in a pattern up or down by n semitones. Note keywords pass through. Non-note keywords (drums, rests) are unchanged.",
-    example: "(transpose 7 (scale :major :c4 (seq 0 1 2 3)))",
+    signature: "(transpose n pat)",
+    description: "Shift values by n semitones (n may be a pattern or an interval string like \"3M\", \"-2M\", \"5P\"). Note names stay note names; plain numbers (Hz) scale by 2^(n/12); maps shift :note. Drums and rests are unchanged.",
+    example: "(transpose \"<0 7>\" (seq :c4 :e4))",
+  },
+
+  // --- Layering, arpeggios & harmony (TL5) ---
+  "superimpose": {
+    signature: "(superimpose f ... pat)",
+    description: "Stack pat with (f pat) for every function f.",
+    example: "(superimpose (comp (fast 2) (add 12)) (seq :c3 :e3 :g3))",
+  },
+  "layer": {
+    signature: "(layer f ... pat)",
+    description: "Stack (f pat) for every function f, without the original pattern.",
+    example: "(layer rev (fast 2) (seq :a :b))",
+  },
+  "echo": {
+    signature: "(echo times time feedback pat)",
+    description: "Layer `times` copies of pat, each `time` cycles later, each quieter by feedback (amp multiplied by feedback^i). All three numbers may be patterns.",
+    example: "(echo 3 1/8 0.6 (seq :cp))",
+  },
+  "stut": {
+    signature: "(stut times feedback time pat)",
+    description: "Alias of echo with the Tidal argument order.",
+    example: "(stut 3 0.5 1/8 (seq :cp))",
+  },
+  "echo-with": {
+    signature: "(echo-with n t f pat)",
+    description: "Tidal stutWith: pat plus n-1 copies, copy i has (f . late t) applied i times.",
+    example: "(echo-with 3 1/8 (add 12) (seq :c3))",
+  },
+  "stutter": {
+    signature: "(stutter n t pat)",
+    description: "n copies of pat, t cycles apart, unchanged.",
+    example: "(stutter 4 1/16 (seq :bd))",
+  },
+  "jux-flip": {
+    signature: "(jux-flip f pat)",
+    description: "Like jux, but the original and transformed sides swap left/right every cycle.",
+    example: "(jux-flip rev (seq :a :b))",
+  },
+  "jux-flip-by": {
+    signature: "(jux-flip-by width f pat)",
+    description: "Like jux-by, but the sides swap every cycle. width may be a pattern.",
+    example: "(jux-flip-by 0.5 rev (seq :a :b))",
+  },
+  "xfade": {
+    signature: "(xfade a pos b)",
+    description: "Crossfade two patterns by scaling their amp: pos 0 = only a, pos 1 = only b. pos may be a pattern.",
+    example: "(xfade (seq :bd :bd) \"<0 0.5 1>\" (seq :hh))",
+  },
+  "arp": {
+    signature: "(arp mode pat)",
+    description: "Arpeggiate each group of simultaneous notes. mode is a Tidal mode (:up :down :up-down :down-up :up-and-down :down-and-up :converge :diverge :disconverge :pinky-up :thumb-up ...) or a pattern of modes; a number list like \"0 2 1 3\" picks the i-th note of the chord (Strudel style).",
+    example: "(arp :up-down (chord \"Cm7\"))",
+  },
+  "arp-with": {
+    signature: "(arp-with f pat)",
+    description: "f receives the vector of simultaneous values and returns a pattern, which is played in the chord's time slot.",
+    example: "(arp-with (fn [ns] (seq (first ns) (nth ns 1))) (chord \"Cm7\"))",
+  },
+  "rolled": {
+    signature: "(rolled pat)",
+    description: "Strum simultaneous notes: staggers their starts over a quarter of the event length; the notes keep their ends.",
+    example: "(rolled (chord \"C\"))",
+  },
+  "rolled-by": {
+    signature: "(rolled-by t pat)",
+    description: "Strum simultaneous notes over t of the event length. Negative t strums from the top down; 0 leaves them unchanged.",
+    example: "(rolled-by -1/4 (chord \"C\"))",
+  },
+  "voicing": {
+    signature: "(voicing [opts] pat)",
+    description: "Voice chord symbols as 3-4 note chords with smooth voice leading. opts: {:anchor :c5 :mode :below :offset 0}; modes :below :above :duck :root.",
+    example: "(voicing (seq \"C^7\" \"A7b13\" \"Dm7\" \"G7\"))",
+  },
+  "root-notes": {
+    signature: "(root-notes [octave] pat)",
+    description: "Chord symbol to its root note in the given octave (default 2).",
+    example: "(root-notes \"<Cm7 F7>\")",
+  },
+  "scale-transpose": {
+    signature: "(scale-transpose n scale pat)",
+    description: "Move degrees (numbers) or notes n steps inside a scale. scale is a keyword, [scale root] or a semitone vector. n may be a pattern.",
+    example: "(scale-transpose \"<0 2>\" :minor (seq 0 2 4))",
   },
 
   // --- Continuous signals (TL2) ---
@@ -823,7 +905,7 @@ const DOCS = {
   },
   "midi-out": {
     signature: "(midi-out ch pat) or (midi-out ch)",
-    description: "Route pattern events as MIDI Note On/Off messages on the given channel (1–16). Notes are derived from Hz values; amp maps to MIDI velocity. Combine with scale, chord, transpose. Requires Chrome or Edge.",
+    description: "Route pattern events as MIDI Note On/Off messages on the given channel (1–16). Notes are derived from note names or Hz values; amp maps to MIDI velocity. Combine with scale, chord, transpose. Requires Chrome or Edge.",
     example: "(->> (scale :minor :c4 (seq 0 2 4 7)) (midi-out 1))",
   },
   "midi-clock-out!": {

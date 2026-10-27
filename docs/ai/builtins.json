@@ -137,53 +137,63 @@
   },
   "scale": {
     "category": "transform",
-    "signature": "(scale scale-kw root pat)",
+    "signature": "(scale name root pat)",
     "returns": "Pattern",
     "side-effects": [],
     "examples": [
       "(scale :minor :c4 (seq 0 2 4 7))",
-      "(scale :major :g3 (seq 1 3 5 8))"
+      "(scale :major :g3 (seq 0 2 4 7))",
+      "(scale \"<major minor>\" :c4 (seq 0 2 4))",
+      "(scale [0 2 4 5 7 9 11] :c4 (seq 0 1 2))",
+      "(add 12 (scale :minor :c3 (seq 0)))"
     ],
     "see-also": [
       "chord",
       "transpose",
+      "scale-transpose",
       "seq"
     ],
-    "detail": "(scale kw root pat) — map degree integers to Hz (e.g. (scale :minor :c4 (seq 1 3 5)))",
-    "description": "Map degree integers (1, 2, 3, ...) to Hz frequencies using a named scale. 1 = root, 2 = second tone, etc. Degrees outside the scale wrap into higher/lower octaves."
+    "detail": "(scale name root pat) — map 0-based degrees (0 = root) to note names; name may be a keyword, semitone vector or pattern (e.g. (scale :minor :c4 (seq 0 2 4 7)))",
+    "description": "Map 0-based scale degrees (0 = root, negatives go below) to note names. name is a scale keyword (:minor, :dorian, :harmonic-minor, ...), a vector of semitone offsets, or a pattern of names; root is a note or pattern. Degrees beyond the scale wrap into octaves. Note names are MIDI-note values: (add 12 ...) is one octave."
   },
   "chord": {
     "category": "source",
-    "signature": "(chord chord-kw root)",
+    "signature": "(chord chord-kw root) or (chord symbol)",
     "returns": "Pattern",
     "side-effects": [],
     "examples": [
       "(chord :minor7 :a3)",
-      "(chord :major :c4)"
+      "(chord :major :c4)",
+      "(chord \"Cm7\")",
+      "(chord \"<C F>\")"
     ],
     "see-also": [
       "scale",
       "transpose",
+      "voicing",
       "stack"
     ],
-    "detail": "(chord kw root) — stack chord tones as Hz (e.g. (chord :major7 :c4))",
-    "description": "Stack the tones of a chord as simultaneous Hz values."
+    "detail": "(chord kw root) or (chord \"Cm7\") — stack chord tones as note names; accepts chord-symbol strings (e.g. (chord :major7 :c4), (chord \"<C F>\"))",
+    "description": "Stack the tones of a chord as simultaneous note names. Takes a chord keyword and root, or chord-symbol strings/patterns like \"Cm7\", \"F#7b9\", \"C^7\", \"C/E\" (root in octave 4)."
   },
   "transpose": {
     "category": "transform",
-    "signature": "(transpose semitones pat)",
+    "signature": "(transpose n pat)",
     "returns": "Pattern",
     "side-effects": [],
     "examples": [
       "(transpose 7 (scale :major :c4 (seq 0 1 2 3)))",
-      "(transpose -12 (chord :minor :e4))"
+      "(transpose -12 (chord :minor :e4))",
+      "(transpose \"3M\" (seq :c4))",
+      "(transpose \"<0 7>\" (seq :c4 :e4))"
     ],
     "see-also": [
       "scale",
-      "chord"
+      "chord",
+      "scale-transpose"
     ],
-    "detail": "(transpose n pat) — shift Hz values by n semitones",
-    "description": "Shift all Hz values in a pattern up or down by n semitones. Note keywords pass through. Non-note keywords (drums, rests) are unchanged."
+    "detail": "(transpose n pat) — shift notes by n semitones or an interval string (\"3M\" \"-2M\" \"5P\"); note names stay note names; n may be a pattern",
+    "description": "Shift values by n semitones (n may be a pattern or an interval string like \"3M\", \"-2M\", \"5P\"). Note names stay note names; plain numbers (Hz) scale by 2^(n/12); maps shift :note. Drums and rests are unchanged."
   },
   "->>": {
     "category": "special",
@@ -999,6 +1009,266 @@
     ],
     "detail": "(off amount f pat) — layer original with time-shifted transformed copy; amount may be a pattern",
     "description": "Layer the original with a time-shifted transformed copy: (stack pat (late amount (f pat)))."
+  },
+  "superimpose": {
+    "category": "transform",
+    "signature": "(superimpose f ... pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(superimpose (fast 2) (seq :a :b))",
+      "(superimpose (comp (fast 2) (add 12)) (seq :c3 :e3 :g3))"
+    ],
+    "see-also": [
+      "layer",
+      "off",
+      "stack"
+    ],
+    "detail": "(superimpose f ... pat) — stack pat with (f pat) for each f",
+    "description": "Stack pat with (f pat) for every function f."
+  },
+  "layer": {
+    "category": "transform",
+    "signature": "(layer f ... pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(layer rev (fast 2) (seq :a :b))"
+    ],
+    "see-also": [
+      "superimpose",
+      "stack"
+    ],
+    "detail": "(layer f ... pat) — stack (f pat) for each f, without the original",
+    "description": "Stack (f pat) for every function f, without the original pattern."
+  },
+  "echo": {
+    "category": "transform",
+    "signature": "(echo times time feedback pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(echo 3 1/8 0.6 (seq :cp))",
+      "(echo \"<1 2>\" 1/4 0.5 (seq :cp))"
+    ],
+    "see-also": [
+      "stut",
+      "echo-with",
+      "stutter",
+      "off"
+    ],
+    "detail": "(echo times time feedback pat) — repeats, `time` apart, amp × feedback^i; args may be patterns",
+    "description": "Layer `times` copies of pat, each `time` cycles later, each quieter by feedback (amp multiplied by feedback^i). All three numbers may be patterns."
+  },
+  "echo-with": {
+    "category": "transform",
+    "signature": "(echo-with n t f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(echo-with 3 1/8 (add 12) (seq :c3))"
+    ],
+    "see-also": [
+      "echo",
+      "stutter",
+      "superimpose"
+    ],
+    "detail": "(echo-with n t f pat) — pat plus n-1 copies, each (f ∘ late t) deeper (Tidal stutWith)",
+    "description": "Tidal stutWith: pat plus n-1 copies, copy i has (f . late t) applied i times."
+  },
+  "stut": {
+    "category": "transform",
+    "signature": "(stut times feedback time pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(stut 3 0.5 1/8 (seq :cp))"
+    ],
+    "see-also": [
+      "echo",
+      "echo-with"
+    ],
+    "detail": "(stut times feedback time pat) — echo with Tidal argument order",
+    "description": "Alias of echo with the Tidal argument order."
+  },
+  "stutter": {
+    "category": "transform",
+    "signature": "(stutter n t pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(stutter 4 1/16 (seq :bd))"
+    ],
+    "see-also": [
+      "echo-with",
+      "echo"
+    ],
+    "detail": "(stutter n t pat) — n copies of pat, t apart, unchanged",
+    "description": "n copies of pat, t cycles apart, unchanged."
+  },
+  "jux-flip": {
+    "category": "transform",
+    "signature": "(jux-flip f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(jux-flip rev (seq :a :b))"
+    ],
+    "see-also": [
+      "jux",
+      "jux-flip-by"
+    ],
+    "detail": "(jux-flip f pat) — jux whose original/transformed sides swap every cycle",
+    "description": "Like jux, but the original and transformed sides swap left/right every cycle."
+  },
+  "jux-flip-by": {
+    "category": "transform",
+    "signature": "(jux-flip-by width f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(jux-flip-by 0.5 rev (seq :a :b))"
+    ],
+    "see-also": [
+      "jux-by",
+      "jux-flip"
+    ],
+    "detail": "(jux-flip-by w f pat) — jux-by whose sides swap every cycle; w may be a pattern",
+    "description": "Like jux-by, but the sides swap every cycle. width may be a pattern."
+  },
+  "xfade": {
+    "category": "transform",
+    "signature": "(xfade a pos b)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(xfade (seq :bd :bd) 0.25 (seq :hh))",
+      "(xfade (seq :bd) \"<0 0.5 1>\" (seq :hh))"
+    ],
+    "see-also": [
+      "amp",
+      "stack"
+    ],
+    "detail": "(xfade a pos b) — crossfade two patterns; pos 0 = a, 1 = b; pos may be a pattern",
+    "description": "Crossfade two patterns by scaling their amp: pos 0 = only a, pos 1 = only b. pos may be a pattern."
+  },
+  "arp": {
+    "category": "transform",
+    "signature": "(arp mode pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(arp :up (chord \"Cm7\"))",
+      "(arp :up-down (chord \"Cm7\"))",
+      "(arp \"0 2 1 3\" (chord \"Cm7\"))",
+      "(arp \"<up down>\" (chord \"C\"))"
+    ],
+    "see-also": [
+      "arp-with",
+      "chord",
+      "voicing",
+      "rolled"
+    ],
+    "detail": "(arp mode pat) — arpeggiate simultaneous notes; mode :up :down :up-down … or an index list \"0 2 1 3\"",
+    "description": "Arpeggiate each group of simultaneous notes. mode is a Tidal mode (:up :down :up-down :down-up :up-and-down :down-and-up :converge :diverge :disconverge :pinky-up :thumb-up ...) or a pattern of modes; a number list like \"0 2 1 3\" picks the i-th note of the chord (Strudel style)."
+  },
+  "arp-with": {
+    "category": "transform",
+    "signature": "(arp-with f pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(arp-with (fn [ns] (seq (first ns) (nth ns 1))) (chord \"Cm7\"))"
+    ],
+    "see-also": [
+      "arp",
+      "chord"
+    ],
+    "detail": "(arp-with f pat) — f gets the vector of simultaneous values and returns a pattern",
+    "description": "f receives the vector of simultaneous values and returns a pattern, which is played in the chord's time slot."
+  },
+  "rolled": {
+    "category": "transform",
+    "signature": "(rolled pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(rolled (chord \"C\"))"
+    ],
+    "see-also": [
+      "rolled-by",
+      "arp",
+      "chord"
+    ],
+    "detail": "(rolled pat) — strum simultaneous notes over 1/4 of their length",
+    "description": "Strum simultaneous notes: staggers their starts over a quarter of the event length; the notes keep their ends."
+  },
+  "rolled-by": {
+    "category": "transform",
+    "signature": "(rolled-by t pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(rolled-by 1/2 (chord \"Cm7\"))",
+      "(rolled-by -1/4 (chord \"C\"))"
+    ],
+    "see-also": [
+      "rolled",
+      "arp"
+    ],
+    "detail": "(rolled-by t pat) — strum simultaneous notes over t of their length; negative t rolls downwards",
+    "description": "Strum simultaneous notes over t of the event length. Negative t strums from the top down; 0 leaves them unchanged."
+  },
+  "voicing": {
+    "category": "transform",
+    "signature": "(voicing [opts] pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(voicing (seq \"C^7\" \"A7b13\" \"Dm7\" \"G7\"))",
+      "(voicing \"<C^7 A7b13 Dm7 G7>\")",
+      "(voicing {:mode :above :anchor :c4} \"C\")"
+    ],
+    "see-also": [
+      "chord",
+      "arp",
+      "root-notes"
+    ],
+    "detail": "(voicing [opts] pat) — voice chord symbols with smooth voice leading; opts {:anchor :c5 :mode :below :offset 0}",
+    "description": "Voice chord symbols as 3-4 note chords with smooth voice leading. opts: {:anchor :c5 :mode :below :offset 0}; modes :below :above :duck :root."
+  },
+  "root-notes": {
+    "category": "transform",
+    "signature": "(root-notes [octave] pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(root-notes \"<Cm7 F7>\")",
+      "(root-notes 3 (seq \"Bb7\" \"Eb^7\"))"
+    ],
+    "see-also": [
+      "chord",
+      "voicing"
+    ],
+    "detail": "(root-notes [octave] pat) — chord symbol to its root note (default octave 2)",
+    "description": "Chord symbol to its root note in the given octave (default 2)."
+  },
+  "scale-transpose": {
+    "category": "transform",
+    "signature": "(scale-transpose n scale pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(scale-transpose 2 :minor (seq 0 2 4))",
+      "(scale-transpose \"<0 2>\" :minor (seq 0 2 4))",
+      "(scale-transpose 1 [:dorian :d] (seq :d4 :e4))"
+    ],
+    "see-also": [
+      "scale",
+      "transpose"
+    ],
+    "detail": "(scale-transpose n scale pat) — move degrees or notes n steps inside a scale",
+    "description": "Move degrees (numbers) or notes n steps inside a scale. scale is a keyword, [scale root] or a semitone vector. n may be a pattern."
   },
   "add": {
     "category": "transform",
@@ -1869,7 +2139,7 @@
       "midi-clock-out!"
     ],
     "detail": "(midi-out ch pat) — route pattern events as MIDI notes on channel 1–16; (midi-out ch) returns transformer",
-    "description": "Route pattern events as MIDI Note On/Off messages on the given channel (1–16). Notes are derived from Hz values; amp maps to MIDI velocity. Combine with scale, chord, transpose. Requires Chrome or Edge."
+    "description": "Route pattern events as MIDI Note On/Off messages on the given channel (1–16). Notes are derived from note names or Hz values; amp maps to MIDI velocity. Combine with scale, chord, transpose. Requires Chrome or Edge."
   },
   "midi-clock-out!": {
     "category": "midi",

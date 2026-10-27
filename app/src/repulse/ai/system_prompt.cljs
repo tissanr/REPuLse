@@ -15,7 +15,7 @@
        "- Track names are free-form: (track :kick (seq :bd :_ :bd :_)) is fine; "
        "sound keywords inside patterns are not\n"
        "- Pitched notes are note keywords (:c4 :eb3 :fs5) or Hz numbers; "
-       "(chord :minor7 :a3) and (scale :minor :a4 (seq 0 2 4)) produce them\n"
+       "(chord :minor7 :a3), (chord \"Cm7\") and (scale :minor :a4 (seq 0 2 4)) produce note names\n"
        "- Any other sample (claps, percussion, drum machines) must come from list_banks / "
        "list_samples_in_bank or freesound_load — never guess a sample name\n\n"))
 
@@ -53,7 +53,7 @@
       "- Thread parameters with ->>: (->> pat (amp 0.8) (attack 0.02))\n"
       "- Use (fx :name val) for effects\n"
       "- Rests are :_ not nil or 0\n"
-      "- (scale :minor :c4 (seq 0 2 4 7)) maps degree integers to Hz\n"
+      "- (scale :minor :c4 (seq 0 2 4 7)) maps 0-based degree integers (0 = root) to note names\n"
       "- (euclidean k n :sample) — Bjorklund rhythms\n\n"
       sound-rules
       "Editing rules (propose_edit):\n"

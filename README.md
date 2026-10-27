@@ -29,7 +29,7 @@ sound.
 (track :kick  (seq :bd :_ :bd :_))
 (track :snare (seq :_ :sd :_ :sd))
 (track :hats  (fast 2 (seq :hh :_)))
-(track :bass  (->> (scale :minor :c2 (seq 1 :_ 5 :_))
+(track :bass  (->> (scale :minor :c2 (seq 0 :_ 4 :_))
                    (synth :saw)
                    (amp 0.5) (decay 0.3)))
 ```

@@ -1961,7 +1961,7 @@ See full spec: [PROMPTS/PHASE-TL4b.md](PROMPTS/PHASE-TL4b.md)
 
 ---
 
-## Phase TL5 — Layering, Pitch & Harmony 📋 *planned*
+## Phase TL5 — Layering, Pitch & Harmony ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖 auto
 
@@ -1970,6 +1970,25 @@ Layer a pattern on itself and work with harmony musically.
 **Key additions:**
 - `superimpose layer echo echo-with`
 - Chord-symbol parser (`"Cm7"`, `"F#7b9"`), `arp` modes, `voicing`, `root-notes`, `scale-transpose`
+
+**Delivered:**
+- Layering — `superimpose`, `layer` (variadic), `echo`/`stut` (amp × feedback^i), `echo-with`
+  (Tidal `stutWith`), `stutter`, `jux-flip`, `jux-flip-by` (sides swap every cycle), `xfade`;
+  generic ones in `core`, amp-scaling ones in `params`
+- Harmony — chord-symbol parser (34 qualities, slash chords, did-you-mean errors), `(chord "Cm7")`,
+  `voicing` (own small MIT dictionary, anchor-based voice leading, `:anchor :mode :offset`),
+  `root-notes`, `scale-transpose`, `arp` (13 Tidal modes + Strudel index lists), `arp-with`,
+  `rolled`/`rolled-by`; patterned `transpose` with interval strings (`"3M"`); 11 new scales
+- **Breaking:** `scale` is 0-based and `scale`/`chord`/`transpose` return note keywords instead
+  of Hz (so `(add 12 (scale …))` is an octave); `scale` also takes a semitone vector and
+  patterned name/root. Tutorial chapter 7, README and USAGE migrated; old code: subtract 1 from
+  every degree
+- 16 new built-ins registered (grammar + `parser.js`, `completions.js`, `hover.js`,
+  `builtin_meta.edn`, `docs/ai/builtins.json`); USAGE Music theory rewritten, new Harmony and
+  Layering sections; STRUDEL-PARITY rows and summary updated
+- Tests: every spec vector in `theory_test`/`core_test`/`params_test`/`integration_test`
+  (including a table-driven test of all 34 chord qualities and chunk-independence of `arp`),
+  `tl5-documented-examples-evaluate`, Playwright onset counts; no audio, MIDI or WASM code changed
 
 See full spec: [PROMPTS/PHASE-TL5.md](PROMPTS/PHASE-TL5.md)
 
