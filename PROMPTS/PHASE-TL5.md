@@ -56,8 +56,10 @@ chord symbols, voicings and scale-aware transposition.
     examples to 0-based degrees.
   - Community snippets (S3) can't be migrated automatically: add a one-line note to the
     release notes and USAGE.md.
-- Voicing dictionary: port Strudel's `ireal`-style dictionary (check licence) or write a
-  smaller own one.
+- ~~Voicing dictionary~~ **Decided (2026-10-27):** write a **small own voicing dictionary**
+  (MIT-clean). Do **not** port Strudel's `ireal`-style dictionary: Strudel is AGPL-3.0 and
+  REPuLse is MIT. Keep the dictionary to what the chord-symbol parser covers and pick
+  voicings by nearest voice leading to satisfy the ≤ 4-semitone criterion below.
 
 ## Definition of done
 
