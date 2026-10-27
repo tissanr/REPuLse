@@ -1,5 +1,5 @@
 (ns repulse.lisp.mini-test
-  (:require [cljs.test :refer-macros [deftest is]]
+  (:require [cljs.test :refer-macros [deftest is testing]]
             [repulse.lisp.mini :as mini]
             [repulse.core :as core]))
 
@@ -101,14 +101,46 @@
 
 ;;; ── Probability ─────────────────────────────────────────────────────
 
-(deftest degrade-produces-subset
-  ;; Run the pattern many times — sometimes events are dropped.
-  ;; With 50% probability over 100 trials, we should see both 0 and 1 events.
-  (let [pat    (mini/parse "bd?")
-        counts (map (fn [_] (count (core/query pat one-cycle))) (range 100))
-        has-0  (some zero? counts)
-        has-1  (some #(= 1 %) counts)]
-    (is (or has-0 has-1) "degrade should sometimes drop events")))
+(defn- vc [pat n]
+  (mapv :value (sort-by #(core/rat->float (:start (:whole %)))
+                        (core/query-onsets pat (core/cycle-span n)))))
+
+(defn- vcs [s from to] (mapv #(vc (mini/parse s) %) (range from to)))
+
+(defn- parse-msg [s]
+  (try (mini/parse s) nil (catch :default e (ex-message e))))
+
+(deftest tl4-degrade-deterministic
+  (is (= [[] [:bd] [] [:bd]] (vcs "bd?" 0 4)))
+  (is (= (vcs "hh*8?" 0 4) (vcs "hh*8?" 0 4)))
+  (is (= (vc (mini/parse "hh*8?") 0) (vc (mini/parse "hh*8?") 0)))
+  (is (= [[:c :d] [:a :d] [:c :d] [:a :d]] (vcs "a? b? c? d?" 0 4)))
+  (is (= [[:b] [:a :d] [:c :d] [:a :c :d]] (vcs "[a b c d]?" 0 4)))
+  (is (= [2 5] (mapv #(count (vc (mini/parse "hh*8?") %)) [0 1]))))
+
+(deftest tl4-degrade-amount
+  (is (= [4 7] (mapv #(count (vc (mini/parse "hh*8?0.3") %)) [0 1])))
+  (is (= [[:b] [:a :b] [:b] [:a :b]] (vcs "a?0.3 b" 0 4)))
+  (testing "a space after ? makes 0.3 a separate step"
+    (is (= [[0.3]] (vcs "a? 0.3" 0 1)))
+    (is (= [[:a 0.3]] (vcs "a? 0.3" 1 2)))))
+
+(deftest tl4-random-choice
+  (is (= [[:a] [:b] [:a] [:b] [:a] [:a] [:b] [:a]] (vcs "a | b" 0 8)))
+  (is (= [[:bd] [:sd :sd] [:bd] [:hh :hh :hh] [:bd] [:bd]] (vcs "[bd | sd sd | hh*3]" 0 6)))
+  (is (= [[] [:a] [] [:a] [:b] [] [:a] []] (vcs "a? | b" 0 8))))
+
+(deftest tl4-random-choice-errors
+  (is (= "| is only allowed at top level and inside [ ]" (parse-msg "<a | b>")))
+  (is (= "| is only allowed at top level and inside [ ]" (parse-msg "{a | b}")))
+  (is (= "Cannot mix , and | in one group" (parse-msg "[a, b | c]")))
+  (is (nil? (parse-msg "[a | b] c"))))
+
+(deftest tl4-seed-numbering
+  (testing "feet groups consume a seed after their children (post-order)"
+    (is (= (vcs "a? . b?" 0 4) (vcs "a? . b?" 0 4))))
+  (testing "different positions use different seeds"
+    (is (not= (vcs "a? a? a? a?" 0 8) (vcs "a? a? a? a?" 8 16)))))
 
 ;;; ── Weight / elongation ─────────────────────────────────────────────
 

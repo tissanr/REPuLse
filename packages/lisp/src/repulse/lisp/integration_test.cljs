@@ -1,5 +1,6 @@
 (ns repulse.lisp.integration-test
   (:require [cljs.test :refer-macros [deftest is testing]]
+            [clojure.string :refer [includes?]]
             [repulse.core :as core]
             [repulse.lisp.core :as lisp]
             [repulse.lisp.eval :as leval]))
@@ -928,3 +929,153 @@
       (is (core/pattern? pat) code)
       (when (core/pattern? pat)
         (is (seq (mapcat #(cycle-evs pat %) (range 8))) code)))))
+
+;;; ── Phase TL4: randomness & conditionals (Lisp level) ───────────────
+
+(defn- tl4-vals
+  "Onset values of cycle n in whole-start order."
+  [code n]
+  (mapv :value (sort-by #(core/rat->float (:start (:whole %))) (onsets (eval-pat code) n))))
+
+(defn- tl4-vcs [code from to] (mapv #(tl4-vals code %) (range from to)))
+
+(deftest tl4-lisp-vectors
+  (testing "degrade family, string probabilities"
+    (is (= [2 3] (tl4-vals "(degrade-by 0.5 (seq 0 1 2 3 4 5 6 7))" 0)))
+    (is (= [1 2 3 4 6 7] (tl4-vals "(degrade-by \"<0.2 0.6>\" (seq 0 1 2 3 4 5 6 7))" 0)))
+    (is (= [1 3 6] (tl4-vals "(degrade-by \"<0.2 0.6>\" (seq 0 1 2 3 4 5 6 7))" 1)))
+    (is (= [0 1 4 5 6 7] (tl4-vals "(undegrade-by 0.5 (seq 0 1 2 3 4 5 6 7))" 0)))
+    (is (= [4 5 6 7] (tl4-vals "(degrade-by-with saw 1/2 (seq 0 1 2 3 4 5 6 7))" 0))))
+  (testing "sometimes family is per event; closures as transformers"
+    (is (= [100 1 102 103] (tl4-vals "(sometimes-by 0.5 (fn [p] (add 100 p)) (seq 0 1 2 3))" 0)))
+    (is (= [100 1 2 3 4 105 106 7]
+           (tl4-vals "(rarely (fn [p] (add 100 p)) (seq 0 1 2 3 4 5 6 7))" 0)))
+    (is (= [:d :c :b :a] (tl4-vals "(always rev (seq :a :b :c :d))" 0)))
+    (is (= [:a :b :c :d] (tl4-vals "(never rev (seq :a :b :c :d))" 0)))
+    (is (= [[:d :c :b :a] [:a :b :c :d] [:d :c :b :a] [:a :b :c :d]]
+           (tl4-vcs "(some-cycles-by 0.5 rev (seq :a :b :c :d))" 0 4))))
+  (testing "choice"
+    (is (= [:a :b :a :a] (tl4-vals "(segment 4 (choose [:a :b :c]))" 0)))
+    (is (= [:b :a :b :c] (tl4-vals "(segment 4 (choose [:a :b :c]))" 1)))
+    (is (= [[:a] [:b :b] [:a] [:c]]
+           (tl4-vcs "(randcat (pure :a) (seq :b :b) (pure :c))" 0 4)))
+    (is (= [[:a] [:a] [:a] [:b]] (tl4-vcs "(wrandcat [3 (pure :a)] [1 (pure :b)])" 0 4)))
+    (is (= [[:a] [:c] [:a] [:c]] (tl4-vcs "(wchoose-cycles [[1 :a] [1 :b] [2 :c]])" 0 4)))
+    (is (= [:a :b :b :a] (tl4-vals "(segment 4 (wchoose [[1 :a] [3 :b]]))" 0)))
+    (is (= [:b :c :b :a] (tl4-vals "(segment 4 (choose-with sine [:a :b :c]))" 0)))
+    (is (= [:c] (tl4-vals "(choose-in-with (segment 1 rand) [(seq :a :b) (pure :c)])" 1)))
+    (is (empty? (onsets (eval-pat "(choose [:bd :sd])") 0))))
+  (testing "signals"
+    (is (= [true false true true] (tl4-vals "(segment 4 brand)" 0)))
+    (is (= [true false false true] (tl4-vals "(segment 4 (brand-by 0.25))" 0)))
+    (is (= [false] (tl4-vals "(segment 1 (brand-by \"<0 1>\"))" 0)))
+    (is (= [0 3 1 2] (tl4-vals "(randrun 4)" 0)))
+    (is (empty? (onsets (eval-pat "(randrun 0)") 0))))
+  (testing "seed, shuffle, scramble"
+    (is (= [[:a :d :b :c] [:c :b :d :a]] (tl4-vcs "(shuffle 4 (seq :a :b :c :d))" 0 2)))
+    (is (= [[:b :d :c :a] [:c :a :d :b]]
+           (tl4-vcs "(with-seed 7 (shuffle 4 (seq :a :b :c :d)))" 0 2)))
+    (is (= [[:a :b :c :d]] (tl4-vcs "(shuffle \"<1 4>\" (seq :a :b :c :d))" 0 1)))
+    (is (= [[:a :c :b :a]] (tl4-vcs "(scramble 4 (seq :a :b :c :d))" 0 1))))
+  (testing "conditionals"
+    (is (= [[:a :b] [:b :a]] (tl4-vcs "(when-pat \"<0 1>\" rev (seq :a :b))" 0 2)))
+    (is (= [[:a :b] [:a :b] [:b :a]]
+           (tl4-vcs "(when-pat (fn [c] (> c 1)) rev (seq :a :b))" 0 3)))
+    (is (= [[:a :b] [:a :b] [:b :a] [:b :a]] (tl4-vcs "(whenmod 4 2 rev (seq :a :b))" 0 4)))
+    (is (= [[:b :a]] (tl4-vcs "(whenmod \"<4 2>\" 1 rev (seq :a :b))" 1 2)))
+    (is (= 8 (count (tl4-vals "(apply-n 2 (fast 2) (seq :a :b))" 0))))
+    (is (= [4 8] (mapv count (tl4-vcs "(apply-n \"<1 2>\" (fast 2) (seq :a :b))" 0 2))))))
+
+(deftest tl4-lisp-mini
+  (is (= [[] [:bd] [] [:bd]] (tl4-vcs "(~ \"bd?\")" 0 4)))
+  (is (= [[:a] [:b] [:a] [:b] [:a] [:a] [:b] [:a]] (tl4-vcs "(~ \"a | b\")" 0 8)))
+  (is (= [4 7] (mapv count (tl4-vcs "(~ \"hh*8?0.3\")" 0 2)))))
+
+(deftest tl4-lisp-deterministic-across-evals
+  (doseq [code ["(shuffle 4 (seq :a :b :c :d))" "(randcat (pure :a) (pure :b) (pure :c))"
+                "(degrade-by 0.5 (fast 8 (pure :x)))"
+                "(sometimes (fast 2) (seq :a :b :c :d))" "(~ \"hh*8?\")"]]
+    (is (= (tl4-vcs code 0 12) (tl4-vcs code 0 12)) code))
+  (testing "a different seed gives different cycles"
+    (let [base "(randcat (pure :a) (pure :b) (pure :c))"
+          seeded "(with-seed 1 (randcat (pure :a) (pure :b) (pure :c)))"]
+      (is (>= (count (filter true? (map not= (tl4-vcs base 0 100) (tl4-vcs seeded 0 100)))) 50)))))
+
+(deftest tl4-lisp-sources
+  (testing "choose keeps the :source of the chosen element when sampled"
+    (let [pat (eval-pat "(choose [:a :b :c])")
+          ev  (first (core/query pat (core/span [1 4] [1 2])))]
+      (is (= :b (:value ev)))
+      (is (map? (:source ev)))))
+  (testing "degrade-by keeps the token sources of a mini-notation string"
+    (let [evs (core/query (eval-pat "(degrade-by 0 (~ \"a b c d\"))") (core/cycle-span 0))]
+      (is (= 4 (count evs)))
+      (is (every? #(map? (:source %)) evs)))))
+
+(deftest tl4-lisp-curried-forms
+  (let [pat (eval-pat "(->> (seq :bd :sd :hh :cp) (sometimes (fast 2)) (shuffle 4) (degrade-by 0.2) (whenmod 4 3 rev))")]
+    (is (core/pattern? pat))
+    (is (seq (mapcat #(cycle-evs pat %) (range 8))))))
+
+(deftest tl4-lisp-errors
+  (doseq [[code msg] [["(~ \"<a | b>\")" "| is only allowed at top level and inside [ ]"]
+                      ["(~ \"{a | b}\")" "| is only allowed at top level and inside [ ]"]
+                      ["(~ \"[a, b | c]\")" "Cannot mix , and | in one group"]]]
+    (let [r (lisp/eval-string code (make-test-env))]
+      (is (lisp/eval-error? r) code)
+      (is (includes? (str (:message r)) msg) code)))
+  (testing "brand and berlin are signals, not functions"
+    (is (lisp/eval-error? (lisp/eval-string "(brand)" (make-test-env))))
+    (is (lisp/eval-error? (lisp/eval-string "(berlin)" (make-test-env))))))
+
+(deftest tl4-documented-examples-evaluate
+  (doseq [code [
+                "(degrade-by \"<0.2 0.6>\" (fast 16 (seq :hh)))"
+                "(undegrade-by 0.3 (seq :a :b :c :d))"
+                "(undegrade-by \"<0.2 0.6>\" (seq :a :b :c :d))"
+                "(undegrade (seq :a :b :c :d))"
+                "(degrade-by-with saw 0.5 (fast 8 (pure :hh)))"
+                "(degrade-by-with (segment 1 rand) \"<0.2 0.6>\" (fast 8 (pure :hh)))"
+                "(sometimes-by \"<0.2 0.6>\" (fast 2) (seq :bd :sd :hh :cp))"
+                "(sometimes (fast 2) (seq :bd :sd :hh :cp))"
+                "(almost-never rev (seq :a :b :c :d))"
+                "(almost-always rev (seq :a :b :c :d))"
+                "(always rev (seq :a :b))"
+                "(never rev (seq :a :b))"
+                "(some-cycles-by 0.3 (fast 2) (seq :bd :sd))"
+                "(some-cycles-by \"<0 1>\" rev (seq :bd :sd))"
+                "(some-cycles rev (seq :bd :sd))"
+                "(segment 4 (choose [:bd :sd :hh]))"
+                "(segment 4 (wchoose [[3 :bd] [1 :sd]]))"
+                "(segment 4 (choose-with sine [:a :b :c]))"
+                "(choose-in [(seq :a :b) (seq :c :d)])"
+                "(choose-in-with (segment 1 rand) [(seq :a :b) (pure :c)])"
+                "(choose-cycles [:bd :sd :hh])"
+                "(wchoose-cycles [[3 :bd] [1 :sd]])"
+                "(randcat (seq :bd :sd) (seq :hh :hh :oh) (seq :cp))"
+                "(wrandcat [3 (seq :bd :sd)] [1 (pure :cp)])"
+                "(segment 4 brand)"
+                "(segment 4 (brand-by 0.25))"
+                "(segment 1 (brand-by \"<0.2 0.6>\"))"
+                "(segment 4 berlin)"
+                "(segment 1 (rand-l 3))"
+                "(segment 1 (rand-l \"<2 3>\"))"
+                "(randrun 4)"
+                "(randrun \"<3 4>\")"
+                "(with-seed 7 (shuffle 4 (seq :a :b :c :d)))"
+                "(with-seed \"<0 1>\" (segment 4 rand))"
+                "(shuffle 4 (seq :a :b :c :d))"
+                "(shuffle \"<2 4>\" (seq :a :b :c :d))"
+                "(scramble 4 (seq :a :b :c :d))"
+                "(scramble \"<2 4>\" (seq :a :b :c :d))"
+                "(when-pat \"<0 1>\" rev (seq :a :b))"
+                "(when-pat (fn [c] (> c 3)) rev (seq :a :b))"
+                "(whenmod 8 6 rev (seq 0 2 4 7))"
+                "(whenmod \"<4 2>\" 1 rev (seq :a :b))"
+                "(apply-n 2 (fast 2) (seq :a :b))"
+                "(apply-n \"<1 2>\" (fast 2) (seq :a :b))"
+                "(~ \"hh*8?0.3 [bd | sd sd | cp*3]\")"]]
+    (let [pat (eval-pat code)]
+      (is (core/pattern? pat) code)
+      (when (core/pattern? pat)
+        (is (seq (mapcat #(cycle-evs pat %) (range 16))) code)))))

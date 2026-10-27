@@ -11,6 +11,7 @@
    "sine2" core/sine2 "cosine2" core/cosine2 "saw2" core/saw2 "isaw2" core/isaw2
    "tri2" core/tri2 "itri2" core/itri2 "square2" core/square2 "isquare2" core/isquare2
    "rand" core/rand "rand2" core/rand2 "perlin" core/perlin "time" core/time
+   "brand" core/brand "berlin" core/berlin
 
    ;; Constructors
    "signal" (fn [f]

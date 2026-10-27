@@ -34,23 +34,6 @@
    "early"  (fn
               ([a]   (let [a (u/pat-arg a)] (fn [p] (core/early a (u/unwrap p)))))
               ([a p] (core/early (u/pat-arg a) (u/unwrap p))))
-   "sometimes"    (fn [f p] (core/sometimes (u/unwrap f) (u/unwrap p)))
-   "often"        (fn [f p] (core/often (u/unwrap f) (u/unwrap p)))
-   "rarely"       (fn [f p] (core/rarely (u/unwrap f) (u/unwrap p)))
-   "sometimes-by" (fn [prob f p] (core/sometimes-by (u/pat-arg prob) (u/unwrap f) (u/unwrap p)))
-   "degrade"      (fn [p] (core/degrade (u/unwrap p)))
-   "degrade-by"   (fn
-                    ([prob]   (let [prob (u/pat-arg prob)]
-                                (fn [p] (core/degrade-by prob (u/unwrap p)))))
-                    ([prob p] (core/degrade-by (u/pat-arg prob) (u/unwrap p))))
-   "choose"  (fn [xs]
-               (let [xs' (u/unwrap xs)]
-                 (core/choose (mapv u/unwrap xs') (mapv u/source-of xs'))))
-   "wchoose" (fn [pairs]
-               (let [pairs' (u/unwrap pairs)
-                     srcs   (mapv #(u/source-of (second %)) pairs')
-                     vecs   (mapv (fn [[w v]] [(u/unwrap w) (u/unwrap v)]) pairs')]
-                 (core/wchoose vecs srcs)))
    "jux"    (fn [f p] (params/jux (u/unwrap f) (u/unwrap p)))
    "jux-by" (fn [w f p] (params/jux-by (u/pat-arg w) (u/unwrap f) (u/unwrap p)))
    "off"    (fn [a f p] (core/off (u/pat-arg a) (u/unwrap f) (u/unwrap p)))

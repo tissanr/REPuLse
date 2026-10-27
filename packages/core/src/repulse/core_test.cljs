@@ -153,8 +153,11 @@
 
 (deftest sometimes-by-multi-cycle-span
   (let [pat (c/sometimes-by 0.5 (fn [p] (c/fmap (constantly :x) p)) (c/pure :a))]
-    (is (= (into [] (mapcat #(vals-in pat % (inc %))) (range 6))
-           (vals-in pat 0 6)))))
+    ;; TL4: sometimes-by is a stack of two branches, so a multi-cycle query lists
+    ;; branch by branch; compare the events in time order instead.
+    (let [by-start (fn [evs] (mapv :value (sort-by #(c/rat->float (:start (:whole %))) evs)))]
+      (is (= (into [] (mapcat #(by-start (c/query pat (c/cycle-span %)))) (range 6))
+             (by-start (c/query pat (c/span (c/int->rat 0) (c/int->rat 6)))))))))
 
 (deftest arrange-multi-cycle-span
   (let [arr (c/arrange* [[(c/pure :a) 1] [(c/pure :b) 2]])]
@@ -234,41 +237,42 @@
       (is (= (mapv :value evs1) (mapv :value evs2))))))
 
 (deftest choose-picks-one-per-cycle
-  (testing "choose returns exactly one event per cycle"
-    (let [pat (c/choose [:a :b :c :d])]
+  (testing "choose-cycles (the pre-TL4 choose) returns exactly one event per cycle"
+    (let [pat (c/choose-cycles [:a :b :c :d])]
       (doseq [cy (range 10)]
         (let [evs (c/query pat (c/cycle-span cy))]
           (is (= 1 (count evs)))
           (is (contains? #{:a :b :c :d} (:value (first evs)))))))))
 
 (deftest choose-deterministic
-  (testing "choose is deterministic for the same cycle"
-    (let [pat (c/choose [:a :b :c :d])]
+  (testing "choose-cycles is deterministic for the same cycle"
+    (let [pat (c/choose-cycles [:a :b :c :d])]
       (doseq [cy (range 10)]
         (is (= (mapv :value (c/query pat (c/cycle-span cy)))
                (mapv :value (c/query pat (c/cycle-span cy)))))))))
 
 (deftest wchoose-picks-one-per-cycle
-  (testing "wchoose returns exactly one event per cycle"
-    (let [pat (c/wchoose [[0.5 :bd] [0.3 :sd] [0.2 :hh]])]
+  (testing "wchoose-cycles (the pre-TL4 wchoose) returns exactly one event per cycle"
+    (let [pat (c/wchoose-cycles [[0.5 :bd] [0.3 :sd] [0.2 :hh]])]
       (doseq [cy (range 10)]
         (let [evs (c/query pat (c/cycle-span cy))]
           (is (= 1 (count evs)))
           (is (contains? #{:bd :sd :hh} (:value (first evs)))))))))
 
 (deftest choose-attaches-source
-  (testing "choose attaches :source from the sources vector to events"
-    (let [srcs [{:from 0 :to 3} {:from 4 :to 7} {:from 8 :to 11} {:from 12 :to 15}]
-          pat  (c/choose [:a :b :c :d] srcs)]
-      (doseq [cy (range 20)]
-        (let [ev  (first (c/query pat (c/cycle-span cy)))
-              idx (mod (c/cycle-hash cy) 4)]
-          (is (= (nth srcs idx) (:source ev))))))))
+  (testing "choose-cycles attaches :source of the chosen value (TL4 vector, cycles 0-7)"
+    (let [srcs [{:from 0 :to 3} {:from 4 :to 7} {:from 8 :to 11}]
+          pat  (c/choose-cycles [:a :b :c] srcs)
+          idxs [0 1 0 2 0 0 1 0]]
+      (doseq [cy (range 8)]
+        (let [ev (first (c/query pat (c/cycle-span cy)))]
+          (is (= (nth [:a :b :c] (nth idxs cy)) (:value ev)))
+          (is (= (nth srcs (nth idxs cy)) (:source ev))))))))
 
 (deftest wchoose-attaches-source
   (testing "wchoose attaches :source from the sources vector to events"
     (let [srcs [{:from 0 :to 3} {:from 4 :to 7} {:from 8 :to 11}]
-          pat  (c/wchoose [[0.5 :bd] [0.3 :sd] [0.2 :hh]] srcs)]
+          pat  (c/wchoose-cycles [[0.5 :bd] [0.3 :sd] [0.2 :hh]] srcs)]
       (doseq [cy (range 20)]
         (let [ev (first (c/query pat (c/cycle-span cy)))]
           (is (contains? (set srcs) (:source ev))))))))
@@ -941,3 +945,254 @@
   (is (= [[false "0" "1/2"] [true "1/2" "1"]] (tb-evs (c/binary-n 1 (tb-alt 2 4)) 0)))
   (is (= [false false false true] (tb-vals (c/binary-n 1 (tb-alt 2 4)) 1)))
   (is (= [false true false true] (tb-vals (c/binary-n 5 4) 1))))
+
+;;; ── Phase TL4: randomness & conditionals ────────────────────────────
+
+(defn- vc
+  "values c: onset values of cycle n in whole-start order."
+  [pat n]
+  (mapv :value (sort-by #(c/rat->float (:start (:whole %))) (c/query-onsets pat (c/cycle-span n)))))
+
+(defn- vcs [pat from to] (mapv #(vc pat %) (range from to)))
+
+(defn- evs
+  "[value whole-start whole-end] triples of cycle n sorted by whole start."
+  [pat n]
+  (mapv (fn [e] [(:value e) (:start (:whole e)) (:end (:whole e))])
+        (sort-by (juxt #(c/rat->float (:start (:whole %))) #(str (:value %)))
+                 (c/query-onsets pat (c/cycle-span n)))))
+
+(def ^:private s8 (c/seq* [0 1 2 3 4 5 6 7]))
+(def ^:private s4 (c/seq* [:a :b :c :d]))
+(defn- plus100 [p] (c/fmap #(+ % 100) p))
+(defn- close= [a b] (every? true? (map #(< (Math/abs (- %1 %2)) 1e-12) a b)))
+(defn- sample [pat t]
+  (:value (first (c/query pat (c/span t (c/rat+ t [1 1000000]))))))
+
+(deftest tl4-time->rands
+  (is (close= [0.2591378428041935 0.712890088558197 0.9065967965871096 0.6629501506686211]
+              (c/time->rands [1 2] 4)))
+  (is (close= [0.4010523743927479 0.35760145634412766 0.1534953359514475 0.363248186185956]
+              (c/time->rands [3 2] 4)))
+  (is (= [0 0 0] (c/time->rands [0 1] 3)))
+  (doseq [t [[1 1] [1 4] [7 3]]]
+    (is (= (c/time->rand t) (first (c/time->rands t 5))))))
+
+(deftest tl4-with-seed
+  (let [r4 (c/segment 4 c/rand)]
+    (is (= (vc r4 1) (vc (c/with-seed 1 r4) 0)))
+    (is (close= [0.5177721455693245 0.2788401562720537 0.4010523743927479 0.7870833929628134]
+                (vc (c/with-seed 1 r4) 0)))
+    (is (= (vc r4 2) (vc (c/with-seed 1 (c/with-seed 2 r4)) 0)))
+    (is (close= [0.03601731359958649 0.35768954269587994 0.5576803125441074 0.6513602118939161]
+                (vc (c/with-seed 1 (c/with-seed 2 r4)) 0)))
+    (is (= [0 1 4 6 7] (vc (c/with-seed 3 (c/degrade-by 0.5 s8)) 0)))
+    (is (= (vc (c/degrade-by 0.5 s8) 3) (vc (c/with-seed 3 (c/degrade-by 0.5 s8)) 0)))
+    (is (= [:a :a :b :a :b :a :a :a]
+           (mapv first (vcs (c/with-seed 7 (c/randcat [(c/pure :a) (c/pure :b) (c/pure :c)])) 0 8))))
+    (is (= [0 0.03601731359958649]
+           [(first (vc (c/with-seed (c/cat* [(c/pure 0) (c/pure 1)]) (c/segment 1 c/rand)) 0))
+            (first (vc (c/with-seed (c/cat* [(c/pure 0) (c/pure 1)]) (c/segment 1 c/rand)) 1))]))))
+
+(deftest tl4-seed-differs
+  (let [pats [(c/pure :a) (c/pure :b) (c/pure :c)]
+        base (c/randcat pats)
+        seeded (c/with-seed 1 base)]
+    (is (>= (count (filter #(not= (vc base %) (vc seeded %)) (range 100))) 50))
+    (is (= (vcs (c/shuffle 4 s4) 0 20) (vcs (c/shuffle 4 s4) 0 20)))))
+
+(deftest tl4-degrade-by
+  (is (= [2 3] (vc (c/degrade-by 0.5 s8) 0)))
+  (is (= [0 1 3 5 6] (vc (c/degrade-by 0.5 s8) 1)))
+  (is (= 8 (count (vc (c/degrade-by 0 s8) 0))))
+  (is (empty? (vc (c/degrade-by 1 s8) 0)))
+  (is (= (vc (c/degrade-by 0.5 s8) 0) (vc (c/degrade s8) 0)))
+  (is (= [1 2 3 4 6 7] (vc (c/degrade-by (c/cat* [(c/pure 0.2) (c/pure 0.6)]) s8) 0)))
+  (is (= [1 3 6] (vc (c/degrade-by (c/cat* [(c/pure 0.2) (c/pure 0.6)]) s8) 1)))
+  (is (= [13 7 12 8]
+         (mapv #(count (vc (c/degrade-by (c/cat* [(c/pure 0.2) (c/pure 0.6)]) (c/fast 16 (c/seq* [:hh]))) %)) (range 4))))
+  (is (= [{:from 0 :to 1} {:from 2 :to 3}]
+         (let [pat (c/seq* [:a :b] [{:from 0 :to 1} {:from 2 :to 3}])]
+           (mapv :source (c/query (c/degrade-by 0 pat) (cyc 0)))))))
+
+(deftest tl4-undegrade-by
+  (is (= [0 1 4 5 6 7] (vc (c/undegrade-by 0.5 s8) 0)))
+  (is (= [2 4 7] (vc (c/undegrade-by 0.5 s8) 1)))
+  (doseq [x [0.1 0.5 0.9] n (range 10)]
+    (is (= (evs s8 n) (evs (c/stack* [(c/degrade-by x s8) (c/undegrade-by x s8)]) n))))
+  (is (= (vc (c/undegrade-by 0.5 s8) 0) (vc (c/undegrade s8) 0))))
+
+(deftest tl4-degrade-by-with
+  (is (= [4 5 6 7] (vc (c/degrade-by-with c/saw [1 2] s8) 0)))
+  (is (empty? (vc (c/degrade-by-with (c/segment 1 c/rand) 0.5 s8) 0)))
+  (is (= 8 (count (vc (c/degrade-by-with (c/segment 1 c/rand) 0.5 s8) 1)))))
+
+(deftest tl4-sometimes-by
+  (is (= [[100 [0 1] [1 4]] [1 [1 4] [1 2]] [102 [1 2] [3 4]] [103 [3 4] [1 1]]]
+         (evs (c/sometimes-by 0.5 plus100 (c/seq* [0 1 2 3])) 0)))
+  (is (= [[0 [1 1] [5 4]] [101 [5 4] [3 2]] [102 [3 2] [7 4]] [3 [7 4] [2 1]]]
+         (evs (c/sometimes-by 0.5 plus100 (c/seq* [0 1 2 3])) 1)))
+  (is (= (set [[:a [0 1] [1 8]] [:c [1 4] [3 8]] [:d [3 8] [1 2]] [:b [1 4] [1 2]] [:b [5 8] [3 4]] [:c [3 4] [7 8]]])
+         (set (evs (c/sometimes-by 0.5 #(c/fast 2 %) s4) 0))))
+  (is (= [:a :b] (vc (c/sometimes-by (c/cat* [(c/pure 0) (c/pure 1)]) c/rev (c/seq* [:a :b])) 0)))
+  (is (= [:b :a] (vc (c/sometimes-by (c/cat* [(c/pure 0) (c/pure 1)]) c/rev (c/seq* [:a :b])) 1))))
+
+(deftest tl4-named-probabilities
+  (is (= (evs (c/sometimes-by 0.5 plus100 s8) 0) (evs (c/sometimes plus100 s8) 0)))
+  (is (= (range 100 108) (vc (c/often plus100 s8) 0)))
+  (is (= [100 1 2 3 4 105 106 7] (vc (c/rarely plus100 s8) 0)))
+  (is (= [100 1 2 3 4 5 6 7] (vc (c/almost-never plus100 s8) 0)))
+  (is (= (range 8) (vc (c/almost-never plus100 s8) 1)))
+  (is (= (range 100 108) (vc (c/almost-always plus100 s8) 0)))
+  (is (= (range 100 108) (vc (c/almost-always plus100 s8) 1)))
+  (is (= (vc (plus100 s8) 0) (vc (c/always plus100 s8) 0)))
+  (is (= (vc s8 0) (vc (c/never plus100 s8) 0))))
+
+(deftest tl4-some-cycles-by
+  (is (= ["dcba" "abcd" "dcba" "abcd" "dcba" "dcba" "abcd" "dcba"]
+         (mapv #(apply str (map name %)) (vcs (c/some-cycles-by 0.5 c/rev s4) 0 8))))
+  (is (= [[100 101 102 103] [0 1 2 3] [100 101 102 103] [0 1 2 3]]
+         (vcs (c/some-cycles plus100 (c/seq* [0 1 2 3])) 0 4)))
+  (let [pat (c/some-cycles-by 0.5 c/rev s4)]
+    (is (= (into [] (mapcat #(vals-in pat % (inc %))) (range 6)) (vals-in pat 0 6))))
+  (is (= [:a :b :c :d] (vc (c/some-cycles-by (c/cat* [(c/pure 0) (c/pure 1)]) c/rev s4) 0)))
+  (is (= [:d :c :b :a] (vc (c/some-cycles-by (c/cat* [(c/pure 0) (c/pure 1)]) c/rev s4) 1))))
+
+(deftest tl4-choose
+  (let [ch (c/choose [:a :b :c])]
+    (is (= [:a :b :a :a] (vc (c/segment 4 ch) 0)))
+    (is (= [:b :a :b :c] (vc (c/segment 4 ch) 1)))
+    (let [es (c/query ch (c/span [1 4] [1 2]))]
+      (is (= 1 (count es)))
+      (is (nil? (:whole (first es))))
+      (is (= :b (:value (first es)))))
+    (is (empty? (c/query-onsets (c/choose [:a :b]) (cyc 0))))
+    (is (empty? (c/query (c/choose []) (cyc 0))))
+    (let [pat (c/choose [:a :b :c] [{:from 0 :to 1} {:from 2 :to 3} {:from 4 :to 5}])
+          es  (mapv #(first (c/query pat (c/span [%1 4] [(inc %1) 4]))) (range 4))]
+      ;; sampled directly (segment keeps the source of its own structure)
+      (is (= [:a :b :a :a] (mapv :value (map #(first (c/query pat (c/span [%1 4] [(inc %1) 4]))) (range 4)))))
+      (is (= {:from 2 :to 3} (:source (first (c/query pat (c/span [1 4] [1 2]))))))
+      (is (= 4 (count es))))))
+
+(deftest tl4-wchoose
+  (let [w (c/wchoose [[1 :a] [3 :b]])]
+    (is (= [:a :b :b :a] (vc (c/segment 4 w) 0)))
+    (is (= [:b :b :b :b] (vc (c/segment 4 w) 1))))
+  (is (empty? (c/query (c/wchoose [[0 :a] [0 :b]]) (cyc 0)))))
+
+(deftest tl4-choose-with-in
+  (is (= [:b :c :b :a] (vc (c/segment 4 (c/choose-with c/sine [:a :b :c])) 0)))
+  (let [ci (c/choose-in [(c/seq* [:a :b]) (c/seq* [:c :d])])]
+    (is (= [[:c [1 1] [3 2]] [:d [3 2] [2 1]]]
+           (mapv (fn [e] [(:value e) (:start (:whole e)) (:end (:whole e))]) (c/query ci (c/span [1 1] [2 1])))))
+    (is (= [[:b [3 2] [2 1]]]
+           (mapv (fn [e] [(:value e) (:start (:whole e)) (:end (:whole e))]) (c/query ci (c/span [3 2] [2 1]))))))
+  (is (= [:c] (vc (c/choose-in-with (c/segment 1 c/rand) [(c/seq* [:a :b]) (c/pure :c)]) 1))))
+
+(deftest tl4-randcat
+  (let [pat (c/randcat [(c/pure :a) (c/seq* [:b :b]) (c/pure :c)])]
+    (is (= [[:a] [:b :b] [:a] [:c] [:a] [:a] [:b :b] [:a]] (vcs pat 0 8)))
+    (is (= [[:b [1 1] [3 2]] [:b [3 2] [2 1]]] (evs pat 1))))
+  (let [pat (c/choose-cycles [:a :b :c])]
+    (doseq [n (range 10)]
+      (let [es (c/query pat (cyc n))]
+        (is (= 1 (count es)))
+        (is (= (cyc n) (:whole (first es)))))))
+  (let [es (c/query (c/choose-cycles [:a :b] [{:from 0 :to 2} {:from 3 :to 5}]) (cyc 1))]
+    (is (= [:b] (mapv :value es)))
+    (is (= {:from 3 :to 5} (:source (first es))))))
+
+(deftest tl4-wrandcat
+  (is (= [[:a] [:a] [:a] [:b] [:a] [:a] [:a] [:a]]
+         (vcs (c/wrandcat [[3 (c/pure :a)] [1 (c/pure :b)]]) 0 8)))
+  (is (= [[:a] [:c] [:a] [:c] [:a] [:a] [:c] [:a]]
+         (vcs (c/wchoose-cycles [[1 :a] [1 :b] [2 :c]]) 0 8))))
+
+(deftest tl4-brand
+  (is (= [true false true true] (vc (c/segment 4 c/brand) 0)))
+  (is (= [false true true false] (vc (c/segment 4 c/brand) 1)))
+  (is (= [true false false true] (vc (c/segment 4 (c/brand-by 0.25)) 0)))
+  (is (= [false false false false] (vc (c/segment 4 (c/brand-by 0.25)) 1)))
+  (is (= [false] (vc (c/segment 1 (c/brand-by (c/cat* [(c/pure 0) (c/pure 1)]))) 0)))
+  (is (= [true] (vc (c/segment 1 (c/brand-by (c/cat* [(c/pure 0) (c/pure 1)]))) 1))))
+
+(deftest tl4-berlin
+  (let [at (fn [t] (sample c/berlin t))]
+    (is (close= [0 0.12944303639233112 0.25888607278466225 0.26789040118455887 0.2186607443727553]
+                (mapv at [[0 1] [1 2] [1 1] [3 2] [5 2]])))
+    (is (close= [(at [3 2])] [(sample (c/with-seed 1 c/berlin) [1 2])]))))
+
+(deftest tl4-rand-l
+  (is (close= [0.2591378428041935 0.712890088558197 0.9065967965871096]
+              (sample (c/rand-l 3) [1 2])))
+  (is (= [0 0 0] (sample (c/rand-l 3) [0 1])))
+  (is (empty? (c/query (c/rand-l 0) (cyc 0)))))
+
+(deftest tl4-randrun
+  (is (= [[0 3 1 2] [2 1 3 0] [1 3 2 0] [1 3 0 2]] (vcs (c/randrun 4) 0 4)))
+  (is (= [[0 [0 1] [1 4]] [3 [1 4] [1 2]] [1 [1 2] [3 4]] [2 [3 4] [1 1]]] (evs (c/randrun 4) 0)))
+  (is (= [[0 [0 1] [1 1]]] (evs (c/randrun 1) 0)))
+  (is (empty? (c/query (c/randrun 0) (cyc 0))))
+  (is (every? #(= [0 1 2 3 4] (sort %)) (vcs (c/randrun 5) 0 1000))))
+
+(deftest tl4-shuffle-scramble
+  (is (= [[:a :d :b :c] [:c :b :d :a] [:b :d :c :a] [:b :d :a :c]] (vcs (c/shuffle 4 s4) 0 4)))
+  (is (= [[:a [0 1] [1 4]] [:d [1 4] [1 2]] [:b [1 2] [3 4]] [:c [3 4] [1 1]]] (evs (c/shuffle 4 s4) 0)))
+  (is (= [[:a :b :c :d] [:c :d :a :b] [:c :d :a :b] [:c :d :a :b]] (vcs (c/shuffle 2 s4) 0 4)))
+  (is (= [[:b :d :c :a] [:c :a :d :b] [:b :a :d :c] [:c :a :d :b]] (vcs (c/with-seed 7 (c/shuffle 4 s4)) 0 4)))
+  (is (empty? (c/query (c/shuffle 0 s4) (cyc 0))))
+  (is (= [:a :b :c :d] (vc (c/shuffle (c/cat* [(c/pure 1) (c/pure 4)]) s4) 0)))
+  (is (= (vc (c/shuffle 4 s4) 1) (vc (c/shuffle (c/cat* [(c/pure 1) (c/pure 4)]) s4) 1)))
+  (is (= [[:a :c :b :a] [:c :b :b :d] [:a :b :c :c] [:d :a :c :d]] (vcs (c/scramble 4 s4) 0 4))))
+
+(deftest tl4-when-pat
+  (is (= [:a :b] (vc (c/when-pat (c/cat* [(c/pure 0) (c/pure 1)]) c/rev (c/seq* [:a :b])) 0)))
+  (is (= [:b :a] (vc (c/when-pat (c/cat* [(c/pure 0) (c/pure 1)]) c/rev (c/seq* [:a :b])) 1)))
+  (is (= [[:a [0 1] [1 8]] [:b [1 8] [1 4]] [:c [1 4] [3 8]] [:d [3 8] [1 2]] [:c [1 2] [3 4]] [:d [3 4] [1 1]]]
+         (evs (c/when-pat (c/seq* [1 0]) #(c/fast 2 %) s4) 0)))
+  (let [p (c/when-pat (fn [cy] (> cy 1)) c/rev (c/seq* [:a :b]))]
+    (is (= [[:a :b] [:a :b] [:b :a]] (vcs p 0 3)))))
+
+(deftest tl4-whenmod
+  (let [p (c/whenmod 8 6 c/rev (c/seq* [0 2 4 7]))]
+    (doseq [n (range 16)]
+      (is (= (if (#{6 7 14 15} n) [7 4 2 0] [0 2 4 7]) (vc p n)))))
+  (is (= [[:a :b] [:a :b] [:b :a] [:b :a]] (vcs (c/whenmod 4 2 c/rev (c/seq* [:a :b])) 0 4)))
+  (is (= (vc s4 0) (vc (c/whenmod 0 0 c/rev s4) 0)))
+  (is (= [:b :a] (vc (c/whenmod (c/cat* [(c/pure 4) (c/pure 2)]) 1 c/rev (c/seq* [:a :b])) 1))))
+
+(deftest tl4-apply-n
+  (is (= [[:a [0 1] [1 8]] [:b [1 8] [1 4]] [:a [1 4] [3 8]] [:b [3 8] [1 2]]
+          [:a [1 2] [5 8]] [:b [5 8] [3 4]] [:a [3 4] [7 8]] [:b [7 8] [1 1]]]
+         (evs (c/apply-n 2 #(c/fast 2 %) (c/seq* [:a :b])) 0)))
+  (is (= [:a :b] (vc (c/apply-n 0 c/rev (c/seq* [:a :b])) 0)))
+  (let [p (c/apply-n (c/cat* [(c/pure 1) (c/pure 2)]) #(c/fast 2 %) (c/seq* [:a :b]))]
+    (is (= 4 (count (vc p 0))))
+    (is (= 8 (count (vc p 1))))))
+
+(defn- frac [pred xs] (/ (count (filter pred xs)) (count xs)))
+(defn- near [target x] (< (Math/abs (- x target)) 0.05))
+
+(deftest tl4-statistics
+  (let [n 1000
+        s4' (c/seq* [:a :b :c :d])
+        kept (fn [pat] (/ (reduce + (map #(count (vc pat %)) (range n))) (* 4.0 n)))]
+    (is (near 0.7 (kept (c/degrade-by 0.3 s4'))))
+    (is (near 0.5 (kept (c/degrade s4'))))
+    (let [f (c/sometimes-by 0.25 (fn [p] (c/fmap (constantly :x) p)) s4')]
+      (is (near 0.25 (/ (reduce + (map #(count (filter #{:x} (vc f %))) (range n))) (* 4.0 n)))))
+    (let [f (c/some-cycles-by 0.3 (fn [p] (c/fmap (constantly :x) p)) s4')]
+      (is (near 0.3 (frac #(= [:x :x :x :x] %) (map #(vc f %) (range n))))))
+    (let [counts (frequencies (map #(first (vc (c/randcat [(c/pure :a) (c/pure :b) (c/pure :c)]) %)) (range 900)))]
+      (is (every? #(< (Math/abs (- % 300)) 45) (vals counts))))
+    (is (near 0.75 (frac #{:a} (map #(first (vc (c/wrandcat [[3 (c/pure :a)] [1 (c/pure :b)]]) %)) (range n)))))
+    (let [vs (mapcat #(vc (c/segment 4 (c/choose [:a :b :c])) %) (range n))]
+      (doseq [k [:a :b :c]] (is (near (/ 1 3.0) (frac #{k} vs)))))
+    (is (near 0.5 (frac true? (mapcat #(vc (c/segment 4 c/brand) %) (range n)))))
+    (is (near 0.25 (frac true? (mapcat #(vc (c/segment 4 (c/brand-by 0.25)) %) (range n)))))
+    (let [cs (map #(vc (c/shuffle 4 s4') %) (range n))]
+      (is (every? #(= [:a :b :c :d] (sort %)) cs))
+      (doseq [k [:a :b :c :d]] (is (near 0.25 (frac #{k} (map first cs))))))
+    (let [vs (mapcat #(vc (c/scramble 4 s4') %) (range n))]
+      (doseq [k [:a :b :c :d]] (is (near 0.25 (frac #{k} vs)))))))

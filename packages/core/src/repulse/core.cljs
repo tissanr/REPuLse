@@ -1,5 +1,5 @@
 (ns repulse.core
-  (:refer-clojure :exclude [rand time chunk iter]))
+  (:refer-clojure :exclude [rand time chunk iter shuffle]))
 
 ;;; Rational arithmetic — rationals as [numerator denominator]
 
@@ -490,124 +490,6 @@
   [amount pat]
   ((patternify (fn [a p] (late* (rat-neg (->rat a)) p))) amount pat))
 
-(defn cycle-hash
-  "Deterministic hash of a cycle number. Returns 0–99."
-  [cycle]
-  (mod (+ (* (Math/abs cycle) 48271) 12345) 100))
-
-(defn- sometimes-by*
-  [prob f pat]
-  (let [threshold (int (* prob 100))]
-    (pattern
-     (per-cycle
-      (fn [sp]
-        (let [cycle (int (Math/floor (rat->float (:start sp))))]
-          (if (< (cycle-hash cycle) threshold)
-            (query (f pat) sp)
-            (query pat sp))))))))
-
-(defn sometimes-by
-  "Apply transform f to pat on cycles where (cycle-hash cycle) < (prob * 100).
-   prob is 0.0–1.0, or a pattern of probabilities. Deterministic: the same
-   cycle number always makes the same choice.
-   (sometimes-by 0.5 rev pat) — reverse ~50% of cycles"
-  [prob f pat]
-  ((patternify (fn [pr p] (sometimes-by* pr f p))) prob pat))
-
-(defn sometimes
-  "Apply transform on ~50% of cycles.
-   (sometimes rev pat)"
-  [f pat]
-  (sometimes-by 0.5 f pat))
-
-(defn often
-  "Apply transform on ~75% of cycles.
-   (often (fast 2) pat)"
-  [f pat]
-  (sometimes-by 0.75 f pat))
-
-(defn rarely
-  "Apply transform on ~25% of cycles.
-   (rarely rev pat)"
-  [f pat]
-  (sometimes-by 0.25 f pat))
-
-(defn- event-hash
-  "Deterministic hash of an event's start position. Returns 0–99.
-   Uses the :whole start [numerator denominator] to seed."
-  [event]
-  (let [[n d] (:start (:whole event))]
-    (mod (+ (* (Math/abs n) 48271) (* (Math/abs d) 22543) 9137) 100)))
-
-(defn- degrade-by*
-  [prob pat]
-  (let [threshold (int (* prob 100))]
-    (pattern
-     (fn [sp]
-       (filter #(>= (event-hash %) threshold) (query pat sp))))))
-
-(defn degrade-by
-  "Randomly drop events from pat with probability prob (0.0–1.0, or a pattern
-   of probabilities). Uses a deterministic hash of each event's time position.
-   (degrade-by 0.3 pat) — drop ~30% of events"
-  [prob pat]
-  ((patternify degrade-by*) prob pat))
-
-(defn degrade
-  "Drop ~50% of events randomly. Shorthand for (degrade-by 0.5 pat).
-   (degrade (fast 4 (seq :hh :oh :hh :oh)))"
-  [pat]
-  (degrade-by 0.5 pat))
-
-(defn choose
-  "Pick one value from xs per cycle (deterministic based on cycle number).
-   Returns a pattern that produces one event per cycle.
-   (choose [:bd :sd :hh :oh])
-   Optional sources vector attaches :source to events for editor highlighting."
-  ([xs] (choose xs nil))
-  ([xs sources]
-   (let [n (count xs)]
-     (pattern
-      (fn [{:keys [start end]}]
-        (let [start-c (int (Math/floor (rat->float start)))
-              end-c   (int (Math/ceil  (rat->float end)))]
-          (for [c (range start-c end-c)
-                :let [idx   (mod (cycle-hash c) n)
-                      whole (cycle-span c)
-                      part  (span-intersect whole (span start end))]
-                :when part]
-            (let [base (event (nth xs idx) whole part)
-                  src  (when sources (nth sources idx nil))]
-              (if src (assoc base :source src) base)))))))))
-
-(defn wchoose
-  "Weighted random choice per cycle. Takes a vector of [weight value] pairs.
-   Weights are relative (don't need to sum to 1.0).
-   (wchoose [[0.5 :bd] [0.3 :sd] [0.2 :hh]])
-   Optional sources vector attaches :source to events for editor highlighting."
-  ([pairs] (wchoose pairs nil))
-  ([pairs sources]
-   (let [total      (reduce + (map first pairs))
-         cumulative (reductions + (map #(* 100 (/ (first %) total)) pairs))
-         values     (mapv second pairs)]
-     (pattern
-      (fn [{:keys [start end]}]
-        (let [start-c (int (Math/floor (rat->float start)))
-              end-c   (int (Math/ceil  (rat->float end)))]
-          (for [c (range start-c end-c)
-                :let [h     (cycle-hash c)
-                      idx   (or (first (keep-indexed
-                                         (fn [i thresh]
-                                           (when (< h thresh) i))
-                                         cumulative))
-                                (dec (count values)))
-                      whole (cycle-span c)
-                      part  (span-intersect whole (span start end))]
-                :when part]
-            (let [base (event (nth values idx) whole part)
-                  src  (when sources (nth sources idx nil))]
-              (if src (assoc base :source src) base)))))))))
-
 (defn off
   "Layer the original pattern with a time-shifted, transformed copy.
    amount may be a number, a rational or a pattern of numbers.
@@ -638,12 +520,27 @@
         r   (js* "(~{} % ~{})" n den)]               ; truncating remainder = properFraction
     (js* "((~{} * 536870912n) / ~{})" r den)))       ; BigInt division truncates toward zero
 
+(defn- seed->rand [s]
+  (let [m (js* "(((~{} % 536870912n) + 536870912n) % 536870912n)" s)] ; floored mod
+    (/ (js/Number m) two-29)))
+
 (defn time->rand
   "Tidal timeToRand: deterministic float in [0, 1) for rational time t."
   [t]
-  (let [s (xorwise (time->int-seed (->rat t)))
-        m (js* "(((~{} % 536870912n) + 536870912n) % 536870912n)" s)] ; floored mod
-    (/ (js/Number m) two-29)))
+  (seed->rand (xorwise (time->int-seed (->rat t)))))
+
+(def ^:dynamic *rand-seed*
+  "Time offset added to every random read; bound by with-seed (TL4)."
+  [0 1])
+
+(defn time->rands
+  "Tidal timeToRands: n floats in [0,1) for rational t. (first (time->rands t n)) = (time->rand t)."
+  [t n]
+  (loop [s (xorwise (time->int-seed (->rat t))) k n out []]
+    (if (<= k 0) out (recur (xorwise s) (dec k) (conj out (seed->rand s))))))
+
+(defn- rand-at  [t]   (time->rand  (rat+ (->rat t) *rand-seed*)))
+(defn- rands-at [t n] (time->rands (rat+ (->rat t) *rand-seed*) n))
 
 ;;; ── Phase TL2: Continuous signals ───────────────────────────────────
 
@@ -676,15 +573,15 @@
 (def itri (signal #(- 1 (tri-at (cycle-pos %)))))
 (def square (signal #(if (< (cycle-pos %) 0.5) 0 1)))
 (def isquare (signal #(if (< (cycle-pos %) 0.5) 1 0)))
-(def rand (signal time->rand))
+(def rand (signal rand-at))
 
 (def perlin
   (signal
    (fn [[n d :as t]]
      (let [fl (Math/floor (/ n d))
            x  (- (rat->float t) fl)
-           a  (time->rand [fl 1])
-           b  (time->rand [(inc fl) 1])
+           a  (rand-at [fl 1])
+           b  (rand-at [(inc fl) 1])
            sm (+ (* 6 (Math/pow x 5)) (* -15 (Math/pow x 4)) (* 10 (Math/pow x 3)))]
        (+ a (* sm (- b a)))))))
 
@@ -1383,3 +1280,229 @@
    (if (or (pattern? n) (pattern? bits))
      (inner-join (app-both binary-n* (->pat n) (->pat bits)))
      (binary-n* n bits))))
+
+;;; ── Phase TL4: Randomness & conditionals ────────────────────────────
+
+(defn- degrade-by-with* [rpat x pat]
+  (let [x (num-val x)]
+    (app-left (fn [v _] v) pat
+              (keep-values #(and (number? %) (>= % x)) (->pat rpat)))))
+
+(defn degrade-by-with
+  "Keep events where rpat (sampled at the event's whole start) is >= x."
+  [rpat x pat]
+  ((patternify (fn [x' p] (degrade-by-with* rpat x' p))) x pat))
+
+(defn degrade-by
+  "Randomly drop events with probability x (a number or pattern). Tidal
+   semantics: an event is kept iff rand at its whole start >= x.
+   (degrade-by 0.3 pat) — drop ~30% of events"
+  [x pat]
+  ((patternify (fn [x' p] (degrade-by-with* rand x' p))) x pat))
+
+(defn degrade
+  "Drop ~50% of events randomly. (degrade-by 0.5 pat)"
+  [pat]
+  (degrade-by 0.5 pat))
+
+(defn- undegrade-by* [x pat]
+  (let [x (num-val x)]
+    (app-left (fn [v _] v) pat (keep-values #(< % x) rand))))
+
+(defn undegrade-by
+  "Keep events with rand < x — the exact complement of degrade-by."
+  [x pat]
+  ((patternify undegrade-by*) x pat))
+
+(defn undegrade [pat] (undegrade-by 0.5 pat))
+
+(defn- sometimes-by* [x f pat]
+  (stack* [(degrade-by-with* rand x pat) (f (undegrade-by* x pat))]))
+
+(defn sometimes-by
+  "Per event: each event goes through f with probability x (x may be a pattern)."
+  [x f pat]
+  ((patternify (fn [x' p] (sometimes-by* x' f p))) x pat))
+
+(defn sometimes      [f pat] (sometimes-by 0.5 f pat))
+(defn often          [f pat] (sometimes-by 0.75 f pat))
+(defn rarely         [f pat] (sometimes-by 0.25 f pat))
+(defn almost-never   [f pat] (sometimes-by 0.1 f pat))
+(defn almost-always  [f pat] (sometimes-by 0.9 f pat))
+(defn always         [f pat] (f pat))
+(defn never          [_f pat] pat)
+
+(defn- some-cycles-by* [x f pat]
+  (let [x (num-val x) fp (f pat)]
+    (pattern (per-cycle (fn [sp]
+                          (query (if (< (rand-at (int->rat (cycle-of sp))) x) fp pat) sp))))))
+
+(defn some-cycles-by
+  "Per cycle: cycle c is answered by (f pat) iff rand(c) < x, else by pat."
+  [x f pat]
+  ((patternify (fn [x' p] (some-cycles-by* x' f p))) x pat))
+
+(defn some-cycles [f pat] (some-cycles-by 0.5 f pat))
+
+;; Choice
+
+(defn- with-sources [xs sources]
+  (mapv (fn [x s] (if (pattern? x) x (pure x s))) xs (concat sources (repeat nil))))
+
+(defn- choose-index [v n]
+  (int (min (dec n) (max 0 (Math/floor (* (num-val v) n))))))
+
+(defn- choose-pats [sig xs]
+  (let [xs (mapv ->pat xs) n (count xs)]
+    (fmap #(nth xs (choose-index % n)) (->pat sig))))
+
+(defn choose-with
+  "Signal sig in [0,1) picks from xs; outer join (structure from sig)."
+  [sig xs]
+  (if (empty? xs) silence (outer-join (choose-pats sig xs))))
+
+(defn choose-in-with
+  "Like choose-with but inner join: the chosen pattern keeps its own structure."
+  [sig xs]
+  (if (empty? xs) silence (inner-join (choose-pats sig xs))))
+
+(defn choose
+  "Random signal choosing from xs. Silent unless sampled: (segment 4 (choose [:bd :sd]))."
+  ([xs] (choose xs nil))
+  ([xs sources] (choose-with rand (with-sources xs sources))))
+
+(defn choose-in [xs] (choose-in-with rand xs))
+
+(defn choose-cycles
+  "One random pick per cycle."
+  ([xs] (choose-cycles xs nil))
+  ([xs sources] (choose-in-with (segment* 1 rand) (with-sources xs sources))))
+
+(defn randcat [pats] (choose-cycles pats))
+
+(defn- wchoose-pats [sig pairs]
+  (let [ws    (mapv #(max 0 (num-val (first %))) pairs)
+        xs    (mapv #(->pat (second %)) pairs)
+        total (reduce + ws)
+        cum   (vec (reductions + ws))]
+    (when (pos? total)
+      (fmap (fn [v] (let [find (* total (num-val v))]
+                      (nth xs (or (first (keep-indexed (fn [i c] (when (> c find) i)) cum))
+                                  (dec (count xs))))))
+            (->pat sig)))))
+
+(defn- wpairs [pairs sources]
+  (map (fn [[w x] s] [w (if (pattern? x) x (pure x s))])
+       pairs (concat sources (repeat nil))))
+
+(defn wchoose
+  "Weighted random signal; pairs = [[weight value] …] (weight first)."
+  ([pairs] (wchoose pairs nil))
+  ([pairs sources]
+   (if-let [pp (wchoose-pats rand (wpairs pairs sources))]
+     (outer-join pp)
+     silence)))
+
+(defn wchoose-cycles
+  "Weighted random pick, one per cycle."
+  ([pairs] (wchoose-cycles pairs nil))
+  ([pairs sources]
+   (if-let [pp (wchoose-pats (segment* 1 rand) (wpairs pairs sources))]
+     (inner-join pp)
+     silence)))
+
+(defn wrandcat [pairs] (wchoose-cycles pairs))
+
+;; Signals
+
+(defn- brand-by* [p] (let [p (num-val p)] (fmap #(< % p) rand)))
+(defn brand-by [p] (if (pattern? p) (inner-join (fmap brand-by* p)) (brand-by* p)))
+(def brand (brand-by* 0.5))
+
+(def berlin
+  (signal (fn [[n d :as t]]
+            (let [fl (Math/floor (/ n d))]
+              (/ (+ (rand-at [fl 1]) (* (- (rat->float t) fl) (rand-at [(inc fl) 1]))) 2)))))
+
+(defn- rand-l* [n]
+  (let [k (->int n)] (if (< k 1) silence (signal #(rands-at % k)))))
+(defn rand-l [n] (if (pattern? n) (inner-join (fmap rand-l* n)) (rand-l* n)))
+
+(defn- randrun* [n]
+  (let [k (->int n)]
+    (if (< k 1)
+      silence
+      (pattern
+       (per-cycle
+        (fn [sp]
+          (let [c     (cycle-of sp)
+                order (mapv second (sort-by first (map vector (rands-at (rat+ (int->rat c) [1 2]) k) (range k))))]
+            (keep (fn [i]
+                    (let [w (span (rat (+ (* c k) i) k) (rat (+ (* c k) i 1) k))]
+                      (when-let [p (span-intersect w sp)] (event (nth order i) w p))))
+                  (range k)))))))))
+(defn randrun [n] (if (pattern? n) (inner-join (fmap randrun* n)) (randrun* n)))
+
+;; Seed
+
+(defn- with-seed* [s pat]
+  (let [s (->rat s)]
+    ;; vec: realise every nested query while the binding is active
+    (pattern (fn [sp] (binding [*rand-seed* s] (vec (query pat sp)))))))
+
+(defn with-seed
+  "Every random read inside pat uses t + n. n may be a pattern."
+  [s pat]
+  ((patternify with-seed*) s pat))
+
+;; Rearrangement
+
+(defn- rearrange-with* [ipat k pat]
+  (let [slices (mapv #(fast* k (repeat-cycles* k (zoom* (rat % k) (rat (inc %) k) pat))) (range k))]
+    (inner-join (fmap #(nth slices (mod (->int %) k)) ipat))))
+
+(defn- shuffle* [n pat]
+  (let [k (->int n)] (if (< k 1) silence (rearrange-with* (randrun* k) k pat))))
+
+(defn shuffle
+  "Each cycle: the n slices of the cycle in random order, each exactly once."
+  [n pat] ((patternify shuffle*) n pat))
+
+(defn- scramble* [n pat]
+  (let [k (->int n)] (if (< k 1) silence (rearrange-with* (segment* k (irand* k)) k pat))))
+
+(defn scramble
+  "Each of n slots plays a random slice (with repetition)."
+  [n pat] ((patternify scramble*) n pat))
+
+;; Conditionals
+
+(defn when-pat
+  "on: a boolean pattern (Strudel when) or a fn of the cycle number (Tidal when)."
+  [on f pat]
+  (if (fn? on)
+    (let [fp (f pat)]
+      (pattern (per-cycle (fn [sp] (query (if (on (cycle-of sp)) fp pat) sp)))))
+    ((patternify (fn [o p] (if (step-true? o) (f p) p))) on pat)))
+
+(defn- whenmod* [a b f pat]
+  (let [a (->rat a) b (->rat b)]
+    (if (rat<= a [0 1])
+      pat
+      (let [fp (f pat)]
+        (pattern
+         (per-cycle
+          (fn [sp]
+            (let [c (int->rat (cycle-of sp))
+                  m (rat- c (rat* a (int->rat (Math/floor (rat->float (rat-div c a))))))]
+              (query (if (rat>= m b) fp pat) sp)))))))))
+
+(defn whenmod
+  "Cycle c: (f pat) iff (c mod a) >= b."
+  [a b f pat]
+  ((patternify2 (fn [a' b' p] (whenmod* a' b' f p))) a b pat))
+
+(defn apply-n
+  "Apply f n times."
+  [n f pat]
+  ((patternify (fn [n' p] (nth (iterate f p) (max 0 (->int n'))))) n pat))

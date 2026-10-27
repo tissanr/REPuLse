@@ -9,7 +9,8 @@
 ;;   :open-angle     <
 ;;   :close-angle    >
 ;;   :star           *
-;;   :question       ?
+;;   :question       ?   (with :str-from — the ?amount adjacency check)
+;;   :pipe           |
 ;;   :colon          :
 ;;   :at             @
 ;;   :atom           (with :text, :str-from, :str-to — positions within the string)
@@ -18,7 +19,7 @@
   (contains? #{\space \tab \newline \return} ch))
 
 (defn- special? [ch]
-  (contains? #{\[ \] \< \> \* \? \: \@ \, \! \% \( \) \{ \}} ch))
+  (contains? #{\[ \] \< \> \* \? \: \@ \, \! \% \( \) \{ \} \|} ch))
 
 (defn- tokenise
   "Scan a mini-notation string into a flat sequence of tokens.
@@ -37,7 +38,8 @@
           (= ch \<) (recur (inc i) (conj tokens {:type :open-angle}))
           (= ch \>) (recur (inc i) (conj tokens {:type :close-angle}))
           (= ch \*) (recur (inc i) (conj tokens {:type :star}))
-          (= ch \?) (recur (inc i) (conj tokens {:type :question}))
+          (= ch \?) (recur (inc i) (conj tokens {:type :question :str-from i}))
+          (= ch \|) (recur (inc i) (conj tokens {:type :pipe}))
           (= ch \:) (recur (inc i) (conj tokens {:type :colon}))
           (= ch \@) (recur (inc i) (conj tokens {:type :at}))
           (= ch \,) (recur (inc i) (conj tokens {:type :comma}))
@@ -77,6 +79,8 @@
 ;; Precedence: "," (lowest) splits layers, "." splits groups, spaces split steps.
 
 (declare parse-layers parse-sequence)
+
+(def ^:private rand-scope-msg "| is only allowed at top level and inside [ ]")
 
 (defn- parse-error [msg]
   (ex-info msg {:type :mini-parse-error}))
@@ -132,7 +136,12 @@
           (recur {:type :repeat :child node :times 2 :weight (:weight node 1)} (inc p)))
 
         :question
-        (recur {:type :degrade :child node :weight (:weight node 1)} (inc p))
+        (let [amt (when (and nxt (= :atom (:type nxt))
+                             (= (:str-from nxt) (inc (:str-from tok)))
+                             (re-matches #"\d*\.?\d+" (:text nxt)))
+                    (parse-number-text (:text nxt)))]
+          (recur {:type :degrade :child node :amount amt :weight (:weight node 1)}
+                 (if amt (+ p 2) (inc p))))
 
         :colon
         (if (and (= (:type node) :atom) (= (:type nxt) :atom))
@@ -174,12 +183,14 @@
       :open-angle
       (let [[node p] (parse-layers tokens (inc pos))]
         (when-not (= :close-angle (tok-type tokens p)) (throw (parse-error "Expected >")))
+        (when (= :rand (:type node)) (throw (parse-error rand-scope-msg)))
         (let [alts (mapv (fn [l] {:type :alt :children (:children l)}) (layers->vec node))]
           [(if (= 1 (count alts)) (first alts) {:type :stack :layers alts}) (inc p)]))
 
       :open-brace
       (let [[node p] (parse-layers tokens (inc pos))]
         (when-not (= :close-brace (tok-type tokens p)) (throw (parse-error "Expected }")))
+        (when (= :rand (:type node)) (throw (parse-error rand-scope-msg)))
         (let [p (inc p)
               layers (layers->vec node)]
           (if (= :percent (tok-type tokens p))
@@ -213,11 +224,11 @@
           t   (:type tok)]
       (cond
         (or (nil? tok)
-            (contains? #{:close-bracket :close-angle :close-brace :close-paren :comma} t))
+            (contains? #{:close-bracket :close-angle :close-brace :close-paren :comma :pipe} t))
         (let [groups (if (seq cur) (conj groups cur) groups)]
           [(if (<= (count groups) 1)
              {:type :seq :children (or (first groups) [])}
-             {:type :seq
+             {:type :seq :feet true
               :children (mapv (fn [g] {:type :seq :children g :weight 1}) groups)})
            p])
 
@@ -237,14 +248,40 @@
           (recur groups (conj cur node) p2))))))
 
 (defn- parse-layers
-  "sequence (\",\" sequence)* — a single layer is returned as is."
+  "sequence (\",\" sequence)* or sequence (\"|\" sequence)* — a single layer is
+   returned as is. \"|\" gives a :rand node (one alternative per cycle)."
   [tokens pos]
-  (loop [layers [] p pos]
+  (loop [layers [] seps #{} p pos]
     (let [[node p1] (parse-sequence tokens p)
-          layers    (conj layers node)]
-      (if (= :comma (tok-type tokens p1))
-        (recur layers (inc p1))
-        [(if (= 1 (count layers)) (first layers) {:type :stack :layers layers}) p1]))))
+          layers    (conj layers node)
+          sep       (tok-type tokens p1)]
+      (if (contains? #{:comma :pipe} sep)
+        (recur layers (conj seps sep) (inc p1))
+        (do
+          (when (= 2 (count seps)) (throw (parse-error "Cannot mix , and | in one group")))
+          [(cond
+             (= 1 (count layers)) (first layers)
+             (contains? seps :pipe) {:type :rand :choices layers}
+             :else {:type :stack :layers layers})
+           p1])))))
+
+(defn- number-seeds
+  "Post-order walk (children first, in order: :child, :args, :children, :layers,
+   :choices, then the node itself). :degrade, :rand and :feet nodes take the next
+   seed 0, 1, 2 … (Strudel krill's seed++)."
+  [ast]
+  (let [counter (atom -1)
+        walk (fn walk [n]
+               (let [n (cond-> n
+                         (:child n)    (update :child walk)
+                         (:args n)     (update :args #(mapv walk %))
+                         (:children n) (update :children #(mapv walk %))
+                         (:layers n)   (update :layers #(mapv walk %))
+                         (:choices n)  (update :choices #(mapv walk %)))]
+                 (if (or (contains? #{:degrade :rand} (:type n)) (:feet n))
+                   (assoc n :seed (swap! counter inc))
+                   n)))]
+    (walk ast)))
 
 ;;; ── Compiler: AST → Pattern ─────────────────────────────────────────
 
@@ -270,12 +307,10 @@
                     (core/query (nth pats idx) piece)))
                 (core/split-cycles sp))))))
 
-(defn- degrade
-  "Randomly gate events — each event has a ~50% chance of being dropped."
-  [pat]
-  (core/pattern
-    (fn [sp]
-      (filter (fn [_] (> (Math/random) 0.5)) (core/query pat sp)))))
+(defn- seed-rand
+  "rand shifted by seed * 3/10000 of a cycle (Strudel: rand.early(seed * 0.0003))."
+  [seed]
+  (core/early (core/rat (* 3 seed) 10000) core/rand))
 
 (defn- step-count
   "Steps in a polymeter layer: the sum of its children's weights."
@@ -348,7 +383,13 @@
       (core/fast times child-pat))
 
     :degrade
-    (degrade (compile-ast (:child node) base-offset))
+    (core/degrade-by-with (seed-rand (:seed node))
+                          (or (:amount node) 0.5)
+                          (compile-ast (:child node) base-offset))
+
+    :rand
+    (core/choose-in-with (core/segment 1 (seed-rand (:seed node)))
+                         (mapv #(compile-ast % base-offset) (:choices node)))
 
     ;; Fallback
     (core/pure :_)))
@@ -367,4 +408,4 @@
   ([s base-offset]
    (let [tokens  (tokenise s)
          [ast _] (parse-layers tokens 0)]
-     (compile-ast ast base-offset))))
+     (compile-ast (number-seeds ast) base-offset))))
