@@ -285,7 +285,7 @@ builtin returns `"Error: …"` strings rather than throwing.
   `npm run gen:grammar` regenerates `parser.js`.
 - `app/src/repulse/lisp-lang/completions.js` (`{ label, type, detail }`; `export` entry
   at ≈ line 148), `app/src/repulse/lisp-lang/hover.js` (`DOCS` map: `signature`,
-  `description`, `example`; `arrange` at ≈ line 1004).
+  `description`, `example`; `arrange` at ≈ line 1004; no `export` entry yet).
 - `app/src/repulse/content/builtin_meta.edn` (`:arrange` category `"source"`, `:track`
   category `"audio"`, `:export` category `"io"`); `npm run gen:ai-docs` regenerates
   `docs/ai/builtins.json` and fails when a completion label has no meta entry.
@@ -642,7 +642,7 @@ Add to `window.__REPULSE_TEST__`:
 - Grammar `BuiltinName`: `"song" | "section" | "play-from"` → `npm run gen:grammar`.
 - `completions.js`: `song`, `section`, `play-from`; update `export` detail
   (`… (export :song) — capture the whole song in real time`).
-- `hover.js`: entries for the three names; `export` mentions `:song`.
+- `hover.js`: entries for the three names, plus a new `export` entry (none exists today) covering `(export n)`, `(export :track)`, `(export :song)`.
 - `builtin_meta.edn`: `:song` (category `"source"`, returns `"Song"`, side-effects
   `["audio"]`), `:section` (`"source"`, `"Section"`, `[]`), `:play-from` (`"audio"`,
   `"nil"`, `["audio"]`), each with ≥ 1 example and `see-also` (`song`/`section`/`track`/
