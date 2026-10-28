@@ -56,15 +56,38 @@ gets stems that sound right.
   all use the new offline path.
 - Fallback: if the worklet can't initialise offline, export falls back to real-time capture
   (SONG1) and says so in the output panel, never silently to sines.
+- Tweens re-armed at export start (bar 0) in both export paths (decision 3).
 
-## Open design questions
+## Design decisions
 
-1. Should `(export :song)` keep a `:realtime` option once offline parity exists (e.g. for
-   debugging or browsers without offline worklets)?
-2. Plugins without `clone()` or with internal state not exposed via `getParams`: refuse
-   offline export for them, or fall back to real-time capture?
-3. Tween state (`:tween-state`) and SONG2 automation: are they guaranteed deterministic in
-   song time so that offline and real time agree, or does EXP1 need to replay them?
+All questions below were decided by the project owner on 2026-10-28.
+
+1. **`:realtime` stays as an explicit option.** Default `(export :song)` uses the new
+   offline path; `(export :song :realtime)` keeps SONG1's real-time capture. That path
+   exists anyway, is the reference for the parity test and is the fallback when the
+   offline worklet can't start.
+   **Decided:** offline by default, `:realtime` as opt-in.
+
+2. **Plugins are instantiated offline exactly like `fx/add-track-effect!`.** Use
+   `clone()` when the plugin has one (the CLJS `compressor` does), otherwise
+   `Object.create`/`Object.assign`, as today. Then call `createNodes(offline-ctx)` and copy
+   the current state with `getParams` → `setParam`. Every audio plugin in
+   `app/public/plugins/` already has `getParams`; plugins without it are visualisers
+   (`oscilloscope`, `spectrum`, `p5-*`), which are skipped offline because they don't
+   change the sound. If an audio plugin still can't be rebuilt (e.g. a third-party plugin
+   without `getParams`), export falls back to real-time capture and prints which plugin
+   caused it.
+   **Decided:** reuse `add-track-effect!` instantiation + param replay; skip visualisers;
+   real-time fallback otherwise.
+
+3. **Tweens are re-armed at export start in both export paths.** Today `:tween-state`
+   stores `:start-time` as the audio time of the evaluation (`arm-transitions!` in
+   `app/src/repulse/audio.cljs`), so a tween runs from "when you pressed eval", not from
+   bar 0. For any export (offline and `:realtime`), every tween's start is set to the
+   export's bar 0. This makes exports reproducible and lets offline and real-time output
+   agree. EXP1 also changes SONG1's real-time capture accordingly. SONG2 automation is
+   already defined in song time and needs no special handling.
+   **Decided:** re-arm tweens at export start (bar 0), offline and real time.
 
 ## Definition of done
 
@@ -75,6 +98,9 @@ gets stems that sound right.
 - [ ] Offline `(export :song)` and the SONG1 real-time capture of the same song match in length exactly and in RMS per bar within 1 dB.
 - [ ] `bitcrusher` and `dattorro-reverb` work in offline export (their worklets are loaded).
 - [ ] If the offline worklet fails to initialise, export falls back to real-time capture and prints a notice (test with the worklet URL stubbed to fail).
+- [ ] `(export :song :realtime)` still produces the SONG1 real-time capture.
+- [ ] Visualiser plugins in a track's chain don't block or alter the offline export.
+- [ ] A pattern with a 4-bar `tween` exports identically (RMS per bar within 0.1 dB) whether the buffer was evaluated just before export or several bars earlier, offline and `:realtime`.
 - [ ] Existing TEST1 offline-harness tests still pass (the `"offline-js"` test backend is untouched).
 - [ ] `docs/USAGE.md` export section no longer lists the "no FX / sine fallback" limitation.
 - [ ] The PR description ends with a test protocol (CLAUDE.md Rule 5)
