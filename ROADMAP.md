@@ -43,7 +43,7 @@ without a human:
 | 8 | TL7 | Per-event effects & control parameters | 🤖👂 | outline | opus |
 | 9 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
 | **M2** | | **Full songs** | | | |
-| 10 | SONG1 | Sections, song form & full-song render | 🤖 | outline | opus |
+| 10 | SONG1 | Sections, song form & full-song render | 🤖 | full | opus |
 | 11 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
 | 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | outline | sonnet |
 | 13 | SONG4 | Multi-buffer projects | 🤖 | outline | opus |
