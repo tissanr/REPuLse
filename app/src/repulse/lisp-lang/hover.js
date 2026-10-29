@@ -1011,6 +1011,26 @@ const DOCS = {
     description: "Play patterns as sequential 1-cycle scenes.",
     example: "(play-scenes [(seq :bd :sd) (seq :hh :oh)])",
   },
+  "song": {
+    signature: "(song (section …) … [:end :stop|:loop])",
+    description: "Play the tracks defined above as a song: sections play in order, each for its number of bars, with only the tracks it lists. Stops after the last bar (:end :stop, default) or loops (:end :loop). One song per buffer, at the bottom.",
+    example: "(song (section :intro 4 [:kick :hats]) (section :verse 8 [:kick :snare :bass]) (section :chorus 8 :all))",
+  },
+  "section": {
+    signature: "(section :name bars [:track ...])",
+    description: "A song section: a unique name, a length in bars (1 bar = 1 cycle) and the tracks that play in it — a vector of track names or :all. Used inside (song …).",
+    example: "(section :verse 8 [:kick :snare :bass])",
+  },
+  "play-from": {
+    signature: "(play-from :section) / (play-from bar)",
+    description: "Start (or jump) the song at the first bar of a section, or at a 0-based bar number. Works while playing and after (stop).",
+    example: "(play-from :chorus)",
+  },
+  "export": {
+    signature: "(export) / (export n) / (export :track) / (export :song [:tail secs])",
+    description: "Download a WAV. (export n) renders n cycles of all tracks offline (default 4); (export :track) renders one track; (export :song) plays the song once from bar 0 and records the master output in real time (with FX), plus a release tail (default 2 s). (stop) cancels a song export.",
+    example: "(export :song :tail 4)",
+  },
 
   // --- Special forms ---
   "def": {

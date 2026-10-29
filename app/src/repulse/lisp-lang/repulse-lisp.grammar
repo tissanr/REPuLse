@@ -42,7 +42,7 @@ Map    { OpenBrace expr* CloseBrace }
     "add" | "sub" | "mul" | "div" | "set" |
     "def" | "defn" | "let" | "fn" | "lambda" | "if" | "do" |
     "defmacro" | "defsynth" | "loop" | "recur" | "quasiquote" |
-    "bpm" | "stop" | "fx" | "load-plugin" | "unload-plugin" | "arrange" | "play-scenes" | "sound" |
+    "bpm" | "stop" | "fx" | "load-plugin" | "unload-plugin" | "arrange" | "play-scenes" | "song" | "section" | "play-from" | "sound" |
     "distort" | "amp-sim" | "waveshape" | "cab" |
     "chebyshev" | "fold" | "bitcrush" |
     "get" | "assoc" | "merge" | "not" | "and" | "or" | "comp" |

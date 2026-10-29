@@ -5,6 +5,7 @@
    Exports: render-track-panel!, start-playhead-raf!"
   (:require [repulse.core :as core]
             [repulse.audio :as audio]
+            [repulse.song :as song]
             [repulse.ui.html :refer [escape-html]]))
 
 (defn- el [id] (.getElementById js/document id))
@@ -44,12 +45,23 @@
                         :value value}))
                    evs)}))
 
+(defn song-resting-tracks
+  "In song mode: the set of tracks that do not play in the current song bar
+   (drawn like muted tracks). nil without an active song."
+  [{:keys [tracks cycle] :as state}]
+  (when-let [{s :song origin :origin} (:song state)]
+    (let [q      (when origin (song/wrap-bar s (- cycle 1 origin)))
+          active (if q (song/active-tracks-at-bar s q) #{})]
+      (set (remove active (keys tracks))))))
+
 (defn- active-track-data []
-  (let [{:keys [tracks muted cycle]} @audio/scheduler-state]
+  (let [{:keys [tracks muted cycle] :as state} @audio/scheduler-state
+        resting (or (song-resting-tracks state) #{})]
     (mapv (fn [[idx [track-name pattern]]]
             (track-events track-name pattern cycle
                           (nth track-colors (mod idx (count track-colors)))
-                          (contains? muted track-name)))
+                          (or (contains? muted track-name)
+                              (contains? resting track-name))))
           (map-indexed vector (sort-by (comp name first) tracks)))))
 
 (defn- draw-label! [ctx x y {:keys [name color muted?]}]

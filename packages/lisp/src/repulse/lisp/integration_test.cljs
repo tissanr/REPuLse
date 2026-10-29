@@ -231,6 +231,36 @@
     (let [evs (eval-pattern "(arrange [[(seq :bd :sd) 2] [(pure :hh) 1]])")]
       (is (pos? (count evs))))))
 
+;;; ── Phase SONG1: section ─────────────────────────────────────────────
+
+(deftest section-evaluates-to-data
+  (let [s (eval-result "(section :intro 4 [:kick :hats])")]
+    (is (= {:type :section :name :intro :bars 4 :tracks [:kick :hats]}
+           (select-keys s [:type :name :bars :tracks])))
+    (testing "track keywords keep their source ranges for error squiggles"
+      (is (= {:from 19 :to 24} (get-in s [:track-sources :kick])))))
+  (is (= :all (:tracks (eval-result "(section :chorus 8 :all)")))))
+
+(deftest section-errors
+  (testing "extra arguments are reserved for SONG2"
+    (let [r (lisp/eval-string "(section :intro 4 [:kick] 7)" (make-test-env))]
+      (is (lisp/eval-error? r))
+      (is (= "section :intro: unexpected argument 7 — sections take (section name bars tracks)"
+             (:message r)))
+      (is (= {:from 26 :to 27} (:source r)))))
+  (testing "bars must be a whole number ≥ 1"
+    (let [r (lisp/eval-string "(section :intro 1/2 [:kick])" (make-test-env))]
+      (is (lisp/eval-error? r))
+      (is (= "section :intro: length must be a whole number of bars ≥ 1, got 1/2" (:message r)))
+      ;; a rational literal evaluates to a plain vector, so the squiggle falls back to the name
+      (is (= {:from 9 :to 15} (:source r))))
+    (let [r (lisp/eval-string "(section :intro 0 [:kick])" (make-test-env))]
+      (is (= "section :intro: length must be a whole number of bars ≥ 1, got 0" (:message r)))))
+  (testing "tracks must be :all or a vector of keywords"
+    (let [r (lisp/eval-string "(section :intro 4 :kick)" (make-test-env))]
+      (is (lisp/eval-error? r))
+      (is (includes? (:message r) "tracks must be :all or a vector of track names")))))
+
 ;;; ── Phase TL1: patterned arguments & pattern arithmetic ─────────────
 
 (defn- eval-pat [code]

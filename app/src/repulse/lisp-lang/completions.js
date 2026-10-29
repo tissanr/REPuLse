@@ -145,7 +145,7 @@ export const BUILTINS = [
   // --- Sharing ---
   { label: "share!",       type: "function", detail: "(share!) — copy shareable session URL to clipboard" },
   { label: "load-gist",    type: "function", detail: "(load-gist url) — fetch a Gist and load into editor" },
-  { label: "export",       type: "function", detail: "(export) — render all tracks to WAV; (export n) — n cycles; (export :track) — single track" },
+  { label: "export",       type: "function", detail: "(export) — render all tracks to WAV; (export n) — n cycles; (export :track) — single track; (export :song) — capture the whole song in real time" },
   // --- Sample playback control ---
   { label: "rate",        type: "function", detail: "(rate n pat) — playback rate: 1.0 = normal, 2.0 = octave up; (rate n) returns transformer" },
   { label: "begin",       type: "function", detail: "(begin frac pat) — sample start offset 0.0–1.0; (begin frac) returns transformer" },
@@ -250,6 +250,9 @@ export const BUILTINS = [
   // --- Arrangement ---
   { label: "arrange",      type: "function", detail: "(arrange [[pat cycles] …]) — sequence patterns by duration" },
   { label: "play-scenes",  type: "function", detail: "(play-scenes [pat …]) — play patterns as 1-cycle scenes" },
+  { label: "song",         type: "function", detail: "(song (section …) … [:end :stop|:loop]) — play tracks as a song with sections; stops (or loops) after the last bar" },
+  { label: "section",      type: "function", detail: "(section :name bars [:track …]) — a song section: name, length in bars, tracks that play (or :all)" },
+  { label: "play-from",    type: "function", detail: "(play-from :section) / (play-from bar) — start or jump the song to a section or 0-based bar" },
   // --- Special forms ---
   { label: "def",          type: "keyword",  detail: "(def name val) — bind a name in the global environment" },
   { label: "defn",         type: "keyword",  detail: "(defn name [params] body) — define a named function" },

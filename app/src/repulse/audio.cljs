@@ -7,6 +7,7 @@
             [repulse.bus :as bus]
             [repulse.midi :as midi]
             [repulse.preview-track :as preview-track]
+            [repulse.song :as song]
             [repulse.audio-clock :as clock]))
 
 ;; Web Audio API scheduler
@@ -21,9 +22,18 @@
 (defonce worklet-node (atom nil))
 (defonce worklet-ready? (atom false))
 
-;; Master signal chain: sources → master-gain → analyser → destination
+;; Master signal chain:
+;;   sources → master-gain → [global FX…] → master-tap → [recorder] → analyser → destination
+;; master-tap is a permanent pass-through GainNode marking the end of the master
+;; FX chain; the recorder (SONG1 real-time export) sits between it and the analyser.
 (defonce master-gain   (atom nil))
+(defonce master-tap    (atom nil))
 (defonce analyser-node (atom nil))
+
+;; Recorder AudioWorkletNode ("repulse-recorder") — nil until loaded or when
+;; AudioWorklet is unsupported. recorder-ready resolves to the node or nil.
+(defonce recorder-node (atom nil))
+(defonce ^:private recorder-ready-promise (atom nil))
 
 ;; Per-track audio routing: keyword → {:gain-node GainNode :fx-chain [...]}
 (defonce track-nodes (atom {}))
@@ -33,7 +43,10 @@
         script-src (some-> document .-currentScript .-src)]
     (.-href
      (cond
-       (and script-src (str/includes? script-src "/js/"))
+       ;; app build (/js/main.js) and TEST1 harness build (/test-js/main.js)
+       ;; both live one level below app/public
+       (and script-src (or (str/includes? script-src "/js/")
+                           (str/includes? script-src "/test-js/")))
        (js/URL. "../" script-src)
 
        script-src
@@ -51,12 +64,16 @@
 (defn- build-master-chain! [ac]
   (let [gain (doto (.createGain ac)
                (-> .-gain (.setValueAtTime 1.0 (.-currentTime ac))))
+        tap  (doto (.createGain ac)
+               (-> .-gain (.setValueAtTime 1.0 (.-currentTime ac))))
         anl  (doto (.createAnalyser ac)
                (aset "fftSize" 2048)
                (aset "smoothingTimeConstant" 0.8))]
-    (.connect gain anl)
+    (.connect gain tap)
+    (.connect tap anl)
     (.connect anl (.-destination ac))
     (reset! master-gain gain)
+    (reset! master-tap tap)
     (reset! analyser-node anl)))
 
 (defn- init-worklet!
@@ -109,13 +126,50 @@
                  (.-webkitAudioContext js/window))]
     (new ctor)))
 
+(declare on-recorder-message!)
+
+(defn- init-recorder!
+  "Load the pass-through recorder worklet and insert it between master-tap and
+   the analyser. On failure master-tap stays connected straight to the analyser
+   and recorder-node stays nil."
+  [ac]
+  (reset! recorder-ready-promise
+          (if-let [worklet (.-audioWorklet ac)]
+            (-> (.addModule worklet (public-url "worklets/recorder-processor.js"))
+                (.then (fn []
+                         (let [node (js/AudioWorkletNode. ac "repulse-recorder"
+                                                          #js {:numberOfInputs     1
+                                                               :numberOfOutputs    1
+                                                               :outputChannelCount #js [2]
+                                                               :channelCount       2
+                                                               :channelCountMode   "explicit"})
+                               tap  @master-tap]
+                           (.disconnect tap)
+                           (.connect tap node)
+                           (.connect node @analyser-node)
+                           (set! (.. node -port -onmessage) on-recorder-message!)
+                           (reset! recorder-node node)
+                           node)))
+                (.catch (fn [e]
+                          (js/console.warn "[REPuLse] recorder worklet unavailable — (export :song) disabled" e)
+                          nil)))
+            (do (js/console.warn "[REPuLse] AudioWorklet not supported — (export :song) disabled")
+                (js/Promise.resolve nil)))))
+
 (defn get-ctx []
   (or @ctx
       (let [c (make-audio-context)]
         (reset! ctx c)
         (build-master-chain! c)
         (init-worklet! c)
+        (init-recorder! c)
         c)))
+
+(defn recorder-ready
+  "Promise resolving to the recorder node once loaded, or nil when unavailable."
+  []
+  (get-ctx)
+  @recorder-ready-promise)
 
 ;;; Per-track routing helpers
 
@@ -543,7 +597,23 @@
          :on-beat      nil
          :on-event     nil
          :on-fx-event  nil
-         :tween-state  {}}))  ; track-name → {param-key {:tween pv :start-time t}}
+         :tween-state  {}     ; track-name → {param-key {:tween pv :start-time t}}
+         ;; SONG1 song mode: {:song <song value> :origin int-or-nil :start-bar int}
+         ;; song bar = scheduler cycle − origin; origin nil = fresh start, resolved
+         ;; on the next tick so bar :start-bar begins at the next whole bar.
+         :song         nil
+         ;; Active (export :song) capture: {:status :waiting|:recording :tail s
+         ;; :start-time t0 :end-time t1} — read by the context panel.
+         :capture      nil
+         ;; Called after a :stop song has finished (and its tail rung out).
+         :on-song-end  nil}))
+
+;; Seconds a finished :end :stop song keeps the scheduler alive so tails ring out.
+(def song-release-secs 2.0)
+
+;; A fresh song start never begins on a bar that starts less than this far ahead
+;; of currentTime, so the first bar (and a capture's first frame) is never cut.
+(def ^:private song-start-margin-secs 0.05)
 
 (defn coerce-bpm
   "Clamp BPM to the safe scheduler range [20, 640]. Invalid, NaN, or
@@ -611,73 +681,247 @@
   (reset! visual-raf-id nil)
   (reset! visual-queue []))
 
+(defn- schedule-event!
+  "Schedule one onset event of track-name at audio time t (duration dur, in
+   seconds): tween interpolation, synthesis, MIDI out, FX event hooks and the
+   visual callbacks. Events already in the past are skipped."
+  [ac state snap track-name ev t dur]
+  (let [{:keys [cycle-dur on-beat on-event on-fx-event]} state]
+    (when (> t (.-currentTime ac))
+      (let [tween-st (get-in state [:tween-state track-name] {})
+            raw      (:value ev)
+            value    (if (and (map? raw) (seq tween-st))
+                       (reduce-kv (fn [m k ts]
+                                    (if (tween? (get m k))
+                                      (assoc m k (interp-tween ts t cycle-dur))
+                                      m))
+                                  raw tween-st)
+                       raw)]
+        (play-event ac t value track-name)
+        ;; MIDI note output — triggered by :midi-ch key added via (midi-out ch pat)
+        (when-let [midi-ch (:midi-ch (:value ev))]
+          (let [value    (:value ev)
+                hz       (cond
+                           (:freq value) (:freq value)
+                           (and (:note value) (theory/note-keyword? (:note value)))
+                           (theory/note->hz (:note value))
+                           (number? (:note value)) (:note value)
+                           (theory/note-keyword? value) (theory/note->hz value)
+                           (number? value) value
+                           :else nil)
+                note-num (when hz (midi/hz->midi (double hz)))
+                amp-v    (float (:amp value 1.0))
+                velocity (min 127 (max 0 (Math/round (* amp-v 127))))
+                ts-on    (clock/audible-perf-ms snap t)
+                ts-off   (+ ts-on (* dur 1000))]
+            (when note-num
+              (midi/send-note-on!  midi-ch note-num velocity ts-on)
+              (midi/send-note-off! midi-ch note-num ts-off))))
+        (when on-fx-event
+          (on-fx-event (:value ev) t))
+        (when (and on-event (:source ev) (not (preview-track/preview-track? track-name)))
+          (let [src (:source ev)]
+            (schedule-visual! (clock/audible-perf-ms snap t) #(on-event src))))
+        (when on-beat
+          (schedule-visual! (clock/audible-perf-ms snap t) on-beat))))))
+
 (defn schedule-cycle! [ac state cycle]
-  (let [{:keys [tracks muted cycle-dur on-beat on-event on-fx-event]} state
-        sp   {:start [cycle 1] :end [(inc cycle) 1]}
+  (let [{:keys [tracks muted cycle-dur]} state
         snap (clock-snapshot ac)]
-    (doseq [[track-name pattern] tracks]
-      (when (and pattern (not (contains? muted track-name)))
-        ;; Only onsets trigger: a whole that crosses a cycle boundary (or is
-        ;; cut by a structure-aware combinator) also yields non-onset
-        ;; fragments, which must not re-trigger the sound. Continuous (analog)
-        ;; events have no :whole and are skipped here on purpose; the user is
-        ;; warned about structureless signals at eval time.
-        (let [evs (core/query-onsets pattern sp)]
-          (doseq [ev evs]
-            (let [whole-start       (core/rat->float (:start (:whole ev)))
-                  whole-end         (core/rat->float (:end   (:whole ev)))
-                  cycle-audio-start (* cycle cycle-dur)
-                  event-offset      (* (- whole-start cycle) cycle-dur)
-                  t                 (+ cycle-audio-start event-offset)
-                  dur               (* (- whole-end whole-start) cycle-dur)]
-              (when (> t (.-currentTime ac))
-                (let [tween-st (get-in state [:tween-state track-name] {})
-                      raw      (:value ev)
-                      value    (if (and (map? raw) (seq tween-st))
-                                 (reduce-kv (fn [m k ts]
-                                              (if (tween? (get m k))
-                                                (assoc m k (interp-tween ts t cycle-dur))
-                                                m))
-                                            raw tween-st)
-                                 raw)]
-                (play-event ac t value track-name)
-                ;; MIDI note output — triggered by :midi-ch key added via (midi-out ch pat)
-                (when-let [midi-ch (:midi-ch (:value ev))]
-                  (let [value    (:value ev)
-                        hz       (cond
-                                   (:freq value) (:freq value)
-                                   (and (:note value) (theory/note-keyword? (:note value)))
-                                   (theory/note->hz (:note value))
-                                   (number? (:note value)) (:note value)
-                                   (theory/note-keyword? value) (theory/note->hz value)
-                                   (number? value) value
-                                   :else nil)
-                        note-num (when hz (midi/hz->midi (double hz)))
-                        amp-v    (float (:amp value 1.0))
-                        velocity (min 127 (max 0 (Math/round (* amp-v 127))))
-                        ts-on    (clock/audible-perf-ms snap t)
-                        ts-off   (+ ts-on (* dur 1000))]
-                    (when note-num
-                      (midi/send-note-on!  midi-ch note-num velocity ts-on)
-                      (midi/send-note-off! midi-ch note-num ts-off))))
-                (when on-fx-event
-                  (on-fx-event (:value ev) t))
-                (when (and on-event (:source ev) (not (preview-track/preview-track? track-name)))
-                  (let [src (:source ev)]
-                    (schedule-visual! (clock/audible-perf-ms snap t) #(on-event src))))
-                (when on-beat
-                  (schedule-visual! (clock/audible-perf-ms snap t) on-beat)))))))))))
+    (if-let [{s :song origin :origin} (:song state)]
+      ;; ── Song mode: the song decides which tracks sound in this bar ─────
+      ;; song-onsets queries each track in song time and places the events at
+      ;; song bar (cycle − origin); it returns [] in pre-roll and after the
+      ;; end of a :stop song. Mute always wins (decision 8).
+      (when origin
+        (doseq [{:keys [track event]} (song/song-onsets s tracks muted (- cycle origin))]
+          (let [whole-start (core/rat->float (:start (:whole event)))
+                whole-end   (core/rat->float (:end   (:whole event)))
+                t           (* (+ origin whole-start) cycle-dur)
+                dur         (* (- whole-end whole-start) cycle-dur)]
+            (schedule-event! ac state snap track event t dur))))
+      ;; ── Free-running tracks (no song) ──────────────────────────────────
+      (let [sp {:start [cycle 1] :end [(inc cycle) 1]}]
+        (doseq [[track-name pattern] tracks]
+          (when (and pattern (not (contains? muted track-name)))
+            ;; Only onsets trigger: a whole that crosses a cycle boundary (or is
+            ;; cut by a structure-aware combinator) also yields non-onset
+            ;; fragments, which must not re-trigger the sound. Continuous (analog)
+            ;; events have no :whole and are skipped here on purpose; the user is
+            ;; warned about structureless signals at eval time.
+            (doseq [ev (core/query-onsets pattern sp)]
+              (let [whole-start       (core/rat->float (:start (:whole ev)))
+                    whole-end         (core/rat->float (:end   (:whole ev)))
+                    cycle-audio-start (* cycle cycle-dur)
+                    event-offset      (* (- whole-start cycle) cycle-dur)
+                    t                 (+ cycle-audio-start event-offset)
+                    dur               (* (- whole-end whole-start) cycle-dur)]
+                (schedule-event! ac state snap track-name ev t dur)))))))))
+
+;;; Song mode and real-time capture (SONG1)
+
+;; Main-thread side of an active capture: promise fns + preallocated PCM.
+(defonce ^:private capture-ctl (atom nil))
+
+(defn- arm-capture!
+  "Start the recorder once the song origin is known: record from the start of
+   bar :start-bar to the end of the song plus the tail."
+  [ac state]
+  (let [{s :song origin :origin start-bar :start-bar} (:song state)
+        cap  (:capture state)
+        ctl  @capture-ctl
+        node @recorder-node]
+    (when (and (= :waiting (:status cap)) ctl node origin)
+      (let [cd          (:cycle-dur state)
+            sr          (.-sampleRate ac)
+            tail        (:tail cap)
+            t0          (* (+ origin start-bar) cd)
+            dur         (song/song-duration-secs s (/ 240.0 cd))
+            t1          (+ t0 dur tail)
+            start-frame (Math/round (* t0 sr))
+            frames      (Math/round (* (+ dur tail) sr))]
+        (swap! capture-ctl assoc
+               :left   (js/Float32Array. frames)
+               :right  (js/Float32Array. frames)
+               :frames frames
+               :sample-rate sr)
+        (.. node -port (postMessage #js {:type        "start"
+                                         :startFrame  start-frame
+                                         :endFrame    (+ start-frame frames)
+                                         :chunkFrames sr}))
+        (swap! scheduler-state assoc :capture
+               {:status :recording :tail tail :start-time t0 :end-time t1})))))
+
+(defn- resolve-song-origin!
+  "Fresh song start: place bar :start-bar on the next whole bar boundary."
+  [ac now]
+  (let [state @scheduler-state
+        sg    (:song state)]
+    (when (and sg (nil? (:origin sg)))
+      (let [{:keys [cycle cycle-dur]} state
+            first-bar (if (< (* cycle cycle-dur) (+ now song-start-margin-secs))
+                        (inc cycle)
+                        cycle)]
+        (swap! scheduler-state assoc-in [:song :origin] (- first-bar (:start-bar sg)))
+        (arm-capture! ac @scheduler-state)))))
+
+(declare stop!)
+
+(defn- song-finished?
+  "True once a :stop song has played its last bar and the release has passed.
+   While a capture is active the capture's \"done\" handler stops instead."
+  [state now]
+  (let [{s :song origin :origin} (:song state)]
+    (and s origin (= :stop (:end s)) (nil? (:capture state))
+         (>= now (+ (* (+ origin (:total s)) (:cycle-dur state)) song-release-secs)))))
 
 (defn tick! []
-  (let [ac    (get-ctx)
-        state @scheduler-state]
-    (when (:playing? state)
-      (let [{:keys [cycle cycle-dur lookahead]} state
-            now         (.-currentTime ac)
-            cycle-start (* cycle cycle-dur)]
-        (when (< (- cycle-start now) lookahead)
-          (schedule-cycle! ac state cycle)
-          (swap! scheduler-state update :cycle inc))))))
+  (let [ac (get-ctx)]
+    (when (:playing? @scheduler-state)
+      (let [now (.-currentTime ac)]
+        (resolve-song-origin! ac now)
+        (let [state @scheduler-state]
+          (if (song-finished? state now)
+            (let [on-end (:on-song-end state)]
+              (stop!)
+              (when on-end (on-end)))
+            (let [{:keys [cycle cycle-dur lookahead]} state
+                  cycle-start (* cycle cycle-dur)]
+              (when (< (- cycle-start now) lookahead)
+                (schedule-cycle! ac state cycle)
+                (swap! scheduler-state update :cycle inc)))))))))
+
+(defn set-song!
+  "Activate a song value. Not playing → fresh start at :start-bar (default 0).
+   Playing a song → keep the bar position (decision 6), or jump to :start-bar.
+   Playing without a song → the song starts at the next unscheduled bar."
+  [s {:keys [start-bar]}]
+  (swap! scheduler-state
+         (fn [st]
+           (let [cur (:song st)]
+             (cond
+               (not (:playing? st))
+               (assoc st :song {:song s :origin nil :start-bar (or start-bar 0)})
+
+               (nil? cur)
+               (assoc st :song {:song s :origin (- (:cycle st) (or start-bar 0))
+                                :start-bar (or start-bar 0)})
+
+               (nil? (:origin cur))
+               (assoc st :song (assoc cur :song s :start-bar (or start-bar (:start-bar cur))))
+
+               :else
+               (let [old  (:song cur)
+                     bar  (- (:cycle st) (:origin cur))
+                     bar  (if (and (= :loop (:end old)) (>= bar 0)) (mod bar (:total old)) bar)
+                     pos  (or start-bar (song/position-after-reeval s bar))]
+                 (assoc st :song {:song s :origin (- (:cycle st) pos) :start-bar pos})))))))
+
+(defn clear-song! []
+  (swap! scheduler-state assoc :song nil))
+
+(defn relocate-song!
+  "Playing with a song: make `bar` the next scheduled song bar."
+  [bar]
+  (swap! scheduler-state
+         (fn [st]
+           (if-let [sg (:song st)]
+             (if (:origin sg)
+               (assoc st :song (assoc sg :origin (- (:cycle st) bar) :start-bar bar))
+               (assoc st :song (assoc sg :start-bar bar)))
+             st))))
+
+(defn- finish-capture! [late?]
+  (when-let [{:keys [resolve left right frames sample-rate]} @capture-ctl]
+    (reset! capture-ctl nil)
+    (swap! scheduler-state assoc :capture nil)
+    (let [on-end (:on-song-end @scheduler-state)]
+      (stop!)
+      (when on-end (on-end)))
+    (resolve {:left left :right right :sample-rate sample-rate
+              :frames frames :late (boolean late?)})))
+
+(defn- on-recorder-message! [^js e]
+  (let [^js d (.-data e)]
+    (case (.-type d)
+      "chunk" (when-let [{:keys [left right frames]} @capture-ctl]
+                (let [off (.-offset d)
+                      n   (min (.-frames d) (- frames off))]
+                  (when (pos? n)
+                    (.set left  (.subarray (.-left d)  0 n) off)
+                    (.set right (.subarray (.-right d) 0 n) off))))
+      "done"  (finish-capture! (.-late d))
+      nil)))
+
+(defn capture!
+  "Record one pass of the active song from the master output in real time.
+   Requires a freshly activated song (origin not yet resolved) and a loaded
+   recorder. Returns a Promise of {:left :right :sample-rate :frames :late}
+   (Float32Arrays); rejects with ex-info {:cancelled true} when (stop) cancels."
+  [{:keys [tail]}]
+  (js/Promise.
+   (fn [resolve reject]
+     (let [sg (:song @scheduler-state)]
+       (cond
+         (nil? @recorder-node)
+         (reject (ex-info "recorder unavailable" {}))
+
+         (or (nil? sg) (some? (:origin sg)))
+         (reject (ex-info "capture! needs a freshly started song" {}))
+
+         @capture-ctl
+         (reject (ex-info "an export is already running" {}))
+
+         :else
+         (do (reset! capture-ctl {:resolve resolve :reject reject})
+             (swap! scheduler-state assoc :capture {:status :waiting :tail (or tail 0)})))))))
+
+(defn- cancel-capture! []
+  (when-let [{:keys [reject]} @capture-ctl]
+    (reset! capture-ctl nil)
+    (when-let [node @recorder-node]
+      (.. node -port (postMessage #js {:type "cancel"})))
+    (reject (ex-info "export cancelled" {:cancelled true}))))
 
 (defn- ensure-running!
   "Start the scheduler tick loop if not already running."
@@ -696,6 +940,7 @@
     (tick!)))
 
 (defn stop! []
+  (cancel-capture!)
   (when-let [node @worklet-node]
     (.. node -port (postMessage #js {:type "stop"})))
   (when-let [id (:interval-id @scheduler-state)]
@@ -714,7 +959,10 @@
          :interval-id  nil
          :tracks       {}
          :muted        #{}
-         :tween-state  {}))
+         :tween-state  {}
+         :song         nil
+         :capture      nil))
+
 
 (defn- arm-transitions!
   "Detect tween descriptors in the first cycle of pattern and record their start time.

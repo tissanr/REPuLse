@@ -75,7 +75,25 @@ jobs:
           key: m2-${{ hashFiles('shadow-cljs.edn') }}
           restore-keys: m2-
 
+      # SONG1: the (export :song) capture test runs against the real WASM
+      # AudioWorklet, so the browser tests need the WASM build (as release-build).
+      - name: Cache Cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/audio/target
+          key: cargo-${{ hashFiles('packages/audio/Cargo.lock') }}
+          restore-keys: cargo-
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install wasm-pack
+        run: cargo install --locked wasm-pack@0.14.0
+
       - run: npm ci
+      - run: npm run build:wasm
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
 

@@ -114,6 +114,9 @@
                    (str "=> preview :" (name name') " playing"))
                  "Error: second argument to track must be a pattern")))
            "fx" sandbox-fx
+           ;; SONG1: previews play every track looping; the song form is ignored
+           "song" (fn [& _] "preview: song form ignored — tracks loop")
+           "play-from" (fn [& _] nil)
            "bpm" (fn [b] (audio/set-bpm! (->num b)) nil)
            "stop" (fn [] nil)
            "clear!" (fn [& _] nil)

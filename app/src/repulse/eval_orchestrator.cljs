@@ -13,6 +13,8 @@
             [repulse.sound-check :as sound-check]
             [repulse.fx :as fx]
             [repulse.env.builtins :as builtins]
+            [repulse.song :as song]
+            [repulse.song-transport :as song-transport]
             [repulse.ui.editor :as editor]
             [repulse.ui.context-panel :as ctx-panel]
             [repulse.lisp-patcher :as patcher]
@@ -41,6 +43,9 @@
   "Evaluate REPuLse-Lisp code silently (no audio, no UI side-effects).
    Returns {:ok true :event-count N :duration-bars 1} or {:ok false :error msg}."
   [code]
+  ;; track/song/play-from/export only collect into song-transport's pending
+  ;; atoms; nothing is activated here, so the AI preview stays silent.
+  (song-transport/reset-pending!)
   (try
     (builtins/ensure-env!)
     (let [env    @builtins/env-atom
@@ -53,7 +58,9 @@
               {:ok true :event-count (count events) :duration-bars 1})
             {:ok true :event-count 0 :duration-bars 0 :value (pr-str val)}))))
     (catch :default e
-      {:ok false :error (.-message e)})))
+      {:ok false :error (.-message e)})
+    (finally
+      (song-transport/reset-pending!))))
 
 (defn init!
   "Wire app-level callback fns into this module.
@@ -65,7 +72,13 @@
                :set-playing! set-playing!-fn
                :set-output!  set-output!-fn})
   ;; Wire the silent eval function for the AI agent eval_preview tool.
-  (reset! ai-tools/eval-preview-fn evaluate-in-context!))
+  (reset! ai-tools/eval-preview-fn evaluate-in-context!)
+  ;; A finished (song … :end :stop) stops itself — reflect that in the UI.
+  (swap! audio/scheduler-state assoc :on-song-end
+         (fn []
+           (editor/clear-highlights!)
+           (set-playing!-fn false)
+           (set-output!-fn "song finished" :idle))))
 
 ;;; Diagnostics
 
@@ -151,6 +164,8 @@
     (fx/reset-global-effects!)
     ;; Clear per-evaluation duplicate-track detector
     (reset! builtins/seen-tracks #{})
+    ;; Clear tracks/song/play-from/export collected by the previous evaluation
+    (song-transport/reset-pending!)
     ;; Keep stop fn up to date (in case env was reset)
     (let [env    (assoc @builtins/env-atom "stop" (make-stop-fn))
           result (lisp/eval-string code env)]
@@ -168,7 +183,23 @@
           (when (some? val)
             (when-let [view @editor/editor-view]
               (set-diagnostics! view nil nil nil)))
+          ;; SONG1: start the tracks collected during evaluation (under the
+          ;; buffer's song, if any), then apply (play-from …) / (export :song).
+          ;; Runs before the cond so a buffer ending in a bare pattern still
+          ;; replaces all tracks with :_ exactly as before.
+          (song-transport/activate-buffer! {:on-beat      on-beat
+                                            :on-event     editor/highlight-range!
+                                            :set-playing! set-playing!})
           (cond
+            ;; Song value — tracks were activated under it above
+            (song/song? val)
+            (set-output! (str "song: " (count (:sections val)) " sections · "
+                              (song/song-length val) " bars · "
+                              (.toFixed (song/song-duration-secs val (audio/get-bpm)) 1)
+                              " s at " (Math/round (audio/get-bpm)) " BPM · :end :"
+                              (name (:end val)))
+                         :success)
+
             ;; Pattern — start playing (legacy single-pattern mode).
             ;; Uses play-track! on the anonymous :_ track so that :track-fx
             ;; metadata (from per-track fx calls in ->>) is applied correctly.
