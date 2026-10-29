@@ -7,6 +7,7 @@
   (:require [clojure.string :as str]
             [repulse.core :as core]
             [repulse.audio :as audio]
+            [repulse.song :as song]
             [repulse.fx :as fx]
             [repulse.midi :as midi]
             [repulse.samples :as samples]
@@ -263,11 +264,39 @@
 
 ;;; Section renderers
 
+(defn song-bar
+  "Song bar most recently scheduled (≈ the one sounding), or nil when no song
+   is active or its origin is not resolved yet."
+  [state]
+  (when-let [{:keys [origin]} (:song state)]
+    (when origin (- (:cycle state) 1 origin))))
+
+(defn song-status-text
+  "\"▶ chorus · bar 13/24\", \"▶ song · starting\" during pre-roll, or nil."
+  [state]
+  (when-let [{s :song origin :origin} (:song state)]
+    (if-let [{:keys [bar total section]} (when origin (song/song-status s (song-bar state)))]
+      (str "▶ " (name section) " · bar " bar "/" total)
+      (when (or (nil? origin) (neg? (song-bar state)))
+        "▶ song · starting"))))
+
+(defn rec-status-text
+  "\"● REC 12.0 / 50.0 s\" while an (export :song) capture runs, or nil."
+  [state now]
+  (when-let [{:keys [status start-time end-time]} (:capture state)]
+    (if (= :recording status)
+      (str "● REC " (.toFixed (max 0 (- now start-time)) 1)
+           " / " (.toFixed (- end-time start-time) 1) " s")
+      "● REC waiting")))
+
 (defn- render-status-section []
-  (let [bpm      (Math/round (/ 240.0 (:cycle-dur @audio/scheduler-state)))
+  (let [state    @audio/scheduler-state
+        bpm      (Math/round (/ 240.0 (:cycle-dur state)))
         playing? (audio/playing?)
         backend  (if @audio/worklet-ready? "[wasm]" "[js]")
-        pfx      @samples/active-bank-prefix]
+        pfx      @samples/active-bank-prefix
+        song-txt (song-status-text state)
+        rec-txt  (rec-status-text state (if @audio/ctx (.-currentTime @audio/ctx) 0))]
     (str "<div class=\"ctx-status\">"
          "<span class=\"ctx-bpm\">" bpm " BPM</span>"
          "<span class=\"ctx-backend\">" backend "</span>"
@@ -275,7 +304,18 @@
          "<span class=\"" (if playing? "ctx-playing" "ctx-stopped") "\">"
          (if playing? "&#9679; playing" "&#9675; stopped")
          "</span>"
+         (when song-txt (str "<span class=\"ctx-song\">" (escape-html song-txt) "</span>"))
+         (when rec-txt (str "<span class=\"ctx-rec\">" (escape-html rec-txt) "</span>"))
          "</div>")))
+
+(defn inactive-section
+  "In song mode: the current section's name when track-name rests in it, else nil."
+  [state track-name]
+  (when-let [{s :song} (:song state)]
+    (when-let [bar (song-bar state)]
+      (when-let [q (song/wrap-bar s bar)]
+        (when-not (contains? (song/active-tracks-at-bar s q) track-name)
+          (:name (song/section-at-bar s q)))))))
 
 (defn- render-tracks-section []
   (let [state  @audio/scheduler-state
@@ -291,6 +331,8 @@
                (map (fn [[track-name pattern]]
                       (let [muted?       (contains? muted track-name)
                             solo?        (= track-name solo-track)
+                            resting      (when-not (or muted? solo?)
+                                           (inactive-section state track-name))
                             icon         (cond muted? "&#9632;" solo? "&#9733;" :else "&#9654;")
                             params       (when-not muted? (extract-track-params pattern))
                             ;; Text params: non-numeric or not in SLIDER-PARAMS (synth, bank)
@@ -309,6 +351,8 @@
                              (cond
                                muted? "<span class=\"ctx-track-status\">(muted)</span>"
                                solo?  "<span class=\"ctx-track-status ctx-track-solo\">(solo)</span>"
+                               resting (str "<span class=\"ctx-track-status\">(not in :"
+                                            (escape-html (name resting)) ")</span>")
                                (seq text-pkeys)
                                (str "<span class=\"ctx-track-params\">"
                                     (apply str

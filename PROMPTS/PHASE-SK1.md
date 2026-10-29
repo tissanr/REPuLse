@@ -4,7 +4,7 @@
 > **Automation:** 🤖 auto — offline rendering, WAV/MIDI file structure, durations and per-stem content are all assertable in the TEST1 offline harness and unit tests.
 
 **Milestone:** M4 — Sketchpad
-**Depends on:** SONG1 (song length and section form). TL7 recommended (per-event effects to render into stems).
+**Depends on:** SONG1 (song length and section form), EXP1 (offline render with WASM voices and FX — stems can't be captured in real time one by one). TL7 recommended (per-event effects to render into stems).
 
 ## Goal
 

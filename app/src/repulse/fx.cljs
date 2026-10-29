@@ -25,11 +25,12 @@
     entry))
 
 (defn- rewire!
-  "Reconnect the chain: masterGain → effect1 → effect2 → ... → analyser.
-   Disconnects all existing outputs first, then rebuilds in order."
+  "Reconnect the chain: masterGain → effect1 → effect2 → ... → master-tap.
+   master-tap is the fixed end of the master FX chain (it feeds the recorder
+   and the analyser). Disconnects all existing outputs first, then rebuilds."
   []
   (let [gain    @audio/master-gain
-        anl     @audio/analyser-node
+        anl     @audio/master-tap
         effects @chain]
     (.disconnect gain)
     (doseq [{:keys [output]} effects]

@@ -43,28 +43,29 @@ them loop in real time.
 21. [Tempo control](#tempo-control)
 22. [Named tracks](#named-tracks)
 23. [Song arrangement](#song-arrangement)
-24. [Effect plugins](#effect-plugins)
-25. [Visual plugins](#visual-plugins)
+24. [Writing a song](#writing-a-song)
+25. [Effect plugins](#effect-plugins)
+26. [Visual plugins](#visual-plugins)
 
 **Going further**
 
-26. [Advanced language features](#advanced-language-features)
-27. [Standard library](#standard-library)
-28. [MIDI & External I/O](#midi--external-io)
+27. [Advanced language features](#advanced-language-features)
+28. [Standard library](#standard-library)
+29. [MIDI & External I/O](#midi--external-io)
 
 **Saving and sharing**
 
-29. [Session persistence and sharing](#session-persistence-and-sharing)
-30. [AI assistant](#ai-assistant)
-31. [Snippet library](#snippet-library)
-32. [User accounts & community](#user-accounts--community)
-33. [Embeddable component](#embeddable-component)
+30. [Session persistence and sharing](#session-persistence-and-sharing)
+31. [AI assistant](#ai-assistant)
+32. [Snippet library](#snippet-library)
+33. [User accounts & community](#user-accounts--community)
+34. [Embeddable component](#embeddable-component)
 
 **Reference**
 
-34. [Error messages](#error-messages)
-35. [Grammar summary](#grammar-summary)
-36. [Examples](#examples)
+35. [Error messages](#error-messages)
+36. [Grammar summary](#grammar-summary)
+37. [Examples](#examples)
 
 ---
 
@@ -151,7 +152,7 @@ Patterns describe **what** sounds and **when**. All composition happens here:
 - **Parameters:** `amp`, `decay`, `attack`, `release`, `pan`, `synth`, `rate`, `begin`, `end`
 - **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`
 - **Composition:** `->>` (thread-last) chains transforms, parameters, and effects
-- **Structure:** `def`, `let`, `fn`, `if`, `do`, `track`, `arrange`
+- **Structure:** `def`, `let`, `fn`, `if`, `do`, `track`, `arrange`, `song`, `section`
 
 ### Layer 2: Instrument definition layer (defsynth only)
 
@@ -1296,9 +1297,20 @@ Fetch a GitHub Gist into the editor and evaluate it:
 Render `n` cycles of the current tracks to a downloadable WAV file via `OfflineAudioContext`:
 
 ```lisp
-(export 4)   ; 4 cycles → WAV download
-(export 1)   ; 1 cycle loop
+(export 4)       ; 4 cycles → WAV download
+(export 1)       ; 1 cycle loop
+(export :kick)   ; 4 cycles of the :kick track only
+(export :song)   ; capture the whole song in real time — see "Writing a song"
 ```
+
+| Form | What it does |
+|---|---|
+| `(export)` / `(export n)` | Render `n` cycles (default 4) of all tracks offline, 44.1 kHz → `repulse-all-<n>cycles.wav` |
+| `(export :track)` | Render 4 cycles of one track offline → `repulse-<track>-4cycles.wav` |
+| `(export :song)` / `(export :song :tail secs)` | Play the song once from bar 0 and record the master output (with all FX) in real time, plus a release tail (default 2 s, 0–30) → `repulse-song-<bars>bars.wav`. `(stop)` cancels. |
+
+The offline `(export n)` / `(export :track)` path uses JS fallbacks for WASM voices and skips
+FX; `(export :song)` sounds exactly like playback because it records it.
 
 ---
 
@@ -2100,6 +2112,11 @@ the running session and belong in the [command bar](#command-bar).
 Evaluating `track` again with the same name replaces that track's pattern without stopping the
 others.
 
+Tracks start once the **whole buffer** has evaluated, not at the moment their `track` form is
+read. A buffer is applied all-or-nothing: if any form fails, none of its tracks start. This lets
+a [`song`](#writing-a-song) at the bottom of the buffer decide which tracks play when; without
+a `song`, every track plays (in buffer order) exactly as before.
+
 ### `mute!` / `unmute!` — silence a track
 
 ```lisp
@@ -2182,6 +2199,127 @@ Shorthand where every section plays for exactly 1 cycle. Useful for short, bar-l
    [chorus  8]
    [verse-2 8]
    [chorus  8]])
+```
+
+---
+
+## Writing a song
+
+`arrange` loops forever. A **song** has an end: you define your tracks at the top of the buffer
+and put one `song` block at the bottom that names sections, gives each a length in bars and says
+which tracks play in it.
+
+```lisp
+(track :kick  (seq :bd :_ :bd :_))
+(track :snare (seq :_ :sd :_ :sd))
+(track :hats  (fast 2 (seq :hh :_)))
+(track :bass  (->> (scale :minor :c2 (seq 0 :_ 4 :_)) (synth :saw)))
+
+(song
+  (section :intro  4 [:kick :hats])
+  (section :verse  8 [:kick :snare :bass])
+  (section :chorus 8 :all)
+  (section :outro  4 [:hats])
+  :end :stop)            ; or :end :loop
+```
+
+The output line shows `song: 4 sections · 24 bars · 48.0 s at 120 BPM · :end :stop`. The intro
+plays kick and hats for 4 bars, the verse adds snare and bass (hats rest), the chorus plays every
+track, the outro only the hats — then playback stops and the output shows `song finished`.
+
+### Built-ins
+
+| Built-in | Description |
+|---|---|
+| `(section name bars tracks)` | A section: a keyword name (unique in the song), a length in whole bars ≥ 1, and the tracks that play — a vector of track names or `:all` (every track defined above the song) |
+| `(song section… [:end :stop\|:loop])` | Play the tracks above as a song. `:end :stop` (default) stops 2 s after the last bar so tails ring out; `:end :loop` starts again at bar 0. Returns the song value |
+| `(play-from :section)` / `(play-from bar)` | Start — or, while playing, jump — the song at a section's first bar or at a 0-based bar number. After `(stop)` it restarts the last song |
+| `(export :song)` / `(export :song :tail secs)` | Capture one pass of the song to WAV in real time (see below) |
+
+### Rules
+
+- **1 bar = 1 cycle** (4 beats). Bars are numbered from 0, like cycles: the intro above is bars
+  0–3, the verse 4–11, the chorus 12–19, the outro 20–23.
+- **Tracks above, song below.** `song` checks every track name against the tracks defined above
+  it and suggests the closest name for typos (`Unknown track :snar in section :verse — did you
+  mean :snare?`). A `track` below the song is an error, and there is at most one `song` per
+  buffer.
+- **Song time.** Each track is played in song time: bar 12 of the song plays cycle 12 of the
+  track's pattern, so `every`, `cat` and `<a b>` line up with the song start — every loop pass
+  and the export sound the same.
+- **Variants are tracks.** A section only selects tracks. For a different chorus bass, define
+  `(track :bass-chorus …)` and list it in the chorus.
+- **Mute and solo still win.** `(mute! :kick)` silences the kick even in a section that lists it;
+  `solo!` works on top of the section selection.
+
+### Rehearsing — `play-from`
+
+Type these in the command bar:
+
+```lisp
+(play-from :chorus)   ; => playing from :chorus (bar 12)
+(play-from 20)        ; => playing from bar 20
+```
+
+While playing, the jump happens at the next bar boundary. After `(stop)`, `play-from` restarts
+the last evaluated song from that bar.
+
+### Re-evaluating mid-song
+
+Re-evaluating the buffer while the song plays keeps the current bar: edit the chorus, press
+Alt+Enter, and the new version takes over at the next bar. If you shortened the song so that the
+current bar no longer exists, playback continues at the first bar of the (new) last section.
+
+### Context panel
+
+While a song plays, the status row shows the current section and bar, e.g. `▶ chorus · bar
+13/24` (`▶ song · starting` until bar 0 begins). Tracks that rest in the current section are
+listed as `(not in :outro)` and drawn like muted tracks in the timeline.
+
+### `(export :song)` — capture the whole song
+
+```lisp
+(export :song)           ; one pass + 2 s release tail
+(export :song :tail 4)   ; with a 4 s tail (0–30 s)
+```
+
+The song restarts from bar 0 and the master output — after every global effect — is recorded
+in real time, so the WAV sounds exactly like playback (WASM voices, per-track and global FX).
+Export therefore takes as long as the song; the context panel shows `● REC 12.0 / 50.0 s`. A
+`:loop` song is captured as one pass. `(stop)` cancels (`export cancelled`); when it finishes,
+the WAV `repulse-song-24bars.wav` downloads (sample rate of your audio device) and the output
+shows `exported song — 24 bars, 50.0 s`.
+
+Inside `export`, `:song` is reserved: a track named `:song` can't be exported by name.
+
+### `song` vs `arrange`
+
+| | `arrange` / `play-scenes` | `song` |
+|---|---|---|
+| Sections are | patterns | named lists of tracks |
+| Length unit | cycles | bars (= cycles) |
+| End | loops forever | stops after the last bar (or `:end :loop`) |
+| Rehearsal | — | `(play-from :chorus)` |
+| Export | `(export n)` (offline) | `(export :song)` (real time, with FX) |
+
+### Errors
+
+```
+section :intro: length must be a whole number of bars ≥ 1, got 0
+section :intro: unexpected argument 7 — sections take (section name bars tracks)
+Unknown track :snar in section :verse — did you mean :snare?
+Duplicate section name :verse — section names must be unique in a song
+Only one (song …) per buffer
+track :x is defined after (song …) — define tracks above the song
+song needs at least one (section …)
+song: unknown option :foo — expected :end
+song: :end must be :stop or :loop, got :fade
+Unknown section :chrous — did you mean :chorus?
+play-from: bar 30 is outside the song (0–23)
+play-from: no song — evaluate a buffer that ends with (song …) first
+Error: no song — evaluate a buffer that ends with (song …) first          ; (export :song)
+Error: :tail must be a number of seconds between 0 and 30
+Error: an export is already running — (stop) cancels it
 ```
 
 ---
@@ -3494,6 +3632,11 @@ track-expr = "(track" keyword pattern ")"
 ;; Arrangement
 arrange    = "(arrange" "[[" pattern cycles "]" ["[" pattern cycles "]"]* "])"
 
+;; Song form
+song       = "(song" section+ [":end" (":stop" | ":loop")] ")"
+section    = "(section" keyword bars ("[" keyword* "]" | ":all") ")"
+play-from  = "(play-from" (keyword | bar) ")"
+
 ;; Curve generators (for fx :waveshape)
 generator  = "(chebyshev" order ")"              ;; order 1-8
            | "(fold)"                            ;; wavefolder
@@ -3629,6 +3772,9 @@ do-expr    = "(do" expr+ ")"
 
 ;; Render 1 cycle (useful for short loops)
 (export 1)
+
+;; Capture the whole song (buffer ending in (song …)) in real time, with FX
+(export :song)
 ```
 
 ### Per-track effects

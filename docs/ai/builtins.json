@@ -1684,6 +1684,63 @@
     "detail": "(play-scenes [pat …]) — play patterns as 1-cycle scenes",
     "description": "Play patterns as sequential 1-cycle scenes."
   },
+  "song": {
+    "category": "source",
+    "signature": "(song (section …) … [:end :stop|:loop])",
+    "returns": "Song",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(song (section :intro 4 [:kick :hats]) (section :verse 8 [:kick :snare :bass]) (section :chorus 8 :all))",
+      "(song (section :a 4 [:kick]) (section :b 4 :all) :end :loop)"
+    ],
+    "see-also": [
+      "section",
+      "track",
+      "play-from",
+      "export",
+      "arrange"
+    ],
+    "detail": "(song (section …) … [:end :stop|:loop]) — play tracks as a song with sections; stops (or loops) after the last bar",
+    "description": "Play the tracks defined above as a song: sections play in order, each for its number of bars, with only the tracks it lists. Stops after the last bar (:end :stop, default) or loops (:end :loop). One song per buffer, at the bottom."
+  },
+  "section": {
+    "category": "source",
+    "signature": "(section :name bars [:track ...])",
+    "returns": "Section",
+    "side-effects": [],
+    "examples": [
+      "(section :verse 8 [:kick :snare :bass])",
+      "(section :chorus 8 :all)"
+    ],
+    "see-also": [
+      "song",
+      "track",
+      "play-from"
+    ],
+    "detail": "(section :name bars [:track …]) — a song section: name, length in bars, tracks that play (or :all)",
+    "description": "A song section: a unique name, a length in bars (1 bar = 1 cycle) and the tracks that play in it — a vector of track names or :all. Used inside (song …)."
+  },
+  "play-from": {
+    "category": "audio",
+    "signature": "(play-from :section) / (play-from bar)",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(play-from :chorus)",
+      "(play-from 12)"
+    ],
+    "see-also": [
+      "song",
+      "section",
+      "export"
+    ],
+    "detail": "(play-from :section) / (play-from bar) — start or jump the song to a section or 0-based bar",
+    "description": "Start (or jump) the song at the first bar of a section, or at a 0-based bar number. Works while playing and after (stop)."
+  },
   "sound": {
     "category": "sample",
     "signature": "(sound bank n)",
@@ -3142,7 +3199,7 @@
   },
   "export": {
     "category": "io",
-    "signature": "(export) — render all tracks to WAV; (export n) — n cycles; (export :track) — single track",
+    "signature": "(export) / (export n) / (export :track) / (export :song [:tail secs])",
     "returns": "nil",
     "side-effects": [
       "audio",
@@ -3151,14 +3208,17 @@
     "examples": [
       "(export)",
       "(export 4)",
-      "(export :kick)"
+      "(export :kick)",
+      "(export :song)",
+      "(export :song :tail 4)"
     ],
     "see-also": [
       "midi-export",
-      "share!"
+      "share!",
+      "song"
     ],
-    "detail": "(export) — render all tracks to WAV; (export n) — n cycles; (export :track) — single track",
-    "description": ""
+    "detail": "(export) — render all tracks to WAV; (export n) — n cycles; (export :track) — single track; (export :song) — capture the whole song in real time",
+    "description": "Download a WAV. (export n) renders n cycles of all tracks offline (default 4); (export :track) renders one track; (export :song) plays the song once from bar 0 and records the master output in real time (with FX), plus a release tail (default 2 s). (stop) cancels a song export."
   },
   "rate": {
     "category": "transform",

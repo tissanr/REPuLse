@@ -224,6 +224,8 @@ footer {
 .ctx-bank    { color: #c678dd; font-weight: bold; }
 .ctx-playing { color: #98c379; }
 .ctx-stopped { color: var(--dim); }
+.ctx-song    { color: #61afef; font-weight: bold; }
+.ctx-rec     { color: #e06c75; font-weight: bold; }
 
 .ctx-section {
   border-bottom: 1px solid var(--border);
@@ -1748,6 +1750,8 @@ header h1 {
 .ctx-bank { color: var(--purple); }
 .ctx-playing { color: var(--cyan); }
 .ctx-stopped { color: #2a3a55; }
+.ctx-song { color: var(--cyan); }
+.ctx-rec { color: #e94560; }
 .ctx-section { border-bottom-color: #1a2440; }
 .ctx-section-title {
   color: #2a3a55;

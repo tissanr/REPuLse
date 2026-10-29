@@ -65,6 +65,25 @@
                           "(play-scenes [(fast 2 (seq :bd)) (slow 2 (seq :sd))])"]
                :see-also ["arrange" "cat"]}
 
+ :song       {:category "source"
+              :returns "Song"
+              :side-effects ["audio"]
+              :examples ["(song (section :intro 4 [:kick :hats]) (section :verse 8 [:kick :snare :bass]) (section :chorus 8 :all))"
+                         "(song (section :a 4 [:kick]) (section :b 4 :all) :end :loop)"]
+              :see-also ["section" "track" "play-from" "export" "arrange"]}
+
+ :section    {:category "source"
+              :returns "Section"
+              :side-effects []
+              :examples ["(section :verse 8 [:kick :snare :bass])" "(section :chorus 8 :all)"]
+              :see-also ["song" "track" "play-from"]}
+
+ :play-from  {:category "audio"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(play-from :chorus)" "(play-from 12)"]
+              :see-also ["song" "section" "export"]}
+
  ;; ── Pattern transformers ─────────────────────────────────────────────────────
  :fast       {:category "transform"
               :returns "Pattern"
@@ -1264,8 +1283,9 @@
  :export     {:category "io"
               :returns "nil"
               :side-effects ["audio" "dom"]
-              :examples ["(export)" "(export 4)" "(export :kick)"]
-              :see-also ["midi-export" "share!"]}
+              :examples ["(export)" "(export 4)" "(export :kick)" "(export :song)"
+                         "(export :song :tail 4)"]
+              :see-also ["midi-export" "share!" "song"]}
 
  ;; ── Content ──────────────────────────────────────────────────────────────────
  :snippet    {:category "content"

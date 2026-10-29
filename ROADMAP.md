@@ -43,7 +43,7 @@ without a human:
 | 8 | TL7 | Per-event effects & control parameters | 🤖👂 | outline | opus |
 | 9 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
 | **M2** | | **Full songs** | | | |
-| 10 | SONG1 | Sections, song form & full-song render | 🤖 | outline | opus |
+| 10 | SONG1 | Sections, song form & full-song render | 🤖 | full | opus |
 | 11 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
 | 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | outline | sonnet |
 | 13 | SONG4 | Multi-buffer projects | 🤖 | outline | opus |
@@ -52,11 +52,12 @@ without a human:
 | 15 | LIVE1 | Companion bridge: Ableton Link & OSC | 🧑 | outline | opus |
 | 16 | LIVE2 | Latency compensation, nudge & per-track outputs | 🧑 | outline | sonnet |
 | **M4** | | **Sketchpad** | | | |
-| 17 | SK1 | Stem export & full-song MIDI export | 🤖 | outline | sonnet |
-| 18 | SK2 | Session snapshots & eval history | 🤖 | outline | sonnet |
-| 19 | SK3 | MIDI capture 1: click, fixed grid, velocity → code | 🤖👂 | outline | sonnet |
-| 20 | SK4 | MIDI capture 2: always-on capture | 🤖👂 | outline | sonnet |
-| 21 | SK5 | MIDI capture 3: grid & feel detection | 🤖👂 | outline | opus |
+| 17 | EXP1 | Export parity: offline render with WASM voices & FX | 🤖 | outline | opus |
+| 18 | SK1 | Stem export & full-song MIDI export | 🤖 | outline | sonnet |
+| 19 | SK2 | Session snapshots & eval history | 🤖 | outline | sonnet |
+| 20 | SK3 | MIDI capture 1: click, fixed grid, velocity → code | 🤖👂 | outline | sonnet |
+| 21 | SK4 | MIDI capture 2: always-on capture | 🤖👂 | outline | sonnet |
+| 22 | SK5 | MIDI capture 3: grid & feel detection | 🤖👂 | outline | opus |
 
 **Models.** Expanding an outline into a full spec is always done with **Opus**: it makes
 the design decisions and writes reference test cases. The *Build model* column is the
@@ -2040,7 +2041,7 @@ See full spec: [PROMPTS/PHASE-KIT1.md](PROMPTS/PHASE-KIT1.md)
 
 ---
 
-## Phase SONG1 — Sections, Song Form & Full-Song Render 📋 *planned*
+## Phase SONG1 — Sections, Song Form & Full-Song Render ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2049,9 +2050,31 @@ at the bottom with named sections.
 
 **Key additions:**
 - `song` / `section` form: named sections with bar lengths and per-section track selection
-- Song position in the scheduler; end behaviour `:stop` / `:loop`; start from a section
-- Full-song WAV render sized from the song form; progress in the context panel
+- Song position in the scheduler; end behaviour `:stop` / `:loop`; `(play-from :section)`
+- `(export :song)`: real-time capture of the master output, so the WAV sounds exactly like playback; progress in the context panel
 - `arrange` and `play-scenes` keep working unchanged
+
+**Delivered:**
+- Pure song model in `repulse.song` (core): `make-section`, `make-song` (fuzzy-matched unknown
+  tracks, `:all` resolved to the tracks above the song), bar/section queries, `wrap-bar`,
+  `position-after-reeval`, `song-status` and `song-onsets` — tracks queried in song time, mute
+  always wins; shared by the scheduler and the TEST1 harness
+- `section` (Lisp layer, `& more` kept for SONG2), `song` and `play-from` built-ins; `track` now
+  only collects during evaluation and `repulse.song-transport` activates the buffer
+  all-or-nothing afterwards — without `song`, tracks play exactly as before; AI `eval_preview`
+  stays silent; snippet previews ignore `song`
+- Scheduler song mode: lazy origin on the next whole bar, `:end :stop` stops 2 s after the last
+  bar (`song finished`), `:end :loop`, re-evaluation keeps the bar (or jumps to the last
+  section's start), `play-from` relocates live or restarts the last song after `(stop)`
+- `(export :song [:tail s])`: pass-through `repulse-recorder` AudioWorklet after a new
+  `master-tap` (end of the master FX chain), trimmed by audio-clock frames, 16-bit WAV at the
+  context's sample rate; `(stop)` cancels; WAV encoder extracted unchanged into `repulse.wav`
+- Context panel `▶ chorus · bar 13/24`, `● REC x / y s`, `(not in :outro)`; timeline draws
+  resting tracks as muted; grammar, completions, hover (incl. a new `export` entry),
+  `builtin_meta.edn`, AI docs; USAGE "Writing a song", README
+- Tests: every DoD vector in `song_test`, `song_transport_test`, `wav_test`, `integration_test`;
+  Playwright `songEvents` vectors and a real-`AudioContext` capture (frame count, WASM backend,
+  saw harmonics via Goertzel); CI `browser-audio` job now builds WASM
 
 See full spec: [PROMPTS/PHASE-SONG1.md](PROMPTS/PHASE-SONG1.md)
 
@@ -2132,6 +2155,21 @@ See full spec: [PROMPTS/PHASE-LIVE2.md](PROMPTS/PHASE-LIVE2.md)
 
 ---
 
+## Phase EXP1 — Export Parity: Offline Render with WASM Voices & FX 📋 *planned*
+
+> **Milestone 4** · **Automation:** 🤖 auto
+
+Offline export that sounds exactly like playback, faster than real time.
+
+**Key additions:**
+- WASM worklet loaded into the `OfflineAudioContext` (today `play-event` falls back to JS sines offline)
+- Per-track and global FX chains rebuilt offline from cloned plugins and their current params, incl. plugin worklets
+- `(export n)`, `(export :track)` and `(export :song)` use it; fallback to SONG1 real-time capture, never to sines
+
+See full spec: [PROMPTS/PHASE-EXP1.md](PROMPTS/PHASE-EXP1.md)
+
+---
+
 ## Phase SK1 — Stem Export & Full-Song MIDI Export 📋 *planned*
 
 > **Milestone 4** · **Automation:** 🤖 auto
@@ -2140,7 +2178,7 @@ Hand a song to a DAW: one WAV per track and one multi-track MIDI file.
 
 **Key additions:**
 - Fix `midi-export` (events from every cycle are currently stacked on cycle 0)
-- Stems for the full song length with identical frame counts; FX included if feasible
+- Stems for the full song length with identical frame counts, rendered through the EXP1 offline path (WASM voices + FX)
 - Format-1 MIDI with one track per REPuLse track, velocity, tempo and section markers; drums on channel 10
 
 See full spec: [PROMPTS/PHASE-SK1.md](PROMPTS/PHASE-SK1.md)
