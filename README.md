@@ -52,6 +52,18 @@ and **when** — not **how** synthesis works internally.
 - **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`, `(fx :cab :ir :4x12)`
 - **Performance:** named tracks you can mute, solo and replace live; MIDI in/out; WAV and
   MIDI export
+- **Songs:** `song` and `section` turn the tracks of a buffer into a song with an end;
+  `(play-from :chorus)` rehearses from any section and `(export :song)` records the whole song
+  to WAV in real time:
+
+  ```clojure
+  (song (section :intro  4 [:kick :hats])
+        (section :verse  8 [:kick :snare :bass])
+        (section :chorus 8 :all)
+        (section :outro  4 [:hats])
+        :end :stop)
+  (play-from :chorus)   ; in the command bar
+  ```
 
 REPuLse is **not** a signal-flow language like SuperCollider, Overtone or Extempore. There is
 no oscillator routing in pattern code. The one exception is `defsynth`, which defines reusable

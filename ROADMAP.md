@@ -2041,7 +2041,7 @@ See full spec: [PROMPTS/PHASE-KIT1.md](PROMPTS/PHASE-KIT1.md)
 
 ---
 
-## Phase SONG1 — Sections, Song Form & Full-Song Render 📋 *planned*
+## Phase SONG1 — Sections, Song Form & Full-Song Render ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2053,6 +2053,28 @@ at the bottom with named sections.
 - Song position in the scheduler; end behaviour `:stop` / `:loop`; `(play-from :section)`
 - `(export :song)`: real-time capture of the master output, so the WAV sounds exactly like playback; progress in the context panel
 - `arrange` and `play-scenes` keep working unchanged
+
+**Delivered:**
+- Pure song model in `repulse.song` (core): `make-section`, `make-song` (fuzzy-matched unknown
+  tracks, `:all` resolved to the tracks above the song), bar/section queries, `wrap-bar`,
+  `position-after-reeval`, `song-status` and `song-onsets` — tracks queried in song time, mute
+  always wins; shared by the scheduler and the TEST1 harness
+- `section` (Lisp layer, `& more` kept for SONG2), `song` and `play-from` built-ins; `track` now
+  only collects during evaluation and `repulse.song-transport` activates the buffer
+  all-or-nothing afterwards — without `song`, tracks play exactly as before; AI `eval_preview`
+  stays silent; snippet previews ignore `song`
+- Scheduler song mode: lazy origin on the next whole bar, `:end :stop` stops 2 s after the last
+  bar (`song finished`), `:end :loop`, re-evaluation keeps the bar (or jumps to the last
+  section's start), `play-from` relocates live or restarts the last song after `(stop)`
+- `(export :song [:tail s])`: pass-through `repulse-recorder` AudioWorklet after a new
+  `master-tap` (end of the master FX chain), trimmed by audio-clock frames, 16-bit WAV at the
+  context's sample rate; `(stop)` cancels; WAV encoder extracted unchanged into `repulse.wav`
+- Context panel `▶ chorus · bar 13/24`, `● REC x / y s`, `(not in :outro)`; timeline draws
+  resting tracks as muted; grammar, completions, hover (incl. a new `export` entry),
+  `builtin_meta.edn`, AI docs; USAGE "Writing a song", README
+- Tests: every DoD vector in `song_test`, `song_transport_test`, `wav_test`, `integration_test`;
+  Playwright `songEvents` vectors and a real-`AudioContext` capture (frame count, WASM backend,
+  saw harmonics via Goertzel); CI `browser-audio` job now builds WASM
 
 See full spec: [PROMPTS/PHASE-SONG1.md](PROMPTS/PHASE-SONG1.md)
 
