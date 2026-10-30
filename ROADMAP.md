@@ -45,7 +45,7 @@ without a human:
 | **M2** | | **Full songs** | | | |
 | 10 | SONG1 | Sections, song form & full-song render | 🤖 | full | opus |
 | 11 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
-| 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | outline | sonnet |
+| 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | full | sonnet |
 | 13 | SONG4 | Multi-buffer projects | 🤖 | outline | opus |
 | **M3** | | **Plays with others** | | | |
 | 14 | N1 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
