@@ -10,7 +10,7 @@
 ## Goal
 
 Move the AI assistant out of the editor column into a right-hand rail, as in
-*Outline Panel v2* (`docs/design/song3-outline-v2/outline-v2.jsx`: `AIRail`, `AIPanel`;
+*Outline Panel v2* (`design/outline-panel-v2/outline-v2.jsx`: `AIRail`, `AIPanel`;
 frame 4 in `Outline Panel v2.html`):
 
 - A **28 px rail** on the right edge (`‹` button, vertical "AI" label). Clicking it (or

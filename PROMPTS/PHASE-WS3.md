@@ -10,7 +10,7 @@
 ## Goal
 
 Numbers you want to play with become draggable widgets right in the code, as in
-*Outline Panel v2* (`docs/design/song3-outline-v2/outline-v2.jsx`: `InlineSlider`,
+*Outline Panel v2* (`design/outline-panel-v2/outline-v2.jsx`: `InlineSlider`,
 `CodeLine`; frame 6 "Inline slider" in `Outline Panel v2.html`):
 
 ```lisp

@@ -10,7 +10,7 @@
 ## Goal
 
 Give the global effect chain a home in the code, as in *Outline Panel v2*
-(`docs/design/song3-outline-v2/outline-v2.jsx`, `MasterBlock`, the `master` outline group):
+(`design/outline-panel-v2/outline-v2.jsx`, `MasterBlock`, the `master` outline group):
 
 ```lisp
 ;; before — global effects are loose top-level forms

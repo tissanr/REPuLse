@@ -10,7 +10,7 @@
 ## Goal
 
 Finish the workspace layout from Claude Design's *Outline Panel v2*
-(`docs/design/song3-outline-v2/`, `outline-v2.jsx`: `StatusHead`, `Inspector`,
+(`design/outline-panel-v2/`, `outline-v2.jsx`: `StatusHead`, `Inspector`,
 `TrackBlock`, `SectionBlock`, `DefBlock`). The right **context panel goes away**, and its
 parts move to where they belong:
 
