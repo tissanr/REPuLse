@@ -47,6 +47,10 @@ without a human:
 | 11 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
 | 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | outline | sonnet |
 | 13 | SONG4 | Multi-buffer projects | 🤖 | outline | opus |
+| 13a | WS1 | Inspector column & status head (retire context panel) | 🤖 | outline | opus |
+| 13b | WS2 | `(master …)` form & master fx outline group | 🤖 | outline | sonnet |
+| 13c | WS3 | Inline sliders in code: `(slider v min max)` | 🤖 | outline | opus |
+| 13d | WS4 | AI assistant rail | 🤖 | outline | sonnet |
 | **M3** | | **Plays with others** | | | |
 | 14 | N1 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
 | 15 | LIVE1 | Companion bridge: Ableton Link & OSC | 🧑 | outline | opus |
@@ -2123,6 +2127,63 @@ Projects with several named buffers; a one-file song is a project with only `mai
 - Session schema v3 with migration from v2; outline/go-to-definition across buffers
 
 See full spec: [PROMPTS/PHASE-SONG4.md](PROMPTS/PHASE-SONG4.md)
+
+---
+
+## Phase WS1 — Inspector Column & Status Head 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖 auto
+
+The workspace from Claude Design's *Outline Panel v2*: the right context panel goes away.
+
+**Key additions:**
+- Status head in the outline column: editable BPM, a song progress bar (click a section to cue it), latency
+- Inspector column (only open while something is selected): track params + fx chain, section, def preview
+- Click selects + highlights instead of moving the cursor; ⇧-click multi-selects tracks; Esc closes
+
+See full spec: [PROMPTS/PHASE-WS1.md](PROMPTS/PHASE-WS1.md)
+
+---
+
+## Phase WS2 — `(master …)` Form & Master FX Group 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖 auto
+
+Global effects get a home in the code and in the outline.
+
+**Key additions:**
+- New built-in `master` grouping the global `(fx …)` chain; top-level `(fx …)` keeps working
+- Outline `master` group and an inspector block with write-back sliders
+
+See full spec: [PROMPTS/PHASE-WS2.md](PROMPTS/PHASE-WS2.md)
+
+---
+
+## Phase WS3 — Inline Sliders in Code 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖 auto
+
+`(slider v min max)` evaluates to `v` and is drawn as a draggable widget in the editor.
+
+**Key additions:**
+- Drag writes the value back into the code (⇧ = fine); the cursor inside shows raw text
+- ⌘K S wraps or unwraps a number, with the range guessed from the param name (log for freq)
+
+See full spec: [PROMPTS/PHASE-WS3.md](PROMPTS/PHASE-WS3.md)
+
+---
+
+## Phase WS4 — AI Assistant Rail 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖 auto
+
+The assistant moves from the editor column to a 28 px right rail with a 300 px panel.
+
+**Key additions:**
+- Rail toggle (⌘I) replaces the `ai` nav button; the open state persists
+- Working-state animation (pulsing dots, sweep on the input); the selection is sent as context
+
+See full spec: [PROMPTS/PHASE-WS4.md](PROMPTS/PHASE-WS4.md)
 
 ---
 
