@@ -10,6 +10,8 @@
             [repulse.ui.editor :as editor]
             [repulse.ui.timeline :as timeline]
             [repulse.ui.context-panel :as ctx-panel]
+            [repulse.ui.outline-panel :as outline-panel]
+            [repulse.ui.goto :as goto]
             [repulse.ui.snippet-panel :as snippet-panel]
             [repulse.ui.snippet-submit-modal :as snippet-submit-modal]
             [repulse.snippets.preview :as snippet-preview]
@@ -24,6 +26,7 @@
             [clojure.string :as str]
             ["./lisp-lang/providers.js" :refer [setBankNamesProvider setFxNamesProvider]]
             ["@codemirror/commands" :refer [selectAll]]
+            ["@codemirror/state" :refer [StateEffect]]
             ["@vercel/speed-insights" :refer [injectSpeedInsights]]))
 
 ;;; DOM helpers
@@ -204,6 +207,7 @@
                "  </div>"
                "</header>"
                "<div class=\"main-area app-shell\">"
+               "  <div id=\"outline-panel\" class=\"outline-panel\"></div>"
                "  <div class=\"workbench\">"
                "    <div id=\"editor-container\" class=\"editor-container\"></div>"
                "    <div id=\"snippet-panel\" class=\"snippet-panel hidden\"></div>"
@@ -356,6 +360,12 @@
     (let [container (el "editor-container")
           view      (editor/make-editor container init-text eo/evaluate!)]
       (reset! editor/editor-view view)
+      ;; Outline panel + go-to-definition: main app only (never the embed).
+      (.dispatch view #js {:effects (.of StateEffect.appendConfig
+                                         #js [outline-panel/extension goto/extension])})
+      (outline-panel/init! view)
+      ;; Test/debug handle (used by e2e/outline.spec.ts).
+      (set! (.-__REPULSE_EDITOR__ js/window) view)
       (.focus view))
 
     ;; Register the editor-text getter for session snapshots
@@ -467,6 +477,7 @@
   (add-watch fx/chain                        ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))
   (add-watch audio/scheduler-state           ::ctx (fn [_ _ _ _]
                                                      (ctx-panel/schedule-render!)
+                                                     (outline-panel/schedule-render!)
                                                      (timeline/render-track-panel!)))
   (add-watch samples/active-bank-prefix      ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))
   (add-watch samples/loaded-sources          ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))

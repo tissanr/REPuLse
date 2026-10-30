@@ -1725,6 +1725,102 @@ header h1 {
   border-radius: 2px;
 }
 
+/* Outline panel (SONG3) */
+.outline-panel {
+  width: 192px;
+  flex-shrink: 0;
+  background: #10172a;
+  border-right: 1px solid #1a2440;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-mono);
+  overflow: hidden;
+}
+.outline-panel.collapsed { width: 28px; }
+.ol-header {
+  height: 28px; flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  padding: 0 4px 0 10px; border-bottom: 1px solid #1a2440;
+}
+.ol-title { font-size: 9px; letter-spacing: .14em; color: #4a5a7e; text-transform: uppercase; }
+.ol-count { font-size: 9px; color: #3a4868; }
+.ol-partial {
+  font-size: 9px; color: #d19a66; border: 1px solid #d19a6644;
+  padding: 0 4px; border-radius: 2px;
+}
+.ol-spacer { flex: 1; }
+.ol-collapse {
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  background: none; border: none; padding: 0; color: #5a6a8a; font-size: 13px;
+  font-family: inherit; cursor: pointer;
+}
+.ol-collapse:hover { color: #d7dce4; }
+.ol-list { flex: 1; overflow: auto; padding: 4px 0; }
+.ol-row {
+  position: relative; display: flex; align-items: center; height: 22px;
+  font-size: 11px; cursor: pointer; user-select: none; color: #abb2bf;
+}
+.ol-row:hover { background: #151f37; color: #d7dce4; }
+.ol-row.ol-cursor { background: #1b2744; color: #d7dce4; }
+.ol-row.ol-cursor::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: #5a6a8a;
+}
+.ol-row.ol-playing { background: #122634; }
+.ol-row.ol-playing .ol-name { color: #56b6c2; font-weight: 700; }
+.ol-row.ol-playing.ol-cursor { background: #1a3040; }
+.ol-row.ol-playing.ol-cursor::before { background: #56b6c2; }
+.ol-row.ol-muted { opacity: .55; }
+.ol-row.ol-muted .ol-kind, .ol-row.ol-muted .ol-name { color: #3a4868; }
+.ol-row.ol-off .ol-name { color: #5a6a8a; }
+.ol-glyph {
+  width: 18px; flex-shrink: 0; text-align: center; color: #5a6a8a;
+  font-size: 8px; font-weight: 700;
+}
+.ol-glyph.ol-fold { font-size: 9px; }
+.ol-glyph.ol-g-play, .ol-glyph.ol-g-aud { color: #56b6c2; }
+.ol-glyph.ol-g-aud { font-size: 13px; }
+.ol-kind { width: 44px; flex-shrink: 0; font-size: 10px; }
+.ol-kind-def { color: #c678dd; }
+.ol-kind-defn { color: #98c379; }
+.ol-kind-defsynth { color: #d19a66; }
+.ol-kind-track { color: #e5c07b; }
+.ol-kind-song { color: #e94560; }
+.ol-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ol-meta { color: #5a6a8a; font-weight: 400; margin-left: 6px; }
+.ol-dots { display: flex; gap: 3px; margin-right: 6px; }
+.ol-dot { width: 5px; height: 5px; border-radius: 50%; opacity: .75; }
+.ol-playing .ol-dot { opacity: 1; }
+.ol-line { width: 30px; flex-shrink: 0; text-align: right; padding-right: 10px; color: #5a6a8a; font-size: 10px; }
+.ol-cursor .ol-line { color: #abb2bf; }
+.ol-progress { position: absolute; left: 18px; bottom: 0; height: 1px; background: #56b6c2; opacity: .7; }
+.ol-empty { padding: 14px 12px; font-size: 10px; line-height: 1.7em; color: #5a6a8a; flex: 1; }
+.ol-empty .ol-p { color: #e94560; }
+.ol-empty .ol-k { color: #e5c07b; }
+.ol-empty .ol-n { color: #abb2bf; }
+.ol-empty .ol-c { color: #56b6c2; }
+.ol-footer {
+  flex-shrink: 0; border-top: 1px solid #1a2440; padding: 7px 10px;
+  display: flex; flex-direction: column; gap: 4px; font-size: 9px; color: #5a6a8a;
+}
+.ol-hint { display: flex; align-items: center; gap: 4px; }
+.ol-hint > span:not(.ol-spacer) { margin-left: 2px; }
+.ol-kbd {
+  border: 1px solid #1e2a45; border-radius: 2px; padding: 0 4px; color: #abb2bf;
+  font-size: 9px; line-height: 14px; font-family: inherit;
+}
+.ol-rail { flex: 1; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+.ol-rail-btn {
+  height: 28px; width: 100%; display: flex; align-items: center; justify-content: center;
+  color: #abb2bf; font-size: 13px; border-bottom: 1px solid #1a2440;
+}
+.ol-rail-label {
+  writing-mode: vertical-rl; font-size: 9px; letter-spacing: .2em; color: #5a6a8a;
+  text-transform: uppercase; margin-top: 12px;
+}
+.ol-rail-bars { display: flex; flex-direction: column; gap: 3px; margin-top: 16px; }
+.ol-rail-bar { width: 4px; border-radius: 1px; background: #2a3a55; }
+.ol-rail-bar.playing { background: #56b6c2; }
+.cm-editor .outline-flash { background: #1f2d4e70; }
+
 .context-panel {
   width: 195px;
   background: #10172a;
