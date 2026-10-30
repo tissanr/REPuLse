@@ -50,7 +50,7 @@ OUTLINE 12                       ‹
 ## Design reference
 
 The visual design is the **outline column** of Claude Design's *Outline Panel v2*, checked
-in at [`docs/design/song3-outline-v2/`](../docs/design/song3-outline-v2/). Open
+in at [`design/outline-panel-v2/`](../design/outline-panel-v2/). Open
 `Outline Panel v2.html` in a browser to see it live. `outline-app.jsx` (`ORow`, `Outline`,
 `OutlineRail`, `OutlineHeader`, `OutlineFooter`) and `outline-v2.jsx` (`Row`, `OutlineV2`) hold
 the exact sizes and colours. Only the outline column belongs to SONG3 (see decision 6):
