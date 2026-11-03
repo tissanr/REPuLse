@@ -105,17 +105,20 @@ Type in the command bar (the `>` input at the bottom):
     (demo :techno)
 
 This loads a full multi-track techno pattern into the editor and starts playing it immediately.
-Available demos:
+Loading a demo first clears the tracks of whatever was playing before. Each demo is a genre
+sketch that also showcases a group of features — its `;; Shows:` comment line names them:
 
-| Demo | BPM | Description |
-|---|---|---|
-| `:techno` | 130 | Four-on-the-floor kick, offbeat hats, acid bassline |
-| `:ambient` | 72 | Slow pad chords, gentle melodic line |
-| `:dnb` | 174 | Breakbeat, sub bass, amen-style rhythm |
-| `:minimal` | 120 | Sparse kick, subtle hats, one-note bass |
-| `:house` | 124 | Classic four-on-the-floor, organ stabs |
-| `:dub` | 140 | Heavy bass, delay-heavy snare |
-| `:experimental` | 110 | Algorithmic patterns: every, rev, fmap |
+| Demo | BPM | Style | Shows |
+|---|---|---|---|
+| `:techno` | 130 | Mini-notation drums, acid line | `~` mini-notation, `euclidean`, `synth :saw`, per-track `filter` + `distort`, `tween` fade-in |
+| `:house` | 124 | Rhodes stabs, offbeat bass | FM `:epiano`, `def` + `comp` presets, `off`, `alt`, `chorus`, `synth :square` |
+| `:ambient` | 72 | Pads, bells, long tails | FM `:epiano` / `:bell`, `dattorro-reverb`, `delay`, `degrade-by`, `tween` swell |
+| `:dnb` | 174 | Chopped amen, saw bass | `sound` + `fmap` sample slices (`amencutup`), `rate`, `end`, `sometimes`, `chorus` |
+| `:minimal` | 122 | Sparse, shifting groove | `euclidean` with rotation, `degrade-by`, `choose`, `off`, `sometimes`, FM `:marimba` |
+| `:dub` | 76 | Skank, echoes, sub bass | `delay` feedback, `reverb`, `late`, `synth :square` + `filter`, FM `:trombone` |
+| `:rock` | 118 | Distorted power chords | Karplus-Strong `:guitar`, `defn`, `amp-sim` + `cab`, `<...>` alternation |
+| `:modular` | 100 | Self-built instruments | `defsynth`, UGens (`saw`, `noise`, `mix`, `lpf`, `hpf`), `env-perc` / `env-asr` / `env-gen`, `arrange` |
+| `:experimental` | 110 | Algorithmic Lisp | `defn`, `let`, `fn`, `fmap`, `cat`, `jux`, `every`, `rev`, `transpose`, `bitcrusher` |
 
 Type `(demo)` with no arguments to list all available demos.
 
@@ -163,9 +166,10 @@ Patterns describe **what** sounds and **when**. All composition happens here:
 - **Filters:** `lpf`, `hpf`, `bpf`
 - **Envelopes:** `env-perc`, `env-asr`, `env` + `env-gen` (general envelope)
 - **Routing:** `mix`, `gain`, `delay-node`
-- **Threading:** `->` (thread-first) — **only valid inside defsynth**
+- **Modulation:** `bus`/`out`/`in` plus signal arithmetic (`*`, `+`) — any UGen parameter takes a number or a signal
+- **Threading:** `->>` (thread-last) — UGens take their source as the **last** argument, like pattern transforms
 
-⚠️ **The `->` macro only works inside `defsynth` bodies. At the pattern level, always use `->>`.**
+⚠️ **Use `->>` in `defsynth` bodies too. `->` (thread-first) puts the source in the cutoff/level slot.**
 
 ### What REPuLse is NOT
 
@@ -245,7 +249,7 @@ These patterns are **wrong** in REPuLse. If you see AI-generated code that looks
 ### ❌ Thread-first `->` at pattern level
 
 ```clojure
-;; WRONG — -> is only for defsynth bodies
+;; WRONG — -> puts the pattern first; transforms take it last
 (-> (seq :bd :sd) (fast 2) (amp 0.8))
 
 ;; RIGHT — ->> (thread-last) at pattern level
@@ -1719,6 +1723,10 @@ If the prefixed bank doesn't exist (e.g. a machine has no hi-hat), the keyword r
 via the standard fallback with no error. The active bank is shown as a badge in the status head
 (top of the outline column).
 
+The prefix is a session setting, like `bpm`: it persists across evaluations and page
+reloads until you change it or call `(bank nil)`. Removing a `(bank …)` line from the
+buffer does not clear it.
+
 ### Built-in synthesis fallback
 
 These keywords always work even if samples haven't loaded yet — they are synthesized
@@ -3013,14 +3021,14 @@ Define custom instruments from Web Audio node graphs. UGen functions build the g
 
 ```lisp
 (defsynth pluck [freq]
-  (-> (saw freq)
-      (lpf (* freq 2))
-      (env-perc 0.01 0.3)))
+  (->> (saw freq)
+       (lpf (* freq 2))
+       (env-perc 0.01 0.3)))
 
 (defsynth pad [freq]
-  (-> (mix (sin freq) (sin (* freq 1.002)))
-      (lpf 2000)
-      (env-asr 0.3 0.8 1.0)))
+  (->> (mix (sin freq) (sin (* freq 1.002)))
+       (lpf 2000)
+       (env-asr 0.3 0.8 1.0)))
 
 (->> (scale :minor :c4 (seq 0 2 4 7))
      (synth :pluck)
@@ -3048,7 +3056,17 @@ Available UGens:
 | `(env-asr attack sustain release src)` | Sustain + release envelope |
 | `(env-gen env-data src)` | General envelope — takes data from `(env ...)` |
 | `(out :bus-name src)` | Write signal to a named bus |
+| `(* depth sig)` | Scale a signal (two signals: ring modulation) |
+| `(+ offset sig)` | Add a constant or another signal |
 | `(in :bus-name)` | Read from a named bus as a UGen source |
+UGens take their source as the **last** argument, so thread them with `->>`.
+Every parameter (`freq`, `cutoff`, `level`, `time`) accepts a number or a signal —
+see [`bus` / `out` / `in`](#bus--out--in--named-audio-and-control-rate-buses).
+
+Trigger a synth with `(synth :name pat)`; its parameters (`freq`, …) come from the
+event. A parameterless synth can also be triggered by its bare name, e.g.
+`(seq :lfo-sine)` — useful for bus writers.
+
 | `(kr rate src)` | Control-rate pass-through (informational wrapper) |
 
 Synths are ephemeral — nodes are created at event time and disconnected after the envelope.
@@ -3080,9 +3098,9 @@ Use `env` with `env-gen` inside a `defsynth` body:
 
 ```lisp
 (defsynth pluck [freq]
-  (-> (saw freq)
-      (lpf 3000)
-      (env-gen (env [0 1 0.3 0] [0.001 0.05 0.4] [:lin :exp :exp]))))
+  (->> (saw freq)
+       (lpf 3000)
+       (env-gen (env [0 1 0.3 0] [0.001 0.05 0.4] [:lin :exp :exp]))))
 ```
 
 ### `bus` / `out` / `in` — named audio and control-rate buses
@@ -3099,19 +3117,31 @@ from another, or mix multiple sources.
 
 ;; LFO writer synth — plays on a track each cycle
 (defsynth lfo-sine []
-  (out :lfo (sin 4)))     ; 4 Hz sine to bus
+  (out :lfo (sin 4)))     ; 4 Hz sine (-1…1) to bus
 
 ;; Synth that reads the LFO bus
 (defsynth wobble [freq]
-  (-> (saw freq)
-      (lpf (* 2000 (in :lfo)))   ; LFO modulates cutoff
-      (env-perc 0.01 0.4)))
+  (->> (saw freq)
+       (lpf (+ 1200 (* 800 (in :lfo))))   ; cutoff sweeps 400…2000 Hz
+       (env-perc 0.01 0.4)))
 
-;; Wire it up
+;; Wire it up — a bare defsynth name triggers it
 (track :lfo-src (seq :lfo-sine))
-(->> (scale :minor :c3 (seq 0 3 5 7))
-     (synth :wobble))
+(track :lead
+  (->> (scale :minor :c3 (seq 0 3 5 7))
+       (synth :wobble)))
 ```
+
+Modulation:
+- Any UGen parameter — oscillator `freq`, filter `cutoff`, `gain` `level`, `delay-node`
+  `time` — takes a number or a signal. A signal is connected to the underlying
+  AudioParam and **replaces** its value, so a bare `(in :lfo)` (range -1…1) would be
+  a near-zero cutoff
+- Inside `defsynth`, `*` and `+` work on signals: `(* 800 sig)` scales, `(+ 1200 sig)`
+  adds an offset, `(* sig-a sig-b)` ring-modulates. Use `(+ centre (* depth sig))` to
+  sweep a parameter around a centre value
+- A parameterless synth (e.g. a bus writer) is triggered by its bare name in a
+  pattern: `(seq :lfo-sine)`. `(synth :name pat)` works too
 
 Bus rules:
 - `(bus :name)` defaults to `:control`

@@ -14,6 +14,7 @@
             [repulse.wav-test]
             [repulse.samples-test]
             [repulse.sound-check-test]
+            [repulse.content.demos-test]
             [repulse.ui.timeline-test]
             [repulse.outline-test]
             [repulse.project-test]
@@ -45,6 +46,7 @@
                   'repulse.song-transport-test 'repulse.wav-test
                   'repulse.samples-test
                   'repulse.sound-check-test
+                  'repulse.content.demos-test
                   'repulse.ui.timeline-test
                   'repulse.outline-test
                   'repulse.project-test
