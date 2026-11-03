@@ -49,7 +49,7 @@ without a human:
 | 13 | SONG4 | Multi-buffer projects | 🤖 | full | opus |
 | 13a | WS1 | Inspector column & status head (retire context panel) | 🤖 | full | opus |
 | 13b | WS2 | `(master …)` form & master fx outline group | 🤖 | full | sonnet |
-| 13c | WS3 | Inline sliders in code: `(slider v min max)` | 🤖 | outline | opus |
+| 13c | WS3 | Inline sliders in code: `(slider v min max)` | 🤖 | full | opus |
 | 13d | WS4 | AI assistant rail | 🤖 | outline | sonnet |
 | **M3** | | **Plays with others** | | | |
 | 14 | N1 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
