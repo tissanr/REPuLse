@@ -67,17 +67,20 @@
 ;;; ── choose / wchoose source propagation ─────────────────────────────
 
 (deftest lisp-choose-attaches-source
-  (testing "choose attaches :source of the chosen element to the event"
-    (let [code "(choose [:a :b :c :d])"
+  (testing "choose (a signal since TL4) carries the :source of the sampled element"
+    (let [pat (:result (lisp/eval-string "(choose [:a :b :c])" (make-test-env)))
+          ev  (first (core/query pat (core/span [1 4] [1 2])))]
+      ;; (choose [:a :b :c]) — :b sits at 12-14
+      (is (= :b (:value ev)))
+      (is (= {:from 12 :to 14} (:source ev)))))
+  (testing "choose-cycles attaches :source of the chosen element to the event"
+    (let [code "(choose-cycles [:a :b :c :d])"
           ;;    0         1         2
-          ;;    0123456789012345678901
-          ;;    (choose [:a :b :c :d])
-          ;;              ^9 ^12^15^18
           env  (make-test-env)
           pat  (:result (lisp/eval-string code env))
-          srcs #{;; :a at 9-11, :b at 12-14, :c at 15-17, :d at 18-20
-                 {:from 9 :to 11} {:from 12 :to 14}
-                 {:from 15 :to 17} {:from 18 :to 20}}]
+          srcs #{;; (choose-cycles [ — :a at 16-18, :b at 19-21, :c at 22-24, :d at 25-27
+                 {:from 16 :to 18} {:from 19 :to 21}
+                 {:from 22 :to 24} {:from 25 :to 27}}]
       (is (some? pat))
       ;; Every chosen event must carry a :source pointing to one of the keywords
       (doseq [cy (range 20)]

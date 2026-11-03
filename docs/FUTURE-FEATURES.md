@@ -2,6 +2,11 @@
 
 Unplanned feature backlog. See `ROADMAP.md` for planned phases.
 
+> **Now scheduled (2026-10-26 milestone plan):** additional combinators → TL3/TL4,
+> OSC and Ableton Link → LIVE1, multi-buffer editor → SONG4, stem and MIDI export →
+> SK1, project snapshots and session journal/eval history → SK2. The entries below are
+> kept for context; the phase specs are authoritative.
+
 ---
 
 ## Backlog — nice-to-haves

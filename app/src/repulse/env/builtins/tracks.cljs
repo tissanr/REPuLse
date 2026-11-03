@@ -3,6 +3,7 @@
   (:require [repulse.core :as core]
             [repulse.audio :as audio]
             [repulse.fx :as fx]
+            [repulse.song-transport :as song-transport]
             [repulse.lisp.core :as lisp]
             [repulse.lisp.eval :as leval]
             [repulse.ui.editor :as editor]
@@ -18,17 +19,13 @@
      (let [name' (leval/unwrap track-name)
            pat'  (leval/unwrap pat)
            src   (:source track-name)]
-       (when (contains? @seen-tracks name')
-         (throw (ex-info (str "Duplicate track name :" (cljs.core/name name')
-                              " — each track must have a unique name in the buffer")
-                         (cond-> {:type :eval-error}
-                           src (merge {:from (:from src) :to (:to src)})))))
-       (swap! seen-tracks conj name')
        (if (core/pattern? pat')
          (do
-           (audio/play-track! name' pat' on-beat editor/highlight-range!)
-           (fx/apply-track-effects! name' (:track-fx pat'))
-           (set-playing! true)
+           ;; SONG1: tracks are only collected here; eval-orchestrator activates
+           ;; them (under the buffer's song, if any) once the whole buffer has
+           ;; evaluated. collect-track! rejects duplicates and tracks below a song.
+           (song-transport/collect-track! name' pat' src)
+           (swap! seen-tracks conj name')
            (str "=> track :" (cljs.core/name name') " playing"))
          "Error: second argument to track must be a pattern")))
 
@@ -58,6 +55,7 @@
    (fn
      ([]
       (audio/stop!)
+      (reset! song-transport/song-buffer nil)
       (editor/clear-highlights!)
       (set-playing! false)
       "=> cleared all tracks")

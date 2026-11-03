@@ -27,9 +27,10 @@
         note-pat' (if (pat? note-pat)
                     note-pat
                     (core/pure note-pat))]
-    (core/combine (fn [pv nv] (assoc (to-map nv) kw pv))
-                  param-pat
-                  note-pat')))
+    ;; Structure from the note pattern (Tidal `#`, Strudel `.set`).
+    (core/app-right (fn [pv nv] (assoc (to-map nv) kw pv))
+                    param-pat
+                    note-pat')))
 
 ;;; ── Parameter transformers ───────────────────────────────────────────
 
@@ -112,9 +113,12 @@
 (defn jux-by
   "Like jux but with adjustable stereo width.
    width 0.0 = both copies centre (mono), 1.0 = full left/right.
+   width may also be a pattern of widths.
    (jux-by 0.5 rev pat) — half stereo width"
   [width f pat]
-  (core/stack* [(pan (- width) pat) (pan width (f pat))]))
+  ((core/patternify
+    (fn [w p] (core/stack* [(pan (- w) p) (pan w (f p))])))
+   width pat))
 
 (defn midi-out
   "Tag events for MIDI note output on the given channel (1–16).
@@ -122,3 +126,68 @@
    (midi-out 1)      — return (pat → pat) transformer"
   ([ch]     (fn [pat] (midi-out ch pat)))
   ([ch pat] (apply-param :midi-ch ch pat)))
+
+;;; ── Phase TL3b: hurry ────────────────────────────────────────────────
+
+(defn- hurry* [r pat]
+  (let [f (core/rat->float (core/->rat r))]
+    (core/fmap (fn [v]
+                 (if (or (nil? v) (= :_ v))
+                   v
+                   (let [m (to-map v)] (assoc m :rate (* (or (:rate m) 1) f)))))
+               (core/fast r pat))))
+
+(defn hurry
+  "fast r, and multiply every event's :rate by r (missing :rate counts as 1).
+   (hurry 2 pat) — double speed and playback rate
+   (hurry 2)     — return transformer"
+  ([r]     (fn [pat] (hurry r pat)))
+  ([r pat] ((core/patternify hurry*) r pat)))
+
+;;; ── Phase TL5: amp-scaling layering ──────────────────────────────────
+
+(defn- amp*
+  "Multiply the :amp of an event value by f (default amp 1). Rests stay rests."
+  [f v]
+  (if (= v :_) v (update (to-map v) :amp #(* (or % 1.0) f))))
+
+(defn- echo* [times time feedback pat]
+  (let [n  (int (core/rat->float (core/->rat times)))
+        fb (core/rat->float (core/->rat feedback))
+        t  (core/->rat time)]
+    (core/stack* (mapv (fn [i]
+                         (core/fmap #(amp* (Math/pow fb i) %)
+                                    (core/late (core/rat* t [i 1]) pat)))
+                       (range (max 0 n))))))
+
+(defn echo
+  "Strudel echo: times layers, each `time` later, amp × feedback^i."
+  [times time feedback pat]
+  ((core/patternify3 echo*) times time feedback pat))
+
+(defn stut
+  "Strudel stut: echo with Tidal argument order (times feedback time)."
+  [times feedback time pat]
+  (echo times time feedback pat))
+
+(defn jux-flip-by
+  "jux-by whose width alternates between w and −w every cycle."
+  [w f pat]
+  (let [->f (fn [x] (let [x (if (vector? x) (core/rat->float (core/->rat x)) x)] (double x)))
+        w'  (if (core/pattern? w) (core/fmap ->f w) (core/pure (->f w)))]
+    (jux-by (core/cat* [w' (core/fmap - w')]) f pat)))
+
+(defn jux-flip [f pat] (jux-flip-by 1 f pat))
+
+(defn- fade-gain [p] (if (< p 0.5) 1 (* 2 (- 1 p))))
+
+(defn xfade
+  "Crossfade two patterns: a gets fade-gain(pos), b gets fade-gain(1 − pos)."
+  [a pos b]
+  (let [pos  (if (core/pattern? pos) pos (core/pure pos))
+        ->p  #(if (core/pattern? %) % (core/pure %))
+        side (fn [pat g]
+               (core/app-left
+                (fn [v p] (amp* (fade-gain (g (core/rat->float (core/->rat p)))) v))
+                (->p pat) pos))]
+    (core/stack* [(side a identity) (side b #(- 1 %))])))

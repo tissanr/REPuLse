@@ -64,3 +64,24 @@ export function assertFinitePcm(buffer: number[]): void {
     }
   }
 }
+
+/**
+ * Magnitude of a single frequency bin (Goertzel algorithm), normalised by the
+ * buffer length so values are comparable across buffer sizes.
+ */
+export function goertzel(buffer: number[], sampleRate: number, hz: number): number {
+  const n = buffer.length;
+  if (n === 0) return 0;
+  const k = Math.round((n * hz) / sampleRate);
+  const w = (2 * Math.PI * k) / n;
+  const coeff = 2 * Math.cos(w);
+  let s1 = 0;
+  let s2 = 0;
+  for (let i = 0; i < n; i += 1) {
+    const s0 = buffer[i] + coeff * s1 - s2;
+    s2 = s1;
+    s1 = s0;
+  }
+  const power = s1 * s1 + s2 * s2 - coeff * s1 * s2;
+  return Math.sqrt(Math.max(0, power)) / n;
+}
