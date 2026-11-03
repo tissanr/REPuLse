@@ -1661,6 +1661,10 @@ Set a global prefix so bare keywords resolve to a named drum machine bank:
 If the prefixed bank doesn't exist (e.g. a machine has no hi-hat), the keyword resolves
 via the standard fallback with no error. The active bank is shown in the context panel.
 
+The prefix is a session setting, like `bpm`: it persists across evaluations and page
+reloads until you change it or call `(bank nil)`. Removing a `(bank …)` line from the
+buffer does not clear it.
+
 ### Built-in synthesis fallback
 
 These keywords always work even if samples haven't loaded yet — they are synthesized
