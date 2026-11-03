@@ -350,7 +350,14 @@ app/src/repulse/
 ├── ui/
 │   ├── editor.cljs               CodeMirror editor, highlighting (highlight-range!)
 │   ├── timeline.cljs             Canvas track visualizer + cached RAF energy curves
-│   └── context_panel.cljs        Context panel DOM, slider config, schedule-render!
+│   ├── outline_panel.cljs        Outline column: rows, selection, fx group, session block
+│   ├── status_head.cljs          Status head: BPM edit, backend/bank badges, song progress + cue, latency
+│   ├── inspector.cljs            Inspector column: track/section/def/fx blocks, sliders, M/S, resize
+│   ├── selection_highlight.cljs  CodeMirror line + gutter decoration for the outline selection
+│   ├── slider_model.cljs         Pure: slider/FX config, snap, drag, key-step, text-diff
+│   ├── status_model.cljs         Pure: song bar/status text, BPM parse/step, latency, progress segments
+│   ├── selection.cljs            Pure: selection ids, pick, prune, ranges, header
+│   └── inspector_model.cljs      Pure: track params, fx rows, mute/solo flags and actions
 └── content/
     ├── demos.cljs                Demo template data + demo builtin factory
     ├── tutorial.cljs             Tutorial chapters + tutorial builtin factory
@@ -359,8 +366,11 @@ app/src/repulse/
 
 **Module dependency rules:**
 - `content/*` depend only on audio/samples/core/lisp — not on app, ui, or eval
-- `ui/*` depend only on audio/fx/midi/samples/bus/core — not on app or eval
-- `eval_orchestrator` depends on ui/editor and ui/context_panel — not on app
+- `ui/*` depend only on audio/fx/midi/samples/bus/core — not on app or eval; the exception is
+  `ui/inspector`, which calls the eval-orchestrator's slider write-back (`*-patch-and-eval!`,
+  `begin-slider-drag!` / `end-slider-drag!`). The `ui/*_model` namespaces and `ui/selection`
+  are pure (no DOM, no atoms) and unit-tested.
+- `eval_orchestrator` depends on ui/editor and ui/slider_model — not on app
 - `env/builtins` and `env/builtins/*` depend on content/*, ui/editor, plugin_loading — not on eval-orchestrator
 - `app.cljs` is the only module that depends on everything
 - No circular dependencies

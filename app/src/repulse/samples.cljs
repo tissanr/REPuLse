@@ -16,7 +16,7 @@
 ;; When set, keyword :kw is looked up as "<prefix>_<kw>" first.
 (defonce active-bank-prefix (atom nil))
 
-;; External sources loaded via (samples! ...) — tracked for the context panel.
+;; External sources loaded via (samples! ...) — listed in the outline session block.
 ;; [{:type :github :id "owner/repo" :banks N}
 ;;  {:type :freesound :query "kick 808" :count N}]
 (defonce loaded-sources (atom []))

@@ -8,8 +8,10 @@
             [repulse.plugins.compressor :as compressor-plugin]
             [repulse.ui.editor :as editor]
             [repulse.ui.timeline :as timeline]
-            [repulse.ui.context-panel :as ctx-panel]
             [repulse.ui.outline-panel :as outline-panel]
+            [repulse.ui.status-head :as status-head]
+            [repulse.ui.inspector :as inspector]
+            [repulse.ui.selection-highlight :as selection-highlight]
             [repulse.ui.goto :as goto]
             [repulse.ui.buffers :as buffers]
             [repulse.project :as project]
@@ -177,7 +179,11 @@
                "  </div>"
                "</header>"
                "<div class=\"main-area app-shell\">"
-               "  <div id=\"outline-panel\" class=\"outline-panel\"></div>"
+               "  <div id=\"outline-panel\" class=\"outline-panel\">"
+               "    <div id=\"status-head\" class=\"status-head\"></div>"
+               "    <div id=\"outline-main\" class=\"outline-main\"></div>"
+               "  </div>"
+               "  <div id=\"inspector\" class=\"inspector hidden\"></div>"
                "  <div class=\"workbench\">"
                "    <div id=\"buffer-tabs\" class=\"buffer-tabs\"></div>"
                "    <div id=\"editor-container\" class=\"editor-container\"></div>"
@@ -202,70 +208,12 @@
                "      <span class=\"hint\">Alt+Enter to eval</span>"
                "    </footer>"
                "  </div>"
-               "  <div id=\"context-panel\" class=\"context-panel\"></div>"
                "</div>"
                )))
   (.addEventListener (el "play-btn")           "click" on-play-btn-click)
   (.addEventListener (el "tap-btn")            "click" (fn [] (eo/evaluate! "(tap!)")))
   (.addEventListener (el "share-btn")          "click" share!)
   (.addEventListener (el "snippet-toggle-btn") "click" snippet-panel/toggle-panel!))
-
-(defn- attach-slider-listener! []
-  (when-let [panel (el "context-panel")]
-    ;; Pause context panel re-renders while a slider is held down
-    (.addEventListener panel "pointerdown"
-      (fn [^js e]
-        (when (.contains (.-classList (.-target e)) "ctx-slider")
-          (reset! ctx-panel/slider-active? true))))
-    (.addEventListener js/document "pointerup"
-      (fn [_]
-        (when @ctx-panel/slider-active?
-          (reset! ctx-panel/slider-active? false)
-          (js/requestAnimationFrame ctx-panel/render-context-panel!))))
-    (.addEventListener panel "input"
-      (fn [^js e]
-        (let [target (.-target e)]
-          (when (and (= "range" (.-type target))
-                     (.contains (.-classList target) "ctx-slider"))
-            (let [fx-name    (.. target -dataset -fx)
-                  track-name (.. target -dataset -track)
-                  param-name (.. target -dataset -param)
-                  raw-val    (js/parseFloat (.-value target))
-                  values     (some-> (.. target -dataset -values) (.split ","))
-                  new-val    (if values
-                               (js/parseFloat (aget values (int raw-val)))
-                               raw-val)
-                  row        (.-parentNode target)
-                  val-el     (when row (.querySelector row ".ctx-param-val"))
-                  fmtd       (if (== new-val (Math/round new-val))
-                               (str (int new-val))
-                               (.toFixed new-val 2))]
-              (when val-el (set! (.-textContent val-el) fmtd))
-              (cond
-                ;; Per-track FX slider: has both data-track and data-fx
-                (and (seq fx-name) (seq track-name))
-                (eo/per-track-fx-slider-patch-and-eval! track-name fx-name param-name new-val)
-                ;; Global FX slider: has data-fx only
-                (seq fx-name)
-                (eo/fx-slider-patch-and-eval! fx-name param-name new-val)
-                ;; Track param slider: has data-track only
-                :else
-                (eo/slider-patch-and-eval! track-name param-name new-val)))))))
-    (.addEventListener panel "change"
-      (fn [^js e]
-        (let [target (.-target e)]
-          (when (and (= "SELECT" (.-tagName target))
-                     (.contains (.-classList target) "ctx-select"))
-            (let [fx-name    (.. target -dataset -fx)
-                  track-name (.. target -dataset -track)
-                  param-name (.. target -dataset -param)
-                  new-val    (.-value target)]
-              (cond
-                (and (seq fx-name) (seq track-name))
-                (eo/per-track-fx-select-patch-and-eval! track-name fx-name param-name new-val)
-
-                (seq fx-name)
-                (eo/fx-select-patch-and-eval! fx-name param-name new-val)))))))))
 
 (defn init []
   (injectSpeedInsights)
@@ -300,7 +248,6 @@
   (assistant-panel/init!)
   (when-let [btn (el "ai-toggle-btn")]
     (.addEventListener btn "click" assistant-panel/toggle-panel!))
-  (attach-slider-listener!)
   (builtins/ensure-env!)
   (setBankNamesProvider (fn [] (clj->js (samples/bank-names))))
   (setFxNamesProvider   (fn [] (clj->js (mapv :name @fx/chain))))
@@ -336,11 +283,15 @@
           exts      (.concat (editor/editor-extensions
                               (fn [_] (eo/evaluate-project!))
                               #(eo/evaluate! "(upd)"))
-                             #js [outline-panel/extension goto/extension])
+                             #js [outline-panel/extension goto/extension
+                                  selection-highlight/extension])
           view      (editor/make-view container (editor/make-state "" exts))]
       (reset! editor/editor-view view)
       (buffers/init! view proj exts {:set-output! set-output!})
       (outline-panel/init! view)
+      (status-head/init!)
+      (inspector/init!)
+      ;; refresh! also clears the selection (WS1)
       (buffers/add-switch-hook! #(outline-panel/refresh! view))
       (reset! goto/cross-buffer
               {:active  buffers/active-name
@@ -352,8 +303,14 @@
                                              :when (not= name (:active p))]
                                          [name (:entries (outline/extract (.parse parser code) code))])]
                             (outline/project-definition others kind text)))})
-      ;; Test/debug handle (used by e2e/outline.spec.ts).
+      ;; Test/debug handles (used by e2e/outline.spec.ts, e2e/workspace.spec.ts).
       (set! (.-__REPULSE_EDITOR__ js/window) view)
+      (set! (.-__REPULSE_APP__ js/window)
+            #js {:cycleDur   (fn [] (:cycle-dur @audio/scheduler-state))
+                 :muted      (fn [] (clj->js (sort (map name (:muted @audio/scheduler-state)))))
+                 :selection  (fn [] (clj->js @outline-panel/selection))
+                 :trackParam (fn [track param]
+                               (inspector/track-param (keyword track) (keyword param)))})
       (.focus view))
 
     ;; Register the project getter for session snapshots
@@ -459,18 +416,18 @@
           (.catch (fn [e]
                     (js/console.warn "[REPuLse] Effect load failed:" url e))))))
 
-  ;; Reactive context panel + track panel
-  (add-watch builtins/env-atom               ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))
-  (add-watch fx/chain                        ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))
-  (add-watch audio/scheduler-state           ::ctx (fn [_ _ _ _]
-                                                     (ctx-panel/schedule-render!)
-                                                     (outline-panel/schedule-render!)
-                                                     (timeline/render-track-panel!)))
-  (add-watch samples/active-bank-prefix      ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))
-  (add-watch samples/loaded-sources          ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))
-  (add-watch midi/cc-mappings                ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))
+  ;; Reactive workspace (outline + status head + inspector, WS1) + track panel
+  (add-watch audio/scheduler-state      ::workspace (fn [_ _ _ _]
+                                                      (outline-panel/schedule-render!)
+                                                      (status-head/schedule-render!)
+                                                      (inspector/schedule-render!)
+                                                      (timeline/render-track-panel!)))
+  (add-watch fx/chain                   ::workspace (fn [_ _ _ _] (inspector/schedule-render!)))
+  (add-watch samples/active-bank-prefix ::workspace (fn [_ _ _ _] (status-head/schedule-render!)))
+  (add-watch audio/worklet-ready?       ::workspace (fn [_ _ _ _] (status-head/schedule-render!)))
+  (add-watch samples/loaded-sources     ::workspace (fn [_ _ _ _] (outline-panel/schedule-render!)))
+  (add-watch midi/cc-mappings           ::workspace (fn [_ _ _ _] (outline-panel/schedule-render!)))
 
-  (ctx-panel/render-context-panel!)
   (timeline/render-track-panel!)
   (timeline/start-playhead-raf!))
 

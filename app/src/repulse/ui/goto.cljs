@@ -6,7 +6,7 @@
    Phase SONG4: when the active buffer has no definition, the other project
    buffers are searched through the `cross-buffer` hooks (set by app.cljs) and
    the jump switches buffers; Shift+F12 switches back.
-   Exports: name-at, goto-definition!, go-back!, reveal!, jump-stack,
+   Exports: name-at, goto-definition!, go-back!, reveal!, push-jump!, jump-stack,
             cross-buffer, extension."
   (:require [repulse.outline :as outline]
             ["@codemirror/view" :refer [EditorView Decoration keymap]]
@@ -28,7 +28,9 @@
 (defn- active-buffer []
   (when-let [f (:active @cross-buffer)] (f)))
 
-(defn- push-jump! [state]
+(defn push-jump!
+  "Push the cursor position (and buffer) of `state` onto the jump stack."
+  [state]
   (swap! jump-stack
          (fn [s] (vec (take-last MAX-STACK
                                  (conj s {:buffer (active-buffer)

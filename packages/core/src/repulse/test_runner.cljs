@@ -24,7 +24,11 @@
             [repulse.ai.models-test]
             [repulse.ai.tool-calls-test]
             [repulse.ai.knowledge-test]
-            [repulse.audio-clock-test]))
+            [repulse.audio-clock-test]
+            [repulse.ui.slider-model-test]
+            [repulse.ui.status-model-test]
+            [repulse.ui.selection-test]
+            [repulse.ui.inspector-model-test]))
 
 ;; Without this the process exits 0 even when tests fail, so `npm test` (and CI)
 ;; would pass regardless of the result.
@@ -51,4 +55,8 @@
                   'repulse.ai.models-test
                   'repulse.ai.tool-calls-test
                   'repulse.ai.knowledge-test
-                  'repulse.audio-clock-test))
+                  'repulse.audio-clock-test
+                  'repulse.ui.slider-model-test
+                  'repulse.ui.status-model-test
+                  'repulse.ui.selection-test
+                  'repulse.ui.inspector-model-test))

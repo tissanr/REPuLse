@@ -119,6 +119,13 @@
     (and (audio/playing?) (:song @audio/scheduler-state)) (audio/relocate-song! bar)
     :else (replay-song-buffer! bar {})))
 
+(defn cue-bar!
+  "Cue `bar` like (play-from bar) issued while a song is active: playing → it
+   becomes the next scheduled bar; stopped → the last song buffer restarts
+   there. WS1 (status-head progress segments, inspector ▶ cue)."
+  [bar]
+  (apply-play-from! bar false))
+
 (defn- secs-str [x] (.toFixed (double x) 1))
 
 (defn song-summary

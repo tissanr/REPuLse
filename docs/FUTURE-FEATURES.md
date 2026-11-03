@@ -47,7 +47,7 @@ there's energy for side quests.
 ### Timing
 | Feature | Description |
 |---|---|
-| Latency monitor | `(latency)` — scheduling stats in context panel (green/yellow/red) |
+| Latency monitor | `(latency)` — scheduling stats in the status head (green/yellow/red) |
 | Jitter histogram | Visual plugin: per-event timing deviation over last N cycles |
 
 ### Visual plugins
@@ -137,7 +137,7 @@ traditional music theory.
 | Feature | Description |
 |---|---|
 | Harmonic trace overlay | Per-event label in the punchcard / piano roll: scale degree (î ĩ iii̊ …), chord symbol |
-| Key detection | Infer the current key from active note patterns; surfaced in the context panel |
+| Key detection | Infer the current key from active note patterns; surfaced in the status head |
 | Voice-leading warnings | Soft highlight when consecutive events form parallel fifths or dissonant leaps |
 
 ### Morphing and interpolation
