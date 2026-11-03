@@ -74,7 +74,7 @@
          (let [events
                (for [c    (range n-cycles)
                      :let [sp {:start [c 1] :end [(inc c) 1]}]
-                     ev   (core/query pattern sp)
+                     ev   (core/query-onsets pattern sp)
                      :let [v  (:value ev)
                            hz (cond
                                 (number? v) v
@@ -85,8 +85,8 @@
                                 (theory/note-keyword? v) (theory/note->hz v)
                                 :else nil)]
                      :when hz
-                     :let [ps (core/rat->float (:start (:part ev)))
-                           pe (core/rat->float (:end   (:part ev)))]]
+                     :let [ps (core/rat->float (:start (:whole ev)))
+                           pe (core/rat->float (:end   (:whole ev)))]]
                  {:time-sec     (* (- ps c) cycle-dur)
                   :duration-sec (* (- pe ps) cycle-dur)
                   :midi-note    (midi/hz->midi (double hz))

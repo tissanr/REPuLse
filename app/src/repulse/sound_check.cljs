@@ -5,8 +5,9 @@
    name. Unknown names otherwise fall through to a quiet 440 Hz sine, which is
    easy to mistake for silence.
    Pure — sample-bank lookups are injected by the caller.
+   Also detects continuous signals with no rhythm, which never sound.
    Exports: builtin-drums, sound-keywords, suggest, unknown-sounds, warning-message,
-            keyword-ranges"
+            keyword-ranges, has-analog-events?, structure-warning-message"
   (:require [repulse.core :as core]
             [repulse.theory :as theory]
             [repulse.lisp.eval :as leval]
@@ -97,3 +98,14 @@
       (if-let [m (.exec re code)]
         (recur (conj acc {:from (.-index m) :to (+ (.-index m) (count token))}))
         acc))))
+
+(defn has-analog-events?
+  "True when pat yields any continuous (whole-less) event in cycle 0.
+   Such events never trigger sound: a signal needs structure."
+  [pat]
+  (boolean (some core/analog? (core/query pat (core/cycle-span 0)))))
+
+(defn structure-warning-message [track-name]
+  (str "track :" (name track-name) " contains a continuous signal with no rhythm, "
+       "which plays nothing. A signal needs structure, e.g. (segment 8 …) "
+       "or (pan sine pat)"))

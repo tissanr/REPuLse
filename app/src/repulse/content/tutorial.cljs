@@ -111,17 +111,17 @@
    ";; === Tutorial 7/8 — Melody: scale & chord ===
 ;;
 ;; Note keywords like :c4 play pitched tones.
-;; `scale` maps degree numbers (1, 2, 3, …) to a musical scale.
+;; `scale` maps degree numbers (0, 1, 2, …) to a musical scale — 0 is the root.
 ;; `chord` stacks the tones of a chord.
 
 (track :bass
-  (scale :minor :c3 (seq 1 1 4 6)))
+  (scale :minor :c3 (seq 0 0 3 5)))
 
 (track :chords
   (slow 2 (chord :minor :c4)))
 
 (track :melody
-  (scale :minor :c4 (seq 1 3 5 8 5 3)))
+  (scale :minor :c4 (seq 0 2 4 7 4 2)))
 
 (track :kick
   (seq :bd :bd :bd :bd))

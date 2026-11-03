@@ -15,13 +15,16 @@ Before evaluating, read these files in order:
 
 1. `ROADMAP.md` — delivered phases, planned phases, naming/numbering convention
 2. `PROMPTS/phase-m-lisp-superpowers.md` — canonical style reference for PROMPTS files
-3. `README.md` — current language surface, architecture, built-in vocabulary
+3. `docs/USAGE.md` and `docs/ai/builtins.json` — current language surface and the complete built-in vocabulary
+   (`docs/ARCHITECTURE.md` for the architecture)
 4. `CLAUDE.md` — project-level constraints and conventions
 
 Then scan whichever source files are relevant to the idea:
 
 - `packages/core/src/repulse/core.cljs` — pattern algebra
 - `packages/lisp/src/repulse/lisp/eval.cljs` — evaluator, `make-env`, special forms
+- `packages/lisp/src/repulse/lisp/builtins/` — language built-ins by topic
+- `app/src/repulse/env/builtins/` — app built-ins (tracks, fx, samples, MIDI, …)
 - `packages/audio/src/lib.rs` — Rust/WASM synthesis engine
 - `app/src/repulse/audio.cljs` — scheduler, `play-event` dispatch
 - `app/src/repulse/fx.cljs` — effect chain manager
@@ -38,7 +41,7 @@ Only read files actually relevant to the idea.
 
 ### 2. Duplication check
 
-Does any part of this already exist? Check delivered phases in ROADMAP.md, `make-env` in `eval.cljs`, `packages/core/`, `play-event` dispatch branches.
+Does any part of this already exist? Check delivered phases in ROADMAP.md, `docs/ai/builtins.json`, `packages/core/`, `play-event` dispatch branches in `audio.cljs`.
 
 State clearly: **fully covered**, **partially covered** (describe what's missing), or **not covered**.
 

@@ -4,15 +4,19 @@
             [repulse.theory-test]
             [repulse.params-test]
             [repulse.envelope-test]
+            [repulse.song-test]
             [repulse.lisp.eval-test]
             [repulse.lisp.mini-test]
             [repulse.lisp.integration-test]
             [repulse.fx-test]
             [repulse.session-test]
+            [repulse.song-transport-test]
+            [repulse.wav-test]
             [repulse.samples-test]
             [repulse.sound-check-test]
             [repulse.content.demos-test]
             [repulse.ui.timeline-test]
+            [repulse.outline-test]
             [repulse.ai.safety-test]
             [repulse.ai.edit-test]
             [repulse.ai.client-test]
@@ -29,14 +33,16 @@
 
 (defn main []
   (test/run-tests 'repulse.core-test 'repulse.theory-test 'repulse.params-test
-                  'repulse.envelope-test
+                  'repulse.envelope-test 'repulse.song-test
                   'repulse.lisp.eval-test 'repulse.lisp.mini-test
                   'repulse.lisp.integration-test
                   'repulse.fx-test 'repulse.session-test
+                  'repulse.song-transport-test 'repulse.wav-test
                   'repulse.samples-test
                   'repulse.sound-check-test
                   'repulse.content.demos-test
                   'repulse.ui.timeline-test
+                  'repulse.outline-test
                   'repulse.ai.safety-test
                   'repulse.ai.edit-test
                   'repulse.ai.client-test

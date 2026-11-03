@@ -15,7 +15,7 @@
 ";; TECHNO — mini-notation drums, euclidean percussion, filtered acid line
 ;; Shows: (~ \"...\") mini-notation, euclidean, synth :saw, per-track fx, tween
 ;; Try: change the euclidean 5 to 3 or 7, or the filter :freq to 2000
-;; Scale degrees are 1-indexed: 1 = root, 8 = root an octave up
+;; Scale degrees are 0-based: 0 = root, 7 = root an octave up
 (bpm 130)
 
 (track :kick (~ \"bd*4\"))
@@ -32,7 +32,7 @@
        (pan 0.4)))
 
 (track :acid
-  (->> (scale :minor :c2 (~ \"1 1 [8 1] 4 1 [6 5] 1 7\"))
+  (->> (scale :minor :c2 (~ \"0 0 [7 0] 3 0 [5 4] 0 6\"))
        (synth :saw)
        (decay 0.18)
        (amp (tween :linear 0.0 0.6 8))   ; fades in over 8 bars
@@ -67,7 +67,7 @@
        (fx :chorus 0.4)))
 
 (track :bass
-  (->> (scale :minor :a1 (~ \"~ 1 ~ 1 ~ 1 ~ <4 5>\"))
+  (->> (scale :minor :a1 (~ \"~ 0 ~ 0 ~ 0 ~ <3 4>\"))
        (synth :square :pw 0.3)
        (amp 0.55)
        (decay 0.15)
@@ -82,13 +82,13 @@
 (bpm 72)
 
 (track :keys
-  (->> (slow 2 (alt (chord :minor7 :a3) (chord :maj7 :f3)))
+  (->> (slow 2 (alt (chord :minor7 :a3) (chord :major7 :f3)))
        (synth :epiano)
        (amp (tween :sine 0.0 0.45 4))   ; swells in over 4 bars
        (fx :dattorro-reverb :wet 0.5 :decay 0.85)))
 
 (track :bells
-  (->> (scale :minor :a4 (~ \"1 ~ 5 ~ <8 10> ~ 5 3\"))
+  (->> (scale :minor :a4 (~ \"0 ~ 4 ~ <7 9> ~ 4 2\"))
        (degrade-by 0.3)                 ; drop ~30% of notes, differently each cycle
        (synth :bell)
        (amp 0.25)
@@ -123,7 +123,7 @@
        (pan (~ \"-0.3 0.3\"))))
 
 (track :bass
-  (->> (scale :minor :e1 (~ \"1 ~ ~ 1 ~ ~ <4 6> ~\"))
+  (->> (scale :minor :e1 (~ \"0 ~ ~ 0 ~ ~ <3 5> ~\"))
        (synth :saw)
        (attack 0.01)
        (decay 0.6)
@@ -151,7 +151,7 @@
        (amp (choose [0.15 0.25 0.35]))))   ; new level each cycle
 
 (track :blip
-  (->> (scale :dorian :d4 (~ \"1 ~ ~ 5 ~ ~ <8 10> ~\"))
+  (->> (scale :dorian :d4 (~ \"0 ~ ~ 4 ~ ~ <7 9> ~\"))
        (off 0.1875 (transpose 12))        ; octave echo, three 16ths later
        (sometimes (late 0.0625))
        (synth :marimba)
@@ -195,13 +195,13 @@
        (fx :delay :wet 0.3 :time 0.395 :feedback 0.4)))
 
 (track :bass
-  (->> (scale :minor :g1 (~ \"1 ~ ~ 1 ~ 4 ~ <5 3>\"))
+  (->> (scale :minor :g1 (~ \"0 ~ ~ 0 ~ 3 ~ <4 2>\"))
        (attack 0.01)
        (decay 0.5)
        (amp 0.85)))
 
 (track :horn
-  (->> (slow 2 (scale :minor :g3 (~ \"~ ~ 5 4 ~ 3 1 ~\")))
+  (->> (slow 2 (scale :minor :g3 (~ \"~ ~ 4 3 ~ 2 0 ~\")))
        (synth :trombone)
        (amp 0.4)
        (fx :reverb 0.4)))
@@ -261,7 +261,7 @@
 
 (def verse
   (stack (~ \"bd ~ sd ~\")
-         (->> (scale :minor :c3 (~ \"1 3 5 8\"))
+         (->> (scale :minor :c3 (~ \"0 2 4 7\"))
               (synth :pluck)
               (amp 0.5))))
 
@@ -269,7 +269,7 @@
   (stack (~ \"bd bd sd [~ bd]\")
          (->> (fast 8 (pure :c4)) (synth :tick) (amp 0.25))
          (->> (slow 2 (chord :minor :c4)) (synth :supersaw) (amp 0.25))
-         (->> (scale :minor :c4 (~ \"1 3 4 6 8 6 4 3\"))
+         (->> (scale :minor :c4 (~ \"0 2 3 5 7 5 3 2\"))
               (synth :pluck)
               (amp 0.4))))
 
@@ -290,8 +290,8 @@
        (decay 0.8)))
 
 (track :melody
-  (->> (cat (phrase :d4 (~ \"1 3 5 7 8 5 3 1\"))
-            (phrase :a3 (~ \"1 ~ 5 ~ 8 ~ 10 8\")))
+  (->> (cat (phrase :d4 (~ \"0 2 4 6 7 4 2 0\"))
+            (phrase :a3 (~ \"0 ~ 4 ~ 7 ~ 9 7\")))
        (every 4 rev)
        (jux rev)                         ; reversed copy in the right ear
        (amp 0.45)))
