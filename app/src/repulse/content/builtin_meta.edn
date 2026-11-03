@@ -84,6 +84,12 @@
               :examples ["(play-from :chorus)" "(play-from 12)"]
               :see-also ["song" "section" "export"]}
 
+ :use        {:category "special"
+              :returns "String"
+              :side-effects []
+              :examples ["(use :drums)" "(use :drums :bass)"]
+              :see-also ["def" "track" "song"]}
+
  ;; ── Pattern transformers ─────────────────────────────────────────────────────
  :fast       {:category "transform"
               :returns "Pattern"

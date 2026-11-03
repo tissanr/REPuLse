@@ -18,6 +18,11 @@
 (defonce pending-song      (atom nil))
 (defonce pending-play-from (atom nil))  ; integer bar
 (defonce pending-export    (atom nil))  ; {:tail secs :set-output! f}
+(defonce pending-track-srcs (atom {}))  ; {kw src} — first definition's source
+
+;; nil, or (fn [src] → buffer name) while a multi-buffer project evaluates
+;; (set only by repulse.project-eval/run-project, Phase SONG4).
+(defonce buffer-of (atom nil))
 
 ;; Last activated song buffer {:tracks [[kw pat] …] :song song} — used by
 ;; play-from / export after (stop).
@@ -31,7 +36,8 @@
   (reset! pending-tracks [])
   (reset! pending-song nil)
   (reset! pending-play-from nil)
-  (reset! pending-export nil))
+  (reset! pending-export nil)
+  (reset! pending-track-srcs {}))
 
 (defn current-song
   "The song of this evaluation, else the last activated one."
@@ -48,12 +54,20 @@
    defined below the song."
   [name' pat' src]
   (when (some #(= name' (first %)) @pending-tracks)
-    (throw (ex-info (str "Duplicate track name :" (name name')
-                         " — each track must have a unique name in the buffer")
-                    (merge {:type :eval-error} (src-data src)))))
+    (let [f (or @buffer-of (constantly nil))
+          a (f (get @pending-track-srcs name'))
+          b (f src)]
+      (throw (ex-info (if (and a b (not= a b))
+                        (str "Duplicate track name :" (name name')
+                             " — already defined in buffer :" a
+                             "; track names must be unique across the project")
+                        (str "Duplicate track name :" (name name')
+                             " — each track must have a unique name in the buffer"))
+                      (merge {:type :eval-error} (src-data src))))))
   (when @pending-song
     (throw (ex-info (str "track :" (name name') " is defined after (song …) — define tracks above the song")
                     (merge {:type :eval-error} (src-data src)))))
+  (swap! pending-track-srcs assoc name' src)
   (swap! pending-tracks conj [name' pat']))
 
 (defn- hint-fn [name-str known-strs]

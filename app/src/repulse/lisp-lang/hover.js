@@ -1026,6 +1026,11 @@ const DOCS = {
     description: "Start (or jump) the song at the first bar of a section, or at a 0-based bar number. Works while playing and after (stop).",
     example: "(play-from :chorus)",
   },
+  "use": {
+    signature: "(use :buffer …)",
+    description: "Evaluate the named project buffers, in order, before continuing. All buffers share one environment, so their defs and tracks are visible unqualified. Each buffer runs at most once per evaluation; circular use is an error. Only works when Alt+Enter evaluates the project (not in the command bar).",
+    example: "(use :drums :bass)",
+  },
   "export": {
     signature: "(export) / (export n) / (export :track) / (export :song [:tail secs])",
     description: "Download a WAV. (export n) renders n cycles of all tracks offline (default 4); (export :track) renders one track; (export :song) plays the song once from bar 0 and records the master output in real time (with FX), plus a release tail (default 2 s). (stop) cancels a song export.",

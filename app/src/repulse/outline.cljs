@@ -103,6 +103,16 @@
   (let [kinds (if (= kind :keyword) #{:track} #{:def :defn :defsynth})]
     (last (filter #(and (contains? kinds (:kind %)) (= name (:name %))) entries))))
 
+(defn project-definition
+  "Cross-buffer lookup (Phase SONG4). others = [[buffer-name entries] …] in tab
+   order, without the active buffer. → {:buffer b :entry e} for the first buffer
+   whose definition-for matches (its last match), or nil."
+  [others kind name]
+  (some (fn [[b entries]]
+          (when-let [e (definition-for entries kind name)]
+            {:buffer b :entry e}))
+        others))
+
 (defn song-bars
   "Sum of section :bars, or nil if any is missing."
   [song-entry]

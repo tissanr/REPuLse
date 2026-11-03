@@ -2,7 +2,8 @@
   "Evaluation entry point, diagnostics, and live slider patching.
    Responsibility: own evaluate!, set-diagnostics!, pending-mutes, and all
    editor code-patching logic for slider updates.
-   Exports: evaluate!, evaluate-in-context!, set-diagnostics!, pending-mutes,
+   Exports: evaluate!, evaluate-project!, evaluate-in-context!, set-diagnostics!,
+            pending-mutes,
             slider-patch-and-eval!, fx-slider-patch-and-eval!,
             fx-select-patch-and-eval!, per-track-fx-slider-patch-and-eval!,
             per-track-fx-select-patch-and-eval!"
@@ -15,7 +16,10 @@
             [repulse.env.builtins :as builtins]
             [repulse.song :as song]
             [repulse.song-transport :as song-transport]
+            [repulse.project :as project]
+            [repulse.project-eval :as project-eval]
             [repulse.ui.editor :as editor]
+            [repulse.ui.buffers :as buffers]
             [repulse.ui.context-panel :as ctx-panel]
             [repulse.lisp-patcher :as patcher]
             [repulse.ai.tools :as ai-tools]
@@ -149,7 +153,43 @@
 
 ;;; Evaluation
 
-(defn evaluate! [code]
+;; Offset bases of the last successful project evaluation (Phase SONG4).
+(defonce last-bases (atom {"main" 0}))
+
+(defn- project-highlighter
+  "on-event callback for a project evaluation: map a global source range back
+   to its buffer and highlight it only when that buffer is shown."
+  [bases]
+  (fn [src]
+    (when-let [{:keys [buffer from to]} (project/locate bases (:from src) (:to src))]
+      (when (= buffer (buffers/active-name))
+        (editor/highlight-range! {:from from :to to})))))
+
+(defn- report-eval-error!
+  "Show an evaluation error: diagnostic + output line. In project mode the
+   global position is mapped to its buffer, which becomes active."
+  [result project set-output!]
+  (editor/clear-highlights!)
+  (let [{:keys [from to]} (:source result)
+        msg (:message result)]
+    (if project
+      (let [loc (project/locate (project/offset-bases project) from to)
+            buf (or (:buffer loc) (:main project))]
+        (when (and (:buffer loc) (not= buf (buffers/active-name)))
+          (buffers/switch-to! buf))
+        (buffers/clear-all-diagnostics!)
+        (when-let [view @editor/editor-view]
+          (when loc (set-diagnostics! view (:from loc) (:to loc) msg)))
+        (set-output! (if (= buf (:main project))
+                       (str "Error: " msg)
+                       (str "Error in :" buf ": " msg))
+                     :error))
+      (do
+        (when-let [view @editor/editor-view]
+          (set-diagnostics! view from to msg))
+        (set-output! (str "Error: " msg) :error)))))
+
+(defn- evaluate* [code {:keys [project]}]
   (let [{:keys [on-beat make-stop-fn set-playing!]} @cbs
         ;; Remember the last output message so an unknown-sound warning can be
         ;; appended to it rather than replacing it.
@@ -168,27 +208,31 @@
     (song-transport/reset-pending!)
     ;; Keep stop fn up to date (in case env was reset)
     (let [env    (assoc @builtins/env-atom "stop" (make-stop-fn))
-          result (lisp/eval-string code env)]
+          ;; Project mode (Phase SONG4): evaluate from the main buffer with
+          ;; `use` enabled; every source position is global (offset per buffer).
+          {result :value bases :bases}
+          (if project
+            (project-eval/run-project project env)
+            {:value (lisp/eval-string code env)})
+          on-event (if project (project-highlighter bases) editor/highlight-range!)]
       (if (lisp/eval-error? result)
-        (do
-          (editor/clear-highlights!)
-          (when-let [view @editor/editor-view]
-            (let [{:keys [from to]} (:source result)]
-              (set-diagnostics! view from to (:message result))))
-          (set-output! (str "Error: " (:message result)) :error))
+        (report-eval-error! result project set-output!)
         (let [val (:result result)]
+          (when project (reset! last-bases bases))
           ;; Clear stale diagnostics only when there is a real result.
           ;; A nil val means the command handled output itself (e.g. (upd), (stop))
           ;; and may have already set its own diagnostics — don't clobber them.
-          (when (some? val)
-            (when-let [view @editor/editor-view]
-              (set-diagnostics! view nil nil nil)))
+          (if project
+            (buffers/clear-all-diagnostics!)
+            (when (some? val)
+              (when-let [view @editor/editor-view]
+                (set-diagnostics! view nil nil nil))))
           ;; SONG1: start the tracks collected during evaluation (under the
           ;; buffer's song, if any), then apply (play-from …) / (export :song).
           ;; Runs before the cond so a buffer ending in a bare pattern still
           ;; replaces all tracks with :_ exactly as before.
           (song-transport/activate-buffer! {:on-beat      on-beat
-                                            :on-event     editor/highlight-range!
+                                            :on-event     on-event
                                             :set-playing! set-playing!})
           (cond
             ;; Song value — tracks were activated under it above
@@ -209,7 +253,7 @@
             (do
               (audio/stop!)
               (editor/clear-highlights!)
-              (audio/play-track! :_ val on-beat editor/highlight-range!)
+              (audio/play-track! :_ val on-beat on-event)
               (fx/apply-track-effects! :_ (:track-fx val))
               (set-playing! true)
               (set-output! "playing pattern — Alt+Enter to re-evaluate, (stop) to stop" :success))
@@ -220,7 +264,7 @@
             (do
               (audio/stop!)
               (editor/clear-highlights!)
-              (audio/play-track! :_ (core/pure val) on-beat editor/highlight-range!)
+              (audio/play-track! :_ (core/pure val) on-beat on-event)
               (set-playing! true)
               (set-output! "playing — Alt+Enter to re-evaluate, (stop) to stop" :success))
 
@@ -247,7 +291,7 @@
                   pats      (filter core/pattern? defs-vals)]
               (when (= 1 (count pats))
                 (let [pat (first pats)]
-                  (audio/play-track! :_ pat on-beat editor/highlight-range!)
+                  (audio/play-track! :_ pat on-beat on-event)
                   (fx/apply-track-effects! :_ (:track-fx pat))))))
 
           ;; ── Apply restored mutes after first eval ─────────────────────────
@@ -266,8 +310,24 @@
 
           ;; ── Unknown sound names ───────────────────────────────────────────
           ;; Tracks defined by this evaluation, plus the anonymous :_ track.
+          ;; In project mode the warning ranges are placed in the active buffer.
           (report-unknown-sounds! (conj @builtins/seen-tracks :_)
-                                  code @last-output set-output!))))))
+                                  (if project
+                                    (or (project/code-of project (:active project)) "")
+                                    code)
+                                  @last-output set-output!))))))
+
+(defn evaluate!
+  "Evaluate a single code string (command bar, (upd), tap, demos, …)."
+  [code]
+  (evaluate* code nil))
+
+(defn evaluate-project!
+  "Evaluate the whole project starting from its main buffer (Alt+Enter, play
+   button, slider re-evaluation) — Phase SONG4."
+  []
+  (let [p (buffers/current-project)]
+    (evaluate* (project/code-of p (:main p)) {:project p})))
 
 ;;; Code patching for live slider updates
 
@@ -295,8 +355,7 @@
     (js/setTimeout
       (fn []
         (reset! slider-timeout nil)
-        (when-let [view @editor/editor-view]
-          (evaluate! (.. view -state -doc (toString)))))
+        (evaluate-project!))
       150)))
 
 (defn- patch-fx-param-in-editor!
@@ -326,8 +385,7 @@
     (js/setTimeout
       (fn []
         (reset! slider-timeout nil)
-        (when-let [view @editor/editor-view]
-          (evaluate! (.. view -state -doc (toString)))))
+        (evaluate-project!))
       150)))
 
 (defn- patch-fx-keyword-param-in-editor!
@@ -351,8 +409,7 @@
     (js/setTimeout
       (fn []
         (reset! slider-timeout nil)
-        (when-let [view @editor/editor-view]
-          (evaluate! (.. view -state -doc (toString)))))
+        (evaluate-project!))
       150)))
 
 (defn- patch-per-track-fx-param-in-editor!
@@ -383,8 +440,7 @@
     (js/setTimeout
       (fn []
         (reset! slider-timeout nil)
-        (when-let [view @editor/editor-view]
-          (evaluate! (.. view -state -doc (toString)))))
+        (evaluate-project!))
       150)))
 
 (defn- patch-per-track-fx-keyword-param-in-editor!
@@ -412,6 +468,5 @@
     (js/setTimeout
       (fn []
         (reset! slider-timeout nil)
-        (when-let [view @editor/editor-view]
-          (evaluate! (.. view -state -doc (toString)))))
+        (evaluate-project!))
       150)))

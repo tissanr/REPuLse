@@ -44,6 +44,7 @@ them loop in real time.
 22. [Named tracks](#named-tracks)
 23. [Song arrangement](#song-arrangement)
 24. [Writing a song](#writing-a-song)
+    - [Projects & buffers](#projects--buffers)
 25. [Effect plugins](#effect-plugins)
 26. [Visual plugins](#visual-plugins)
 
@@ -2359,6 +2360,101 @@ Error: an export is already running — (stop) cancels it
 
 ---
 
+## Projects & buffers
+
+A song can grow beyond one file. A **project** has one **main buffer** — the song file with the
+arrangement at the bottom — and any number of named buffers (drums, bass, chords, …), shown as
+tabs above the editor. A single-file song is simply a project that only has `main`.
+
+The main buffer loads the others explicitly at the top with `use`, so "evaluate top to bottom,
+define before use" stays true across the whole project:
+
+```lisp
+;; buffer "drums"
+(track :kick  (seq :bd :_ :bd :_))
+(track :snare (seq :_ :sd :_ :sd))
+
+;; buffer "bass"
+(track :bass (->> (scale :minor :c2 (seq 0 :_ 4 :_)) (synth :saw)))
+
+;; buffer "main"
+(use :drums :bass)          ; evaluates buffers "drums" then "bass" first
+(song
+  (section :verse 8 [:kick :snare :bass])
+  (section :chorus 8 :all))
+```
+
+### Tabs
+
+| Action | How |
+|---|---|
+| New buffer | `+` — asks for a name (proposed: the first free `buffer-N`); the new buffer starts empty and becomes active |
+| Switch | click a tab |
+| Rename | double-click a tab. `(use :old)` references are **not** rewritten |
+| Delete | `×` on the tab (asks first). The main buffer (bold tab) can't be deleted |
+| Export | `export` — downloads the whole project as `<main>.repulse` |
+| Import | `import` — loads a `.repulse` file and replaces the current project (asks first; does not evaluate or stop playback) |
+
+Buffer names use `a-z`, `0-9` and `-`, start with a letter, are at most 32 characters long and
+unique; a project has at most 32 buffers. Each buffer keeps its own undo history.
+
+### `use`
+
+| Built-in | Description |
+|---|---|
+| `(use :buffer …)` | Evaluate the named buffers, in argument order, before continuing. Returns `=> used :drums :bass` |
+
+- **Alt+Enter in any tab evaluates the whole project, starting from `main`.** So do the play
+  button and the context-panel sliders. There is no "evaluate only this buffer" key.
+- `use` is depth-first: a used buffer may itself `use` other buffers. Each buffer runs **at most
+  once per evaluation** — a second `(use :kit)` is skipped.
+- All buffers share **one environment**: defs and tracks from used buffers are visible
+  unqualified (`kick`, not `drums/kick`).
+- Track names must be unique across the whole project.
+- Only `main`'s last form decides what plays (a song, a pattern, …); the value of the last form
+  in a used buffer is ignored.
+- A cycle (`drums` uses `bass`, `bass` uses `drums`) is an error naming the cycle.
+- An error inside a used buffer switches to that buffer's tab and underlines the spot; the
+  output reads `Error in :drums: …`.
+
+### Navigation
+
+Outline and go-to-definition (F12 / Cmd/Ctrl-click) work in every buffer. A name is looked up in
+the active buffer first; otherwise the other buffers are searched in tab order. Cmd/Ctrl-click on
+`kick` in `main` jumps into `drums`, and **Shift+F12** switches back.
+
+### What stays single-buffer
+
+- The command bar, `(upd)` / Ctrl+. / F9, demos, `load-gist` and the AI assistant work on the
+  **active buffer only**, and `use` does not work there.
+- Snippets: inserting or submitting a snippet uses the active buffer's text.
+- Sliders patch the active buffer's text. A parameter of a track defined in another buffer is
+  applied live but not written back into that buffer.
+
+### Errors
+
+```
+Circular use: main → drums → bass → drums
+Unknown buffer :drumz — did you mean :drums?
+Unknown buffer :zzz
+use needs at least one buffer name, e.g. (use :drums)
+use expects buffer names as keywords, e.g. (use :drums) — got "drums"
+use only works when the project is evaluated (Alt+Enter in the editor)
+Duplicate track name :kick — already defined in buffer :drums; track names must be unique across the project
+Error in :drums: Undefined symbol: qqqqqqqq
+```
+
+Buffer tab errors:
+
+```
+Error: invalid buffer name "Drums!" — use a-z, 0-9 and -, starting with a letter (max 32)
+Error: a buffer named "drums" already exists
+Error: the main buffer can't be deleted
+Error: too many buffers (max 32)
+```
+
+---
+
 ## Effect plugins
 
 REPuLse has a built-in effect chain between the synthesis engine and the audio output.
@@ -3195,7 +3291,7 @@ REPuLse automatically saves all session state to `localStorage` and restores it 
 
 | State | Notes |
 |-------|-------|
-| Editor text | Full buffer contents |
+| Project buffers | Every buffer's text, which buffer is `main`, and the active tab |
 | BPM | Current tempo |
 | FX chain | Effect names, parameters, bypass state |
 | Bank prefix | Active `(bank :Name)` prefix |
@@ -3218,13 +3314,47 @@ Stops playback, deletes all persisted state (editor, BPM, effects, bank, sample 
 
 ### URL sharing
 
-Click the **share** button or call `(share!)` to copy a full session URL to the clipboard. The URL encodes the complete session state (editor text, BPM, effects, bank, mutes) in the URL hash using base64. Loading the URL restores the full session immediately.
+Click the **share** button or call `(share!)` to copy a full session URL to the clipboard. The URL encodes the complete session state (all project buffers, BPM, bank, sample sources, mutes) in the URL hash using base64. Loading the URL restores the full project (it does not start playing).
 
 ```lisp
-(share!)  ; copies URL like https://repulse.app/#v2:eyJ2...
+(share!)  ; copies URL like https://repulse.app/#v3:eyJ2...
 ```
 
-Old `#v1:...` share URLs are still supported.
+Share links use the `#v3:` format. Old `#v2:` and `#v1:` links still load, as a project with a
+single `main` buffer. A share URL may be at most **64 000 characters**; a larger project shows
+
+```
+Share failed: link would be 71234 characters (limit 64000). Export the project as a .repulse file instead.
+```
+
+and nothing is copied.
+
+### `.repulse` project files
+
+The `export` button above the editor downloads the whole project as one EDN file named
+`<main>.repulse` — one buffer per line, so it diffs nicely in version control:
+
+```clojure
+{:version 3
+ :main "main"
+ :buffers [{:name "main" :code "(use :drums)\n(song (section :a 4 :all))"}
+           {:name "drums" :code "(track :kick (~ \"bd sd\"))"}]}
+```
+
+`import` reads such a file (max 5 MB), asks for confirmation and replaces the current project;
+`main` becomes active. Malformed files are rejected and the project is left unchanged:
+
+```
+Import failed: could not read EDN
+Import failed: expected a map
+Import failed: unsupported version 2 — expected :version 3
+Import failed: :buffers must be a non-empty vector
+Import failed: each buffer needs a :name and a :code string
+Import failed: invalid buffer name "Drums!" — use a-z, 0-9 and -, starting with a letter (max 32)
+Import failed: duplicate buffer name "main"
+Import failed: main buffer "song" not found
+Import failed: file too large (max 5 MB)
+```
 
 ---
 
@@ -3581,6 +3711,14 @@ track :boom playing — Warning: unknown sound :kick — did you mean :bd?
 ```
 
 See [Keywords as sounds](#keywords-as-sounds).
+
+Errors inside a project buffer other than `main` name the buffer (and that tab becomes active):
+
+```
+Error in :drums: Undefined symbol: qqqqqqqq
+```
+
+See [Projects & buffers](#projects--buffers) for the `use`, buffer-name, share and import errors.
 
 Calling a signal as a function is an error with a hint:
 

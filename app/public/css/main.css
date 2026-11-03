@@ -2609,3 +2609,79 @@ footer {
   .context-panel { width: 168px; }
   .snippet-cards { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Buffer tabs (SONG4) */
+.buffer-tabs {
+  flex: 0 0 26px;
+  height: 26px;
+  display: flex;
+  align-items: stretch;
+  background: #10172a;
+  border-bottom: 1px solid #1a2440;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
+.buffer-tabs button {
+  font: inherit;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.buf-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  color: #5a6a8a;
+  border-top: 2px solid transparent;
+}
+
+.buf-tab:hover {
+  color: #8a9aba;
+}
+
+.buf-tab.active {
+  background: #1b2744;
+  color: #c8d0e0;
+  border-top: 2px solid #e94560;
+}
+
+.buf-tab.main {
+  font-weight: bold;
+}
+
+.buf-close {
+  color: #5a6a8a;
+  padding: 0 2px;
+}
+
+.buf-close:hover {
+  color: #e94560;
+}
+
+.buf-add {
+  padding: 0 10px;
+  color: #5a6a8a;
+}
+
+.buf-add:hover {
+  color: #c8d0e0;
+}
+
+.buf-spacer {
+  flex: 1;
+}
+
+.buf-io {
+  padding: 0 8px;
+  color: #5a6a8a;
+}
+
+.buf-io:hover {
+  color: #c8d0e0;
+}

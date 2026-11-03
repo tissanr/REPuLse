@@ -16,6 +16,8 @@
             [repulse.sound-check-test]
             [repulse.ui.timeline-test]
             [repulse.outline-test]
+            [repulse.project-test]
+            [repulse.project-eval-test]
             [repulse.ai.safety-test]
             [repulse.ai.edit-test]
             [repulse.ai.client-test]
@@ -41,6 +43,8 @@
                   'repulse.sound-check-test
                   'repulse.ui.timeline-test
                   'repulse.outline-test
+                  'repulse.project-test
+                  'repulse.project-eval-test
                   'repulse.ai.safety-test
                   'repulse.ai.edit-test
                   'repulse.ai.client-test

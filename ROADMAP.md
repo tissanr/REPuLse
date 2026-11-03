@@ -46,7 +46,7 @@ without a human:
 | 10 | SONG1 | Sections, song form & full-song render | 🤖 | full | opus |
 | 11 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
 | 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | full | sonnet |
-| 13 | SONG4 | Multi-buffer projects | 🤖 | outline | opus |
+| 13 | SONG4 | Multi-buffer projects | 🤖 | full | opus |
 | 13a | WS1 | Inspector column & status head (retire context panel) | 🤖 | outline | opus |
 | 13b | WS2 | `(master …)` form & master fx outline group | 🤖 | outline | sonnet |
 | 13c | WS3 | Inline sliders in code: `(slider v min max)` | 🤖 | outline | opus |
@@ -2131,7 +2131,7 @@ See full spec: [PROMPTS/PHASE-SONG3.md](PROMPTS/PHASE-SONG3.md)
 
 ---
 
-## Phase SONG4 — Multi-Buffer Projects 📋 *planned*
+## Phase SONG4 — Multi-Buffer Projects ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2141,6 +2141,25 @@ Projects with several named buffers; a one-file song is a project with only `mai
 - Buffer tabs; one `main` buffer; `(use :drums :bass)` evaluates buffers top to bottom (cycle detection)
 - Project-wide duplicate-track check and buffer-aware error locations
 - Session schema v3 with migration from v2; outline/go-to-definition across buffers
+
+**Delivered:**
+- `(use :buffer …)`: depth-first, argument-order evaluation of other buffers in one shared
+  environment, each buffer at most once per evaluation; cycle, unknown-buffer (with typo hint)
+  and argument errors; only active inside a project evaluation (`repulse.project-eval`)
+- Global source offsets: `eval-string` takes `{:offset n}` (reader `shift-sources`); each buffer
+  gets an offset base so errors, event highlights and the project-wide duplicate-track check
+  (`already defined in buffer :drums`) map back to the right buffer; an error in a used buffer
+  switches to its tab and shows `Error in :drums: …`
+- `repulse.project` (pure model: add/rename/remove/switch, offset bases, `.repulse` EDN
+  export/import with exact validation errors) and `repulse.ui.buffers` (one `EditorView`, one
+  `EditorState` per buffer, tab bar with `+`, rename on double-click, `×`, export/import);
+  Alt+Enter, the play button and slider re-evaluation evaluate the project from `main`
+- Session v3 (`:main :active :buffers`) with v2/legacy migration; `#v3:` share links (`#v2:`/`#v1:`
+  still load) with a 64 000-character limit and a clear error instead of a broken link
+- Cross-buffer go-to-definition (`outline/project-definition`); the jump stack stores
+  `{:buffer :pos}` so Shift+F12 switches back
+- Tests: lisp L1–L3, `project_test` P1–P7, `project_eval_test` E1–E8, session S1–S5, outline
+  O1, Playwright `e2e/buffers.spec.ts` W1–W8; docs: USAGE "Projects & buffers"
 
 See full spec: [PROMPTS/PHASE-SONG4.md](PROMPTS/PHASE-SONG4.md)
 

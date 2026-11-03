@@ -253,6 +253,7 @@ export const BUILTINS = [
   { label: "song",         type: "function", detail: "(song (section …) … [:end :stop|:loop]) — play tracks as a song with sections; stops (or loops) after the last bar" },
   { label: "section",      type: "function", detail: "(section :name bars [:track …]) — a song section: name, length in bars, tracks that play (or :all)" },
   { label: "play-from",    type: "function", detail: "(play-from :section) / (play-from bar) — start or jump the song to a section or 0-based bar" },
+  { label: "use",          type: "function", detail: "(use :drums :bass) — evaluate other project buffers first (once per evaluation, shared definitions)" },
   // --- Special forms ---
   { label: "def",          type: "keyword",  detail: "(def name val) — bind a name in the global environment" },
   { label: "defn",         type: "keyword",  detail: "(defn name [params] body) — define a named function" },

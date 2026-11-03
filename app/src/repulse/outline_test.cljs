@@ -114,3 +114,15 @@
     (is (nil? (at -1)))
     (testing "name mismatch (text edited since eval) → nil"
       (is (nil? (outline/playing-section s 0 [{:name ":other"}]))))))
+
+(deftest project-definition-o1
+  (let [drums  "(def kick 1)\n(track :kick (seq :bd))"
+        others [["drums" (:entries (ex drums))] ["bass" (:entries (ex "(def kick 2)"))]]
+        d      (outline/project-definition others :symbol "kick")
+        k      (outline/project-definition others :keyword ":kick")]
+    (is (= "drums" (:buffer d)))
+    (is (= [:def "kick" 0] ((juxt :kind :name :from) (:entry d))))
+    (is (= "drums" (:buffer k)))
+    (is (= :track (:kind (:entry k))))
+    (is (= 13 (:from (:entry k))))
+    (is (nil? (outline/project-definition others :symbol "nope")))))

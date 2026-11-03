@@ -5,13 +5,15 @@
             [repulse.samples :as samples]
             [repulse.plugins :as plugins]
             [repulse.session :as session]
-            [repulse.specs :as specs]
             [repulse.plugins.compressor :as compressor-plugin]
             [repulse.ui.editor :as editor]
             [repulse.ui.timeline :as timeline]
             [repulse.ui.context-panel :as ctx-panel]
             [repulse.ui.outline-panel :as outline-panel]
             [repulse.ui.goto :as goto]
+            [repulse.ui.buffers :as buffers]
+            [repulse.project :as project]
+            [repulse.outline :as outline]
             [repulse.ui.snippet-panel :as snippet-panel]
             [repulse.ui.snippet-submit-modal :as snippet-submit-modal]
             [repulse.snippets.preview :as snippet-preview]
@@ -26,7 +28,7 @@
             [clojure.string :as str]
             ["./lisp-lang/providers.js" :refer [setBankNamesProvider setFxNamesProvider]]
             ["@codemirror/commands" :refer [selectAll]]
-            ["@codemirror/state" :refer [StateEffect]]
+            ["./lisp-lang/parser.js" :refer [parser]]
             ["@vercel/speed-insights" :refer [injectSpeedInsights]]))
 
 ;;; DOM helpers
@@ -123,51 +125,19 @@
 
 ;;; Session persistence
 
-(defn- b64-encode [s]
-  (js/btoa (js/unescape (js/encodeURIComponent s))))
-
-(defn- b64-decode [s]
-  (js/decodeURIComponent (js/escape (js/atob s))))
-
-(defn- encode-session []
-  (let [snap (session/build-session-snapshot)
-        obj  (clj->js snap)]
-    (str "#v2:" (b64-encode (js/JSON.stringify obj)))))
-
-(defn- decode-session
-  "Decode a URL hash into a session map. Handles #v1: and #v2: formats."
-  [hash]
-  (try
-    (cond
-      (and hash (str/starts-with? hash "#v2:"))
-      (let [b64  (subs hash 4)
-            data (js->clj (js/JSON.parse (b64-decode b64)) :keywordize-keys true)]
-        (specs/sanitize-session-v2 (update data :bpm audio/coerce-bpm)))
-
-      (and hash (str/starts-with? hash "#v1:"))
-      (let [b64  (subs hash 4)
-            data (js->clj (js/JSON.parse (js/atob b64)) :keywordize-keys true)]
-        (when data
-          (specs/sanitize-session-v2
-           {:v       2
-            :bpm     (audio/coerce-bpm (:bpm data))
-            :editor  (:editor data)
-            :fx      []
-            :bank    nil
-            :sources []
-            :muted   []
-            :midi    {}})))
-
-      :else nil)
-    (catch :default _ nil)))
-
 (defn share! []
-  (let [session (encode-session)
-        url     (str (.-origin js/location) (.-pathname js/location) session)]
-    (if (.-clipboard js/navigator)
+  (let [base (str (.-origin js/location) (.-pathname js/location))
+        {:keys [url error]} (session/share-link base (session/build-session-snapshot))]
+    (cond
+      error
+      (set-output! error :error)
+
+      (.-clipboard js/navigator)
       (-> (.writeText (.-clipboard js/navigator) url)
           (.then (fn [] (set-output! (str "URL copied to clipboard") :success)))
           (.catch (fn [_] (js/prompt "Copy this URL:" url))))
+
+      :else
       (js/prompt "Copy this URL:" url))))
 
 ;;; App bootstrap
@@ -181,8 +151,8 @@
         (editor/clear-highlights!)
         (set-playing! false)
         (set-output! "stopped" :idle))
-    (when-let [view @editor/editor-view]
-      (eo/evaluate! (.. view -state -doc (toString))))))
+    (when @editor/editor-view
+      (eo/evaluate-project!))))
 
 
 (defn build-dom! []
@@ -209,6 +179,7 @@
                "<div class=\"main-area app-shell\">"
                "  <div id=\"outline-panel\" class=\"outline-panel\"></div>"
                "  <div class=\"workbench\">"
+               "    <div id=\"buffer-tabs\" class=\"buffer-tabs\"></div>"
                "    <div id=\"editor-container\" class=\"editor-container\"></div>"
                "    <div id=\"snippet-panel\" class=\"snippet-panel hidden\"></div>"
                "    <div id=\"ai-panel\" class=\"ai-panel hidden\"></div>"
@@ -345,32 +316,48 @@
   (reset! editor/cmd-view (editor/make-cmd-editor (el "cmd-container") eo/evaluate!))
 
   ;; ── Session restore ───────────────────────────────────────────────────────
-  ;; Precedence: URL hash (#v2:/#v1:) > localStorage v2 > legacy keys > first visit
+  ;; Precedence: URL hash (#v3:/#v2:/#v1:) > localStorage (v3, v2 migrated)
+  ;; > legacy keys > first visit. Every restored session is a v3 project.
   (let [hash        (.-hash js/location)
-        url-session (decode-session hash)
+        url-session (session/decode-share-hash hash)
         stored      (or (session/load-session) (session/migrate-legacy!))
         active-sess (or url-session stored)
-        init-text   (or (:editor active-sess) "")]
+        proj        (if active-sess
+                      (select-keys active-sess [:main :active :buffers])
+                      (project/empty-project))]
 
     ;; Remove hash from URL (avoid re-consuming on F5)
     (when url-session
       (.replaceState js/history nil nil (.-pathname js/location)))
 
-    ;; Create editor with the session content (or empty for first-visit)
+    ;; One EditorView, one EditorState per buffer (Phase SONG4). Outline panel
+    ;; + go-to-definition are main-app only (never the embed).
     (let [container (el "editor-container")
-          view      (editor/make-editor container init-text eo/evaluate!)]
+          exts      (.concat (editor/editor-extensions
+                              (fn [_] (eo/evaluate-project!))
+                              #(eo/evaluate! "(upd)"))
+                             #js [outline-panel/extension goto/extension])
+          view      (editor/make-view container (editor/make-state "" exts))]
       (reset! editor/editor-view view)
-      ;; Outline panel + go-to-definition: main app only (never the embed).
-      (.dispatch view #js {:effects (.of StateEffect.appendConfig
-                                         #js [outline-panel/extension goto/extension])})
+      (buffers/init! view proj exts {:set-output! set-output!})
       (outline-panel/init! view)
+      (buffers/add-switch-hook! #(outline-panel/refresh! view))
+      (reset! goto/cross-buffer
+              {:active  buffers/active-name
+               :exists? (fn [n] (some #(= n (:name %)) (:buffers (buffers/current-project))))
+               :switch! buffers/switch-to!
+               :find    (fn [kind text]
+                          (let [p      (buffers/current-project)
+                                others (for [{:keys [name code]} (:buffers p)
+                                             :when (not= name (:active p))]
+                                         [name (:entries (outline/extract (.parse parser code) code))])]
+                            (outline/project-definition others kind text)))})
       ;; Test/debug handle (used by e2e/outline.spec.ts).
       (set! (.-__REPULSE_EDITOR__ js/window) view)
       (.focus view))
 
-    ;; Register the editor-text getter for session snapshots
-    (reset! session/editor-text-fn
-      (fn [] (when-let [v @editor/editor-view] (.. v -state -doc (toString)))))
+    ;; Register the project getter for session snapshots
+    (reset! session/project-fn buffers/current-project)
 
     (if active-sess
       ;; ── Restore existing session ──────────────────────────────────────────
@@ -410,10 +397,10 @@
               in-editor? (.contains editor-dom target)
               in-cmd?    (and cmd-dom (.contains cmd-dom target))]
           (cond
-            ;; Alt/Option+Enter — evaluate main buffer from anywhere.
+            ;; Alt/Option+Enter — evaluate the project (from main) from anywhere.
             (and (.-altKey e) (= "Enter" (.-key e)))
             (do (.preventDefault e)
-                (eo/evaluate! (.. view -state -doc (toString))))
+                (eo/evaluate-project!))
 
             ;; Ctrl+. or F9 — run (upd) from anywhere
             (or (and (.-ctrlKey e) (= "." (.-key e)))
