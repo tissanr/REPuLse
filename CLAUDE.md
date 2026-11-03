@@ -48,6 +48,7 @@ app/               Browser app (CLJS + CodeMirror 6 + vanilla DOM) — wires it 
 api/               Vercel serverless functions (auth, snippets, AI proxy)
 e2e/               Playwright offline-audio tests
 PROMPTS/           Phase specs (one per phase)
+design/            UI design sources (briefs, Claude Design prototypes) — reference, not built
 ROADMAP.md         Phase status and delivery notes — the single source of truth
 docs/              USAGE (user manual), ARCHITECTURE, PLUGINS, …
 ```

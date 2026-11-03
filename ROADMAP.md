@@ -45,7 +45,7 @@ without a human:
 | **M2** | | **Full songs** | | | |
 | 10 | SONG1 | Sections, song form & full-song render | 🤖 | full | opus |
 | 11 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
-| 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | outline | sonnet |
+| 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | full | sonnet |
 | 13 | SONG4 | Multi-buffer projects | 🤖 | outline | opus |
 | **M3** | | **Plays with others** | | | |
 | 14 | N1 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
@@ -2095,7 +2095,7 @@ See full spec: [PROMPTS/PHASE-SONG2.md](PROMPTS/PHASE-SONG2.md)
 
 ---
 
-## Phase SONG3 — Editor Navigation: Outline & Go-to-Definition 📋 *planned*
+## Phase SONG3 — Editor Navigation: Outline & Go-to-Definition ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2106,6 +2106,22 @@ away from every definition.
 - Pure outline extraction of `def defn defsynth track song section` (tolerates invalid code)
 - Outline panel with click-to-jump and current-entry highlight
 - Cmd/Ctrl-click go-to-definition for symbols and track keywords, with "back"
+
+**Delivered:**
+- `repulse.outline` (pure): `extract` over the Lezer tree (def/defn/defsynth/track/song with
+  sections, bars and tracks; `:partial?` on syntax errors), `entry-at`, `definition-for` (last
+  binding wins), `song-bars`, `playing-section` (SONG1 song + bar → outline section index)
+- `repulse.ui.goto`: Cmd/Ctrl-click and F12 go-to-definition, Shift+F12 back (50-deep jump
+  stack), shared reveal/flash decoration; installed only in the main editor, never the embed
+- `repulse.ui.outline-panel`: 192 px left column (28 px rail, state in `localStorage`,
+  `Cmd/Ctrl-Shift-O`), cursor-inside and playing-section highlights with progress line,
+  muted/audible track glyphs, `~ partial` tag, key-hint footer, empty state; HTML-string
+  rendering with escaped names, repainted on the scheduler-state watch
+- Spike: a node unit test can load `parser.js`, so extraction is covered by `outline_test` in
+  `npm test` (no harness fallback needed); hover underline while Mod is held was skipped
+- Playwright `e2e/outline.spec.ts` against the real app page (`playwright.config.ts` now also
+  compiles `app`); `window.__REPULSE_EDITOR__` exposes the editor view for tests
+- Docs: USAGE "Outline & go-to-definition"
 
 See full spec: [PROMPTS/PHASE-SONG3.md](PROMPTS/PHASE-SONG3.md)
 
