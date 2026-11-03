@@ -4,11 +4,20 @@
    document text.  The Lezer tree is partial on invalid code, so the outline
    keeps working while the buffer has syntax errors.
 
-   Exports: extract, entry-at, definition-for, song-bars, playing-section."
+   Phase WS1: top-level (fx :name …) forms are entries of kind :fx, and every
+   top-level entry carries :refs (Symbol/BuiltinName texts inside it), which
+   used-by searches.
+
+   Exports: extract, entry-at, definition-for, project-definition, song-bars,
+            playing-section, used-by."
   (:require [repulse.song :as song]))
 
 (def ^:private HEADS
-  {"def" :def "defn" :defn "defsynth" :defsynth "track" :track "song" :song})
+  {"def" :def "defn" :defn "defsynth" :defsynth "track" :track "song" :song
+   "fx" :fx})
+
+;; Kinds whose name token must be a Keyword (the others take a Symbol).
+(def ^:private KEYWORD-NAMED #{:track :fx})
 
 (defn- node-name [^js n] (.-name n))
 (defn- text-of [text ^js n] (subs text (.-from n) (.-to n)))
@@ -57,6 +66,17 @@
           (assoc :tracks (vec (keep #(when (= "Keyword" (node-name %)) (text-of text %))
                                     (children tracks)))))))))
 
+(defn- collect-refs
+  "Set of Symbol/BuiltinName texts anywhere under `n`, skipping the nodes
+   starting at the positions in `skip` (the head and the name token)."
+  [text ^js n skip]
+  (letfn [(walk [acc ^js c]
+            (cond
+              (contains? skip (.-from c)) acc
+              (contains? #{"Symbol" "BuiltinName"} (node-name c)) (conj acc (text-of text c))
+              :else (reduce walk acc (children c))))]
+    (reduce walk #{} (children n))))
+
 (defn- top-level-entry [text ^js list-node]
   (let [[head nm & rest-nodes] (body-nodes list-node)
         kind (when head (get HEADS (text-of text head)))]
@@ -69,13 +89,14 @@
                                 (when (= "List" (node-name n))
                                   (section-entry text n)))
                               (cons nm rest-nodes)))}
-        (let [ok? (and nm (if (= kind :track)
+        (let [ok? (and nm (if (contains? KEYWORD-NAMED kind)
                             (= "Keyword" (node-name nm))
                             (contains? #{"Symbol" "BuiltinName"} (node-name nm))))]
           (when ok?
             {:kind kind :name (text-of text nm)
              :from (.-from list-node) :to (.-to list-node)
              :name-from (.-from nm) :name-to (.-to nm)
+             :refs (collect-refs text list-node #{(.-from head) (.-from nm)})
              :children []}))))))
 
 (defn extract
@@ -137,3 +158,14 @@
             {:index i
              :section-bar  (- q (:start sec))
              :section-bars (:bars sec)}))))))
+
+(defn used-by
+  "Names of the entries (any kind but :song) whose :refs contain `name`, in
+   source order, without the entry called `name` itself — Phase WS1."
+  [entries name]
+  (vec (keep (fn [e]
+               (when (and (not= :song (:kind e))
+                          (not= name (:name e))
+                          (contains? (:refs e) name))
+                 (:name e)))
+             entries)))

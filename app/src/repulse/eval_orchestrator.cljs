@@ -6,7 +6,8 @@
             pending-mutes,
             slider-patch-and-eval!, fx-slider-patch-and-eval!,
             fx-select-patch-and-eval!, per-track-fx-slider-patch-and-eval!,
-            per-track-fx-select-patch-and-eval!"
+            per-track-fx-select-patch-and-eval!,
+            begin-slider-drag!, end-slider-drag! (WS1: one undo step per drag)"
   (:require [repulse.lisp.core :as lisp]
             [repulse.core :as core]
             [repulse.audio :as audio]
@@ -20,11 +21,13 @@
             [repulse.project-eval :as project-eval]
             [repulse.ui.editor :as editor]
             [repulse.ui.buffers :as buffers]
-            [repulse.ui.context-panel :as ctx-panel]
+            [repulse.ui.slider-model :as sm]
             [repulse.lisp-patcher :as patcher]
             [repulse.ai.tools :as ai-tools]
             [clojure.string :as cstr]
-            ["@codemirror/lint" :refer [setDiagnostics]]))
+            ["@codemirror/lint" :refer [setDiagnostics]]
+            ["@codemirror/state" :refer [Transaction]]
+            ["@codemirror/commands" :refer [isolateHistory]]))
 
 ;;; Owned atoms
 
@@ -334,8 +337,41 @@
 (defn- fmt-num [v]
   (if (== v (Math/round v)) (str (int v)) (.toFixed v 2)))
 
+;; Slider drag session (Phase WS1): the doc string at drag start, or nil.
+;; While set, slider patches stay out of the undo history; end-slider-drag!
+;; then records the whole drag as one history event.
+(defonce ^:private drag-origin (atom nil))
+
+(defn begin-slider-drag!
+  "Start a slider drag (or a one-step keyboard change) on the main editor."
+  []
+  (when-let [view @editor/editor-view]
+    (reset! drag-origin (.. view -state -doc (toString)))))
+
+(defn- no-history [] (.of (.-addToHistory Transaction) false))
+
 (defn- dispatch-replace! [view from to text]
-  (.dispatch view #js {:changes #js {:from from :to to :insert text}}))
+  (.dispatch view
+    (if @drag-origin
+      #js {:changes #js {:from from :to to :insert text}
+           :annotations #js [(no-history)]}
+      #js {:changes #js {:from from :to to :insert text}})))
+
+(defn end-slider-drag!
+  "Finish a slider drag: revert the buffer to its drag-start text without
+   history, then re-apply the net change as exactly one (isolated) undo event.
+   The buffer text is unchanged; only the history is collapsed."
+  []
+  (when-let [orig @drag-origin]
+    (reset! drag-origin nil)
+    (when-let [view @editor/editor-view]
+      (let [cur (.. view -state -doc (toString))]
+        (when-let [back (sm/text-diff cur orig)]
+          (.dispatch view #js {:changes (clj->js back)
+                               :annotations #js [(no-history)]})
+          (let [fwd (sm/text-diff orig cur)]
+            (.dispatch view #js {:changes (clj->js fwd)
+                                 :annotations #js [(.of isolateHistory "full")]})))))))
 
 (defn- patch-param-in-editor!
   "Replace the number in the first (param-name NUMBER) form at or after
@@ -367,7 +403,7 @@
   (when-let [view @editor/editor-view]
     (let [doc      (.. view -state -doc (toString))
           doc-len  (.-length doc)
-          primary? (= param-name (get ctx-panel/FX-PRIMARY-PARAM effect-name))
+          primary? (= param-name (get sm/FX-PRIMARY-PARAM effect-name))
           fmtd     (fmt-num new-val)
           result   (or (patcher/find-fx-named-param-num doc 0 doc-len effect-name param-name)
                        (when primary?
@@ -422,7 +458,7 @@
       (when (>= track-start 0)
         (let [scope-end (let [p (.indexOf doc "(track :" (inc track-start))]
                           (if (>= p 0) p (.-length doc)))
-              primary?  (= param-name (get ctx-panel/FX-PRIMARY-PARAM effect-name))
+              primary?  (= param-name (get sm/FX-PRIMARY-PARAM effect-name))
               fmtd      (fmt-num new-val)
               result    (or (patcher/find-fx-named-param-num doc track-start scope-end effect-name param-name)
                             (when primary?

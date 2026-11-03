@@ -603,7 +603,7 @@
          ;; on the next tick so bar :start-bar begins at the next whole bar.
          :song         nil
          ;; Active (export :song) capture: {:status :waiting|:recording :tail s
-         ;; :start-time t0 :end-time t1} — read by the context panel.
+         ;; :start-time t0 :end-time t1} — read by the status head (REC text).
          :capture      nil
          ;; Called after a :stop song has finished (and its tail rung out).
          :on-song-end  nil}))

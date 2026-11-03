@@ -84,5 +84,5 @@
                      (b-project/make-builtins ctx)))
       ;; Wire the FX event notification callback (used by sidechain plugin)
       (swap! audio/scheduler-state assoc :on-fx-event fx/notify-fx-event!)
-      ;; Snapshot built-in names so render-context-panel! can filter them out
+      ;; Snapshot built-in names so user bindings can be told apart from built-ins
       (reset! builtin-names (set (keys @env-atom))))))
