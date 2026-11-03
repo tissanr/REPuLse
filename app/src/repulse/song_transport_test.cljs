@@ -5,6 +5,8 @@
             [repulse.lisp.eval :as leval]
             [repulse.song :as song]
             [repulse.song-transport :as st]
+            [repulse.audio :as audio]
+            [repulse.ui.status-model :as status-model]
             [repulse.env.builtins.song :as b-song]))
 
 (defn- make-env []
@@ -118,3 +120,26 @@
   (is (nil? @st/pending-song))
   (is (nil? @st/pending-play-from))
   (is (nil? @st/pending-export)))
+
+;;; Phase WS1 — cue-bar! (status-head segment click / inspector ▶ cue)
+
+(deftest cue-bar-test
+  (let [saved @audio/scheduler-state]
+    (try
+      (testing "playing with a song: the cued bar becomes the next scheduled bar"
+        (let [s (:result (run (str tracks-s song-s)))]
+          (swap! audio/scheduler-state assoc
+                 :playing? true :cycle 40
+                 :song {:song s :origin 20 :start-bar 0})
+          (st/cue-bar! (status-model/segment-cue-bar s 2))
+          (let [st' @audio/scheduler-state]
+            (is (= {:song s :origin 28 :start-bar 12} (:song st')))
+            (is (= 12 (- (:cycle st') (get-in st' [:song :origin]))))
+            (is (= 40 (:cycle st')) "the already scheduled bar is not touched"))))
+      (testing "stopped without a song buffer: nothing happens"
+        (swap! audio/scheduler-state assoc :playing? false :song nil)
+        (reset! st/song-buffer nil)
+        (is (nil? (st/cue-bar! 12))))
+      (finally
+        (reset! audio/scheduler-state saved)))))
+

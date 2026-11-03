@@ -126,3 +126,40 @@
     (is (= :track (:kind (:entry k))))
     (is (= 13 (:from (:entry k))))
     (is (nil? (outline/project-definition others :symbol "nope")))))
+
+;;; Phase WS1 — :fx entries, :refs, used-by
+
+(def W
+  (str/join "\n"
+    ["(def kick (seq :bd :_ :bd :_))"
+     "(track :drums (->> kick (amp 0.8) (fx :filter :freq 2400)))"
+     "(track :bass (->> (seq :c2 :eb2) (synth :saw) (amp 0.6) (decay 0.25)))"
+     "(fx :reverb 0.3)"
+     "(song"
+     "  (section :intro 4 [:drums])"
+     "  (section :verse 8 [:drums :bass])"
+     "  (section :chorus 8 :all))"]))
+
+(deftest fx-entries-and-refs
+  (let [es (:entries (ex W))]
+    (is (= [[:def "kick"] [:track ":drums"] [:track ":bass"] [:fx ":reverb"] [:song nil]]
+           (mapv (juxt :kind :name) es)))
+    (is (= {:from 162 :to 178} (select-keys (nth es 3) [:from :to])))
+    (is (= "0.6" (subs W 142 145)))
+    (is (contains? (:refs (nth es 1)) "kick"))
+    (is (not (contains? (:refs (nth es 1)) "track")))
+    (is (not (contains? (:refs (first es)) "kick")))
+    (is (= [":drums"] (outline/used-by es "kick")))
+    (is (= [] (outline/used-by es "nope")))))
+
+(deftest fx-entry-rules
+  (is (= [] (mapv :kind (:entries (ex "(fx)")))))
+  (is (= [:track] (mapv :kind (:entries (ex "(track :x (->> y (fx :delay 0.2)))")))))
+  (is (= [:def] (mapv :kind (:entries (ex "(def x (->> y (fx :delay 0.2)))"))))))
+
+(deftest used-by-in-defs
+  (let [t  "(def kick (seq :bd))\n(defn hum [p] (amp 0.9 p))\n(track :drums (stack kick (hum kick)))\n(def k2 (fast 2 kick))"
+        es (:entries (ex t))]
+    (is (= [":drums" "k2"] (outline/used-by es "kick")))
+    (is (= [":drums"] (outline/used-by es "hum")))))
+
