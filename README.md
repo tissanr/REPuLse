@@ -64,6 +64,9 @@ and **when** — not **how** synthesis works internally.
         :end :stop)
   (play-from :chorus)   ; in the command bar
   ```
+- **Projects:** split a song over several editor tabs (buffers); the main buffer loads the
+  others with `(use :drums :bass)`. Projects persist locally, travel in `#v3:` share links and
+  export/import as one `.repulse` file
 
 REPuLse is **not** a signal-flow language like SuperCollider, Overtone or Extempore. There is
 no oscillator routing in pattern code. The one exception is `defsynth`, which defines reusable
