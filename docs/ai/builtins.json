@@ -1758,6 +1758,26 @@
     "detail": "(sound bank n) — select sample n from bank",
     "description": "Select sample number n from the named bank."
   },
+  "bank": {
+    "category": "sample",
+    "signature": "(bank :prefix)",
+    "returns": "string",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(bank :AkaiLinn)",
+      "(bank :RolandTR808)",
+      "(bank nil)"
+    ],
+    "see-also": [
+      "sample-banks",
+      "sound",
+      "samples!"
+    ],
+    "detail": "(bank :prefix) — resolve bare drum keywords to a drum-machine bank, (bank nil) clears",
+    "description": "Set a default bank prefix for all subsequent keyword lookups."
+  },
   "distort": {
     "category": "effect",
     "signature": "(fx :distort [:drive N] [:tone Hz] [:mix N] [:asym N] [:algo kw] [:oversample 1|2|4])",

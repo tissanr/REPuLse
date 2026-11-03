@@ -1169,6 +1169,14 @@
                 :examples ["(sample-banks)"]
                 :see-also ["samples!" "sound"]}
 
+ :bank       {:category "sample"
+              :returns "string"
+              :side-effects ["audio"]
+              :examples ["(bank :AkaiLinn)"
+                         "(bank :RolandTR808)"
+                         "(bank nil)"]
+              :see-also ["sample-banks" "sound" "samples!"]}
+
  ;; ── Track management ────────────────────────────────────────────────────────
  :track      {:category "audio"
               :returns "nil"
