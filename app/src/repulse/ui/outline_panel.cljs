@@ -103,7 +103,7 @@
 ;;; Rendering
 
 (def ^:private kind-label
-  {:def "def" :defn "defn" :defsynth "synth" :track "track" :song "song" :fx "fx"})
+  {:def "def" :defn "defn" :defsynth "synth" :track "track" :song "song" :fx "fx" :master "master"})
 
 (defn- line-of [text-doc pos]
   (.-number (.lineAt text-doc pos)))
@@ -272,7 +272,8 @@
         sec-trk  (when playing (:tracks (nth secs play-idx)))
         line     #(if doc (line-of doc (min % (.-length doc))) 0)
         sel-set  (set @selection)
-        fxs      (filterv #(= :fx (:kind %)) es)]
+        fxs      (filterv #(= :fx (:kind %)) es)
+        mst      (first (filter #(= :master (:kind %)) es))]
     (if @collapsed?
       (rail-html song-e play-idx)
       (str (header-html n)
@@ -319,6 +320,7 @@
                                        :muted? m? :off? (and playing (not in?))
                                        :glyph (cond m? "■" aud? "•") :glyph-class (when (or m? aud?) (if m? "ol-g-mute" "ol-g-aud"))}))
                           :fx ""   ; listed in the fx group below
+                          :master ""   ; listed in the master group, always last
                           (let [id (sel/entry-id e nil)]
                             (row-html {:kind (:kind e) :name (:name e) :from (:from e) :to (:to e)
                                        :line (line (:from e))
@@ -340,6 +342,22 @@
                                             :id id :sel? (contains? sel-set id)
                                             :cursor? (= cur-from (:from f))})))
                              fxs))))
+                  (when mst
+                    (str "<div class=\"ol-group-divider\"></div>"
+                         (row-html {:kind :master :name "fx" :meta (str (count (:children mst)))
+                                    :from (:from mst) :to (:to mst)
+                                    :line (line (:from mst))
+                                    :id "master" :sel? (contains? sel-set "master")
+                                    :cursor? (= cur-from (:from mst))})
+                         (apply str
+                           (map-indexed
+                             (fn [i c]
+                               (let [id (str "master:" i)]
+                                 (row-html {:name (:name c) :from (:from c) :to (:to c)
+                                            :line (line (:from c)) :indent 12
+                                            :id id :sel? (contains? sel-set id)
+                                            :cursor? (= cur-from (:from c))})))
+                             (:children mst)))))
                   "</div>"))
            (session-html)
            (footer-html)))))

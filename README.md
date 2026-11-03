@@ -49,7 +49,8 @@ and **when** — not **how** synthesis works internally.
   patterns combine arithmetically (`(add 7 pat)`), and continuous signals (`sine`, `rand`,
   `perlin`) modulate parameters (`(pan sine pat)`)
 - **Expression:** `amp`, `attack`, `decay`, `pan`, … chained with `->>`
-- **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`, `(fx :cab :ir :4x12)`
+- **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`, `(fx :cab :ir :4x12)`;
+  group the global chain with `(master (fx :delay 0.25) (fx :reverb 0.3))`
 - **Performance:** named tracks you can mute, solo and replace live; MIDI in/out; WAV and
   MIDI export
 - **Songs:** `song` and `section` turn the tracks of a buffer into a song with an end;

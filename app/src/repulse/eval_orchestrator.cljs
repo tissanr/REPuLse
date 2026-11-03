@@ -16,6 +16,7 @@
             [repulse.synth :as synth]
             [repulse.fx :as fx]
             [repulse.env.builtins :as builtins]
+            [repulse.env.builtins.fx :as b-fx]
             [repulse.song :as song]
             [repulse.song-transport :as song-transport]
             [repulse.project :as project]
@@ -54,6 +55,7 @@
   ;; track/song/play-from/export only collect into song-transport's pending
   ;; atoms; nothing is activated here, so the AI preview stays silent.
   (song-transport/reset-pending!)
+  (b-fx/reset-master-run!)
   (try
     (builtins/ensure-env!)
     (let [env    @builtins/env-atom
@@ -68,7 +70,8 @@
     (catch :default e
       {:ok false :error (.-message e)})
     (finally
-      (song-transport/reset-pending!))))
+      (song-transport/reset-pending!)
+      (b-fx/reset-master-run!))))
 
 (defn init!
   "Wire app-level callback fns into this module.
@@ -209,6 +212,8 @@
     (fx/reset-global-effects!)
     ;; Clear per-evaluation duplicate-track detector
     (reset! builtins/seen-tracks #{})
+    ;; Clear the per-evaluation (master …) state (Phase WS2)
+    (b-fx/reset-master-run!)
     ;; Clear tracks/song/play-from/export collected by the previous evaluation
     (song-transport/reset-pending!)
     ;; Keep stop fn up to date (in case env was reset)
@@ -222,7 +227,10 @@
           on-event (if project (project-highlighter bases) editor/highlight-range!)]
       (if (lisp/eval-error? result)
         (report-eval-error! result project set-output!)
-        (let [val (:result result)]
+        (let [run-song @song-transport/pending-song
+              ;; WS2: `(song …)` followed by `(master …)` still reports the song.
+              val      (let [v (:result result)]
+                         (if (and run-song (b-fx/master-result? v)) run-song v))]
           (when project (reset! last-bases bases))
           ;; Clear stale diagnostics only when there is a real result.
           ;; A nil val means the command handled output itself (e.g. (upd), (stop))
@@ -283,6 +291,9 @@
 
             :else
             (set-output! (str "=> " (pr-str val)) :success))
+
+          ;; WS2: one-time console hint for master + top-level (fx …)
+          (b-fx/loose-fx-hint!)
 
           ;; ── Legacy :_ track hot-swap ──────────────────────────────────────
           ;; When the last form is not a pattern (e.g. (defsynth lfo ...) follows
@@ -397,58 +408,56 @@
       150)))
 
 (defn- patch-fx-param-in-editor!
-  "Update or insert a param in a (fx :effect-name ...) call.
-   Named :param-name NUMBER exists -> replace the number.
-   Positional (fx :effect-name NUMBER) for primary param -> replace.
-   Not found -> insert :param-name value before the closing )."
-  [effect-name param-name new-val]
+  "Update or insert a param in a (fx :effect-name ...) call. With `at` (char
+   offset of the form's open paren) only that form is edited; a stale `at`
+   writes nothing. Without `at` the first matching form in the buffer is used."
+  [effect-name param-name new-val at]
   (when-let [view @editor/editor-view]
-    (let [doc      (.. view -state -doc (toString))
-          doc-len  (.-length doc)
-          primary? (= param-name (get sm/FX-PRIMARY-PARAM effect-name))
-          fmtd     (fmt-num new-val)
-          result   (or (patcher/find-fx-named-param-num doc 0 doc-len effect-name param-name)
-                       (when primary?
-                         (patcher/find-fx-pos-param-num doc 0 doc-len effect-name)))]
-      (if result
-        (dispatch-replace! view (:from result) (:to result) fmtd)
-        (when-let [close (patcher/find-fx-form-close doc 0 doc-len effect-name)]
-          (dispatch-replace! view close close (str " :" param-name " " fmtd)))))))
+    (let [doc (.. view -state -doc (toString))]
+      (when-let [{:keys [from to insert]}
+                 (patcher/fx-param-edit doc effect-name param-name (fmt-num new-val)
+                                        (= param-name (get sm/FX-PRIMARY-PARAM effect-name))
+                                        at)]
+        (dispatch-replace! view from to insert)))))
 
-(defn fx-slider-patch-and-eval! [effect-name param-name new-val]
-  (fx/set-param! effect-name param-name new-val)
-  (patch-fx-param-in-editor! effect-name param-name new-val)
-  (when @slider-timeout (js/clearTimeout @slider-timeout))
-  (reset! slider-timeout
-    (js/setTimeout
-      (fn []
-        (reset! slider-timeout nil)
-        (evaluate-project!))
-      150)))
+(defn fx-slider-patch-and-eval!
+  ([effect-name param-name new-val]
+   (fx-slider-patch-and-eval! effect-name param-name new-val nil))
+  ([effect-name param-name new-val at]
+   (fx/set-param! effect-name param-name new-val)
+   (patch-fx-param-in-editor! effect-name param-name new-val at)
+   (when @slider-timeout (js/clearTimeout @slider-timeout))
+   (reset! slider-timeout
+     (js/setTimeout
+       (fn []
+         (reset! slider-timeout nil)
+         (evaluate-project!))
+       150))))
 
 (defn- patch-fx-keyword-param-in-editor!
-  "Update or insert a keyword param in a (fx :effect-name ...) call."
-  [effect-name param-name new-val]
+  "Update or insert a keyword param in a (fx :effect-name ...) call (see
+   patch-fx-param-in-editor! for `at`)."
+  [effect-name param-name new-val at]
   (when-let [view @editor/editor-view]
-    (let [doc      (.. view -state -doc (toString))
-          doc-len  (.-length doc)
-          fmtd     (str ":" new-val)
-          result   (patcher/find-fx-named-param-keyword doc 0 doc-len effect-name param-name)]
-      (if result
-        (dispatch-replace! view (:from result) (:to result) fmtd)
-        (when-let [close (patcher/find-fx-form-close doc 0 doc-len effect-name)]
-          (dispatch-replace! view close close (str " :" param-name " " fmtd)))))))
+    (let [doc (.. view -state -doc (toString))]
+      (when-let [{:keys [from to insert]}
+                 (patcher/fx-keyword-param-edit doc effect-name param-name
+                                                (str ":" new-val) at)]
+        (dispatch-replace! view from to insert)))))
 
-(defn fx-select-patch-and-eval! [effect-name param-name new-val]
-  (fx/set-param! effect-name param-name new-val)
-  (patch-fx-keyword-param-in-editor! effect-name param-name new-val)
-  (when @slider-timeout (js/clearTimeout @slider-timeout))
-  (reset! slider-timeout
-    (js/setTimeout
-      (fn []
-        (reset! slider-timeout nil)
-        (evaluate-project!))
-      150)))
+(defn fx-select-patch-and-eval!
+  ([effect-name param-name new-val]
+   (fx-select-patch-and-eval! effect-name param-name new-val nil))
+  ([effect-name param-name new-val at]
+   (fx/set-param! effect-name param-name new-val)
+   (patch-fx-keyword-param-in-editor! effect-name param-name new-val at)
+   (when @slider-timeout (js/clearTimeout @slider-timeout))
+   (reset! slider-timeout
+     (js/setTimeout
+       (fn []
+         (reset! slider-timeout nil)
+         (evaluate-project!))
+       150))))
 
 (defn- patch-per-track-fx-param-in-editor!
   "Update or insert a param in (fx :effect-name ...) scoped to (track :track-name ...)."

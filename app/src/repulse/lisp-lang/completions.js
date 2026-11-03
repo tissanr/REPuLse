@@ -215,6 +215,7 @@ export const BUILTINS = [
   { label: "bank",         type: "function", detail: "(bank :prefix) — resolve bare drum keywords to a drum-machine bank, (bank nil) clears" },
   // --- Effects ---
   { label: "fx",          type: "function", detail: "(fx :name param) — global effect; inside ->>: (fx :name param pat) — per-track effect on this track only" },
+  { label: "master",      type: "keyword",  detail: "(master (fx …) …) — global effect chain block; only (fx …) forms inside, at most one per buffer" },
   { label: "distort",     type: "keyword",  detail: "effect — soft/asymmetric clipping distortion" },
   { label: "amp-sim",      type: "keyword",  detail: "effect — multi-stage amp simulation" },
   { label: "waveshape",    type: "keyword",  detail: "effect — arbitrary waveshaper LUT" },

@@ -48,7 +48,7 @@ without a human:
 | 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | full | sonnet |
 | 13 | SONG4 | Multi-buffer projects | 🤖 | full | opus |
 | 13a | WS1 | Inspector column & status head (retire context panel) | 🤖 | full | opus |
-| 13b | WS2 | `(master …)` form & master fx outline group | 🤖 | outline | sonnet |
+| 13b | WS2 | `(master …)` form & master fx outline group | 🤖 | full | sonnet |
 | 13c | WS3 | Inline sliders in code: `(slider v min max)` | 🤖 | outline | opus |
 | 13d | WS4 | AI assistant rail | 🤖 | outline | sonnet |
 | **M3** | | **Plays with others** | | | |
@@ -2203,7 +2203,7 @@ See full spec: [PROMPTS/PHASE-WS1.md](PROMPTS/PHASE-WS1.md)
 
 ---
 
-## Phase WS2 — `(master …)` Form & Master FX Group 📋 *planned*
+## Phase WS2 — `(master …)` Form & Master FX Group ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2212,6 +2212,26 @@ Global effects get a home in the code and in the outline.
 **Key additions:**
 - New built-in `master` grouping the global `(fx …)` chain; top-level `(fx …)` keeps working
 - Outline `master` group and an inspector block with write-back sliders
+
+**Delivered:**
+- `master` is a special form in `repulse.lisp.eval` (checks only the `fx` head symbol; children
+  run in source order). The app hook `:*master-fn*` (`repulse.env.builtins.fx/run-master!`)
+  allows one `master` per evaluation / project, returns `"=> master: <n> fx"` and counts loose
+  top-level `(fx …)` for a once-per-page-load console hint. Errors: non-`(fx …)` child,
+  per-track `(fx … pat)` child, second master (per buffer / per project)
+- `(song …)` followed by `(master …)` still prints the song summary
+  (`eval-orchestrator/evaluate*` reports the song registered in the run)
+- `repulse.outline` gains the `:master` kind with `:fx` children; selection ids `master` /
+  `master:<i>`; the outline lists a `master fx N` group last behind a divider; the inspector
+  shows all global effects (group) or one (child) with kind colour `#6f9bd8`
+- Slider write-back is scoped to the selected `(fx …)` form: new pure
+  `lisp-patcher/fx-form-range`, `fx-param-edit`, `fx-keyword-param-edit`; the inspector passes the
+  form offset as `data-at` (stale offsets write nothing). This also fixes WS1's loose `fx` group
+  patching a same-named per-track effect
+- Language surface: grammar `BuiltinName`, completion, hover doc, `builtin_meta.edn`,
+  `docs/ai/builtins.json`; test handle `__REPULSE_APP__.fxParam`
+- Tests: E1–E4, F1–F7, P1–P8, O1–O3, S1–S5 (CLJS, 531 total) and `e2e/master.spec.ts`;
+  docs: USAGE "master — the global chain in one block", README Effects bullet
 
 See full spec: [PROMPTS/PHASE-WS2.md](PROMPTS/PHASE-WS2.md)
 

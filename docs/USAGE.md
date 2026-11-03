@@ -443,6 +443,10 @@ that selection. Its header names the kind and the name, `↗ L3` (move the curso
 | **section** | its length, a bar strip (current bar cyan), `▶ bar k/n` while it plays or a `▶ cue` button (cue it at the next bar), and its tracks with `M` / `S` and an `amp` slider |
 | **def / defn / synth** | a syntax-coloured preview of the form (first 12 lines) and `Used by :drums, :bass.` |
 | **fx** (group or one effect) | a slider per parameter of the top-level effect(s), "applies after all tracks" |
+| **master** (group, kind `master`, title `fx`) / **master fx** (one effect) | the same sliders for the effects inside `(master …)`; the sliders rewrite the literal inside that exact `(fx …)` form |
+
+The outline lists a `(master …)` block as a `master fx N` group after everything else, behind a
+divider; its children are the block's `(fx …)` forms. Selecting the group highlights all of them.
 
 Sliders **write into your code**: dragging the `amp` slider of `(track :bass (->> … (amp 0.6)))`
 to 0.75 turns the buffer into `(amp 0.75)` and re-evaluates it 150 ms later (effect sliders
@@ -2548,6 +2552,32 @@ Control them with the `fx` built-in.
 ; Remove an effect from the chain
 (fx :remove :delay)
 ```
+
+### `master` — the global chain in one block
+
+```lisp
+(master
+  (fx :delay  :time 0.375 :feedback 0.4)
+  (fx :reverb 0.3))
+```
+
+`master` groups the global `(fx …)` forms of a buffer. Each `(fx …)` inside runs exactly like
+the same form at top level, in source order. Rules:
+
+- Only `(fx …)` forms may appear inside. Anything else is an error:
+  `master only takes (fx …) forms — got (seq :bd)`. A per-track `(fx … pat)` is rejected too
+  (put it in the track's `->>` chain instead). `(master)` is allowed and does nothing.
+- One `master` per buffer — and per project: a second one is an error
+  (`Only one (master …) per buffer …`, or `… per project — already defined in buffer :name`).
+  None of the second block's effects are applied.
+- Top-level `(fx …)` keeps working. A buffer with both runs everything in source order and logs a
+  one-time console hint suggesting you move them into `master`.
+- `master` takes no options and does not change the signal order, which stays the built-in
+  [Effect chain order](#effect-chain-order).
+- The outline shows the block as a `master fx N` group; selecting it opens its effects in the
+  inspector, and the sliders rewrite the literal inside that `(fx …)`.
+- `(master …)` evaluates to `master: <n> fx` in the output. After a `(song …)` the song summary
+  is shown as usual.
 
 ### Per-track effects
 

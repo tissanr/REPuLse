@@ -959,6 +959,11 @@ const DOCS = {
     description: "Global: sets a master-chain effect parameter. Per-track: use inside ->> to route a track through its own effect chain — re-evaluating play without (fx ...) removes the effect automatically. Use (fx :off :name) / (fx :on :name) to bypass/restore global effects.",
     example: "(->> (seq :bd :_ :bd :_) (fx :filter 1000))",
   },
+  "master": {
+    signature: "(master (fx :name …) …)",
+    description: "Group the global effect chain in one block. Each (fx …) inside runs exactly like a top-level (fx …); anything else is an error. One master per buffer. The signal order stays the built-in chain order.",
+    example: "(master\n  (fx :delay :time 0.375 :feedback 0.4)\n  (fx :reverb 0.3))",
+  },
   "distort": {
     signature: "(fx :distort [:drive N] [:tone Hz] [:mix N] [:asym N] [:algo kw] [:oversample 1|2|4])",
     description: "Soft-clipping waveshaper distortion. :drive sets pre-clip gain from 1.0–100.0 (default 4.0). :tone sets the post-clip lowpass from 200–20000 Hz (default 3000). :mix blends dry/wet from 0.0–1.0 (default 1.0). :asym sets half-wave asymmetry from -1.0–1.0 for even-harmonic warmth (default 0.0). :algo chooses :tanh, :sigmoid, or :atan clipping curves. :oversample reduces aliasing at high drive (default 1).",

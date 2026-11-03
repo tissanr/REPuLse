@@ -2,7 +2,9 @@
   "Pure outline selection model (Phase WS1).  Selection ids are strings that
    stay stable across edits: \"def:kick\", \"defn:humanize\", \"defsynth:pad\",
    \"track::drums\", \"section:<index>\", \"fx\" (the top-level fx group) and
-   \"fx:<index>\" (index among :fx entries).  A selection is a vector of ids,
+   \"fx:<index>\" (index among :fx entries), \"master\" (the first top-level
+   (master …) group, Phase WS2) and \"master:<index>\" (index among its :fx
+   children).  A selection is a vector of ids,
    newest last.  The song row is not selectable.
    Exports: entry-id, index-entries, pick, prune, ranges, primary, header."
   (:require [clojure.string :as str]))
@@ -18,13 +20,16 @@
     :track    (str "track:" (:name e))
     :section  (str "section:" index)
     :fx       (str "fx:" index)
+    :master   "master"
+    :master-fx (str "master:" index)
     nil))
 
 (defn index-entries
   "{id entry} for every selectable item of the outline entries."
   [entries]
   (let [song (first (filter #(= :song (:kind %)) entries))
-        fxs  (filterv #(= :fx (:kind %)) entries)]
+        fxs  (filterv #(= :fx (:kind %)) entries)
+        m    (first (filter #(= :master (:kind %)) entries))]
     (cond-> (into {}
                   (concat
                     (keep (fn [e]
@@ -32,7 +37,13 @@
                               [(entry-id e nil) e]))
                           entries)
                     (map-indexed (fn [i s] [(entry-id s i) s]) (:children song))
-                    (map-indexed (fn [i f] [(entry-id f i) f]) fxs)))
+                    (map-indexed (fn [i f] [(entry-id f i) f]) fxs)
+                    (when m
+                      (cons ["master" (assoc m :name "fx")]
+                            (map-indexed (fn [i c]
+                                           (let [c' (assoc c :kind :master-fx)]
+                                             [(entry-id c' i) c']))
+                                         (:children m))))))
       (seq fxs) (assoc "fx" {:kind :fx-group
                              :name "fx"
                              :from (:from (first fxs))
@@ -87,7 +98,8 @@
 
 (def ^:private KIND-LABEL
   {:track "track" :section "section" :def "def" :defn "defn"
-   :defsynth "synth" :fx "fx" :fx-group "fx"})
+   :defsynth "synth" :fx "fx" :fx-group "fx"
+   :master "master" :master-fx "master fx"})
 
 (defn header
   "{:kind :title :from} for the inspector header, or nil for an empty

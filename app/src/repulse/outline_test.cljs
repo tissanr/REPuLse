@@ -163,3 +163,34 @@
     (is (= [":drums" "k2"] (outline/used-by es "kick")))
     (is (= [":drums"] (outline/used-by es "hum")))))
 
+
+;;; ── Phase WS2: (master …) ────────────────────────────────────────────
+
+(def MS
+  (str/join "\n"
+    ["(track :drums (->> (seq :bd :_ :bd :_) (fx :reverb 0.5)))"
+     "(master"
+     "  (fx :delay :time 0.375 :feedback 0.4)"
+     "  (fx :reverb 0.3))"]))
+
+(def MS-DUP
+  "(master (seq :bd) (fx :reverb 0.3))\n(master (fx :delay 0.25))")
+
+(deftest master-entry-test
+  (testing "O1"
+    (let [es (:entries (ex MS))]
+      (is (= 125 (count MS)))
+      (is (= #{"->>" "seq" "fx"} (:refs (first es))))
+      (is (= {:kind :master :name nil :from 58 :to 125 :name-from nil :name-to nil
+              :children [{:kind :fx :name ":delay" :from 68 :to 105
+                          :name-from 72 :name-to 78 :refs #{} :children []}
+                         {:kind :fx :name ":reverb" :from 108 :to 124
+                          :name-from 112 :name-to 119 :refs #{} :children []}]}
+             (second es)))))
+  (testing "O2"
+    (is (= [[:master [":reverb"]] [:master [":delay"]]]
+           (mapv (juxt :kind #(mapv :name (:children %))) (:entries (ex MS-DUP))))))
+  (testing "O3"
+    (let [e (outline/entry-at (:entries (ex MS)) 115)]
+      (is (= :fx (:kind e)))
+      (is (= 108 (:from e))))))

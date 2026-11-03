@@ -8,13 +8,16 @@
    top-level entry carries :refs (Symbol/BuiltinName texts inside it), which
    used-by searches.
 
+   Phase WS2: a top-level (master (fx …) …) form is an entry of kind :master
+   (no name) whose :children are its (fx …) entries (kind :fx).
+
    Exports: extract, entry-at, definition-for, project-definition, song-bars,
             playing-section, used-by."
   (:require [repulse.song :as song]))
 
 (def ^:private HEADS
   {"def" :def "defn" :defn "defsynth" :defsynth "track" :track "song" :song
-   "fx" :fx})
+   "fx" :fx "master" :master})
 
 ;; Kinds whose name token must be a Keyword (the others take a Symbol).
 (def ^:private KEYWORD-NAMED #{:track :fx})
@@ -81,7 +84,17 @@
   (let [[head nm & rest-nodes] (body-nodes list-node)
         kind (when head (get HEADS (text-of text head)))]
     (when (and kind (contains? #{"BuiltinName" "Symbol"} (node-name head)))
-      (if (= kind :song)
+      (case kind
+        :master
+        {:kind :master :name nil
+         :from (.-from list-node) :to (.-to list-node)
+         :name-from nil :name-to nil
+         :children (vec (keep (fn [n]
+                                (when (= "List" (node-name n))
+                                  (let [e (top-level-entry text n)]
+                                    (when (= :fx (:kind e)) e))))
+                              (when nm (cons nm rest-nodes))))}
+        :song
         {:kind :song :name nil
          :from (.-from list-node) :to (.-to list-node)
          :name-from nil :name-to nil

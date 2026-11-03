@@ -1611,6 +1611,25 @@
     "detail": "(fx :name param) — global effect; inside ->>: (fx :name param pat) — per-track effect on this track only",
     "description": "Global: sets a master-chain effect parameter. Per-track: use inside ->> to route a track through its own effect chain — re-evaluating play without (fx ...) removes the effect automatically. Use (fx :off :name) / (fx :on :name) to bypass/restore global effects."
   },
+  "master": {
+    "category": "effect",
+    "signature": "(master (fx :name …) …)",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(master (fx :reverb 0.3))",
+      "(master (fx :delay :time 0.375 :feedback 0.4) (fx :reverb 0.3))"
+    ],
+    "see-also": [
+      "fx",
+      "track",
+      "song"
+    ],
+    "detail": "(master (fx …) …) — global effect chain block; only (fx …) forms inside, at most one per buffer",
+    "description": "Group the global effect chain in one block. Each (fx …) inside runs exactly like a top-level (fx …); anything else is an error. One master per buffer. The signal order stays the built-in chain order."
+  },
   "load-plugin": {
     "category": "io",
     "signature": "(load-plugin \"url\")",

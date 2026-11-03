@@ -94,8 +94,8 @@
 ;;; Controls
 
 (defn- slider-html
-  "label + custom slider + value. ids: {:key :track :fx :param}."
-  [label v cfg {:keys [key track fx param]}]
+  "label + custom slider + value. ids: {:key :track :fx :param :at}."
+  [label v cfg {:keys [key track fx param at]}]
   (let [t   (slm/value->t cfg v)
         pct (* 100 t)
         [lo hi] (if-let [vs (seq (:values cfg))] [(first vs) (last vs)] [(:min cfg) (:max cfg)])]
@@ -109,6 +109,7 @@
          " data-track=\"" (escape-html (or track "")) "\""
          " data-fx=\"" (escape-html (or fx "")) "\""
          " data-param=\"" (escape-html param) "\""
+         " data-at=\"" (if (some? at) at "") "\""
          " data-value=\"" v "\">"
          "<div class=\"ins-rail\"></div>"
          "<div class=\"ins-fill\" style=\"width:" pct "%\"></div>"
@@ -117,7 +118,7 @@
          "<span class=\"ins-pval\">" (escape-html (slm/fmt-pv v)) "</span>"
          "</div>")))
 
-(defn- select-html [label v opts {:keys [key track fx param]}]
+(defn- select-html [label v opts {:keys [key track fx param at]}]
   (let [cur (str/replace (str v) #"^:" "")]
     (str "<div class=\"ins-srow ins-selrow\">"
          "<span class=\"ins-plabel\">" (escape-html label) "</span>"
@@ -125,7 +126,8 @@
          " data-key=\"" (escape-html key) "\""
          " data-track=\"" (escape-html (or track "")) "\""
          " data-fx=\"" (escape-html (or fx "")) "\""
-         " data-param=\"" (escape-html param) "\">"
+         " data-param=\"" (escape-html param) "\""
+         " data-at=\"" (if (some? at) at "") "\">"
          (apply str (map (fn [o]
                            (str "<option value=\"" (escape-html o) "\""
                                 (when (= o cur) " selected") ">" (escape-html o) "</option>"))
@@ -162,11 +164,13 @@
                     "</div>"))
              (apply str (map (fn [[p v cfg]]
                                (slider-html p v cfg {:key (str (or owner "fx") "|" name "|" p)
-                                                     :track owner :fx name :param p}))
+                                                     :track owner :fx name :param p
+                                                     :at (when-not owner (nth jumps i nil))}))
                              sliders))
              (apply str (map (fn [[p v opts]]
                                (select-html p v opts {:key (str (or owner "fx") "|" name "|" p)
-                                                      :track owner :fx name :param p}))
+                                                      :track owner :fx name :param p
+                                                      :at (when-not owner (nth jumps i nil))}))
                              selects))
              "</div>"))
       rows)))
@@ -338,6 +342,8 @@
         (:def :defn :defsynth) (def-block e)
         :fx       (fx-block [e])
         :fx-group (fx-block (:children e))
+        :master   (fx-block (:children e))
+        :master-fx (fx-block [e])
         ""))))
 
 (defn- render-html []
@@ -346,7 +352,7 @@
     (when (seq ids)
       (let [{:keys [kind title from]} (sel/header ids idx)]
         (str "<div class=\"ins-header\">"
-             "<span class=\"ins-kind ins-kind-" kind "\">" (escape-html kind) "</span>"
+             "<span class=\"ins-kind ins-kind-" (str/replace kind " " "-") "\">" (escape-html kind) "</span>"
              "<span class=\"ins-title\">" (escape-html title) "</span>"
              (jump-html from)
              "<kbd class=\"ol-kbd ins-esc\" data-act=\"close\" title=\"close  Esc\">esc</kbd>"
@@ -397,8 +403,10 @@
   (let [^js ds (.-dataset s)
         fx (.-fx ds)
         tr (.-track ds)
-        p  (.-param ds)]
+        p  (.-param ds)
+        at (js/parseInt (.-at ds) 10)]
     {:fx    (when (seq fx) fx)
+     :at    (when-not (js/isNaN at) at)
      :track (when (seq tr) tr)
      :param p
      :cfg   (if (seq fx)
@@ -408,7 +416,7 @@
 
 (defn- apply-value!
   "Show v on the slider element and write it into the code."
-  [^js s {:keys [fx track param cfg]} v]
+  [^js s {:keys [fx track param cfg at]} v]
   (let [pct (* 100 (slm/value->t cfg v))]
     (set! (.. s -dataset -value) (str v))
     (.setAttribute s "aria-valuenow" (str v))
@@ -418,7 +426,7 @@
       (set! (.-textContent lbl) (slm/fmt-pv v)))
     (cond
       (and fx track) (eo/per-track-fx-slider-patch-and-eval! track fx param v)
-      fx             (eo/fx-slider-patch-and-eval! fx param v)
+      fx             (eo/fx-slider-patch-and-eval! fx param v at)
       :else          (eo/slider-patch-and-eval! track param v))))
 
 (defn- on-pointerdown [^js e]
@@ -496,11 +504,13 @@
             fx (.-fx ds)
             tr (.-track ds)
             p  (.-param ds)
+            at (js/parseInt (.-at ds) 10)
+            at (when-not (js/isNaN at) at)
             v  (.-value t)]
         (eo/begin-slider-drag!)
         (if (seq tr)
           (eo/per-track-fx-select-patch-and-eval! tr fx p v)
-          (eo/fx-select-patch-and-eval! fx p v))
+          (eo/fx-select-patch-and-eval! fx p v at))
         (eo/end-slider-drag!)))))
 
 ;;; Buttons

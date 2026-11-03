@@ -70,7 +70,8 @@
       (samples/init!)
       (reset! env-atom
               (merge (assoc (leval/make-env (make-stop-fn) audio/set-bpm!)
-                            :*register-synth-fn* synth/register-synth!)
+                            :*register-synth-fn* synth/register-synth!
+                            :*master-fn* b-fx/run-master!)
                      (b-tracks/make-builtins ctx)
                      (b-fx/make-builtins ctx)
                      (b-samples/make-builtins ctx)
