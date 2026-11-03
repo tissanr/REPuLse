@@ -103,6 +103,16 @@
         freqs  (mapv :value events)]
     (is (< (js/Math.abs (- (* 2.0 (theory/midi->hz 60)) (nth freqs 1))) 0.01))))
 
+(deftest scale-passes-rests-through
+  ;; A rest must stay a rest — not become a note one degree below the root
+  (let [events (core/query
+                 (theory/scale :major :c4 (core/seq* [1 :_ 5]))
+                 one-cycle)
+        vals   (mapv :value events)]
+    (is (= 3 (count vals)))
+    (is (= :_ (nth vals 1)))
+    (is (< (js/Math.abs (- (theory/midi->hz 67) (nth vals 2))) 0.01))))
+
 ;;; ── chord ────────────────────────────────────────────────────────────
 
 (deftest chord-major-triad

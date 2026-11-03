@@ -142,17 +142,20 @@ Type in the command bar (the `>` input at the bottom):
     (demo :techno)
 
 This loads a full multi-track techno pattern into the editor and starts playing it immediately.
-Available demos:
+Loading a demo first clears the tracks of whatever was playing before. Each demo is a genre
+sketch that also showcases a group of features — its `;; Shows:` comment line names them:
 
-| Demo | BPM | Description |
-|---|---|---|
-| `:techno` | 130 | Four-on-the-floor kick, offbeat hats, acid bassline |
-| `:ambient` | 72 | Slow pad chords, gentle melodic line |
-| `:dnb` | 174 | Breakbeat, sub bass, amen-style rhythm |
-| `:minimal` | 120 | Sparse kick, subtle hats, one-note bass |
-| `:house` | 124 | Classic four-on-the-floor, organ stabs |
-| `:dub` | 140 | Heavy bass, delay-heavy snare |
-| `:experimental` | 110 | Algorithmic patterns: every, rev, fmap |
+| Demo | BPM | Style | Shows |
+|---|---|---|---|
+| `:techno` | 130 | Mini-notation drums, acid line | `~` mini-notation, `euclidean`, `synth :saw`, per-track `filter` + `distort`, `tween` fade-in |
+| `:house` | 124 | Rhodes stabs, offbeat bass | FM `:epiano`, `def` + `comp` presets, `off`, `alt`, `chorus`, `synth :square` |
+| `:ambient` | 72 | Pads, bells, long tails | FM `:epiano` / `:bell`, `dattorro-reverb`, `delay`, `degrade-by`, `tween` swell |
+| `:dnb` | 174 | Chopped amen, saw bass | `sound` + `fmap` sample slices (`amencutup`), `rate`, `end`, `sometimes`, `chorus` |
+| `:minimal` | 122 | Sparse, shifting groove | `euclidean` with rotation, `degrade-by`, `choose`, `off`, `sometimes`, FM `:marimba` |
+| `:dub` | 76 | Skank, echoes, sub bass | `delay` feedback, `reverb`, `late`, `synth :square` + `filter`, FM `:trombone` |
+| `:rock` | 118 | Distorted power chords | Karplus-Strong `:guitar`, `defn`, `amp-sim` + `cab`, `<...>` alternation |
+| `:modular` | 100 | Self-built instruments | `defsynth`, UGens (`saw`, `noise`, `mix`, `lpf`, `hpf`), `env-perc` / `env-asr` / `env-gen`, `arrange` |
+| `:experimental` | 110 | Algorithmic Lisp | `defn`, `let`, `fn`, `fmap`, `cat`, `jux`, `every`, `rev`, `transpose`, `bitcrusher` |
 
 Type `(demo)` with no arguments to list all available demos.
 
@@ -740,7 +743,8 @@ Map one-indexed degree integers to frequencies in a named scale:
 ```
 
 Degree 1 = root, degree 2 = second scale tone, etc. Values beyond the scale length wrap
-into higher octaves; values below 1 wrap into lower octaves.
+into higher octaves; values below 1 wrap into lower octaves. Rests (`:_`, or `~` in
+mini-notation) pass through unchanged, so `(scale :minor :c3 (~ "1 ~ 3 5"))` keeps its gap.
 
 Available scales: `:major` (`:ionian`), `:minor` (`:aeolian`), `:dorian`, `:phrygian`,
 `:lydian`, `:mixolydian`, `:locrian`, `:pentatonic`, `:minor-pentatonic`, `:blues`.

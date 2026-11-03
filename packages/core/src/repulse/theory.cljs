@@ -114,7 +114,8 @@
   "Map scale degree integers in pat to Hz frequencies.
    Degrees are one-indexed from the root (1 = root, 2 = second, …); values
    outside [1, n] wrap into higher/lower octaves
-   (e.g. degree 8 in a 7-note scale = root + 1 octave).
+   (e.g. degree 8 in a 7-note scale = root + 1 octave). Non-numeric values
+   (rests such as :_) are passed through unchanged.
 
    (scale :minor :c4 (seq 1 3 5 8))
    (scale :pentatonic :g3 (fast 2 (seq 1 2 3 4 5)))"
@@ -127,7 +128,7 @@
                            oct    (int (js/Math.floor (/ degree n)))
                            idx    (- degree (* oct n))]
                        (midi->hz (+ root-midi (* oct 12) (nth semitones idx)))))]
-    (core/fmap degree->hz pat)))
+    (core/fmap #(if (number? %) (degree->hz %) %) pat)))
 
 (defn chord
   "Return a stacked pattern of the chord tones as Hz values.

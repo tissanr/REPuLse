@@ -11,6 +11,7 @@
             [repulse.session-test]
             [repulse.samples-test]
             [repulse.sound-check-test]
+            [repulse.content.demos-test]
             [repulse.ui.timeline-test]
             [repulse.ai.safety-test]
             [repulse.ai.edit-test]
@@ -34,6 +35,7 @@
                   'repulse.fx-test 'repulse.session-test
                   'repulse.samples-test
                   'repulse.sound-check-test
+                  'repulse.content.demos-test
                   'repulse.ui.timeline-test
                   'repulse.ai.safety-test
                   'repulse.ai.edit-test
