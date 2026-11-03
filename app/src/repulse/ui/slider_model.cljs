@@ -5,7 +5,10 @@
    No DOM, no atoms.
    Exports: TRACK-PARAM-KEYS, SLIDER-PARAMS, FX-SLIDER-PARAMS, FX-SELECT-PARAMS,
             FX-PRIMARY-PARAM, fmt-pv, decimals, snap, value->t, t->value,
-            drag-value, key-step, text-diff."
+            drag-value, key-step, text-diff;
+            inline sliders (WS3): parse-num-literal, inline-cfg, inline-t,
+            inline-value, inline-fmt, INLINE-DRAG-PX, inline-drag-t,
+            inline-range-text, WRAP-RANGES, wrap-range."
   (:require [clojure.string :as str]))
 
 ;;; Configuration
@@ -170,3 +173,91 @@
                  (recur (inc j))
                  j))]
       {:from p :to (- lo s) :insert (subs new p (- ln s))})))
+
+;;; Inline (slider v min max) widgets — Phase WS3
+
+(defn parse-num-literal
+  "Number for a numeric literal text `-?\\d+(\\.\\d+)?(/\\d+)?` (n/d → n÷d),
+   else nil. Non-finite results (1/0) → nil."
+  [s]
+  (when (and (string? s) (re-matches #"-?\d+(\.\d+)?(/\d+)?" s))
+    (let [[a b] (str/split s #"/")
+          n     (js/parseFloat a)
+          v     (if b (/ n (js/parseFloat b)) n)]
+      (when (js/isFinite v) v))))
+
+(defn inline-cfg
+  "Widget config for a form from lisp-patcher/find-slider-forms:
+   {:v :min :max :log? :min-text :max-text}, or nil when a literal does not
+   parse, min ≥ max, the mode is not :log/:lin, or :log has min ≤ 0."
+  [{:keys [value min max mode]}]
+  (let [v    (parse-num-literal (:text value))
+        lo   (parse-num-literal (:text min))
+        hi   (parse-num-literal (:text max))
+        mode (:text mode)]
+    (when (and v lo hi (< lo hi)
+               (or (nil? mode) (= mode ":log") (= mode ":lin"))
+               (not (and (= mode ":log") (<= lo 0))))
+      {:v        v
+       :min      lo
+       :max      hi
+       :log?     (case mode
+                   ":log" true
+                   ":lin" false
+                   (boolean (and (pos? lo) (>= (/ hi lo) 100))))
+       :min-text (:text min)
+       :max-text (:text max)})))
+
+(defn inline-t
+  "Position 0..1 of v (clamped to [min max]) on the inline slider."
+  [{:keys [min max log?]} v]
+  (let [v (clamp min max v)]
+    (if log?
+      (/ (Math/log (/ v min)) (Math/log (/ max min)))
+      (/ (- v min) (- max min)))))
+
+(defn inline-value
+  "Inverse of inline-t, unrounded."
+  [{:keys [min max log?]} t]
+  (if log?
+    (* min (Math/pow (/ max min) t))
+    (+ min (* t (- max min)))))
+
+(defn inline-fmt
+  "Text for v (clamped): integers when max ≥ 100, else 2 decimals. When the
+   rounded text leaves [min max], the min/max literal text instead."
+  [{:keys [min max min-text max-text]} v]
+  (let [v (clamp min max v)
+        s (if (>= max 100) (str (Math/round v)) (.toFixed v 2))
+        n (js/parseFloat s)]
+    (cond
+      (< n min) min-text
+      (> n max) max-text
+      :else     s)))
+
+(def INLINE-DRAG-PX
+  "Pointer distance (px) for the full slider range."
+  140)
+
+(defn inline-drag-t
+  "Slider position after `acc` px of (scaled) pointer movement from t0."
+  [t0 acc]
+  (clamp01 (+ t0 (/ acc INLINE-DRAG-PX))))
+
+(defn- range-num [n]
+  (if (>= n 1000) (str (/ n 1000) "k") (str n)))
+
+(defn inline-range-text
+  "Tooltip range: \"<min>–<max>\" (k for ≥ 1000), + \" · log\" on a log scale."
+  [{:keys [min max log?]}]
+  (str (range-num min) "–" (range-num max) (when log? " · log")))
+
+(def WRAP-RANGES
+  "⌘K S wrap ranges by param name; anything else gets [0 1]."
+  {"amp" [0 1] "pan" [-1 1] "decay" [0 2] "freq" [20 20000] "bpm" [40 300]})
+
+(defn wrap-range
+  "[min max] for wrapping a literal v of param `pname`, widened to include v."
+  [pname v]
+  (let [[lo hi] (get WRAP-RANGES pname [0 1])]
+    [(min lo v) (max hi v)]))

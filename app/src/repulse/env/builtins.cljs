@@ -3,8 +3,10 @@
    app-layer built-in functions.
    Responsibility: own env-atom, builtin-names, and seen-tracks; assemble the full
    Lisp environment on first call to ensure-env!.
-   Exports: env-atom, builtin-names, seen-tracks, evaluate-ref, ensure-env!, init!."
+   Exports: env-atom, builtin-names, seen-tracks, eval-warnings,
+            record-eval-warning!, evaluate-ref, ensure-env!, init!."
   (:require [repulse.lisp.eval :as leval]
+            [repulse.lisp.builtins.slider :as b-slider]
             [repulse.audio :as audio]
             [repulse.synth :as synth]
             [repulse.samples :as samples]
@@ -33,6 +35,15 @@
 ;; Reset by evaluate! before each eval; checked by the `track` builtin to
 ;; detect duplicate track names in the same buffer.
 (defonce seen-tracks (atom #{}))
+
+;; Eval warnings of the current evaluation (Phase WS3: slider clamps), as
+;; [{:message str :from n? :to n?}]. Reset by evaluate* before each eval.
+(defonce eval-warnings (atom []))
+
+(defn record-eval-warning!
+  "Collect one eval warning {:message :from :to} for the current evaluation."
+  [w]
+  (swap! eval-warnings conj w))
 
 ;;; Lazy reference to evaluate! — set by app.cljs after eval-orchestrator loads.
 ;; This breaks the ensure-env! ↔ evaluate! circular dependency:
@@ -72,6 +83,8 @@
               (merge (assoc (leval/make-env (make-stop-fn) audio/set-bpm!)
                             :*register-synth-fn* synth/register-synth!
                             :*master-fn* b-fx/run-master!)
+                     ;; WS3: the app's slider reports clamped values as warnings
+                     {"slider" (b-slider/make-slider-fn record-eval-warning!)}
                      (b-tracks/make-builtins ctx)
                      (b-fx/make-builtins ctx)
                      (b-samples/make-builtins ctx)

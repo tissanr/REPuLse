@@ -49,6 +49,8 @@ and **when** — not **how** synthesis works internally.
   patterns combine arithmetically (`(add 7 pat)`), and continuous signals (`sine`, `rand`,
   `perlin`) modulate parameters (`(pan sine pat)`)
 - **Expression:** `amp`, `attack`, `decay`, `pan`, … chained with `->>`
+- **Inline sliders:** `(amp (slider 0.7 0 1))` evaluates to `0.7` and is drawn as a draggable
+  bar in the editor; dragging rewrites the number in the code (`Cmd/Ctrl+K S` wraps/unwraps)
 - **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`, `(fx :cab :ir :4x12)`;
   group the global chain with `(master (fx :delay 0.25) (fx :reverb 0.3))`
 - **Performance:** named tracks you can mute, solo and replace live; MIDI in/out; WAV and

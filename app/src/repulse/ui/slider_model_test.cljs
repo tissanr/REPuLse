@@ -52,3 +52,84 @@
   (is (= 0.6 (sm/t->value amp (sm/value->t amp 0.6))))
   (is (= 0.5 (sm/value->t {:values [1 2 4]} 2)))
   (is (= 4 (sm/t->value {:values [1 2 4]} 1))))
+
+;;; Inline sliders (Phase WS3)
+
+(defn- fm [v lo hi & [mode]]
+  {:value {:text v} :min {:text lo} :max {:text hi} :mode (when mode {:text mode})})
+
+(defn- near? [a b eps] (< (Math/abs (- a b)) eps))
+
+(def ^:private c01 (sm/inline-cfg (fm "0.7" "0" "1")))
+(def ^:private clog (sm/inline-cfg (fm "632" "20" "20000")))
+(def ^:private cpan (sm/inline-cfg (fm "0" "-1" "1")))
+
+(deftest parse-num-literal-test
+  (testing "M1"
+    (is (= [0.7 -1 0.25 20000 -0.5]
+           (mapv sm/parse-num-literal ["0.7" "-1" "1/4" "20000" "-0.5"])))
+    (is (= [nil nil nil nil nil]
+           (mapv sm/parse-num-literal ["120bpm" ":a" "1e3" ".5" "1/0"])))))
+
+(deftest inline-cfg-test
+  (testing "M2"
+    (is (= {:v 0.7 :min 0 :max 1 :log? false :min-text "0" :max-text "1"} c01)))
+  (testing "M3"
+    (is (= [true true false false true false]
+           (mapv (comp :log? sm/inline-cfg)
+                 [(fm "632" "20" "20000") (fm "5" "1" "100") (fm "5" "1" "99")
+                  (fm "800" "20" "20000" ":lin") (fm "5" "1" "10" ":log") (fm "5" "0" "20000")]))))
+  (testing "M4"
+    (is (= [nil nil nil nil nil]
+           (mapv sm/inline-cfg
+                 [(fm "0.5" "0" "1" ":log") (fm "0.5" "1" "0") (fm "0.5" "1" "1")
+                  (fm "0.5" "0" "1" ":exp") (fm "x" "0" "1")])))))
+
+(deftest inline-t-value-test
+  (testing "M5"
+    (is (near? 0.7 (sm/inline-t c01 0.7) 1e-9))
+    (is (near? 1 (sm/inline-t c01 2) 1e-9))
+    (is (near? 0 (sm/inline-t clog 20) 1e-9))
+    (is (near? 1 (sm/inline-t clog 20000) 1e-9))
+    (is (near? 0.5 (sm/inline-t clog 632.4555320336759) 1e-9)))
+  (testing "M6"
+    (is (near? 632.4555320336759 (sm/inline-value clog 0.5) 1e-6))
+    (is (near? 0.25 (sm/inline-value c01 0.25) 1e-12))
+    (is (near? 0 (sm/inline-value cpan 0.5) 1e-12))))
+
+(deftest inline-fmt-test
+  (testing "M7"
+    (is (= "0.70" (sm/inline-fmt c01 0.7)))
+    (is (= "1.00" (sm/inline-fmt c01 1)))
+    (is (= "-0.50" (sm/inline-fmt cpan -0.5)))
+    (is (= "120" (sm/inline-fmt (sm/inline-cfg (fm "120" "40" "300")) 120.4)))
+    (is (= "100" (sm/inline-fmt (sm/inline-cfg (fm "50" "0" "100")) 99.6)))
+    (is (= "1261" (sm/inline-fmt clog 1261.0057830603323)))
+    (is (= "0.001" (sm/inline-fmt (sm/inline-cfg (fm "0.5" "0.001" "1")) 0.002)))))
+
+(deftest inline-drag-test
+  (testing "M8"
+    (is (= "0.80" (sm/inline-fmt c01 (sm/inline-value c01 (sm/inline-drag-t (sm/inline-t c01 0.7) 14)))))
+    (is (= "0.71" (sm/inline-fmt c01 (sm/inline-value c01 (sm/inline-drag-t (sm/inline-t c01 0.7) 1.4)))))
+    (is (= 1 (sm/inline-drag-t 0.95 14)))
+    (is (= 0 (sm/inline-drag-t 0.05 -14)))
+    (is (= "1261" (sm/inline-fmt clog (sm/inline-value clog (sm/inline-drag-t (sm/inline-t clog 632) 14)))))
+    (is (= 140 sm/INLINE-DRAG-PX))))
+
+(deftest inline-range-text-and-wrap-range-test
+  (testing "M9 inline-range-text"
+    (is (= "0–1" (sm/inline-range-text c01)))
+    (is (= "-1–1" (sm/inline-range-text cpan)))
+    (is (= "20–20k · log" (sm/inline-range-text clog)))
+    (is (= "0–1k" (sm/inline-range-text (sm/inline-cfg (fm "5" "0" "1000")))))
+    (is (= "40–300" (sm/inline-range-text (sm/inline-cfg (fm "120" "40" "300")))))
+    (is (= "1–10 · log" (sm/inline-range-text (sm/inline-cfg (fm "5" "1" "10" ":log"))))))
+  (testing "M9 wrap-range"
+    (is (= [0 1] (sm/wrap-range "amp" 0.7)))
+    (is (= [0 2] (sm/wrap-range "decay" 0.25)))
+    (is (= [20 20000] (sm/wrap-range "freq" 800)))
+    (is (= [40 300] (sm/wrap-range "bpm" 120)))
+    (is (= [-1 1] (sm/wrap-range "pan" -0.3)))
+    (is (= [0 1.5] (sm/wrap-range "amp" 1.5)))
+    (is (= [0 2] (sm/wrap-range "fast" 2)))
+    (is (= [0 1] (sm/wrap-range nil 0.5)))))

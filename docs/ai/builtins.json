@@ -4988,6 +4988,23 @@
     "detail": "(tween curve start end bars) — smooth parameter transition over bars; curve: :linear :exp :sine",
     "description": "Interpolate a parameter from start to end over the given duration in bars. The audio engine handles per-sample interpolation — a single message is sent; no polling occurs. After the transition completes, the end value is held. Re-evaluating code restarts the transition.\n\ncurve: :linear — constant rate of change\n       :exp    — slow start, fast end (good for volume fades)\n       :sine   — S-curve: slow at both ends, fast in the middle"
   },
+  "slider": {
+    "category": "util",
+    "signature": "(slider value min max) or (slider value min max :log)",
+    "returns": "number",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :e1 :g1) (synth :saw) (amp (slider 0.7 0 1)))",
+      "(fx :filter :freq (slider 800 20 20000))"
+    ],
+    "see-also": [
+      "amp",
+      "tween",
+      "range"
+    ],
+    "detail": "(slider value min max [:log|:lin]) — a number drawn as a draggable slider in the editor; ⌘K S wraps/unwraps",
+    "description": "Evaluates to value, clamped to [min, max] (a warning names the clamp). In the editor the form is drawn as a draggable bar: drag to change the number in the code (⇧ = 10× finer), move the cursor onto it to edit the text, ⌘K S / Ctrl-K S to unwrap. Log scale when min > 0 and max/min ≥ 100, or with :log; :lin forces linear."
+  },
   "reset!": {
     "category": "audio",
     "signature": "(reset!)",

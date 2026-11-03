@@ -66,7 +66,7 @@ Map    { OpenBrace expr* CloseBrace }
     "cons" | "concat" | "vec" | "map" | "filter" | "reduce" | "range" |
     "mod" | "quot" | "abs" | "max" | "min" | "identity" | "apply" | "list" |
     "str" | "keyword" | "symbol" | "name" | "number?" | "string?" | "keyword?" | "nil?" |
-    "quote" | "tween" |
+    "quote" | "tween" | "slider" |
     "reset!" | "help-export" | "ai"
   }
 

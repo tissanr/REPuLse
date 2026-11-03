@@ -6,6 +6,8 @@
    source preview + used by) or the top-level fx (their sliders).
    Sliders write back into the code through repulse.eval-orchestrator (one
    undo step per drag; ⇧-drag is 10× finer).  Renders into #inspector.
+   Track param rows whose value is a literal number in the code get a ≋
+   toggle that wraps/unwraps it in (slider …) (Phase WS3).
    Exports: init!, render!, schedule-render!, track-param."
   (:require [clojure.string :as str]
             [repulse.core :as core]
@@ -14,6 +16,8 @@
             [repulse.outline :as outline]
             [repulse.song-transport :as song-transport]
             [repulse.eval-orchestrator :as eo]
+            [repulse.lisp-patcher :as patcher]
+            [repulse.ui.inline-slider :as inline-slider]
             [repulse.ui.editor :as editor]
             [repulse.ui.goto :as goto]
             [repulse.ui.outline-panel :as outline-panel]
@@ -93,13 +97,23 @@
 
 ;;; Controls
 
+(defn- inline-html
+  "WS3 ≋ toggle: on = the param is an inline (slider …) in the code."
+  [param {:keys [on? pos]}]
+  (str "<span class=\"ins-inl" (when on? " on") "\" data-act=\"inline\""
+       " data-param=\"" (escape-html param) "\" data-pos=\"" pos "\""
+       " title=\"" (if on?
+                     "shown as inline slider in code — click to unwrap"
+                     "wrap in (slider …) in code  ⌘K S") "\">≋</span>"))
+
 (defn- slider-html
-  "label + custom slider + value. ids: {:key :track :fx :param :at}."
-  [label v cfg {:keys [key track fx param at]}]
+  "label + custom slider + value. ids: {:key :track :fx :param :at :inline};
+   :inline nil | {:on? bool :pos n} adds the WS3 ≋ toggle."
+  [label v cfg {:keys [key track fx param at inline]}]
   (let [t   (slm/value->t cfg v)
         pct (* 100 t)
         [lo hi] (if-let [vs (seq (:values cfg))] [(first vs) (last vs)] [(:min cfg) (:max cfg)])]
-    (str "<div class=\"ins-srow\">"
+    (str "<div class=\"ins-srow" (when inline " has-inl") "\">"
          "<span class=\"ins-plabel\">" (escape-html label) "</span>"
          "<div class=\"ins-slider\" tabindex=\"0\" role=\"slider\""
          " aria-label=\"" (escape-html label) "\""
@@ -116,7 +130,20 @@
          "<div class=\"ins-knob\" style=\"left:calc(" pct "% - 4px)\"></div>"
          "</div>"
          "<span class=\"ins-pval\">" (escape-html (slm/fmt-pv v)) "</span>"
+         (when inline (inline-html param inline))
          "</div>")))
+
+(defn- inline-state
+  "WS3: ≋ state for track param `pname` within the track form [from, to):
+   {:on? :pos} when it is `(pname NUMBER …)` or `(pname (slider NUMBER …))`."
+  [entry pname]
+  (when-let [view @editor/editor-view]
+    (let [doc (.. view -state -doc (toString))
+          from (:from entry)
+          to   (min (count doc) (or (:to entry) (count doc)))]
+      (when (and (number? from) (< from to))
+        (when-let [r (patcher/find-param-num doc from to pname)]
+          {:on? (some? (:slider r)) :pos (:from r)})))))
 
 (defn- select-html [label v opts {:keys [key track fx param at]}]
   (let [cur (str/replace (str v) #"^:" "")]
@@ -210,7 +237,8 @@
                          (apply str (map (fn [[k v cfg]]
                                            (slider-html (name k) v cfg
                                                         {:key (str tname "|" (name k))
-                                                         :track tname :param (name k)}))
+                                                         :track tname :param (name k)
+                                                         :inline (inline-state entry (name k))}))
                                          sliders))
                          (apply str (map (fn [[k s]]
                                            (str "<div class=\"ins-trow\"><span class=\"ins-plabel\">"
@@ -540,6 +568,10 @@
                                  (vals (outline-panel/selection-index)))]
                   (goto/push-jump! (.-state view))
                   (goto/reveal! view from from (or (:to e) from))))
+      "inline" (let [pos (js/parseInt (.getAttribute act-el "data-pos") 10)]
+                 (when-not (js/isNaN pos)
+                   (inline-slider/toggle-at! @editor/editor-view pos {:keep-cursor? true})
+                   (schedule-render!)))
       "close" (do (outline-panel/clear-selection!)
                   (when-let [v @editor/editor-view] (.focus v)))
       nil)))

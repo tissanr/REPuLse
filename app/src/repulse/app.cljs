@@ -11,6 +11,7 @@
             [repulse.ui.outline-panel :as outline-panel]
             [repulse.ui.status-head :as status-head]
             [repulse.ui.inspector :as inspector]
+            [repulse.ui.inline-slider :as inline-slider]
             [repulse.ui.selection-highlight :as selection-highlight]
             [repulse.ui.goto :as goto]
             [repulse.ui.buffers :as buffers]
@@ -284,7 +285,8 @@
                               (fn [_] (eo/evaluate-project!))
                               #(eo/evaluate! "(upd)"))
                              #js [outline-panel/extension goto/extension
-                                  selection-highlight/extension])
+                                  selection-highlight/extension
+                                  inline-slider/extension])
           view      (editor/make-view container (editor/make-state "" exts))]
       (reset! editor/editor-view view)
       (buffers/init! view proj exts {:set-output! set-output!})

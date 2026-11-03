@@ -2237,7 +2237,7 @@ See full spec: [PROMPTS/PHASE-WS2.md](PROMPTS/PHASE-WS2.md)
 
 ---
 
-## Phase WS3 — Inline Sliders in Code 📋 *planned*
+## Phase WS3 — Inline Sliders in Code ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2246,6 +2246,31 @@ See full spec: [PROMPTS/PHASE-WS2.md](PROMPTS/PHASE-WS2.md)
 **Key additions:**
 - Drag writes the value back into the code (⇧ = fine); the cursor inside shows raw text
 - ⌘K S wraps or unwraps a number, with the range guessed from the param name (log for freq)
+
+**Delivered:**
+- New built-in `slider` (`repulse.lisp.builtins.slider/make-slider-fn`): evaluates to its value
+  (a JS number, rationals accepted), clamped to `[min, max]`; optional `:log` / `:lin`; seven
+  exact eval-error texts (arity, value/min/max not a number, min ≥ max, bad scale, `:log` with
+  min ≤ 0). The app env installs a variant that records clamp warnings
+  (`repulse.env.builtins/eval-warnings`); `evaluate*` appends `Warning: …` to the output line and
+  sets warning diagnostics (kept when the unknown-sound report adds its own)
+- Editor widget `repulse.ui.inline-slider` (main app only): a `StateField` replaces each
+  well-formed single-line `(slider …)` with a 70×15 `WidgetType` bar (shadow `defclass`) unless a
+  selection touches it; drag = 140 px full range, ⇧ = 10× finer with a `×0.1` tag, log scale when
+  min > 0 and max/min ≥ 100; each move patches the value literal and re-evaluates through
+  `eval-orchestrator/inline-slider-patch-and-eval!` (150 ms debounce), one undo step per drag;
+  double-click selects the value
+- **⌘K S / Ctrl-K S** (`"Mod-k s"`) wraps the number under the cursor with a range from the param
+  name (amp 0–1, pan −1–1, decay 0–2, freq 20–20000, bpm 40–300, else 0–1, widened to include the
+  literal) or unwraps the slider under the cursor; inspector track param rows get a `≋` toggle
+  (cyan when the param is an inline slider)
+- `lisp-patcher` learns `find-slider-forms`, `slider-form-at`, `visible-sliders`,
+  `slider-toggle-edit`, and its track/fx numeric finders look through `(slider NUMBER …)`
+  (inspector and fx write-backs land in the slider's value, clamped to its range);
+  `slider-model` gains the pure inline mapping/formatting helpers
+- Language surface: grammar, completion, hover doc, `builtin_meta.edn`, `docs/ai/builtins.json`.
+  Tests: E1–E16, M1–M9, P1–P12 (CLJS) and `e2e/inline-slider.spec.ts` (11 Playwright tests);
+  docs: USAGE "Inline sliders — slider" + key row + inspector `≋`, README bullet
 
 See full spec: [PROMPTS/PHASE-WS3.md](PROMPTS/PHASE-WS3.md)
 
