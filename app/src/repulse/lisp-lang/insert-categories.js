@@ -120,7 +120,7 @@ const TOP_CATEGORIES = [
     items: [
       withBuiltinDetail("def", "(def ¦kick (seq :bd :_ :bd :_))"),
       withBuiltinDetail("defn", "(defn ¦swing [pat]\n  (off 1/8 rev pat))"),
-      withBuiltinDetail("defsynth", "(defsynth ¦lead [freq]\n  (-> (saw freq)\n      (env-perc 0.01 0.2)))"),
+      withBuiltinDetail("defsynth", "(defsynth ¦lead [freq]\n  (->> (saw freq)\n      (env-perc 0.01 0.2)))"),
       withBuiltinDetail("defmacro", "(defmacro ¦twice [form]\n  (list 'do form form))"),
     ],
   },

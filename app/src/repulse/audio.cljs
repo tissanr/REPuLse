@@ -436,6 +436,11 @@
        (let [synth-def (synth/lookup-synth (:synth value))]
          (synth/play-synth! ac t synth-def value dest))
 
+       ;; Bare defsynth name — (seq :lfo-sine) triggers a parameterless synth,
+       ;; e.g. a bus writer. Note names keep their meaning.
+       (and (keyword? value) (not (theory/note-keyword? value)) (synth/lookup-synth value))
+       (synth/play-synth! ac t (synth/lookup-synth value) {} dest)
+
        ;; Parameter map {:note … :amp … :attack … :decay … :pan … :synth …}
        ;; from amp/attack/decay/release/pan/saw/square/noise/fm transformers
        (and (map? value) (:note value))

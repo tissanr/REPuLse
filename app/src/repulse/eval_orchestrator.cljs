@@ -13,6 +13,7 @@
             [repulse.audio :as audio]
             [repulse.samples :as samples]
             [repulse.sound-check :as sound-check]
+            [repulse.synth :as synth]
             [repulse.fx :as fx]
             [repulse.env.builtins :as builtins]
             [repulse.song :as song]
@@ -120,7 +121,8 @@
                pats     (keep #(get tracks %) track-names)
                unknown  (sound-check/unknown-sounds
                          pats
-                         #(samples/has-bank? (samples/resolve-keyword %))
+                         #(or (synth/lookup-synth %)
+                              (samples/has-bank? (samples/resolve-keyword %)))
                          (samples/bank-names))]
            (when (seq unknown)
              (let [msgs (map sound-check/warning-message unknown)]

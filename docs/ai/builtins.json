@@ -1494,7 +1494,8 @@
     ],
     "examples": [
       "(defsynth bell [freq] (->> (sin freq) (env-perc 0.01 1.5)))",
-      "(defsynth bass [freq] (->> (saw freq) (lpf 800) (env-perc 0.01 0.3)))"
+      "(defsynth bass [freq] (->> (saw freq) (lpf 800) (env-perc 0.01 0.3)))",
+      "(defsynth lfo-sine [] (out :lfo (sin 4))) ; trigger with (seq :lfo-sine)"
     ],
     "see-also": [
       "synth",
@@ -1773,6 +1774,26 @@
     ],
     "detail": "(sound bank n) — select sample n from bank",
     "description": "Select sample number n from the named bank."
+  },
+  "bank": {
+    "category": "sample",
+    "signature": "(bank :prefix)",
+    "returns": "string",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(bank :AkaiLinn)",
+      "(bank :RolandTR808)",
+      "(bank nil)"
+    ],
+    "see-also": [
+      "sample-banks",
+      "sound",
+      "samples!"
+    ],
+    "detail": "(bank :prefix) — resolve bare drum keywords to a drum-machine bank, (bank nil) clears",
+    "description": "Set a default bank prefix for all subsequent keyword lookups."
   },
   "distort": {
     "category": "effect",
@@ -4332,7 +4353,7 @@
     "returns": "UGen",
     "side-effects": [],
     "examples": [
-      "(-> (sin freq) (env-gen (env [0 1 0] [0.01 0.5] [:lin :exp])))",
+      "(->> (sin freq) (env-gen (env [0 1 0] [0.01 0.5] [:lin :exp])))",
       "(env-gen (env [0 1 0] [0.01 0.3]) (mix (sin freq) (tri freq)))"
     ],
     "see-also": [
@@ -4406,7 +4427,7 @@
     "side-effects": [],
     "examples": [
       "(in :lfo)",
-      "(lpf (* 2000 (in :lfo)) (saw freq))"
+      "(lpf (+ 1200 (* 800 (in :lfo))) (saw freq))"
     ],
     "see-also": [
       "out",
