@@ -205,9 +205,10 @@ Patterns describe **what** sounds and **when**. All composition happens here:
 - **Filters:** `lpf`, `hpf`, `bpf`
 - **Envelopes:** `env-perc`, `env-asr`, `env` + `env-gen` (general envelope)
 - **Routing:** `mix`, `gain`, `delay-node`
-- **Threading:** `->` (thread-first) — **only valid inside defsynth**
+- **Modulation:** `bus`/`out`/`in` plus signal arithmetic (`*`, `+`) — any UGen parameter takes a number or a signal
+- **Threading:** `->>` (thread-last) — UGens take their source as the **last** argument, like pattern transforms
 
-⚠️ **The `->` macro only works inside `defsynth` bodies. At the pattern level, always use `->>`.**
+⚠️ **Use `->>` in `defsynth` bodies too. `->` (thread-first) puts the source in the cutoff/level slot.**
 
 ### What REPuLse is NOT
 
@@ -286,7 +287,7 @@ These patterns are **wrong** in REPuLse. If you see AI-generated code that looks
 ### ❌ Thread-first `->` at pattern level
 
 ```clojure
-;; WRONG — -> is only for defsynth bodies
+;; WRONG — -> puts the pattern first; transforms take it last
 (-> (seq :bd :sd) (fast 2) (amp 0.8))
 
 ;; RIGHT — ->> (thread-last) at pattern level
@@ -1670,14 +1671,14 @@ Define custom instruments from Web Audio node graphs. UGen functions build the g
 
 ```lisp
 (defsynth pluck [freq]
-  (-> (saw freq)
-      (lpf (* freq 2))
-      (env-perc 0.01 0.3)))
+  (->> (saw freq)
+       (lpf (* freq 2))
+       (env-perc 0.01 0.3)))
 
 (defsynth pad [freq]
-  (-> (mix (sin freq) (sin (* freq 1.002)))
-      (lpf 2000)
-      (env-asr 0.3 0.8 1.0)))
+  (->> (mix (sin freq) (sin (* freq 1.002)))
+       (lpf 2000)
+       (env-asr 0.3 0.8 1.0)))
 
 (->> (scale :minor :c4 (seq 1 3 5 8))
      (synth :pluck)
@@ -1705,6 +1706,16 @@ Available UGens:
 | `(out :bus-name src)` | Write signal to a named bus |
 | `(in :bus-name)` | Read from a named bus as a UGen source |
 | `(kr rate src)` | Control-rate pass-through (informational wrapper) |
+| `(* depth sig)` | Scale a signal (two signals: ring modulation) |
+| `(+ offset sig)` | Add a constant or another signal |
+
+UGens take their source as the **last** argument, so thread them with `->>`.
+Every parameter (`freq`, `cutoff`, `level`, `time`) accepts a number or a signal —
+see [`bus` / `out` / `in`](#bus--out--in--named-audio-and-control-rate-buses).
+
+Trigger a synth with `(synth :name pat)`; its parameters (`freq`, …) come from the
+event. A parameterless synth can also be triggered by its bare name, e.g.
+`(seq :lfo-sine)` — useful for bus writers.
 
 Synths are ephemeral — nodes are created at event time and disconnected after the envelope.
 
@@ -1735,9 +1746,9 @@ Use `env` with `env-gen` inside a `defsynth` body:
 
 ```lisp
 (defsynth pluck [freq]
-  (-> (saw freq)
-      (lpf 3000)
-      (env-gen (env [0 1 0.3 0] [0.001 0.05 0.4] [:lin :exp :exp]))))
+  (->> (saw freq)
+       (lpf 3000)
+       (env-gen (env [0 1 0.3 0] [0.001 0.05 0.4] [:lin :exp :exp]))))
 ```
 
 ### `bus` / `out` / `in` — named audio and control-rate buses
@@ -1754,19 +1765,31 @@ from another, or mix multiple sources.
 
 ;; LFO writer synth — plays on a track each cycle
 (defsynth lfo-sine []
-  (out :lfo (sin 4)))     ; 4 Hz sine to bus
+  (out :lfo (sin 4)))     ; 4 Hz sine (-1…1) to bus
 
 ;; Synth that reads the LFO bus
 (defsynth wobble [freq]
-  (-> (saw freq)
-      (lpf (* 2000 (in :lfo)))   ; LFO modulates cutoff
-      (env-perc 0.01 0.4)))
+  (->> (saw freq)
+       (lpf (+ 1200 (* 800 (in :lfo))))   ; cutoff sweeps 400…2000 Hz
+       (env-perc 0.01 0.4)))
 
-;; Wire it up
+;; Wire it up — a bare defsynth name triggers it
 (track :lfo-src (seq :lfo-sine))
-(->> (scale :minor :c3 (seq 0 3 5 7))
-     (synth :wobble))
+(track :lead
+  (->> (scale :minor :c3 (seq 0 3 5 7))
+       (synth :wobble)))
 ```
+
+Modulation:
+- Any UGen parameter — oscillator `freq`, filter `cutoff`, `gain` `level`, `delay-node`
+  `time` — takes a number or a signal. A signal is connected to the underlying
+  AudioParam and **replaces** its value, so a bare `(in :lfo)` (range -1…1) would be
+  a near-zero cutoff
+- Inside `defsynth`, `*` and `+` work on signals: `(* 800 sig)` scales, `(+ 1200 sig)`
+  adds an offset, `(* sig-a sig-b)` ring-modulates. Use `(+ centre (* depth sig))` to
+  sweep a parameter around a centre value
+- A parameterless synth (e.g. a bus writer) is triggered by its bare name in a
+  pattern: `(seq :lfo-sine)`. `(synth :name pat)` works too
 
 Bus rules:
 - `(bus :name)` defaults to `:control`

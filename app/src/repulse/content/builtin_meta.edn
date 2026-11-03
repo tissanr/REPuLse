@@ -555,7 +555,7 @@
  :env-gen    {:category "ugen"
               :returns "UGen"
               :side-effects []
-              :examples ["(-> (sin freq) (env-gen (env [0 1 0] [0.01 0.5] [:lin :exp])))"
+              :examples ["(->> (sin freq) (env-gen (env [0 1 0] [0.01 0.5] [:lin :exp])))"
                          "(env-gen (env [0 1 0] [0.01 0.3]) (mix (sin freq) (tri freq)))"]
               :see-also ["env" "env-perc" "env-asr" "defsynth"]}
 
@@ -575,7 +575,7 @@
  :in         {:category "ugen"
               :returns "UGen"
               :side-effects []
-              :examples ["(in :lfo)" "(lpf (* 2000 (in :lfo)) (saw freq))"]
+              :examples ["(in :lfo)" "(lpf (+ 1200 (* 800 (in :lfo))) (saw freq))"]
               :see-also ["out" "bus"]}
 
  :kr         {:category "ugen"
@@ -898,7 +898,8 @@
               :returns "nil"
               :side-effects ["audio"]
               :examples ["(defsynth bell [freq] (->> (sin freq) (env-perc 0.01 1.5)))"
-                         "(defsynth bass [freq] (->> (saw freq) (lpf 800) (env-perc 0.01 0.3)))"]
+                         "(defsynth bass [freq] (->> (saw freq) (lpf 800) (env-perc 0.01 0.3)))"
+                         "(defsynth lfo-sine [] (out :lfo (sin 4))) ; trigger with (seq :lfo-sine)"]
               :see-also ["synth" "sin" "tri" "saw" "env-perc"]}
 
  :loop       {:category "special"

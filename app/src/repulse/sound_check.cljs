@@ -68,7 +68,8 @@
 
 (defn unknown-sounds
   "Unknown sound keywords across patterns, each as {:name kw :suggestion kw-or-nil}.
-   known-bank? — (fn [kw]) true when kw resolves to a registered sample bank.
+   known-bank? — (fn [kw]) true when kw resolves to something playable: a
+                 registered sample bank or a defsynth name.
    bank-names  — registered bank names (strings), used for suggestions."
   [patterns known-bank? bank-names]
   (->> patterns

@@ -2,26 +2,40 @@
   (:require [repulse.audio :as audio]
             [repulse.core :as core]
             [repulse.lisp.core :as lisp]
-            [repulse.lisp.eval :as leval]))
+            [repulse.lisp.eval :as leval]
+            [repulse.bus :as bus]
+            [repulse.synth :as synth]))
 
 (def ^:private default-sample-rate 44100)
 (def ^:private default-cycle-dur 2.0)
 
-(defn- make-test-env []
-  (leval/make-env (fn [] nil) (fn [_] nil)))
+(defn- make-test-env
+  "Pattern-only env; given an audio context, also defsynth and (bus …) on it."
+  ([] (leval/make-env (fn [] nil) (fn [_] nil)))
+  ([ac]
+   (assoc (make-test-env)
+          :*register-synth-fn* synth/register-synth!
+          "bus" (fn [bus-name & [bus-type]]
+                  (bus/create-bus! ac (leval/unwrap bus-name)
+                                   (or (leval/unwrap bus-type) :control))
+                  nil))))
 
-(defn- eval-code [code]
-  (let [env (make-test-env)
-        r   (lisp/eval-string code env)]
-    (when (lisp/eval-error? r)
-      (throw (js/Error. (:message r))))
-    (:result r)))
+(defn- eval-code
+  ([code] (eval-code code nil))
+  ([code ac]
+   (let [env (if ac (make-test-env ac) (make-test-env))
+         r   (lisp/eval-string code env)]
+     (when (lisp/eval-error? r)
+       (throw (js/Error. (:message r))))
+     (:result r))))
 
-(defn- pattern-from-code [code]
-  (let [result (eval-code code)]
-    (when-not (core/pattern? result)
-      (throw (js/Error. (str "Expected pattern, got " (type result)))))
-    result))
+(defn- pattern-from-code
+  ([code] (pattern-from-code code nil))
+  ([code ac]
+   (let [result (eval-code code ac)]
+     (when-not (core/pattern? result)
+       (throw (js/Error. (str "Expected pattern, got " (type result)))))
+     result)))
 
 (defn- safe-value [v]
   (cond
@@ -71,14 +85,14 @@
   ([code] (render-offline code 1 nil))
   ([code cycles] (render-offline code cycles nil))
   ([code cycles options]
-   (let [pattern     (pattern-from-code code)
-         opts        (js->clj (or options #js {}) :keywordize-keys true)
+   (let [opts        (js->clj (or options #js {}) :keywordize-keys true)
          n-cycles    (max 1 (int (or cycles 1)))
          sample-rate (int (or (:sampleRate opts) default-sample-rate))
          cycle-dur   (double (or (:cycleDur opts) default-cycle-dur))
          duration    (* n-cycles cycle-dur)
          n-frames    (int (* sample-rate duration))
-         offline     (js/OfflineAudioContext. 2 n-frames sample-rate)]
+         offline     (js/OfflineAudioContext. 2 n-frames sample-rate)
+         pattern     (pattern-from-code code offline)]
      (schedule-pattern! offline pattern n-cycles cycle-dur)
      (-> (.startRendering offline)
          (.then (fn [buffer]
@@ -91,6 +105,7 @@
                             :right      (channel-array buffer 1)})))))))
 
 (defn- reset-test-state! []
+  (bus/cleanup-all!)
   (cljs.core/reset! audio/scheduler-state {:playing?     false
                                            :tracks       {}
                                            :muted        #{}

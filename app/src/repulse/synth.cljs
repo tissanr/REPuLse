@@ -1,5 +1,6 @@
 (ns repulse.synth
   (:require [repulse.lisp.eval :as leval]
+            [repulse.lisp.util :as u]
             [repulse.bus :as bus]
             [repulse.envelope :as env]))
 
@@ -22,6 +23,74 @@
 (defn lookup-synth [synth-name]
   (get @synth-defs synth-name))
 
+;;; ── Signal parameters ───────────────────────────────────────────────
+;;
+;; UGen parameters (frequency, cutoff, level, delay time) take either a number
+;; or a signal — an AudioNode such as (in :lfo) or (* 800 (in :lfo)). A signal
+;; is connected to the AudioParam and the param's own value is zeroed, so the
+;; signal alone sets it. Add a constant to centre it: (+ 1200 (* 800 (in :lfo))).
+
+(defn signal?
+  "True for an AudioNode usable as a UGen source or parameter."
+  [x]
+  (and (some? x) (fn? (.-connect x))))
+
+(defn- set-param!
+  [param v pname]
+  (cond
+    (signal? v)
+    (do (.setValueAtTime param 0 0)
+        (.connect v param))
+
+    (and (number? v) (js/isFinite v))
+    (.setValueAtTime param v 0)
+
+    :else
+    (throw (ex-info (str pname " must be a number or a signal such as (in :lfo), got "
+                         (pr-str v))
+                    {:type :eval-error}))))
+
+(defn signal-mul
+  "(* …) inside defsynth: plain numbers multiply as usual; with signals, returns
+   a GainNode scaling the first signal by the numeric product. Further signals
+   ring-modulate it (each drives the gain of another GainNode)."
+  [ac args]
+  (let [sigs (filter signal? args)
+        k    (apply * (map u/->num (remove signal? args)))]
+    (if (empty? sigs)
+      k
+      (let [g (.createGain ac)]
+        (.setValueAtTime (.-gain g) k 0)
+        (.connect (first sigs) g)
+        (reduce (fn [prev s]
+                  (let [rm (.createGain ac)]
+                    (.setValueAtTime (.-gain rm) 0 0)
+                    (.connect prev rm)
+                    (.connect s (.-gain rm))
+                    rm))
+                g
+                (rest sigs))))))
+
+(defn signal-add
+  "(+ …) inside defsynth: plain numbers add as usual; with signals, returns a
+   GainNode summing them plus a ConstantSourceNode for the numeric offset.
+   Returns [node started-sources] — the offset source must be stopped later."
+  [ac t args]
+  (let [sigs (filter signal? args)
+        c    (apply + (map u/->num (remove signal? args)))]
+    (if (empty? sigs)
+      [c nil]
+      (let [g (.createGain ac)]
+        (.setValueAtTime (.-gain g) 1 0)
+        (doseq [s sigs] (.connect s g))
+        (if (zero? c)
+          [g nil]
+          (let [cs (.createConstantSource ac)]
+            (.setValueAtTime (.-offset cs) c 0)
+            (.connect cs g)
+            (.start cs t)
+            [g [cs]]))))))
+
 ;;; ── UGen constructors ────────────────────────────────────────────────
 ;;
 ;; Each oscillator/source UGen takes (ac t [freq]) and returns a started AudioNode.
@@ -31,28 +100,28 @@
 (defn sin-osc [ac t freq]
   (let [osc (.createOscillator ac)]
     (set! (.-type osc) "sine")
-    (.setValueAtTime (.-frequency osc) freq 0)
+    (set-param! (.-frequency osc) freq "frequency")
     (.start osc t)
     osc))
 
 (defn saw-osc [ac t freq]
   (let [osc (.createOscillator ac)]
     (set! (.-type osc) "sawtooth")
-    (.setValueAtTime (.-frequency osc) freq 0)
+    (set-param! (.-frequency osc) freq "frequency")
     (.start osc t)
     osc))
 
 (defn square-osc [ac t freq]
   (let [osc (.createOscillator ac)]
     (set! (.-type osc) "square")
-    (.setValueAtTime (.-frequency osc) freq 0)
+    (set-param! (.-frequency osc) freq "frequency")
     (.start osc t)
     osc))
 
 (defn tri-osc [ac t freq]
   (let [osc (.createOscillator ac)]
     (set! (.-type osc) "triangle")
-    (.setValueAtTime (.-frequency osc) freq 0)
+    (set-param! (.-frequency osc) freq "frequency")
     (.start osc t)
     osc))
 
@@ -74,7 +143,7 @@
   [ac cutoff source]
   (let [flt (.createBiquadFilter ac)]
     (set! (.-type flt) "lowpass")
-    (.setValueAtTime (.-frequency flt) cutoff 0)
+    (set-param! (.-frequency flt) cutoff "cutoff")
     (.connect source flt)
     flt))
 
@@ -83,7 +152,7 @@
   [ac cutoff source]
   (let [flt (.createBiquadFilter ac)]
     (set! (.-type flt) "highpass")
-    (.setValueAtTime (.-frequency flt) cutoff 0)
+    (set-param! (.-frequency flt) cutoff "cutoff")
     (.connect source flt)
     flt))
 
@@ -92,7 +161,7 @@
   [ac freq source]
   (let [flt (.createBiquadFilter ac)]
     (set! (.-type flt) "bandpass")
-    (.setValueAtTime (.-frequency flt) freq 0)
+    (set-param! (.-frequency flt) freq "frequency")
     (.connect source flt)
     flt))
 
@@ -100,7 +169,7 @@
   "Static gain: (gain level source)."
   [ac level source]
   (let [g (.createGain ac)]
-    (.setValueAtTime (.-gain g) level 0)
+    (set-param! (.-gain g) level "level")
     (.connect source g)
     g))
 
@@ -108,7 +177,7 @@
   "Delay: (delay-node time source)."
   [ac time source]
   (let [d (.createDelay ac 5.0)]
-    (.setValueAtTime (.-delayTime d) time 0)
+    (set-param! (.-delayTime d) time "delay time")
     (.connect source d)
     d))
 
@@ -231,11 +300,15 @@
 (defn- make-build-fn
   "Creates the Web Audio graph builder function for a defsynth.
    When called with [ac t param-map] it evaluates the synth body
-   with UGen functions and param bindings in scope.
+   with UGen functions and param bindings in scope, and returns
+   [result release!] — release! detaches the voice from shared bus nodes
+   and stops sources started for signal arithmetic.
    synth-name is used by out-node for replace-on-retrigger tracking."
   [synth-name param-names body closed-env]
   (fn [ac t param-map]
-    (let [;; Bind param values from the event's parameter map
+    (let [releases (atom [])
+          on-release! (fn [f] (swap! releases conj f))
+          ;; Bind param values from the event's parameter map
           param-bindings (zipmap param-names
                                  (map #(get param-map (keyword %)) param-names))
           ;; UGen functions capture ac and t from the call site
@@ -251,6 +324,13 @@
                     "gain"       (fn [level src]     (gain-node  ac (unwrap level)  (unwrap src)))
                     "delay-node" (fn [time src]      (delay-line ac (unwrap time)   (unwrap src)))
                     "mix"        (fn [a b]           (mix-node   ac (unwrap a)      (unwrap b)))
+                    ;; Signal-aware arithmetic: (* 800 (in :lfo)), (+ 1200 sig)
+                    "*"          (fn [& args]        (signal-mul ac (map unwrap args)))
+                    "+"          (fn [& args]
+                                   (let [[node started] (signal-add ac t (map unwrap args))]
+                                     (doseq [s started]
+                                       (on-release! #(try (.stop s) (catch :default _))))
+                                     node))
                     ;; Envelope UGens: source is last arg — use with ->>
                     "env-perc"   (fn [atk dec src]   (env-perc-node ac t (unwrap atk) (unwrap dec) (unwrap src)))
                     "env-asr"    (fn [atk sus rel src] (env-asr-node ac t (unwrap atk) (unwrap sus) (unwrap rel) (unwrap src)))
@@ -259,12 +339,19 @@
                     ;; Bus UGens
                     "out"        (fn [bus-name-v signal-v]
                                    (out-node synth-name (unwrap bus-name-v) (unwrap signal-v)))
+                    ;; Each voice reads through its own tap so release! can cut it
+                    ;; off the long-lived bus node without touching other voices.
                     "in"         (fn [bus-name-v]
-                                   (in-node ac (unwrap bus-name-v)))
+                                   (let [src (in-node ac (unwrap bus-name-v))
+                                         tap (.createGain ac)]
+                                     (.connect src tap)
+                                     (on-release! #(try (.disconnect src tap) (catch :default _)))
+                                     tap))
                     "kr"         (fn [rate-v signal-v]
                                    (kr-node (unwrap rate-v) (unwrap signal-v)))}
-          local (merge closed-env param-bindings ugen-env)]
-      (last (map #(leval/eval-form % local) body)))))
+          local  (merge closed-env param-bindings ugen-env)
+          result (last (map #(leval/eval-form % local) body))]
+      [result (fn [] (doseq [f @releases] (f)))])))
 
 ;;; ── Synth playback ───────────────────────────────────────────────────
 
@@ -274,12 +361,18 @@
    Schedules disconnection after the envelope completes."
   [ac t synth-def param-map dest]
   (let [{:keys [build-fn]} synth-def
-        result   (build-fn ac t param-map)
+        [result release!] (build-fn ac t param-map)
         ;; result is either:
         ;;   AudioNode               — no envelope, use 1.5 s default duration
         ;;   {:node AudioNode :duration N} — from env-perc / env-asr / env-gen
         ;;   {:node nil :bus-writer true}  — synth writes to bus, no audio output
-        ]
+        finish! (fn [out-n dur]
+                  (.connect out-n dest)
+                  (js/setTimeout
+                    (fn []
+                      (try (.disconnect out-n) (catch :default _))
+                      (release!))
+                    (* (+ dur 0.1) 1000)))]
     (cond
       ;; Bus writer — no audio connection, oscillator keeps running in bus
       (and result (map? result) (:bus-writer result))
@@ -287,17 +380,8 @@
 
       ;; Envelope result
       (and result (map? result) (:node result))
-      (let [out-n (:node result)
-            dur   (:duration result)]
-        (.connect out-n dest)
-        (js/setTimeout
-          (fn [] (try (.disconnect out-n) (catch :default _)))
-          (* (+ dur 0.1) 1000)))
+      (finish! (:node result) (:duration result))
 
       ;; Raw AudioNode — no envelope
       result
-      (do
-        (.connect result dest)
-        (js/setTimeout
-          (fn [] (try (.disconnect result) (catch :default _)))
-          (* (+ 1.5 0.1) 1000))))))
+      (finish! result 1.5))))

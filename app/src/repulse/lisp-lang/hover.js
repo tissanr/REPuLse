@@ -422,7 +422,7 @@ const DOCS = {
   "env-gen": {
     signature: "(env-gen env-data signal)",
     description: "Apply a general envelope (created with env) to a UGen signal. Returns the enveloped signal with duration equal to the total envelope time.",
-    example: "(-> (sin freq) (env-gen (env [0 1 0] [0.01 0.5] [:lin :exp])))",
+    example: "(->> (sin freq) (env-gen (env [0 1 0] [0.01 0.5] [:lin :exp])))",
   },
 
   // --- Snippet library ---
@@ -446,7 +446,7 @@ const DOCS = {
   "in": {
     signature: "(in :bus-name)",
     description: "Read from a named bus as a UGen audio source. Returns silence and logs a warning if the bus does not exist.",
-    example: "(lpf (* 2000 (in :lfo)) (saw freq))",
+    example: "(lpf (+ 1200 (* 800 (in :lfo))) (saw freq))",
   },
   "kr": {
     signature: "(kr rate signal)",

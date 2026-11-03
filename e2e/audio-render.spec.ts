@@ -111,3 +111,39 @@ test('rests render silence', async ({ page }) => {
   assertFinitePcm(mono);
   expect(rms(mono)).toBeLessThan(SILENCE_RMS);
 });
+
+// Ratio of first-difference RMS to RMS — rises with high-frequency content.
+function brightness(buffer: number[], sampleRate: number, from: number, to: number): number {
+  const slice = buffer.slice(Math.floor(from * sampleRate), Math.floor(to * sampleRate));
+  const diff = slice.slice(1).map((v, i) => v - slice[i]);
+  return rms(diff) / rms(slice);
+}
+
+// Phase P bus example: a 1 Hz LFO on a control bus sweeps a lowpass cutoff
+// between 2900 Hz (t = 0.25 s) and 100 Hz (t = 0.75 s).
+const wobble = (cutoff: string) => `
+(bus :lfo :control)
+(defsynth lfo-sine [] (out :lfo (sin 1)))
+(defsynth wobble [freq]
+  (->> (saw freq)
+       (lpf ${cutoff})
+       (env-asr 0.01 1.0 0.5)))
+(stack (seq :lfo-sine) (synth :wobble (pure 110)))`;
+
+test('bus LFO modulates a defsynth filter cutoff', async ({ page }) => {
+  const result = await render(page, wobble('(+ 1500 (* 1400 (in :lfo)))'));
+  const mono = mixMono(result.left, result.right);
+  assertFinitePcm(mono);
+  const open = brightness(mono, result.sampleRate, 0.15, 0.35);
+  const closed = brightness(mono, result.sampleRate, 0.65, 0.85);
+  expect(open).toBeGreaterThan(closed * 3);
+});
+
+test('static cutoff control: brightness stays level', async ({ page }) => {
+  const result = await render(page, wobble('1500'));
+  const mono = mixMono(result.left, result.right);
+  const open = brightness(mono, result.sampleRate, 0.15, 0.35);
+  const closed = brightness(mono, result.sampleRate, 0.65, 0.85);
+  expect(open / closed).toBeGreaterThan(0.8);
+  expect(open / closed).toBeLessThan(1.25);
+});
