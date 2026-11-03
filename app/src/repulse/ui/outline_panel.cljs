@@ -285,6 +285,15 @@
               #js [#js {:key "Mod-Shift-o"
                         :run (fn [_] (toggle-collapsed!) true)}]))])
 
+(defn refresh!
+  "Re-extract and repaint after the view's state was swapped (a buffer switch
+   via view.setState does not run update listeners) — Phase SONG4."
+  [view]
+  (reset! view-ref view)
+  (reset! cursor-pos (.. view -state -selection -main -head))
+  (re-extract! view)
+  (render!))
+
 (defn init!
   "Wire the panel to the main editor view: initial extraction, listeners, paint."
   [view]

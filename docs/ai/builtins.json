@@ -1741,6 +1741,23 @@
     "detail": "(play-from :section) / (play-from bar) — start or jump the song to a section or 0-based bar",
     "description": "Start (or jump) the song at the first bar of a section, or at a 0-based bar number. Works while playing and after (stop)."
   },
+  "use": {
+    "category": "special",
+    "signature": "(use :buffer …)",
+    "returns": "String",
+    "side-effects": [],
+    "examples": [
+      "(use :drums)",
+      "(use :drums :bass)"
+    ],
+    "see-also": [
+      "def",
+      "track",
+      "song"
+    ],
+    "detail": "(use :drums :bass) — evaluate other project buffers first (once per evaluation, shared definitions)",
+    "description": "Evaluate the named project buffers, in order, before continuing. All buffers share one environment, so their defs and tracks are visible unqualified. Each buffer runs at most once per evaluation; circular use is an error. Only works when Alt+Enter evaluates the project (not in the command bar)."
+  },
   "sound": {
     "category": "sample",
     "signature": "(sound bank n)",
