@@ -50,18 +50,33 @@ A single-file song is simply a project that only has a main buffer.
   and reported as an eval error; a buffer used twice is evaluated once per evaluation.
 - Duplicate track detection spans the whole project evaluation.
 - Errors point to the right buffer and position (switch tab + diagnostic).
-- Alt+Enter in any buffer evaluates the project from `main` (decide — see questions).
+- Alt+Enter in any buffer evaluates the project from `main` (decided — see question 1).
 - Session schema v3 with buffers; migration from v2 (existing editor text → `main`).
-- Share links / snippets: decide whether they carry full projects or only the main buffer.
+- Share links carry full projects; snippets stay single-buffer (decided — see question 3).
+- Project import/export as a single `.repulse` EDN file (decided — see question 4).
 - SONG3 outline + go-to-definition work across buffers.
 
 ## Open design questions
 
 1. Alt+Enter semantics: always evaluate from `main`, or evaluate the current buffer only
    (fast iteration) with a separate "evaluate project" key?
+   **Decided:** Alt+Enter in any buffer always evaluates the whole project starting from
+   `main`. This keeps "evaluate top to bottom, define before use" true across the project
+   and matches SONG1's per-evaluation duplicate-track detection. No separate
+   current-buffer-only key in this phase.
 2. Does `use` share one environment (simple) or give each buffer a namespace (`drums/kick`)?
+   **Decided:** one shared environment. Defs and tracks from used buffers are visible
+   unqualified in `main` (as in the Goal example). No namespaces in this phase.
 3. Share-link size limits with multiple buffers — URL hash vs. Supabase-backed project share.
+   **Decided:** share links encode the full project in the URL hash (a v3 hash format;
+   existing `#v2:` links keep loading as a single-`main` project). If the encoded link
+   exceeds a size limit, `share!` shows a clear error instead of producing a broken link.
+   Snippets (S1/S3) stay single-buffer: inserting or submitting a snippet uses only the
+   current buffer's text. Supabase-backed project sharing is out of scope (later phase).
 4. Import/export a project as a single file (e.g. `.repulse` EDN) for backup and version control?
+   **Decided:** yes. Export the whole project as one `.repulse` EDN file
+   (`{:version 3 :main "main" :buffers [{:name … :code …} …]}`) and import it back,
+   validated by the same sanitizer as the v3 session. Import replaces the current project.
 
 ## Definition of done
 
@@ -73,6 +88,8 @@ A single-file song is simply a project that only has a main buffer.
 - [ ] An error in a used buffer switches to that buffer and shows the diagnostic at the right position (Playwright).
 - [ ] Go-to-definition jumps into another buffer (Playwright).
 - [ ] A project with only `main` behaves exactly like today's single-buffer editor (existing tests pass).
+- [ ] A share link round-trips a multi-buffer project; an old `#v2:` link loads as a single-`main` project; an oversized project shows a clear share error (unit test).
+- [ ] `.repulse` export → import round-trips a project; malformed files are rejected with a clear error (unit test).
 - [ ] `docs/USAGE.md` documents projects, buffers and `use`; `use` follows CLAUDE.md Rule 3.
 
 ## What NOT to do
