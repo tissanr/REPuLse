@@ -304,14 +304,17 @@ structure with `segment` or use it inside `pan`, `amp`, `range` and friends.
 
 ## The editor
 
-The screen has three parts: the **editor** (your program), the **command bar** below it
-(one-off commands), and a **context panel** on the right (live session state).
+The screen has four parts: the **outline column** on the left (a status head with BPM, song
+progress and latency above the list of your definitions), the **inspector** next to it (only
+open while something in the outline is selected), the **editor** (your program) and the
+**command bar** below it (one-off commands).
 
 | Key | Action |
 |---|---|
 | **Alt+Enter** / **Option+Enter** | Evaluate the entire buffer and start playback (works even when the editor is not focused) |
 | **Ctrl+.** or **F9** | Run `(upd)` — apply changes without restarting running patterns |
-| **Escape** | Jump to the command bar |
+| **Escape** | Close the inspector (clear the outline selection); with nothing selected, jump to the command bar |
+| **F12** | With an outline selection: move the cursor to it; otherwise go to the definition under the cursor |
 | **Ctrl+A** / **Cmd+A** | Select all |
 | **Ctrl+Z** / **Cmd+Z** | Undo |
 | **Ctrl+Shift+Z** / **Cmd+Shift+Z** | Redo |
@@ -364,18 +367,41 @@ after you stop typing.
   (section :verse 8 [:drums]))      ;     :verse 8b •   L4
 ```
 
-- **Click a row** to move the cursor to the form's `(`, scroll it into view and flash it.
+- **Click a row** to select it: its lines are tinted in the editor (with a bar in the
+  gutter), the form scrolls into view, and the [inspector](#status-head-and-inspector) opens
+  next to the outline. The cursor does **not** move. Click the same row again to deselect.
+- **⇧-click** another track to add it to (or remove it from) the selection — the inspector then
+  shows every selected track. ⇧-click on anything else behaves like a plain click.
+- **Esc** clears the selection and closes the inspector (the editor keeps focus). **F12** with
+  a selection moves the cursor to the selected form's `(` (`Shift+F12` jumps back); the `↗ L3`
+  link in the inspector header does the same.
+- The song row is not selectable — clicking it folds / unfolds its sections. Selecting another
+  buffer tab or collapsing the outline clears the selection.
 - **Cursor inside** a form highlights its row (a section wins over its song).
 - **Playing section** — while a song plays, the sounding section is marked `▶` in cyan with a
   thin progress line. Tracks show `■` (muted, dimmed) or a cyan `•` when audible in the playing
   section, and are dimmed when they rest in it. `▾` / `▸` folds the song's sections.
+- **fx group** — top-level `(fx …)` forms are listed together in one `fx` group after all other
+  rows (`fx  fx  1`, then `:reverb  L4`). Select the group to inspect every top-level effect,
+  or one child to inspect just that effect. `fx` calls inside a `track` or `->>` are not listed
+  (they belong to the track and show up in its inspector).
+- **Session block** — when MIDI CC mappings, buses or external sample sources exist, a
+  collapsed `▸ session  midi 2 · buses 1 · sources 1` line appears above the footer (zero
+  counts are omitted). Click it to list them; the open/closed state is remembered.
 - **Collapse** with `‹` (or `Cmd/Ctrl-Shift-O`) to a 28 px rail that shows one bar per section;
   click the rail or press the shortcut to restore. The choice is remembered across reloads, and
   the outline starts collapsed on narrow windows.
 
+The footer lists the hints: `click inspect · ⇧ click add`, `F12 go to def · esc close`,
+`⌘⇧O hide`.
+
 | Action | Shortcut |
 |---|---|
-| Go to definition of the name under the cursor | `Cmd/Ctrl-click` on the name, or `F12` |
+| Select a row / inspect it | click (again to deselect) |
+| Add / remove a track from the selection | `⇧-click` |
+| Close the inspector | `Esc` |
+| Move the cursor to the selected form | `F12` (with a selection) or `↗ L<n>` in the inspector |
+| Go to definition of the name under the cursor | `Cmd/Ctrl-click` on the name, or `F12` (no selection) |
 | Jump back (up to 50 jumps) | `Shift+F12` |
 | Show / hide the outline | `Cmd/Ctrl-Shift-O` |
 
@@ -384,15 +410,45 @@ keyword such as `:drums` (also inside a `section` vector) finds `(track :drums �
 are not defined in the buffer (like `:bd` or built-ins) do nothing. The `<repulse-editor>` embed
 has no outline and no go-to-definition.
 
-### Context panel
+### Status head and inspector
 
-A sidebar to the right of the editor shows live session state:
+The **status head** sits at the top of the outline column:
 
-- **BPM** — current tempo, updates immediately when `(bpm N)` is evaluated
-- **Bindings** — all names you have defined with `def`, annotated with their inferred type (`pattern`, `fn`, `number`, etc.). Built-in names are not shown.
-- **Effects** — the active effect chain in order, with the key parameter value for each effect and an `off` indicator when an effect is bypassed
+- **BPM** — the current tempo (yellow, dashed underline). Click it to type a new tempo and press
+  **Enter** (or click elsewhere); **Esc** cancels. Only whole numbers from 40 to 300 are
+  accepted — anything else marks the field red and keeps it open. With the number focused,
+  **↑ / ↓** change it by 1 and **⇧↑ / ⇧↓** by 10. This sets the tempo directly (like `(bpm N)`)
+  without editing your code, so a `(bpm …)` in the buffer wins again on the next Alt+Enter.
+- **Badges** — the active drum-machine bank prefix (when one is set) and the audio backend:
+  `wasm` (AudioWorklet + Rust/WASM) or `js` (fallback).
+- **Song progress bar** — while the buffer has a `(song …)`, one segment per section, sized by
+  its bars; the playing section is bright cyan and fills up bar by bar. Hover it for
+  `▶ chorus · bar 13/20`. **Click a segment to cue that section**: while the song plays it starts
+  at the next bar; while stopped, the last evaluated song starts there.
+- **Latency** — `latency 5.3 ms` (the audio output latency) once audio has started. During an
+  `(export :song)` capture it shows `● REC 12.0 / 50.0 s` instead.
 
-The panel is read-only and updates reactively — no interaction required.
+The **inspector** opens to the right of the outline whenever a row is selected and shows only
+that selection. Its header names the kind and the name, `↗ L3` (move the cursor there) and
+`esc` (close):
+
+| Selection | Inspector shows |
+|---|---|
+| **track** | `M` (mute) / `S` (solo) buttons and the state (`live`, `muted`, `solo`, `rests in :outro`); **params** sliders for `amp`, `pan`, `decay`, `attack`, `release`, `rate`, `begin`, `end` and text rows for `synth` / `bank`; the track's **fx chain** in signal order with a slider per parameter |
+| several tracks (⇧-click) | one block per track, each with its own `↗ L` link |
+| **section** | its length, a bar strip (current bar cyan), `▶ bar k/n` while it plays or a `▶ cue` button (cue it at the next bar), and its tracks with `M` / `S` and an `amp` slider |
+| **def / defn / synth** | a syntax-coloured preview of the form (first 12 lines) and `Used by :drums, :bass.` |
+| **fx** (group or one effect) | a slider per parameter of the top-level effect(s), "applies after all tracks" |
+
+Sliders **write into your code**: dragging the `amp` slider of `(track :bass (->> … (amp 0.6)))`
+to 0.75 turns the buffer into `(amp 0.75)` and re-evaluates it 150 ms later (effect sliders
+change the sound immediately). Hold **⇧** while dragging for 10× finer control. A focused
+slider also responds to **← / →** (one step) and **⇧← / ⇧→** (ten steps). A whole drag — or
+one key press — is **one undo step**: `Cmd/Ctrl+Z` restores the previous number. Drag the
+inspector's right edge to resize it (180–380 px; the width is remembered).
+
+A track that has not been evaluated yet shows `not evaluated — Alt+Enter`; its sliders appear
+after the first evaluation.
 
 ---
 
@@ -1660,7 +1716,8 @@ Set a global prefix so bare keywords resolve to a named drum machine bank:
 ```
 
 If the prefixed bank doesn't exist (e.g. a machine has no hi-hat), the keyword resolves
-via the standard fallback with no error. The active bank is shown in the context panel.
+via the standard fallback with no error. The active bank is shown as a badge in the status head
+(top of the outline column).
 
 ### Built-in synthesis fallback
 
@@ -2306,11 +2363,14 @@ Re-evaluating the buffer while the song plays keeps the current bar: edit the ch
 Alt+Enter, and the new version takes over at the next bar. If you shortened the song so that the
 current bar no longer exists, playback continues at the first bar of the (new) last section.
 
-### Context panel
+### Song progress in the status head
 
-While a song plays, the status row shows the current section and bar, e.g. `▶ chorus · bar
-13/24` (`▶ song · starting` until bar 0 begins). Tracks that rest in the current section are
-listed as `(not in :outro)` and drawn like muted tracks in the timeline.
+The status head at the top of the outline column shows a progress bar with one segment per
+section; the playing segment is bright and fills bar by bar. Hover it for the current section
+and bar, e.g. `▶ chorus · bar 13/24` (`▶ song · starting` until bar 0 begins). **Click a
+segment** — or `▶ cue` in a section's inspector — to jump there at the next bar, exactly like
+`(play-from :chorus)`. Tracks that rest in the current section show `rests in :outro` in their
+inspector and are drawn like muted tracks in the timeline.
 
 ### `(export :song)` — capture the whole song
 
@@ -2321,7 +2381,7 @@ listed as `(not in :outro)` and drawn like muted tracks in the timeline.
 
 The song restarts from bar 0 and the master output — after every global effect — is recorded
 in real time, so the WAV sounds exactly like playback (WASM voices, per-track and global FX).
-Export therefore takes as long as the song; the context panel shows `● REC 12.0 / 50.0 s`. A
+Export therefore takes as long as the song; the status head shows `● REC 12.0 / 50.0 s`. A
 `:loop` song is captured as one pass. `(stop)` cancels (`export cancelled`); when it finishes,
 the WAV `repulse-song-24bars.wav` downloads (sample rate of your audio device) and the output
 shows `exported song — 24 bars, 50.0 s`.
@@ -2405,7 +2465,7 @@ unique; a project has at most 32 buffers. Each buffer keeps its own undo history
 | `(use :buffer …)` | Evaluate the named buffers, in argument order, before continuing. Returns `=> used :drums :bass` |
 
 - **Alt+Enter in any tab evaluates the whole project, starting from `main`.** So do the play
-  button and the context-panel sliders. There is no "evaluate only this buffer" key.
+  button and the inspector sliders. There is no "evaluate only this buffer" key.
 - `use` is depth-first: a used buffer may itself `use` other buffers. Each buffer runs **at most
   once per evaluation** — a second `(use :kit)` is skipped.
 - All buffers share **one environment**: defs and tracks from used buffers are visible

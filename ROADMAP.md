@@ -47,7 +47,7 @@ without a human:
 | 11 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
 | 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | full | sonnet |
 | 13 | SONG4 | Multi-buffer projects | 🤖 | full | opus |
-| 13a | WS1 | Inspector column & status head (retire context panel) | 🤖 | outline | opus |
+| 13a | WS1 | Inspector column & status head (retire context panel) | 🤖 | full | opus |
 | 13b | WS2 | `(master …)` form & master fx outline group | 🤖 | outline | sonnet |
 | 13c | WS3 | Inline sliders in code: `(slider v min max)` | 🤖 | outline | opus |
 | 13d | WS4 | AI assistant rail | 🤖 | outline | sonnet |
@@ -2165,7 +2165,7 @@ See full spec: [PROMPTS/PHASE-SONG4.md](PROMPTS/PHASE-SONG4.md)
 
 ---
 
-## Phase WS1 — Inspector Column & Status Head 📋 *planned*
+## Phase WS1 — Inspector Column & Status Head ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2175,6 +2175,29 @@ The workspace from Claude Design's *Outline Panel v2*: the right context panel g
 - Status head in the outline column: editable BPM, a song progress bar (click a section to cue it), latency
 - Inspector column (only open while something is selected): track params + fx chain, section, def preview
 - Click selects + highlights instead of moving the cursor; ⇧-click multi-selects tracks; Esc closes
+
+**Delivered:**
+- The right context panel is gone (`repulse.ui.context-panel` deleted): status → status head,
+  TRACKS → track inspector, FX → the outline's `fx` group, MIDI / buses / sources → a collapsible
+  `session` block above the outline footer (`repulse:outline-session-open`), BINDINGS dropped
+- `repulse.ui.status-head`: editable BPM (Enter/blur commit, Esc cancel, 40–300 integers only,
+  ↑↓ ±1 / ⇧↑↓ ±10 via `audio/set-bpm!`), bank + `wasm`/`js` badges, a song progress bar with one
+  segment per section (click = `song-transport/cue-bar!`, next-bar cue), `latency x.x ms` or the
+  REC text; no cpu figure
+- `repulse.ui.inspector` (220 px, resizable 180–380 px, `repulse:inspector-width`): track (M/S,
+  `live`/`muted`/`solo`/`rests in :x`, param sliders, fx chain), multi-track, section (bar strip,
+  `▶ cue`, tracks with M/S + amp), def/defn/synth (`highlightCode` preview + `Used by …`) and fx
+  blocks; custom pointer/keyboard sliders (⇧ = 10× finer / ten steps) through the existing
+  `*-patch-and-eval!` write-back
+- Selection model: `data-id` rows (`track::bass`, `section:1`, `fx`, `fx:0`, …), click / ⇧-click /
+  Esc / F12 via a `Prec.highest` keymap that falls through when nothing is selected; the cursor
+  never moves on click; `repulse.ui.selection-highlight` tints the selected lines and adds a gutter
+  bar; `repulse.outline` gains the `:fx` kind, `:refs` and `used-by`
+- One undo step per drag: `eval-orchestrator/begin-slider-drag!` / `end-slider-drag!` keep
+  intermediate patches out of history and replay the net change as one isolated event
+- Pure, unit-tested namespaces `slider-model`, `status-model`, `selection`, `inspector-model`
+  (+ outline and `cue-bar!` tests); Playwright `e2e/workspace.spec.ts` (13 tests) and the SONG3
+  row-click test rewritten to the selection behaviour; docs: USAGE "Status head and inspector"
 
 See full spec: [PROMPTS/PHASE-WS1.md](PROMPTS/PHASE-WS1.md)
 
