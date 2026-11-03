@@ -1,49 +1,71 @@
 # REPuLse — Usage Reference
 
 REPuLse is a browser-based live coding instrument. You write patterns in a minimal Lisp,
-evaluate them with **Ctrl+Enter** (or the **▶ play** button), and hear them loop in real time.
+evaluate them with **Alt+Enter** (macOS: **Option+Enter**) or the **▶ play** button, and hear
+them loop in real time.
 
 ---
 
 ## Table of Contents
 
+**Start here**
+
 1. [Getting started](#getting-started)
-   - [Key design principles](#key-design-principles-read-this-first)
-   - [Complete example](#complete-example--from-silence-to-a-full-track)
-   - [Common mistakes](#common-mistakes)
-2. [The editor](#the-editor)
-3. [Language basics](#language-basics)
-   - [Comments](#comments)
-   - [Literals](#literals)
-   - [Arithmetic](#arithmetic)
-   - [Comparison and logic](#comparison-and-logic)
-   - [Map literals](#map-literals-and-operations)
-   - [Local bindings — `let`](#local-bindings--let)
-   - [Anonymous functions — `fn`](#anonymous-functions--fn)
-   - [Conditionals — `if`](#conditionals--if)
-   - [Sequential evaluation — `do`](#sequential-evaluation--do)
-   - [Top-level definitions — `def`](#top-level-definitions--def)
-4. [Pattern functions](#pattern-functions)
-5. [Pattern combinators](#pattern-combinators)
-6. [Music theory](#music-theory)
-7. [Per-event parameters](#per-event-parameters)
-8. [Sound and samples](#sound-and-samples)
-9. [Mini-notation](#mini-notation)
-10. [Tempo control](#tempo-control)
-11. [Named tracks](#named-tracks)
-12. [Combining patterns](#combining-patterns)
-13. [Defining names](#defining-names)
-14. [Song arrangement](#song-arrangement)
-15. [Lisp language features](#lisp-language-features)
-16. [Effect plugins](#effect-plugins)
-17. [Visual plugins](#visual-plugins)
+2. [Demos and tutorials](#demos-and-tutorials)
+3. [Key design principles](#key-design-principles-read-this-first)
+4. [Complete example — from silence to a full track](#complete-example--from-silence-to-a-full-track)
+5. [Common mistakes](#common-mistakes)
+6. [The editor](#the-editor)
+
+**The language**
+
+7. [Language basics](#language-basics)
+8. [Pattern functions](#pattern-functions)
+9. [Pattern combinators](#pattern-combinators)
+10. [Patterned arguments](#patterned-arguments)
+11. [Pattern arithmetic — `add` `sub` `mul` `div` `set`](#pattern-arithmetic--add-sub-mul-div-set)
+12. [Signals — `sine` `saw` `rand` `perlin` `segment` `range`](#signals--sine-saw-rand-perlin-segment-range)
+13. [Time & structure — `struct` `ply` `chunk` `iter` `swing` `polymeter`](#time--structure--struct-ply-chunk-iter-swing-polymeter)
+14. [Combining patterns](#combining-patterns)
+15. [Mini-notation](#mini-notation)
+
+**Sound**
+
+16. [Music theory](#music-theory)
+    - [Harmony](#harmony)
+17. [Sound and samples](#sound-and-samples)
 18. [Available sample banks](#available-sample-banks)
-19. [MIDI & External I/O](#midi--external-io)
-20. [Error messages](#error-messages)
-21. [Grammar summary](#grammar-summary)
-22. [Examples](#examples)
-23. [Embeddable component](#embeddable-component)
-24. [AI assistant](#ai--ai-assistant-panel)
+19. [Per-event parameters](#per-event-parameters)
+20. [Transitions](#transitions)
+
+**Performing**
+
+21. [Tempo control](#tempo-control)
+22. [Named tracks](#named-tracks)
+23. [Song arrangement](#song-arrangement)
+24. [Writing a song](#writing-a-song)
+25. [Effect plugins](#effect-plugins)
+26. [Visual plugins](#visual-plugins)
+
+**Going further**
+
+27. [Advanced language features](#advanced-language-features)
+28. [Standard library](#standard-library)
+29. [MIDI & External I/O](#midi--external-io)
+
+**Saving and sharing**
+
+30. [Session persistence and sharing](#session-persistence-and-sharing)
+31. [AI assistant](#ai-assistant)
+32. [Snippet library](#snippet-library)
+33. [User accounts & community](#user-accounts--community)
+34. [Embeddable component](#embeddable-component)
+
+**Reference**
+
+35. [Error messages](#error-messages)
+36. [Grammar summary](#grammar-summary)
+37. [Examples](#examples)
 
 ---
 
@@ -68,68 +90,8 @@ Type an expression in the editor and press **Alt+Enter** (macOS: **Option+Enter*
 
 To stop: type `(stop)` and evaluate it, or click **■ stop**.
 
----
-
-## Snippet library
-
-The snippet library lets you browse community-submitted patterns — rhythms, basslines, melodies, chords, and FX demos — that you can audition and insert into your session.
-
-### Opening the panel
-
-Click the **lib** button in the header to open or close the snippet browser. You can also press **Escape** to close it.
-
-### Browsing, sorting, and filtering
-
-The toolbar provides multiple ways to narrow the list:
-
-| Control | Description |
-|---------|-------------|
-| **Search box** | Client-side filter by title, description, or code content |
-| **Tag dropdown** | Filter by genre/role tag |
-| **Sort dropdown** | `★ top rated` (default) · `🕐 newest` · `📈 uses` · `🔥 trending` |
-| **Author input** | Server-side filter by author display name (debounced, 400 ms) |
-
-Top rated sorts by average rating first, then rating count. Trending score uses
-a time-decay formula based on weighted rating and usage.
-
-### Preview and insert
-
-Each card has three action buttons:
-
-| Button | Action |
-|---|---|
-| `▶ solo` | Stops the current session and plays the snippet in isolation |
-| `⊕ mix` | Adds the snippet track alongside your running session |
-| `↓ insert` | Appends the snippet code to the editor and triggers `(upd)`; increments usage counter |
-
-Insert warns you if the snippet's track name already exists in your session.
-
-### Star and report
-
-Each card also has:
-
-| Element | Description |
-|---------|-------------|
-| **★ N** button | Toggle star (requires sign-in); optimistic update, reverts on error |
-| **⚑ report** button | Flag the snippet for review (requires sign-in); prompts for optional reason |
-
-### Share as snippet (sign-in required)
-
-Click **+ share** in the snippet panel toolbar to open the submit modal:
-
-1. Fill in **Title** (required), Description, Tags (comma-separated), and BPM (pre-filled from current session)
-2. The **Code preview** shows what will be submitted (current editor content)
-3. Click **submit** — on success the panel refreshes and a toast confirms the submission
-4. Close at any time with **cancel**, **Escape**, or clicking outside the modal
-
-### Lisp built-in
-
-```clojure
-(snippet :four-on-the-floor)  ;; insert snippet by ID
-(snippet)                     ;; list available snippet IDs
-```
-
-`snippet` supports autocomplete and hover docs in the editor.
+New here? Run `(tutorial)` for an eight-chapter guided tour, or `(demo :techno)` to hear a
+complete track — see [Demos and tutorials](#demos-and-tutorials).
 
 ---
 
@@ -175,11 +137,6 @@ program — press **Alt+Enter** to hear it, read the comments, experiment, then 
 | 7 | Melody | `scale`, `chord` |
 | 8 | Expression | `amp`, `decay`, `->>` |
 
-### Hover documentation
-
-Hover the mouse over any built-in name in the editor to see its signature, a
-description, and an example in a tooltip.
-
 ---
 
 ## Key design principles (read this first)
@@ -195,7 +152,7 @@ Patterns describe **what** sounds and **when**. All composition happens here:
 - **Parameters:** `amp`, `decay`, `attack`, `release`, `pan`, `synth`, `rate`, `begin`, `end`
 - **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`
 - **Composition:** `->>` (thread-last) chains transforms, parameters, and effects
-- **Structure:** `def`, `let`, `fn`, `if`, `do`, `track`, `arrange`
+- **Structure:** `def`, `let`, `fn`, `if`, `do`, `track`, `arrange`, `song`, `section`
 
 ### Layer 2: Instrument definition layer (defsynth only)
 
@@ -216,7 +173,7 @@ REPuLse is not a signal-flow language. Unlike SuperCollider, Overtone, or Extemp
 
 - There is **no** inline oscillator/filter routing at the pattern level
 - There is **no** `patch`, `instrument`, or `synth-def` block that wires oscillators to filters to outputs
-- There is **no** internal patch bay — use `bus`/`out`/`in` for inter-synth routing (Phase P)
+- There is **no** patch bay at the pattern level — inter-synth routing uses `bus`/`out`/`in` inside `defsynth`
 - There are **no** UGen functions like `osc-wt`, `filter-lp`, `distort` at the pattern level
 - Effects are **not** inline signal processors — they are applied via `(fx :name value)` or inside a `->>` pipeline
 
@@ -224,23 +181,25 @@ REPuLse is not a signal-flow language. Unlike SuperCollider, Overtone, or Extemp
 
 ## Complete example — from silence to a full track
 
+Paste this into the editor and press **Alt+Enter**:
+
 ```clojure
-;; 1. Set tempo
+;; 1. Tempo
 (bpm 130)
 
-;; 2. Define patterns — keywords are samples, note-keywords are pitches
+;; 2. Building blocks — keywords are samples
 (def kick  (seq :bd :_ :bd :_))
 (def snare (seq :_ :sd :_ :sd))
 (def hats  (fast 2 (seq :hh :_)))
 
-;; 3. Melodic content — scale maps degree numbers to frequencies
+;; 3. Bass line — scale maps degree numbers to pitches
 (def bass
-  (->> (scale :minor :c2 (seq 1 :_ 5 :_))
+  (->> (scale :minor :c2 (seq 0 :_ 4 :_))
        (synth :saw)            ; sawtooth voice
-       (amp 0.5)               ; amplitude
+       (amp 0.5)               ; loudness
        (decay 0.3)))           ; note length
 
-;; 4. Chords — chord returns a stack of simultaneous pitches
+;; 4. Pad — chord plays all chord tones at once
 (def pad
   (->> (slow 4 (chord :minor :a3))
        (synth :fm :index 2)
@@ -248,24 +207,23 @@ REPuLse is not a signal-flow language. Unlike SuperCollider, Overtone, or Extemp
        (attack 0.2)
        (decay 1.5)))
 
-;; 5. Layer everything
-(stack kick snare hats bass pad)
-
-;; 6. Add evolution — double-speed fill every 4th bar
-(every 4 (fast 2) (stack kick snare hats bass pad))
-
-;; 7. Effects (global)
+;; 5. Global effects
 (fx :reverb 0.3)
-(fx :delay :wet 0.2 :time 0.25)
 (fx :compressor :threshold -18)
 
-;; 8. Or use named tracks for independent control
-(track :kick  kick)
+;; 6. One named track per part — all tracks play together
+(track :kick  (every 4 (fast 2) kick))              ; double-speed fill every 4th bar
 (track :snare snare)
 (track :hats  hats)
 (track :bass  (->> bass (fx :filter 600)))           ; per-track effect
 (track :pad   (->> pad  (fx :dattorro-reverb 0.5)))   ; per-track effect
 ```
+
+**How a buffer is evaluated:** every expression runs from top to bottom, but without `track`
+only the value of the **last** expression is played. Ending the buffer with
+`(stack kick snare hats bass pad)` would play all parts as one anonymous pattern. Named tracks
+are usually the better choice: you can mute, solo and replace each part individually — see
+[Named tracks](#named-tracks).
 
 ---
 
@@ -302,9 +260,8 @@ These patterns are **wrong** in REPuLse. If you see AI-generated code that looks
 (filter-lp :cutoff 800)          ; no filter-lp — use (fx :filter 800)
 (distort :drive 2.0)             ; no inline distort fn — use (fx :distort :drive 8)
 (adsr :a 0.01 :d 0.3 :s 0.1)    ; no adsr — use (attack 0.01) (decay 0.3) (release 0.1)
-(lfo :rate 0.25)                 ; no lfo function
-(mod source amount)              ; no mod routing
-(out :gain env)                  ; no out function
+(lfo :rate 0.25)                 ; no lfo function — build one with defsynth + bus
+(out :gain env)                  ; out exists only inside defsynth and writes to a bus
 
 ;; RIGHT equivalents
 (synth :saw)                              ; voice selection
@@ -314,6 +271,22 @@ These patterns are **wrong** in REPuLse. If you see AI-generated code that looks
 ;; LFO-like variation: use (every), (sometimes), patterned params
 (amp (seq 0.9 0.4 0.9 0.4) pat)          ; patterned amplitude
 ```
+
+### ❌ Calling a signal
+
+```clojure
+;; WRONG - signals are values, not functions
+(saw :c4)        ; error: saw is a signal ... use (synth :saw ...)
+(sine)           ; error: use it without parentheses
+
+;; RIGHT
+(synth :saw (seq :c4 :e4))               ; the saw voice
+(pan sine (fast 8 (seq :hh)))            ; a signal as a parameter
+(segment 8 sine)                         ; a signal discretised into events
+```
+
+A bare signal as a track (`sine` on its own) plays nothing: it has no rhythm. Give it
+structure with `segment` or use it inside `pan`, `amp`, `range` and friends.
 
 ### ❌ Keyword arguments on pattern functions
 
@@ -331,9 +304,15 @@ These patterns are **wrong** in REPuLse. If you see AI-generated code that looks
 
 ## The editor
 
+The screen has three parts: the **editor** (your program), the **command bar** below it
+(one-off commands), and a **context panel** on the right (live session state).
+
 | Key | Action |
 |---|---|
-| **Alt+Enter** / **Option+Enter** | Evaluate the entire buffer and start playback |
+| **Alt+Enter** / **Option+Enter** | Evaluate the entire buffer and start playback (works even when the editor is not focused) |
+| **Ctrl+.** or **F9** | Run `(upd)` — apply changes without restarting running patterns |
+| **Escape** | Jump to the command bar |
+| **Ctrl+A** / **Cmd+A** | Select all |
 | **Ctrl+Z** / **Cmd+Z** | Undo |
 | **Ctrl+Shift+Z** / **Cmd+Shift+Z** | Redo |
 
@@ -347,6 +326,63 @@ toggles playback.
 each event flash amber at the moment they fire. This lets you see exactly which part of your
 code is being heard — useful for understanding how `every`, `fast`, and nested patterns behave
 in real time.
+
+**Hover documentation:** hover the mouse over any built-in name to see its signature, a
+description, and an example.
+
+### Command bar
+
+The single-line input below the editor is for **commands you run once** and don't want in your
+program — muting a track, tapping the tempo, loading samples:
+
+```lisp
+(mute! :kick)
+(solo! :bass)
+(tap!)
+```
+
+| Key | Action |
+|---|---|
+| **Enter** | Evaluate and clear the input |
+| **Escape** | Clear the input and return to the editor |
+
+The outer parentheses are optional: `mute! :kick` works the same as `(mute! :kick)`. The command
+bar has the same highlighting and autocompletion as the editor, but its content is not saved.
+
+### Outline & go-to-definition
+
+A column to the left of the editor lists every top-level `def`, `defn`, `defsynth` (shown as
+`synth`), `track` and the `song` with its `section`s, each with its line number. The list is
+read from the editor's syntax tree, so it keeps working while the code is invalid: forms that
+still parse stay listed and a `~ partial` tag appears in the header. It updates about 150 ms
+after you stop typing.
+
+```lisp
+(def kick (seq :bd :_ :bd :_))      ; def   kick        L1
+(track :drums (stack kick))         ; track :drums      L2
+(song                               ; ▾ song  8 bars    L3
+  (section :verse 8 [:drums]))      ;     :verse 8b •   L4
+```
+
+- **Click a row** to move the cursor to the form's `(`, scroll it into view and flash it.
+- **Cursor inside** a form highlights its row (a section wins over its song).
+- **Playing section** — while a song plays, the sounding section is marked `▶` in cyan with a
+  thin progress line. Tracks show `■` (muted, dimmed) or a cyan `•` when audible in the playing
+  section, and are dimmed when they rest in it. `▾` / `▸` folds the song's sections.
+- **Collapse** with `‹` (or `Cmd/Ctrl-Shift-O`) to a 28 px rail that shows one bar per section;
+  click the rail or press the shortcut to restore. The choice is remembered across reloads, and
+  the outline starts collapsed on narrow windows.
+
+| Action | Shortcut |
+|---|---|
+| Go to definition of the name under the cursor | `Cmd/Ctrl-click` on the name, or `F12` |
+| Jump back (up to 50 jumps) | `Shift+F12` |
+| Show / hide the outline | `Cmd/Ctrl-Shift-O` |
+
+Names resolve to the **last** matching form: a symbol finds `def` / `defn` / `defsynth`, a
+keyword such as `:drums` (also inside a `section` vector) finds `(track :drums …)`. Names that
+are not defined in the buffer (like `:bd` or built-ins) do nothing. The `<repulse-editor>` embed
+has no outline and no go-to-definition.
 
 ### Context panel
 
@@ -516,15 +552,25 @@ This is useful when you want to perform a side effect (like `bpm`) before return
   (stack kick snare))
 ```
 
-### Top-level definitions — `def`
+### Top-level definitions — `def` and `defn`
+
+`def` binds a name for the rest of the session:
 
 ```lisp
-(def kick (seq :bd :_ :bd :_))
+(def kick  (seq :bd :_ :bd :_))
 (def snare (seq :_ :sd :_ :sd))
 (stack kick snare)
 ```
 
-`def` bindings persist for the session. Re-evaluate to update them.
+Re-evaluate a `def` to change it — patterns that use the name pick up the new value on the next
+cycle. Use `let` for names you only need inside one expression.
+
+`defn` defines a named function — shorthand for `(def name (fn [args] body))`:
+
+```lisp
+(defn double-time [p] (fast 2 p))
+(double-time (seq :bd :sd))
+```
 
 ---
 
@@ -567,6 +613,8 @@ One value repeated every cycle:
 ```lisp
 (fast 2 (seq :hh :hh))    ; double speed — 4 hats per bar
 (fast 0.5 (seq :bd :sd))  ; half speed — one hit every 2 bars
+(fast 1/3 (seq :bd :sd))  ; rationals stay exact — no float drift
+(fast "<1 2 4>" (seq :bd :sd))  ; patterned factor — see Patterned arguments
 ```
 
 ### `slow` — slow down
@@ -574,7 +622,11 @@ One value repeated every cycle:
 ```lisp
 (slow 2 (seq :bd :sd :bd :sd))    ; half speed
 (slow 3 (pure :bd))               ; one kick every 3 bars
+(slow (seq 1 2) (seq :bd :sd :hh :oh))  ; factor may be a pattern
 ```
+
+A sound whose event spans several cycles (as in `(slow 3 (pure :bd))`) triggers once,
+at its start — not again at every cycle boundary.
 
 ### `rev` — reverse
 
@@ -591,6 +643,7 @@ Apply a transformation every nth cycle, leave pattern unchanged otherwise:
 ```lisp
 (every 4 (fast 2) (seq :bd :sd))   ; double speed on every 4th bar
 (every 2 rev (seq :bd :hh :sd :hh)) ; reverse every other bar
+(every "<2 4>" rev (seq :bd :sd))   ; n may be a pattern
 ```
 
 ### `fmap` — transform values
@@ -611,15 +664,36 @@ stochastic variation, and spatial layering.
 
 ### `euclidean` — Euclidean rhythms
 
-Distribute `k` onsets across `n` steps as evenly as possible (Björklund algorithm):
+Distribute `k` onsets across `n` steps as evenly as possible. Since TL3 this is Tidal's
+exact `bjorklund` algorithm — `(euclidean 3 8 :bd)` is `bd . . bd . . bd .`. (Before TL3
+all hits bunched at the start of the cycle: `bd bd bd . . . . .`. Existing patterns that
+use `euclidean` now sound different — and correct.)
 
 ```lisp
-(euclidean 5 8 :bd)      ; 5 onsets in 8 steps — Afro-Cuban clave feel
-(euclidean 3 8 :sd)      ; tresillo
+(euclidean 5 8 :bd)      ; x . x x . x x .  — Afro-Cuban clave feel
+(euclidean 3 8 :sd)      ; x . . x . . x .  — tresillo
 (euclidean 7 16 :hh)     ; complex subdivision
 
-; Optional rotation — shift the pattern left by r steps:
-(euclidean 5 8 :bd 2)    ; same rhythm, rotated 2 steps
+; Optional rotation — shift the pattern LEFT by r steps (Tidal's direction):
+(euclidean 3 8 :x 2)     ; . x . . x . x .
+
+; k, n and rotation may be patterns:
+(euclidean "<3 5>" 8 :bd)  ; 3 hits on even cycles, 5 on odd
+
+; A negative k gives the inverted rhythm; k > n clamps to n:
+(euclidean -3 8 :x)
+
+; Struct form — when the third argument is a PATTERN it receives the rhythm
+; (steps that are not hits produce no events), like Strudel's euclid:
+(euclidean 3 8 (seq :bd :sd))   ; bd [0,1/8)  bd [3/8,1/2)  sd [3/4,7/8)
+```
+
+`euclid-legato` / `euclid-legato-rot` make each hit last until the next one (the last hit
+lasts to the end of the cycle):
+
+```lisp
+(euclid-legato 3 8 (pure :x))             ; [0,3/8) [3/8,3/4) [3/4,1)
+(euclid-legato-rot 3 8 2 (pure :x))       ; rotated; steps before the first hit rest
 ```
 
 ### `cat` — sequential concatenation
@@ -638,42 +712,101 @@ Shift all events forward (`late`) or backward (`early`) within the cycle:
 ```lisp
 (late  0.25  (seq :bd :sd :bd :sd))   ; delay by ¼ cycle
 (early 0.125 hihat)                    ; advance by ⅛ cycle
+(late "<0 1/8>" (seq :hh :hh :hh :hh)) ; nudge every other cycle
 ```
 
-### `sometimes` / `often` / `rarely` — probabilistic transforms
+Amounts may be integers, rationals (`1/3` is exact) or floats; floats become the
+nearest rational with a denominator up to 1 000 000, so `0.3333333` is exactly `1/3`.
 
-Apply a transformation with a given probability. The result is deterministic — the same
-cycle always gets the same decision:
+> **Random sequences changed in TL4.** Randomness now uses Tidal's exact `timeToRand`
+> (see [Randomness](#randomness---rand-irand-perlin)), so the old, visibly periodic 0–99
+> hash is gone and **which cycles/events are picked is different from before**:
+>
+> | Before TL4 | Now |
+> |---|---|
+> | `sometimes` / `often` / `rarely` / `sometimes-by` transformed whole **cycles** | They decide **per event**. The old behaviour is `some-cycles` / `some-cycles-by` |
+> | `choose` / `wchoose` gave one value per cycle | They are **signals** (silent on their own): `(segment 4 (choose [:bd :sd]))`. The old behaviour is `choose-cycles` / `wchoose-cycles` (or `randcat`) |
+> | `degrade` / `degrade-by` used a coarse hash of the event time | They keep an event when `rand` at its start is `>= prob` — different events survive |
+> | `(~ "bd?")` was truly random on every query | `?` is deterministic and repeats identically each time you evaluate it; `?0.3` sets the amount |
+>
+> There is no legacy flag. Use `(with-seed n pat)` to get a different (still
+> deterministic) variation.
+
+### `sometimes` family — per-event probabilistic transforms
+
+Each **event** independently goes through the transform with a given probability. The
+result is deterministic — the same event time always gets the same decision:
 
 ```lisp
-(sometimes rev (seq :c4 :e4 :g4 :c5))   ; reverse ~50% of cycles
-(often (fast 2) (seq :hh :oh))           ; speed up ~75% of cycles
-(rarely rev melody)                       ; reverse ~25% of cycles
+(sometimes (fast 2) (seq :bd :sd :hh :cp))   ; each event: 50% through (fast 2)
+(often (fast 2) (seq :hh :oh))               ; 75%
+(rarely rev melody)                          ; 25%
+(sometimes-by 0.2 (fast 4) fill)             ; custom probability
+(sometimes-by "<0.1 0.9>" rev fill)          ; probability may be a pattern
 ```
 
-Use `sometimes-by` for custom probability:
+| Name | Probability |
+|---|---|
+| `almost-never` | 0.1 |
+| `rarely` | 0.25 |
+| `sometimes` | 0.5 |
+| `often` | 0.75 |
+| `almost-always` | 0.9 |
+| `always` | 1 (`(always f pat)` ≡ `(f pat)`) |
+| `never` | 0 (`(never f pat)` ≡ `pat`) |
+
+`(sometimes-by x f pat)` is `(stack (degrade-by x pat) (f (undegrade-by x pat)))`: every
+event takes exactly one of the two branches *before* `f` is applied.
+
+### `some-cycles` / `some-cycles-by` — per-cycle probabilistic transforms
+
+The whole cycle is either transformed or not (this is the pre-TL4 behaviour of
+`sometimes`). Cycle `c` is answered by `(f pat)` when `rand` at `c` is `< prob`:
 
 ```lisp
-(sometimes-by 0.2 (fast 4) fill)   ; double-time 20% of cycles
+(some-cycles rev (seq :c4 :e4 :g4 :c5))      ; reverse ~50% of cycles
+(some-cycles-by 0.3 (fast 2) (seq :bd :sd))  ; ~30% of cycles
+(some-cycles-by "<0 1>" rev (seq :a :b))     ; probability may be a pattern
 ```
 
-### `degrade` / `degrade-by` — probabilistic event removal
+### `degrade` / `undegrade` / `degrade-by-with` — probabilistic event removal
 
-Randomly drop events from a pattern each cycle:
+An event is kept when `rand` at the start of the event is `>= prob`; `undegrade-by` keeps
+the complement (`rand < prob`), so `(stack (degrade-by x p) (undegrade-by x p))` ≡ `p`:
 
 ```lisp
-(degrade (seq :hh :hh :hh :hh))           ; drop ~50% of hi-hats
-(degrade-by 0.3 (fast 4 (seq :hh :oh)))   ; drop 30% of events
+(degrade (seq :hh :hh :hh :hh))             ; drop ~50% of hi-hats
+(degrade-by 0.3 (fast 4 (seq :hh :oh)))     ; drop 30% of events
+(degrade-by "<0 0.5>" (fast 8 (pure :hh)))  ; patterned probability
+(undegrade-by 0.3 (fast 8 (pure :hh)))      ; keep the 30% degrade-by 0.3 would drop
+(degrade-by-with saw 0.5 (fast 8 (pure :hh))) ; your own random source: keep where saw >= 0.5
 ```
 
-### `choose` / `wchoose` — random selection per cycle
+### Random choice — `choose` `wchoose` `choose-cycles` `randcat`
 
-Pick one value from a list each cycle (deterministic per cycle):
+`choose` and `wchoose` are **continuous signals** (like `rand`): they have no onsets of
+their own, so sample them with `segment` or `struct`. Weights come first in `wchoose`:
 
 ```lisp
-(choose [:bd :sd :hh :oh])                    ; uniform probability
-(wchoose [[0.5 :bd] [0.3 :sd] [0.2 :hh]])    ; weighted — bd most likely
+(segment 4 (choose [:bd :sd :hh :oh]))         ; four random picks per cycle
+(struct "t ~ t t" (choose [:bd :sd]))
+(segment 4 (wchoose [[3 :bd] [1 :sd]]))        ; weighted: bd is 3x as likely
+(segment 4 (choose-with sine [:a :b :c]))      ; pick with your own 0..1 signal
 ```
+
+> A bare `(choose [:bd :sd])` is silent after TL4. Use `choose-cycles` for one pick per
+> cycle (the old behaviour).
+
+```lisp
+(choose-cycles [:bd :sd :hh])                  ; one value per cycle
+(wchoose-cycles [[3 :bd] [1 :sd]])             ; weighted, one per cycle
+(randcat (seq :bd :sd) (seq :hh :hh :oh) (seq :cp))   ; a random pattern per cycle
+(wrandcat [3 (seq :bd :sd)] [1 (pure :cp)])    ; weighted random pattern per cycle
+(choose-in [(seq :a :b) (seq :c :d)])          ; chosen pattern keeps its own structure
+```
+
+`choose-in` and `choose-in-with` depend on where a query starts, so they can differ
+between scheduler chunks; prefer `randcat` for a stable per-cycle choice.
 
 ### `jux` / `jux-by` — stereo spatial layering
 
@@ -683,6 +816,7 @@ Stack the original pattern (panned left) with a transformed copy (panned right):
 (jux rev (seq :c4 :e4 :g4))    ; original left, reversed right
 (jux (fast 2) (seq :hh :oh))   ; normal left, double-speed right
 (jux-by 0.5 rev melody)        ; half stereo width
+(jux-by "<0.3 1>" rev melody)  ; width may be a pattern
 ```
 
 ### `off` — time-offset layering
@@ -692,6 +826,7 @@ Layer the original with a time-shifted, transformed copy:
 ```lisp
 (off 0.125 (fast 2) (seq :c4 :e4 :g4))   ; original + shifted double-speed copy
 (off 0.25  rev      (seq :bd :sd :hh))    ; original + ¼-cycle offset reversed copy
+(off "<1/8 1/4>" (fast 2) (seq :bd :sd))  ; amount may be a pattern
 ```
 
 Combines freely with all other combinators:
@@ -702,6 +837,516 @@ Combines freely with all other combinators:
      (jux (fast 2))
      (amp 0.8))
 ```
+
+### Layering — `superimpose` `layer` `echo` `stut` `echo-with` `stutter` `jux-flip` `xfade`
+
+```lisp
+(superimpose (fast 2) (seq :a :b))                       ; original + double-speed copy
+(superimpose (comp (fast 2) (add 12)) (seq :c3 :e3 :g3)) ; + octave-up double-speed copy
+(layer rev (fast 2) (seq :a :b))                         ; reversed + double-speed, no original
+(echo 3 1/8 0.6 (seq :cp))        ; 3 copies, 1/8 apart, amp 1 0.6 0.36 (multiplies existing amp)
+(stut 3 0.5 1/8 (seq :cp))        ; same, Tidal argument order: (stut times feedback time pat)
+(echo-with 3 1/8 (add 12) (seq :c3))   ; copies go up an octave each time (Tidal stutWith)
+(stutter 4 1/16 (seq :bd))        ; 4 unchanged copies, 1/16 apart
+(jux-flip rev (seq :a :b))        ; like jux, the sides swap every cycle
+(jux-flip-by 0.5 rev (seq :a :b)) ; narrower stereo width
+(xfade (seq :bd :bd) "<0 0.5 1>" (seq :hh))   ; crossfade a→b by scaling amp
+```
+
+`superimpose` and `layer` take any number of functions and the pattern last; with only
+functions they return a transformer for `->>`. `echo`, `stut`, `echo-with`, `stutter`,
+`jux-flip-by` and `xfade` accept patterns for their numbers. `xfade` position 0 plays only
+`a`, 1 only `b`; at 0.5 both are at full level.
+
+---
+
+## Patterned arguments
+
+Every numeric argument of a pattern transformer may itself be a pattern — REPuLse is
+"patterns all the way down", like Tidal. Where a number is expected you can pass:
+
+- a number or rational: `(fast 2 pat)`, `(late 1/8 pat)`
+- a pattern: `(fast (seq 1 2) pat)`
+- a mini-notation string, parsed as if wrapped in `~`: `(fast "<1 2 4>" pat)`
+
+```lisp
+(fast (seq 1 2) (seq :bd :sd))          ; 1× in the first half, 2× in the second
+(fast "<1 2 4>" (seq :bd :sd))          ; one factor per cycle
+(late "<0 1/8>" (seq :hh :hh :hh :hh))  ; nudge every other cycle
+(euclidean "<3 5>" 8 :bd)               ; alternate 3 and 5 hits per 8 steps
+```
+
+Functions with patternable arguments: `fast`, `slow`, `late`, `early`, `every` (n),
+`euclidean` (k, n, rotation), `sometimes-by` (probability), `degrade-by`
+(probability), `off` (amount), `jux-by` (width). The curried forms still work:
+`(fast "<1 2>")` returns a transformer for `->>`.
+
+The argument pattern decides *which value is in force when*; the rhythm still comes
+from the pattern being transformed (Tidal's `innerJoin`). With `(fast (seq 1 2) …)`
+the first half of each cycle plays at normal speed and the second half at double speed.
+Rational atoms such as `1/8` are exact inside mini-notation strings.
+
+---
+
+## Pattern arithmetic — `add` `sub` `mul` `div` `set`
+
+Combine a pattern's values with a number, a pattern or a mini-notation string:
+
+| Built-in | Meaning |
+|---|---|
+| `(add [mode] amt pat)` | value + amt |
+| `(sub [mode] amt pat)` | value − amt |
+| `(mul [mode] amt pat)` | value × amt |
+| `(div [mode] amt pat)` | value ÷ amt (÷ 0 leaves the value unchanged) |
+| `(set [mode] ctrl pat)` | merge control maps into each event; `ctrl` wins (Tidal `#`) |
+
+```lisp
+(add 12 (seq :c3 :e3 :g3))                ; note keywords move by semitones → :c4 :e4 :g4
+(->> (seq 0 2 4 7)
+     (add "<0 2 4>")                       ; shift scale degrees per cycle
+     (scale :minor :c3))
+(mul 2 (seq 220 330))                      ; Hz numbers
+(set {:amp 0.5 :pan -0.5} (seq :c4 :e4))  ; like (->> … (amp 0.5) (pan -0.5))
+(set (seq {:amp 1.0} {:amp 0.4}) (seq :bd :hh :sd :hh))
+```
+
+Values: numbers are combined directly; note keywords (`:c4`) go through MIDI note
+numbers and back; parameter maps apply the operation to `:note`; anything else —
+rests `:_`, drum names — passes through unchanged.
+
+### Choosing where the rhythm comes from
+
+The optional leading mode keyword picks which side supplies the event structure (the
+Tidal `|+` / `+|` / `|+|` family, Strudel `.add.in` / `.out` / `.mix` / `.squeeze`):
+
+| Mode | Rhythm from | Tidal |
+|---|---|---|
+| `:in` (default) | the pattern (last argument) | `\|+` |
+| `:out` | the amount | `+\|` |
+| `:mix` | both — event boundaries of either side | `\|+\|` |
+| `:squeeze` | the pattern; a whole cycle of the amount is squeezed into each event | `\|\|+` |
+
+```lisp
+(add :in  (seq 10 20) (seq 1 2 3))   ; rhythm of (seq 1 2 3)   → 11 12 23
+(add :out (seq 10 20) (seq 1 2 3))   ; rhythm of (seq 10 20)   → 11 22
+(add :mix (seq 10 20) (seq 1 2 3))   ; both rhythms intersect  → 11 12 22 23
+(add :squeeze (seq 0 7) (seq :c3 :g3)) ; each note becomes a two-note figure
+```
+
+Every form has a curried version for `->>`: `(add 7)` and `(add :out "<0 12>")` return
+transformers.
+
+Only the *start* of an event triggers a sound. When a value changes in the middle of an
+event (the `12 → 22` change of the second step under `:in` above), the later fragment
+updates nothing audible — exactly like Tidal.
+
+---
+
+## Signals — `sine` `saw` `rand` `perlin` `segment` `range`
+
+A **signal** is a *continuous* pattern: it has a value at every moment but no rhythm of
+its own. A rhythmic pattern gives it structure by sampling it, and the sampled value is
+the signal at the **start** of each event. This is how you get smooth movement (filter
+sweeps, panning, swells) and deterministic random variation.
+
+Signals are **values**, not functions. Write `sine`, never `(sine)`.
+
+```lisp
+(pan sine2 (fast 8 (seq :hh)))                                  ; smooth L<->R sweep every cycle
+(->> (fast 16 (seq :hh)) (amp (range 0.3 0.9 (slow 4 saw))))    ; 4-cycle swell
+(->> (segment 8 (range 1 8 rand)) (scale :minor :c4))           ; 8 random degrees per cycle
+(pan (range -0.5 0.5 perlin) (fast 4 (seq :hh)))                ; smooth random drift
+(segment 4 saw)                                                 ; 0 0.25 0.5 0.75 as events
+```
+
+### Signal reference
+
+Values are floats; `t` is the position in the cycle. "At t = 0" is the value a rhythm
+starting on the downbeat samples.
+
+| Signal | Range | Shape | At t = 0 |
+|---|---|---|---|
+| `saw` | 0..1 | rising ramp, `t` | 0 |
+| `isaw` | 0..1 | falling ramp | 1 |
+| `sine` | 0..1 | sine wave | 0.5 |
+| `cosine` | 0..1 | sine shifted a quarter cycle later (Tidal phase) | 0 |
+| `tri` | 0..1 | triangle, up then down | 0 |
+| `itri` | 0..1 | inverted triangle | 1 |
+| `square` | 0 / 1 | 0 for the first half, 1 for the second | 0 |
+| `isquare` | 0 / 1 | 1 for the first half, 0 for the second | 1 |
+| `rand` | 0..1 | deterministic random | 0 |
+| `perlin` | 0..1 | smooth random (interpolates one random value per cycle) | 0 |
+| `time` | any | absolute cycle time: 0, 0.25 ... 1, 1.25 ... | 0 |
+| `sine2` `cosine2` `saw2` `isaw2` `tri2` `itri2` `square2` `isquare2` `rand2` | -1..1 | bipolar versions | |
+
+Samples of `(segment 4 sig)` in cycle 0: `saw` 0 0.25 0.5 0.75, `sine` 0.5 1 0.5 0, `tri`
+0 0.5 1 0.5, `square` 0 0 1 1.
+
+### `segment` - turn a signal into events
+
+`(segment n sig)` samples a signal `n` times per cycle and returns `n` ordinary events.
+`n` may be a pattern. A bare signal plays nothing, because it has no events to trigger.
+
+```lisp
+(segment 4 saw)                       ; 0 0.25 0.5 0.75
+(->> saw (segment 4))                 ; same, curried
+(segment "<4 8>" sine)
+```
+
+### `range` `rangex` `range2` - scale a 0..1 signal
+
+| Form | Meaning |
+|---|---|
+| `(range lo hi sig)` | scale 0..1 to `lo`..`hi` linearly |
+| `(rangex lo hi sig)` | exponential scaling; `lo` and `hi` must be > 0. Good for frequencies |
+| `(range2 lo hi sig)` | like `range` for a bipolar (-1..1) input such as `sine2` |
+| `(to-bipolar sig)` / `(from-bipolar sig)` | convert 0..1 to -1..1 and back |
+
+`lo` and `hi` may be numbers, mini-notation strings or patterns. `range` only means
+Tidal's `range` when the **last argument is a pattern**; with plain numbers it is still
+the collection function `(range 0 8 2)`.
+
+```lisp
+(segment 4 (range 200 2000 saw))
+(->> sine (rangex 100 1000) (segment 2))
+(->> saw (range 2 6))                 ; works in ->> as well
+```
+
+### Randomness - `rand` `irand` `perlin`
+
+`rand` is deterministic: it is Tidal's `timeToRand` of the sampling time, so a given
+position in the song always yields the same number, on every run. `rand` is exactly `0` at
+time 0 (and every 300 cycles). `(irand n)` gives random integers `0 .. n-1`, and `perlin`
+is smooth noise that glides between random values. To get a different stream use
+`(with-seed n pat)`: every random function inside `pat` reads its random number at time
+`t + n` instead of `t` (structure is not shifted; the innermost `with-seed` wins; `n` may
+be a pattern). A per-track seed is just `(track :x (with-seed 3 ...))`.
+
+```lisp
+(segment 8 (irand 8))                 ; 0 5 2 1 ... (deterministic)
+(segment 4 (with-seed 7 rand))        ; another random stream
+(with-seed 7 (shuffle 4 (seq :a :b :c :d)))   ; a different, still deterministic, permutation
+```
+
+More random sources:
+
+| Name | Meaning |
+|---|---|
+| `brand` / `(brand-by p)` | Boolean signal: `true` when `rand < 0.5` / `< p` (use with `struct`, `mask`, `sew`, `when-pat`) |
+| `berlin` | Sawtooth-like ridge noise in 0..1 (`rand` at the cycle start blended into the next) |
+| `(rand-l n)` | Signal whose value is a vector of `n` random floats |
+| `(randrun n)` | A random permutation of `0 .. n-1` each cycle, `n` events per cycle |
+
+```lisp
+(segment 4 brand)                     ; true false true true
+(struct (segment 8 (brand-by 0.25)) (pure :hh))
+(randrun 4)                           ; each of 0 1 2 3 once per cycle (shuffled)
+```
+
+### `shuffle` / `scramble` — random slice order
+
+```lisp
+(shuffle 4 (seq :a :b :c :d))   ; each cycle: the 4 slices in random order, each exactly once
+(scramble 4 (seq :a :b :c :d))  ; each of 4 slots plays a random slice (repeats possible)
+(shuffle "<2 4>" pat)           ; n may be a pattern
+```
+
+### Conditionals — `when-pat` `whenmod` `apply-n`
+
+```lisp
+(when-pat "<0 1>" rev (seq :a :b))            ; where the boolean pattern is true, apply rev
+(when-pat (fn [c] (> c 3)) rev (seq :a :b))   ; or a function of the cycle number (Tidal when)
+(whenmod 8 6 rev (seq 0 2 4 7))               ; rev in cycles 6 and 7 of every 8 (c mod 8 >= 6)
+(whenmod "<4 2>" 1 rev (seq :a :b))           ; a and b may be patterns
+(apply-n 2 (fast 2) (seq :a :b))              ; (fast 2 (fast 2 ...)) — apply f n times
+(always rev pat)  (never rev pat)             ; ≡ (rev pat) / pat
+```
+
+`when-pat` is Strudel's `when` (named so to keep `when` free); Tidal's `while` is the same
+thing with a pattern condition, so it has no separate name.
+
+### `run` `signal` `steady` `time`
+
+```lisp
+(run 4)                               ; the discrete pattern 0 1 2 3 in one cycle
+(segment 4 (signal (fn [t] (* t 2)))) ; your own signal: f gets the cycle time as a number
+(segment 4 (steady 3))                ; constant 3
+(segment 4 time)                      ; 0 0.25 0.5 0.75, then 1 1.25 ... in cycle 1
+```
+
+### `saw` and `square` are signals now
+
+Before TL2, `(saw :c4)` and `(square :c4)` were synth-voice shortcuts. They are signals
+now. Use `(synth :saw pat)` and `(synth :square :pw 0.25 pat)` for the voices. Calling a
+signal gives a helpful error. Inside `defsynth`, `saw`, `square` and `tri` remain UGens.
+
+---
+
+## Time & structure — `struct` `ply` `chunk` `iter` `swing` `polymeter`
+
+Tidal's rhythmic vocabulary for reshaping time. Every function with a trailing `pat`
+also has a **curried form** (all arguments except `pat`) for `->>`, and numeric arguments
+accept patterns or mini-notation strings (see [Patterned arguments](#patterned-arguments)).
+
+| Function | Meaning | Patterned args |
+|---|---|---|
+| `(struct bools pat)` | Rhythm from `bools`: every true step plays the value(s) of `pat` | `bools` |
+| `(mask bools pat)` | Keep the structure of `pat`, only where `bools` is true | `bools` |
+| `(invert pat)` | Boolean `not` of each value (rests stay rests) | — |
+| `(euclidean k n x [r])` | Björklund rhythm; a pattern `x` gets the rhythm (struct form) | `k n r` |
+| `(euclid-legato k n pat)` | Euclidean hits that last until the next hit | `k n` |
+| `(euclid-legato-rot k n r pat)` | The same, rotated left by `r` | `k n r` |
+| `(ply n pat)` | Repeat each event `n` times inside its own slot | `n` |
+| `(ply-with n f pat)` | `ceil(n)` repeats; repeat `i` has `f` applied `i` times | `n` |
+| `(inside n f pat)` | Apply `f` as if each 1/n of a cycle were a cycle | `n` |
+| `(outside n f pat)` | Apply `f` across `n` cycles at once | `n` |
+| `(within s e f pat)` | Apply `f` to events that start in `[s, e)` of the cycle | `s e` |
+| `(swing-by x n pat)` | Delay the second half of each 1/n slice by `x` of the slice | `x n` |
+| `(swing n pat)` | `(swing-by 1/3 n pat)` | `n` |
+| `(brak pat)` | Breakbeat feel on odd cycles (squeezed, shifted by 1/4) | — |
+| `(iter n pat)` | Start `1/n` earlier each cycle | `n` |
+| `(iter-back n pat)` | Start `1/n` later each cycle | `n` |
+| `(palindrome pat)` | `pat`, then `(rev pat)`, alternating | — |
+| `(rot n pat)` | Rotate the values `n` places left, keeping the rhythm | `n` |
+| `(chunk n f pat)` | Apply `f` to chunk `c mod n` of cycle `c` | `n` |
+| `(chunk-back n f pat)` | As `chunk`, chunk index `0, n-1, n-2 …` | `n` |
+| `(fast-chunk n f pat)` | As `chunk`, without cycle-holding | `n` |
+| `(polymeter [steps] layer…)` | Layers of different step counts on one grid | `steps` |
+| `(timecat [w x]…)` | Weighted concatenation inside one cycle | — |
+| `(first-of n f pat)` | Apply `f` on cycles 0, n, 2n … (same as `every`) | `n` |
+| `(last-of n f pat)` | Apply `f` on cycles n-1, 2n-1 … | `n` |
+| `(compress s e pat)` | Squeeze each cycle into the window `[s, e)` (`0 ≤ s < e ≤ 1`), silence elsewhere | `s e` |
+| `(zoom s e pat)` | Play only the window `[s, e)` of each cycle, stretched to fill the cycle (Tidal `zoomArc`) | `s e` |
+| `(focus s e pat)` | Squeeze the cycle into `[s, e)` and keep playing — neighbouring cycles fill the rest | `s e` |
+| `(fast-gap n pat)` | `n` times faster, then silence until the next cycle | `n` |
+| `(linger n pat)` | Repeat the first `n` of every cycle (last `|n|` for negative `n`); restarts every cycle | `n` |
+| `(bite n ipat pat)` | Cut each cycle into `n` slices; each event of `ipat` (an index) plays its slice | `n` |
+| `(ribbon offset cycles pat)` | Loop `cycles` cycles of `pat` starting at cycle `offset` | `offset cycles` |
+| `(hurry r pat)` | `(fast r pat)` and multiply every event's `:rate` by `r` (missing rate = 1) | `r` |
+| `(revv pat)` | Reverse time across cycles (cycle `c` plays source cycle `-c-1` reversed) | — |
+| `(repeat-cycles n pat)` | Play each source cycle `n` times before moving on | `n` |
+| `(trunc t pat)` | Only the first `t` of each cycle plays; events crossing the cut are cut short | `t` |
+| `(press pat)` | Every event starts half way through its own length (`(press-by 1/2 pat)`) | — |
+| `(press-by r pat)` | Every event starts `r` of the way through its own length | `r` |
+| `(chunk-into n f pat)` | Like `chunk`, but `f` sees the chunk as a looping full cycle; chunk `c mod n` | `n` |
+| `(chunk-back-into n f pat)` | As `chunk-into`, chunk index `n-1, n-2 … 0` | `n` |
+| `(euclidish k n g pat)` | Euclidean rhythm morphed towards even spacing by `g` (0 = `euclidean`, 1 = even) | `k n g` |
+| `(ply-for-each n f pat)` | `ceil(n)` sub-steps per event; sub-step `i ≥ 1` is `(f (pure v) i)` | `n` |
+| `(filter-events pred pat)` | Keep events whose **value** satisfies `pred` | — |
+| `(filter-when pred pat)` | Keep events whose start time satisfies `pred` | — |
+| `(bypass on pat)` | `on` true (`1`) silences `pat`, false plays it | `on` |
+| `(beat t div pat)` | Place every value of `pat` on step `t mod div` of `div` (`"0,7,10"` stacks steps) | `t div` |
+| `(sew bools a b)` | `a` where `bools` is true, `b` where it is false (structure from `a`/`b`) | `bools` |
+| `(stitch bools a b)` | Structure from `bools`; true steps take `a`, false steps take `b` | `bools` |
+| `(binary n)` | Bits of `n`, most significant first, as `true`/`false` steps: `5` → `1 0 1` | `n` |
+| `(binary-n n [bits])` | The low `bits` bits of `n` (default 16), most significant first | `n bits` |
+
+```lisp
+(struct "t ~ t t" (pure :bd))                  ; bd at 0, 1/2, 3/4
+(mask "1 0 1 1" (fast 8 (pure :hh)))           ; gate a hi-hat stream
+(ply 2 (seq :bd :sd))                          ; bd bd sd sd
+(ply-with 3 (add 12) (seq 0 7))                ; 0 12 24 | 7 19 31
+(inside 2 rev (seq 0 1 2 3 4 5 6 7))           ; 3 2 1 0 7 6 5 4
+(within 0 1/2 (fast 2) (seq :a :b :c :d))      ; speed up the first half only
+(swing 4 (fast 8 (pure :hh)))                  ; every 2nd hat of each quarter delayed by 1/12
+(chunk 4 (add 10) (seq 0 1 2 3))               ; a different quarter is transformed each cycle
+(iter 4 (seq :a :b :c :d))                     ; a b c d | b c d a | c d a b | d a b c
+(rot 1 (seq :a :b :c :d))                      ; b c d a — same rhythm, shifted values
+(brak (seq :bd :sd))                           ; odd cycles: squeezed and delayed
+(polymeter [:bd :sd :hh] [:c3 :e3])            ; 3 against 2
+(polymeter 4 [:a :b :c])                       ; a b c a | b c a b …
+(timecat [3 :e3] [1 :g3])                      ; e3 for 3/4 of the cycle, g3 for 1/4
+(->> (seq :bd :sd) (ply 2) (iter 4) (swing 4)) ; curried forms in ->>
+```
+
+**Boolean values.** A step is *false* when it is `false`, `nil`, `0`, `~`/`_` (a rest),
+`f` or `:false`; everything else is true. So `"t ~ t t"`, `"1 0 1 1"`, `"x ~ x x"` and
+`(seq true false true true)` all describe the same rhythm.
+
+**Cycle-holding.** `iter`, `iter-back`, `palindrome`, `chunk` and `chunk-back` follow
+Tidal's `cat`: a cycle-varying input such as `(cat a b)` is *held* — the source advances
+one cycle every `n` cycles, not every cycle. `(iter 2 (cat (seq :a :b) (seq :c :d)))`
+plays `a b | b c | c d | d a`. Use `fast-chunk` for the non-holding variant. The public
+`cat` is unchanged.
+
+### Windows, switches & binary rhythms
+
+`zoom`, `focus` and `compress` all take a window `[s, e)` of the cycle, but do different
+things with the same input `(seq :a :b :c :d)`:
+
+```lisp
+(zoom 1/4 3/4 (seq :a :b :c :d))      ; b c — the middle half, stretched to fill the cycle
+(focus 1/4 3/4 (seq :a :b :c :d))     ; c d a b c d a b — the cycle squeezed into [1/4, 3/4), no gaps
+(compress 1/4 3/4 (seq :a :b :c :d))  ; silence, a b c d in the middle half, silence
+(fast-gap 2 (seq :bd :sd))            ; bd sd in the first half, then silence
+(linger 1/4 (seq 0 1 2 3 4 5 6 7))    ; 0 1 0 1 0 1 0 1 — the first quarter repeated
+(trunc 3/4 (seq :a :b :c :d))         ; a b c then silence
+(bite 4 (seq 0 2) (seq :a :b :c :d :e :f :g :h))  ; a b e f — slices 0 and 2
+(ribbon 1 2 (cat (pure :a) (pure :b) (pure :c) (pure :d)))  ; b c b c — loop cycles 1–2
+(repeat-cycles 2 (cat (pure :a) (pure :b)))       ; a a b b
+(press (seq :a :b))                   ; a and b each start half way into their step
+(chunk-into 2 rev (seq 0 1 2 3))      ; 1 0 2 3 | 0 1 3 2
+(euclidish 3 8 1/2 (pure :x))         ; 3 hits halfway between euclidean and perfectly even
+(ply-for-each 3 (fn [p i] (add (* i 12) p)) (seq 0 7))  ; 0 12 24 | 7 19 31
+```
+
+**`hurry` multiplies `rate`.** `(hurry 2 (seq :bd :sd))` is `(fast 2 …)` and sets
+`:rate 2` on every event, so samples also play an octave up; an existing rate is
+multiplied (`(hurry 2 (rate 1.5 pat))` → rate 3). There is no `speed` alias.
+
+**Switching between patterns.** `sew` and `stitch` choose between two patterns with a
+boolean pattern; rests in the boolean pattern select neither side:
+
+```lisp
+(sew "t f" (seq :a :a :a :a) (seq :b :b :b :b))  ; a a b b — structure from a and b
+(stitch "t f t t" (pure :bd) (pure :sn))         ; bd sn bd bd — structure from the booleans
+(bypass "<0 1>" (seq :a :b))                     ; plays on even cycles, silent on odd ones
+```
+
+**Filtering.** `filter-events` (named so because `filter` works on sequences) receives the
+event **value**; `filter-when` receives the event's start time — a plain integer when it
+is whole (`0`, `1`), otherwise an exact rational such as `1/4`, so `(= t 0)` and
+`(< t 1/2)` both work:
+
+```lisp
+(filter-events (fn [v] (> v 2)) (seq 1 2 3 4))        ; 3 4
+(filter-when (fn [t] (< t 1/2)) (seq :a :b :c :d))    ; a b, then nothing
+```
+
+**Binary rhythms.** `binary` turns a number into `true`/`false` steps (Strudel semantics:
+most significant bit first, argument order `n` then `bits`, default 16 bits for `binary-n`):
+
+```lisp
+(struct (binary 5) (pure :x))          ; 5 = 101 → x ~ x
+(binary-n 5 4)                         ; false true false true
+(beat "0,7,10" 16 (pure :bd))          ; hits on steps 0, 7 and 10 of 16
+(->> (seq :bd :sd) (fast-gap 2) (linger 1/2) (hurry 2) (zoom 0 1/2))  ; curried forms
+```
+
+`sew`, `stitch`, `binary` and `binary-n` have no curried form. Numeric arguments of all
+the functions above accept patterns or mini-notation strings, e.g. `(zoom 0 "<1 1/2>" pat)`.
+
+---
+
+## Combining patterns
+
+Patterns can be composed freely:
+
+```lisp
+; Layered groove
+(stack
+  (seq :bd :_ :bd :_)
+  (seq :_ :sd :_ :sd)
+  (fast 2 (seq :hh :_)))
+
+; Polyrhythm — 3 against 4
+(stack
+  (seq :bd :bd :bd)
+  (seq :hh :hh :hh :hh))
+
+; Conditional variation
+(every 4 (fast 2)
+  (stack (seq :bd :sd) (seq :hh :hh :hh :hh)))
+
+; Reverse every other bar
+(every 2 rev (seq :bd :hh :sd :oh))
+```
+
+---
+
+## Mini-notation
+
+`~` parses a compact Tidal/Strudel-style string into a Pattern. It is opt-in sugar — the
+Lisp is the host language and `~` is just another function returning a Pattern.
+
+```lisp
+(~ "bd sd hh")       ; ≡ (seq :bd :sd :hh)
+(~ "bd [sd hh]")     ; subdivision — sd and hh share one step
+(~ "hh*4 sd")        ; repetition — four hats then a snare
+(~ "<bd sd cp>")     ; alternation — cycles through bd → sd → cp
+(~ "bd? sd")         ; 50% probability — deterministic: the same events every time
+(~ "bd:2 sd:0")      ; sample index — ≡ (sound :bd 2), (sound :sd 0)
+(~ "bd@3 sd")        ; elongation — bd takes ¾ of the cycle
+(~ "c4 e4 g4")       ; note names → keywords (:c4 :e4 :g4)
+(~ "440 330 220")    ; numbers pass through as Hz values
+(~ "0 1/8 1/4")      ; rationals stay exact — [1 8], [1 4]
+(~ "bd!3 sd")        ; replicate — ≡ (seq :bd :bd :bd :sd); "bd ! sd" repeats the previous step once
+(~ "bd sd . hh hh hh") ; "." groups — [bd sd] and [hh hh hh] share the cycle half and half
+(~ "[bd, hh hh]")    ; "," layers — bd under two hats (top level "a b, c d e" works too)
+(~ "{a b c}%4")      ; polymeter — 4 steps per cycle through a b c: a b c a | b c a b
+(~ "{a b c, d e}")   ; layers with different lengths on the first layer's grid
+(~ "bd(3,8)")        ; euclid — 3 hits in 8 steps; bd(3,8,2) rotates; bd(<3 5>,8) is patterned
+(~ "hh*8?0.3")       ; ?amount — drop 30% of the hats (the number must touch the ?)
+(~ "[bd | sd sd | hh*3]") ; "|" — one random alternative per cycle
+```
+
+**Randomness is deterministic.** `x?` is `(degrade-by-with (early (* seed 3/10000) rand) 0.5 x)`
+and `a | b` picks with `(early (* seed 3/10000) rand)` sampled once per cycle, where `seed`
+is a counter that starts at 0 for each string and is incremented, in parse-completion
+order, for every `?`, every `|` group and every `.`-feet group (Strudel's krill `seed++`).
+So `"a? b? c? d?"` degrades the four steps independently, and evaluating the same string
+always gives the same events. `"a? 0.3"` (with a space) is two steps. `|` is allowed at top
+level and inside `[ ]`, but not inside `< >` or `{ }`, and not mixed with `,` in the same group.
+
+`_` is a **rest** (like `~`); use `@` to elongate a step (`bd@3`). This is a deliberate
+difference from Strudel, where `_` extends the previous step.
+
+Sub-sequences are exact since TL3: `"<a b> c"` now alternates between `a c` and `b c`
+(before, it always played `a`), and step times are exact rationals instead of rounded
+floats.
+
+Mini-notation strings are also accepted directly wherever an argument is patternable:
+`(fast "<1 2>" pat)` ≡ `(fast (~ "<1 2>") pat)` (see [Patterned arguments](#patterned-arguments)).
+
+### Mini-notation inside Lisp
+
+Mini-notation composes freely with all Lisp combinators:
+
+```lisp
+(fast 2 (~ "bd sd"))
+(stack (~ "bd _ bd _") (~ "_ sd _ sd"))
+(->> (~ "c4 e4 g4") (amp 0.6) (attack 0.02))
+(every 4 rev (~ "bd sd hh cp"))
+```
+
+### `alt` — cycle-based alternation
+
+`alt` is the Lisp-level equivalent of `<...>` in mini-notation. On each cycle it picks
+the next pattern from the list:
+
+```lisp
+(alt (seq :bd :bd) (seq :sd :sd))   ; even cycles: bd bd, odd cycles: sd sd
+(alt kick fill fill fill)            ; kick on cycle 0, fill on 1–3, loop
+```
+
+### `load-gist` — import a GitHub Gist
+
+Fetch a GitHub Gist into the editor and evaluate it:
+
+```lisp
+(load-gist "https://gist.github.com/user/abc123def")
+(load-gist "https://gist.githubusercontent.com/user/id/raw/file.clj")
+```
+
+### `export` — render to WAV
+
+Render `n` cycles of the current tracks to a downloadable WAV file via `OfflineAudioContext`:
+
+```lisp
+(export 4)       ; 4 cycles → WAV download
+(export 1)       ; 1 cycle loop
+(export :kick)   ; 4 cycles of the :kick track only
+(export :song)   ; capture the whole song in real time — see "Writing a song"
+```
+
+| Form | What it does |
+|---|---|
+| `(export)` / `(export n)` | Render `n` cycles (default 4) of all tracks offline, 44.1 kHz → `repulse-all-<n>cycles.wav` |
+| `(export :track)` | Render 4 cycles of one track offline → `repulse-<track>-4cycles.wav` |
+| `(export :song)` / `(export :song :tail secs)` | Play the song once from bar 0 and record the master output (with all FX) in real time, plus a release tail (default 2 s, 0–30) → `repulse-song-<bars>bars.wav`. `(stop)` cancels. |
+
+The offline `(export n)` / `(export :track)` path uses JS fallbacks for WASM voices and skips
+FX; `(export :song)` sounds exactly like playback because it records it.
 
 ---
 
@@ -727,57 +1372,104 @@ Note keywords play as sine tones by default. Use `synth` (see [Per-event paramet
 to apply a different voice — sawtooth, square, FM, or noise — to the whole pattern. Middle C is `:c4`,
 concert A is `:a4` (440 Hz). Drum keywords like `:bd` and `:sd` are unaffected.
 
+> **Changed in TL5:** `scale` degrees start at 0 and `scale`/`chord`/`transpose` return note
+> names (not Hz). Old code: subtract 1 from every degree. Note names are MIDI-note values, so
+> `(add 12 (scale …))` is exactly one octave. Plain numbers are still frequencies in Hz.
+
 ### `scale` — melodic patterns from scale degrees
 
-Map one-indexed degree integers to frequencies in a named scale:
+Map **0-based** degrees (0 = the root) to note names in a named scale:
 
 ```lisp
-(scale :major :c4 (seq 1 2 3 4 5 6 7))   ; C major scale
-(scale :minor :a3 (seq 1 3 5))            ; A minor triad
-(scale :pentatonic :g3 (fast 2 (seq 1 2 3 4 5)))
+(scale :major :c4 (seq 0 1 2 3 4 5 6))    ; C major scale
+(scale :minor :a3 (seq 0 2 4))             ; A minor triad
+(scale :pentatonic :g3 (fast 2 (seq 0 1 2 3 4)))
 
-;; Degrees wrap into higher octaves
-(scale :major :c4 (seq 1 8 15))           ; C4, C5, C6
+(scale :minor :c4 (seq 0 2 4 7))           ; :c4 :ds4 :g4 :c5
+(scale :minor :c4 (seq -1))                ; :as3 — negative degrees go below the root
+(scale :major :c4 (seq 0 7 14))            ; C4, C5, C6 — degrees wrap into octaves
+(add 12 (scale :minor :c3 (seq 0)))        ; :c4 — exactly one octave up
 ```
 
-Degree 1 = root, degree 2 = second scale tone, etc. Values beyond the scale length wrap
-into higher octaves; values below 1 wrap into lower octaves.
+Non-integer degrees are rounded down; rests and drum keywords pass through. The scale name and
+the root may be patterns, and `name` may be a **vector of semitone offsets** for a custom scale:
+
+```lisp
+(scale "<major minor>" :c4 (seq 0 2 4))             ; scale changes every cycle
+(scale [0 2 4 5 7 9 11] :c4 (seq 0 1 2))            ; custom scale from semitones
+(->> (seq 0 2 4) (scale :dorian :d3))               ; curried: (scale name root)
+```
 
 Available scales: `:major` (`:ionian`), `:minor` (`:aeolian`), `:dorian`, `:phrygian`,
-`:lydian`, `:mixolydian`, `:locrian`, `:pentatonic`, `:minor-pentatonic`, `:blues`.
+`:lydian`, `:mixolydian`, `:locrian`, `:pentatonic` (`:major-pentatonic`), `:minor-pentatonic`,
+`:blues`, `:harmonic-minor`, `:melodic-minor`, `:whole-tone`, `:chromatic`, `:hirajoshi`,
+`:phrygian-dominant`, `:lydian-dominant`, `:altered`, `:diminished`, `:bebop-dominant`.
 
 ### `chord` — stacked chord voicings
 
-Returns a `stack` of the chord tones as Hz values — all voices sound simultaneously for
-one full cycle:
+Returns a `stack` of the chord tones as note names — all voices sound simultaneously for
+one full cycle. Two forms: a chord keyword plus a root, or a **chord symbol string** (root in
+octave 4):
 
 ```lisp
 (chord :major :c4)              ; C E G
 (chord :minor7 :a3)             ; A C E G
-(chord :dom7 :g3)               ; G B D F
+(chord "Cm7")                   ; :c4 :ds4 :g4 :as4
+(chord "<C F G7>")              ; one chord per cycle
+(chord (seq "Dm7" "G7"))        ; two chords per cycle
 
 ;; Layer a chord under a melody
 (stack
   (slow 4 (chord :minor :a3))
-  (scale :minor :a3 (fast 2 (seq 1 3 5 6 5 3))))
+  (scale :minor :a3 (fast 2 (seq 0 2 4 5 4 2))))
 ```
 
-Available chords: `:major`, `:minor`, `:major7`, `:minor7`, `:dom7`, `:m7b5`
-(half-diminished), `:dim`, `:dim7`, `:aug`, `:aug7`, `:maj7s11`, `:sus2`, `:sus4`.
+Keyword chords: `:major`, `:minor`, `:major7`, `:minor7`, `:dom7`, `:m7b5` (half-diminished),
+`:dim`, `:dim7`, `:aug`, `:aug7`, `:maj7s11`, `:sus2`, `:sus4`.
+
+**Chord symbols** are a root `A`–`G` with an optional `#` or `b`, a quality, and an optional
+slash bass (`"C/E"` puts the E below the chord). 34 qualities are understood:
+
+| Quality | Symbols |
+|---|---|
+| major | `C` `CM` `Cmaj` |
+| minor | `Cm` `Cmin` `C-` |
+| diminished / augmented | `Cdim` `Co` / `Caug` `C+` |
+| suspended | `Csus2` / `Csus4` `Csus` |
+| power chord | `C5` |
+| sixths | `C6` `Cm6` `C-6` `C69` |
+| added tones | `Cadd9` `Cadd2` `Cmadd9` |
+| sevenths | `C7` `C^7` `Cmaj7` `CM7` `CΔ` `CΔ7` `Cm7` `C-7` `Cmin7` `Cm^7` `CmM7` `Cmmaj7` `C-^7` |
+| half-dim / dim7 | `Cm7b5` `Ch7` `Ch` `Cø` `Cø7` `C-7b5` / `Co7` `Cdim7` |
+| suspended 7 | `C7sus4` `C7sus` |
+| altered 7 | `C+7` `C7#5` `Caug7` `C7b5` `C7b9` `C7#9` `C7b13` `C7#11` `C^7#11` `Cmaj7#11` |
+| ninths | `C9` `C^9` `Cmaj9` `CM9` `Cm9` `C-9` `C9sus4` `C9sus` |
+| elevenths / thirteenths | `C11` `Cm11` `C-11` `C13` `Cm13` `C-13` |
+
+An unknown symbol in a string literal is an eval error with a suggestion:
+`unknown chord symbol "Cmj7" — did you mean "Cmaj7"?`.
 
 ### `transpose` — semitone shifting
 
-Shifts all numeric (Hz) values in a pattern up or down by `n` semitones. Keyword values
-(`:bd`, `:sd`, etc.) pass through unchanged:
+Shifts values in a pattern up or down by `n` semitones. **Note names stay note names**; plain
+numbers are frequencies and scale by 2^(n/12); maps shift their `:note`; drum keywords and
+rests pass through. `n` may be a pattern, or an **interval string** (number, then quality
+`P M m A d`):
 
 ```lisp
 (transpose 12 (seq :c4 :e4 :g4))          ; up one octave → C5 E5 G5
-(transpose -7 (scale :major :c5 (seq 1 2 3 4)))
+(transpose -7 (scale :major :c5 (seq 0 1 2 3)))
 (transpose 5 (chord :major :c4))           ; same voicing, up a fourth
+(transpose "3M" (seq :c4))                 ; :e4 (major third up)
+(transpose "-2M" (seq :c4))                ; :as3
+(transpose "<0 7>" (seq :c4 :e4))          ; patterned amount
+(transpose 12 (seq 440))                   ; 880 — numbers are Hz
 
 ;; drum keywords are untouched
 (transpose 12 (seq :bd :sd))               ; still :bd :sd
 ```
+
+An impossible interval such as `"3P"` or `"5M"` is an eval error.
 
 ### Putting it together
 
@@ -790,7 +1482,7 @@ Shifts all numeric (Hz) values in a pattern up or down by `n` semitones. Keyword
                     [(chord :major :c4) 4]
                     [(chord :major :g3) 4]]))
   ;; melody over the top
-  (scale :minor :a3 (seq 1 3 5 6 5 3 1 3))
+  (scale :minor :a3 (seq 0 2 4 5 4 2 0 2))
   ;; drums
   (seq :bd :_ :bd :_)
   (seq :_ :sd :_ :sd))
@@ -798,282 +1490,94 @@ Shifts all numeric (Hz) values in a pattern up or down by `n` semitones. Keyword
 
 ---
 
-## Per-event parameters
+## Harmony
 
-Attach synthesis parameters to any pattern using `amp`, `attack`, `decay`, `release`, and
-`pan`. Each parameter function accepts a scalar value or a pattern of values, and can be
-applied directly or returned as a transformer for composition.
+Chord-symbol based tools. They take chord symbols (see [`chord`](#chord--stacked-chord-voicings))
+as strings or patterns and produce note names.
 
-### Thread-last: `->>`
+### `voicing` — smooth voice leading
 
-Chain multiple parameters with `->>` (thread-last). The result of each step is passed as
-the **last** argument to the next form — consistent with REPuLse's existing convention of
-putting the pattern last:
+Voices each chord symbol as a 3–4 note chord and picks the voicing closest to an anchor note,
+so consecutive chords move smoothly instead of jumping:
 
 ```lisp
-(->> (seq :c4 :e4 :g4)
-     (amp 0.7)
-     (attack 0.02)
-     (decay 0.5))
-; ≡ (decay 0.5 (attack 0.02 (amp 0.7 (seq :c4 :e4 :g4))))
+(voicing (seq "Dm7" "G7" "C^7"))        ; D4 F4 A4 C5 | D4 F4 G4 B4 | E4 G4 B4 C5
+(voicing "<C^7 A7b13 Dm7 G7>")           ; one voiced chord per cycle
+(voicing {:mode :above :anchor :c4} "C") ; options map first
+(->> "<Dm7 G7>" (voicing {:anchor :c4})) ; curried
 ```
 
-### `amp` — amplitude (0.0–1.0)
+Options: `:anchor` (a note, default `:c5`), `:mode` (`:below` top note as high as possible but
+not above the anchor, default; `:above` lowest note as low as possible but not below it;
+`:duck` top note strictly below the anchor; `:root` root position with the root at or below the
+anchor) and `:offset` (move that many voicings up, negative = down). The voicing dictionary is
+built in (close-position inversions of the chord's 3–4 essential tones) and has no custom
+dictionaries.
+
+### `root-notes`
+
+The root of each chord symbol as a note in a given octave (default 2) — handy for bass lines:
 
 ```lisp
-(amp 0.8 (seq :c4 :e4 :g4))              ; all notes at 80%
-(amp (seq 0.9 0.4 0.9 0.4) kick)         ; accent pattern — 1st and 3rd louder
+(root-notes "<Cm7 F7>")                   ; :c2 then :f2
+(root-notes 3 (seq "Bb7" "Eb^7"))         ; :as3 :ds3
 ```
 
-### `attack` — onset time in seconds
+### `scale-transpose`
+
+Move degrees (numbers) or notes (keywords) `n` steps *inside a scale*:
 
 ```lisp
-(attack 0.001 melody)   ; percussive / instant
-(attack 0.3 pad)        ; slow swell
+(scale-transpose 2 :minor (seq 0 2 4))                      ; degrees 2 4 6
+(->> (seq 0 2 4) (scale-transpose "<0 2>" :minor) (scale :minor :c4))
+(scale-transpose 1 :minor (seq :c4 :eb4 :g4))               ; :d4 :f4 :gs4
+(scale-transpose 1 [:dorian :d] (seq :d4 :e4))              ; scale given as [name root]
 ```
 
-### `decay` — decay time in seconds
+Notes outside the scale snap down to the nearest scale tone before moving. `n` may be a pattern.
+
+### `arp` — arpeggios
+
+Plays the notes that sound together (a chord) one after the other, spread over the chord's
+time slot. Modes (Tidal names, plus the one-word spellings `updown` `thumbup` …):
+
+| Mode | Order for C E G Bb (low → high) |
+|---|---|
+| `:up` / `:down` | up / down |
+| `:up-down` / `:down-up` | up then back without repeating the ends |
+| `:up-and-down` / `:down-and-up` | up then down, ends repeated |
+| `:converge` / `:diverge` / `:disconverge` | outside-in / inside-out / both |
+| `:pinky-up` / `:pinky-up-down` | each note followed by the highest |
+| `:thumb-up` / `:thumb-up-down` | each note preceded by the lowest |
 
 ```lisp
-(decay 0.08 (chord :major :c4))   ; short stab
-(decay 2.0 (pure :c3))            ; long bass tone
+(arp :up (chord "Cm7"))
+(arp :up-down (chord "Cm7"))
+(arp "<up down>" (chord "C"))            ; mode may be a pattern
+(arp "0 2 1 3" (chord "Cm7"))            ; index form: pick the i-th note (rhythm from the list)
+(->> "<Dm7 G7>" (voicing) (arp :up-down))
 ```
 
-> **Note:** `decay`, `attack`, and `release` only affect **synthesised** sounds (note
-> keywords like `:c4`, `saw`, `square`, `sine`, `noise`). They are silently ignored for
-> **sample-based** sounds (drum keywords like `:bd`, `:sd`, `:hh`, or any `(bank …)`
-> pattern). To shorten a sample, use the `:end` key via `(->> pat (params {:end 0.5}))`
-> instead.
+A single note is passed through unchanged. An unknown mode is an eval error that lists the modes.
 
-### `release` — release time in seconds
+### `arp-with`
+
+Gives you the simultaneous values as a vector and plays the pattern your function returns:
 
 ```lisp
-(release 0.5 melody)   ; tail after note-off
+(arp-with (fn [ns] (seq (first ns) (nth ns 1) (first ns))) (chord "Cm7"))
 ```
 
-### `pan` — stereo position (-1.0 to 1.0)
+### `rolled` / `rolled-by` — strum
+
+Staggers the starts of simultaneous notes while they keep their ends. `rolled` spreads the
+starts over a quarter of the event; `(rolled-by t pat)` over `t` of it (negative `t` strums from
+the top down, `0` leaves the chord alone, `t` may be a pattern):
 
 ```lisp
-(pan -0.5 melody)                      ; slightly left
-(pan (seq -0.8 0.8) (fast 2 hihat))    ; ping-pong hi-hat
-```
-
-### `synth` — apply a synthesis voice to a note pattern
-
-Write note sequences as plain keywords, then attach a voice with `synth`. This separates
-pitch from timbre — the same note pattern can be tried with different voices by changing
-one word:
-
-```lisp
-(->> (seq :c4 :eb4 :g4)
-     (synth :saw)
-     (amp 0.6) (attack 0.02) (decay 0.5))
-
-(->> (seq :c3 :eb3 :g3)
-     (synth :square :pw 0.25)    ; 25% duty cycle — brighter, thinner
-     (amp 0.4) (decay 0.3))
-
-(->> (seq :c4 :eb4 :g4)
-     (synth :fm :index 4 :ratio 2)
-     (amp 0.5) (attack 0.05) (decay 1.2))
-
-(->> (seq :_ :_ :_ :_)           ; timing/rest pattern drives noise hits
-     (synth :noise)
-     (amp 0.5) (decay 0.08))
-```
-
-Available voices:
-
-| Voice                | Keyword      | Options                                                                           |
-|----------------------|--------------|-----------------------------------------------------------------------------------|
-| Sawtooth             | `:saw`       | —                                                                                 |
-| Pulse/square         | `:square`    | `:pw` 0.0–1.0 — duty cycle (default `0.5` = square wave)                        |
-| FM synthesis         | `:fm`        | `:index` modulation depth (default `1.0`), `:ratio` mod/carrier ratio (default `2.0`) |
-| White noise          | `:noise`     | —                                                                                 |
-| Steel-string guitar  | `:western`   | Karplus-Strong; hard pick attack, dreadnought body resonances                     |
-| Classical guitar     | `:nylon`     | Soft fingertip attack, darker timbre, treble rolloff above 3.5 kHz                |
-| Guitar (alias)       | `:guitar`    | Alias for `:western`                                                              |
-| Harp                 | `:harp`      | Bright, long-decay pluck (feedback 0.998)                                         |
-| Pizzicato string     | `:pizz`      | Short staccato pluck (feedback 0.972)                                             |
-| Lute                 | `:lute`      | Warm plucked lute                                                                 |
-| Koto                 | `:koto`      | Japanese koto with subtle vibrato (5.5 Hz)                                        |
-| Mandolin             | `:mandolin`  | Bright mandolin with faster vibrato (6.0 Hz)                                      |
-
-#### FM instrument presets (Phase SYN2)
-
-These voices use 2-operator FM synthesis with per-preset ADSR envelopes. No manual
-tuning needed — just name the instrument:
-
-| Voice                | Keyword          | Character                                                                         |
-|----------------------|------------------|-----------------------------------------------------------------------------------|
-| Saxophone            | `:sax`           | Reed-like; index 3, 20ms attack, sustained body                                   |
-| Trumpet              | `:trumpet`       | Bright brass; high index for harmonic grit                                        |
-| Muted trumpet        | `:trumpet-muted` | Inharmonic ratio (√2), high index — lo-fi nasal grit                             |
-| Cup-muted trumpet    | `:trumpet-cup`   | Darker than open, brighter than harmon                                            |
-| Trombone             | `:trombone`      | Warm brass with slower 40ms attack                                                |
-| Electric piano       | `:epiano`        | Rhodes-style; mod ratio 14×, metallic shimmer, fades naturally                   |
-| Bell                 | `:bell`          | Inharmonic ring (√2 ratio), 1.2s decay to silence                                |
-| Marimba              | `:marimba`       | Percussive; mod ratio 3.5×, 0.35s ring                                            |
-| Flute                | `:flute`         | Low index, breathy, 60ms soft attack                                              |
-
-```lisp
-;; Sax melody
-(->> (scale :minor :c3 (seq 0 3 5 7))
-     (synth :sax)
-     (amp 0.7))
-
-;; Rhodes electric piano chord
-(->> (chord :maj7 :c4 (slow 2 (seq 0 4 7 11)))
-     (synth :epiano)
-     (amp 0.5))
-
-;; Bell melody — rings for over a second
-(->> (fast 2 (scale :major :c5 (seq 0 2 4 5)))
-     (synth :bell))
-
-;; Lo-fi muted trumpet
-(->> (scale :major :c4 (seq 0 2 4 7))
-     (synth :trumpet-muted)
-     (amp 0.6))
-```
-
-```lisp
-;; Plucked string melody
-(->> (scale :minor :c3 (seq 0 3 5 7))
-     (synth :guitar)
-     (amp 0.8))
-
-;; Harp arpeggio
-(->> (chord :major :c4 (slow 2 (seq 0 2 4 7 4 2)))
-     (synth :harp))
-
-;; Pizzicato bass
-(->> (scale :minor :c2 (seq 0 :_ 5 :_))
-     (synth :pizz)
-     (amp 0.6))
-
-;; Fast koto figure
-(->> (scale :pentatonic :d4 (fast 4 (seq 0 2 4 7)))
-     (synth :koto))
-```
-
-`synth` works on any note-producing pattern: plain keywords, Hz values from `scale`, or
-already-transformed maps. All `amp`/`attack`/`decay`/`pan` parameters compose normally
-on top of it.
-
-The per-note forms `(saw :c4)`, `(square :c3 :pw 0.25)`, `(fm :c4 :index 4)` remain
-available when you need different voices on individual steps within the same `seq`.
-
-### Named voice presets
-
-One-argument forms return `(pat → pat)` transformers, enabling reusable presets with `def`
-and `comp`:
-
-```lisp
-(def pluck  (comp (amp 0.8) (attack 0.003) (decay 0.15)))
-(def pad    (comp (amp 0.4) (attack 0.3)   (decay 1.5)))
-(def punchy (comp (amp 1.0) (attack 0.001) (decay 0.08)))
-
-(stack
-  (pluck (scale :minor :a3 (seq 1 3 5 8)))
-  (pad   (chord :minor :a3))
-  (punchy (seq :bd :_ :bd :_)))
-```
-
-### `rate` — sample playback rate
-
-Scale the playback speed of a sample. `1.0` = normal, `2.0` = double speed (one octave up):
-
-```lisp
-(->> (sound :tabla 0) (rate 1.5))    ; 50% faster (higher pitch)
-(->> (seq :hh :oh)    (rate 0.5))    ; half speed
-```
-
-### `begin` / `end` — sample slice
-
-Play only a portion of the sample buffer. Values are fractions of buffer duration (0.0–1.0):
-
-```lisp
-(->> (sound :tabla 0) (begin 0.2) (end 0.8))   ; middle 60%
-(->> (sound :rave  0) (begin 0.5))              ; second half
-```
-
-### `loop-sample` — loop sample
-
-Loop the sample buffer continuously:
-
-```lisp
-(->> (sound :pad 0) (loop-sample true) (decay 4.0))
-```
-
-### Patterned parameters
-
-Parameters can be patterns themselves — they are combined with the note pattern
-cycle-aligned, so different densities create polyrhythmic parameter changes:
-
-```lisp
-; 2-step amp pattern over a 3-step melody — creates shifting accents
-(amp (seq 0.9 0.4) (seq :c4 :e4 :g4))
-
-; independent amp and attack patterns stacked with melody
-(->> (scale :dorian :d3 (fast 3 (seq 1 3 5 6 7)))
-     (amp (slow 2 (seq 0.8 0.5 1.0 0.3)))
-     (attack 0.01))
-```
-
----
-
-## Transitions
-
-A **transition** changes a parameter smoothly from one value to another over musical time. The
-audio engine handles per-sample interpolation — there is no polling:
-
-    (tween curve start end bars)
-
-Every note that fires during the transition picks up the interpolated value at its scheduled time.
-When the transition completes the end value is held indefinitely. Re-evaluating the code restarts
-the transition.
-
-| Curve      | Behaviour                                                  |
-|------------|------------------------------------------------------------|
-| `:linear`  | Constant rate — equal change per unit time                 |
-| `:exp`     | Slow start, fast end — good for volume fades               |
-| `:sine`    | S-curve — slow at both ends, fast in the middle            |
-
-### Examples
-
-```lisp
-;; Amp fade-in over 2 bars
-(->> (seq :c4 :e4 :g4 :c5)
-     (synth :saw)
-     (amp (tween :linear 0.0 1.0 2)))
-
-;; Exponential fade-out over 8 bars
-(->> (fast 2 (seq :hh))
-     (amp (tween :exp 1.0 0.0 8)))
-
-;; S-curve pan sweep over half a bar
-(->> (fast 4 (seq :sd))
-     (pan (tween :sine -1.0 1.0 0.5)))
-
-;; Different transitions per voice in a stack
-(stack
-  (->> (seq :bd :_ :bd :_) (amp (tween :linear 0.2 1.0 2)))
-  (->> (fast 4 (seq :hh))  (pan (tween :sine -0.8 0.8 1))))
-```
-
-### Transitions vs. envelopes
-
-`attack`, `decay`, and `release` shape the amplitude of **individual notes** over milliseconds.
-`tween` changes **any parameter** across multiple bars. They operate at different timescales and
-complement each other:
-
-```lisp
-;; A slow attack on each note, AND a fade-in across all notes
-(->> (seq :c4 :e4 :g4)
-     (synth :saw)
-     (attack 0.3)                     ; each note swells in over 300ms
-     (amp (tween :linear 0.0 1.0 4))) ; overall sequence fades in over 4 bars
+(rolled (chord "C"))
+(rolled-by -1/4 (chord "C"))
+(rolled-by 1/2 (chord "Cm7"))
 ```
 
 ---
@@ -1224,250 +1728,360 @@ plus anything loaded via `samples!`):
 
 ---
 
-## Mini-notation
+## Available sample banks
 
-`~` parses a compact Tidal/Strudel-style string into a Pattern. It is opt-in sugar — the
-Lisp is the host language and `~` is just another function returning a Pattern.
+Sample banks are loaded from the **Dirt-Samples** and **Tidal Drum Machines** collections.
+They are available after a short initial network fetch.
+
+### Dirt-Samples (classic TidalCycles sounds)
+
+| Bank | Description |
+|---|---|
+| `:bd` | Bass drum / kick |
+| `:sd` | Snare drum |
+| `:hh` | Closed hi-hat |
+| `:oh` | Open hi-hat |
+| `:cp` | Clap |
+| `:cb` | Cowbell |
+| `:cr` | Crash cymbal |
+| `:ride` | Ride cymbal |
+| `:lt` `:mt` `:ht` | Low / mid / high tom |
+| `:arpy` | Arpeggio synth |
+| `:bass` `:bass0`–`:bass3` | Various bass sounds |
+| `:moog` | Moog synthesizer |
+| `:jvbass` | Bass guitar |
+| `:feel` | Texture / feel samples |
+| `:house` | House music hits |
+| `:tink` | Tink / high percussive |
+| `:peri` | Peridactyl synth |
+| `:glitch` | Glitch/noise textures |
+| `:birds` | Bird sounds |
+| `:alphabet` | Spoken letters |
+| `:numbers` | Spoken numbers |
+| `:diphone` | Speech diphones |
+| `:gabba` | Gabba kick |
+| `:tabla` | Tabla |
+| `:tabla2` | Tabla variation |
+| `:casio` | Casio keyboard |
+| `:flick` | Flick/snap |
+| `:psr` | PSR keyboard |
+| `:electro1` | Electro hits |
+| `:rave` `:rave2` | Rave stabs |
+| `:space` | Space textures |
+| `:metal` | Metal hits |
+| `:can` | Metal can percussion |
+| `:drum` | Drum machine hits |
+| `:v` | Vocal hits |
+
+### Tidal Drum Machines (full kit names)
+
+These use the format `:<MachineModel>_<part>`:
 
 ```lisp
-(~ "bd sd hh")       ; ≡ (seq :bd :sd :hh)
-(~ "bd [sd hh]")     ; subdivision — sd and hh share one step
-(~ "hh*4 sd")        ; repetition — four hats then a snare
-(~ "<bd sd cp>")     ; alternation — cycles through bd → sd → cp
-(~ "bd? sd")         ; 50% probability — bd plays on ~half of cycles
-(~ "bd:2 sd:0")      ; sample index — ≡ (sound :bd 2), (sound :sd 0)
-(~ "bd@3 sd")        ; elongation — bd takes ¾ of the cycle
-(~ "c4 e4 g4")       ; note names → keywords (:c4 :e4 :g4)
-(~ "440 330 220")    ; numbers pass through as Hz values
+(seq :RolandTR808_bd :RolandTR808_sd :RolandTR808_hh :RolandTR808_cp)
+(seq :RolandTR909_bd :RolandTR909_sd)
+(seq :AkaiRhythm99_bd :AkaiRhythm99_sd)
 ```
 
-### Mini-notation inside Lisp
+Common drum machines in the library include: `RolandTR808`, `RolandTR909`, `RolandTR606`,
+`RolandTR707`, `LinnDrum`, `AkaiMPC60`, `EmuDrumulator`, `KorgKR55`, `YamahaRX5`, and many more.
 
-Mini-notation composes freely with all Lisp combinators:
+Use `(sound :RolandTR808_bd 2)` to pick from multiple kit variations.
+
+---
+
+## Per-event parameters
+
+Attach synthesis parameters to any pattern using `amp`, `attack`, `decay`, `release`, and
+`pan`. Each parameter function accepts a scalar value or a pattern of values, and can be
+applied directly or returned as a transformer for composition.
+
+### Thread-last: `->>`
+
+Chain multiple parameters with `->>` (thread-last). The result of each step is passed as
+the **last** argument to the next form — consistent with REPuLse's existing convention of
+putting the pattern last:
 
 ```lisp
-(fast 2 (~ "bd sd"))
-(stack (~ "bd _ bd _") (~ "_ sd _ sd"))
-(->> (~ "c4 e4 g4") (amp 0.6) (attack 0.02))
-(every 4 rev (~ "bd sd hh cp"))
+(->> (seq :c4 :e4 :g4)
+     (amp 0.7)
+     (attack 0.02)
+     (decay 0.5))
+; ≡ (decay 0.5 (attack 0.02 (amp 0.7 (seq :c4 :e4 :g4))))
 ```
 
-### `alt` — cycle-based alternation
-
-`alt` is the Lisp-level equivalent of `<...>` in mini-notation. On each cycle it picks
-the next pattern from the list:
+### `amp` — amplitude (0.0–1.0)
 
 ```lisp
-(alt (seq :bd :bd) (seq :sd :sd))   ; even cycles: bd bd, odd cycles: sd sd
-(alt kick fill fill fill)            ; kick on cycle 0, fill on 1–3, loop
+(amp 0.8 (seq :c4 :e4 :g4))              ; all notes at 80%
+(amp (seq 0.9 0.4 0.9 0.4) kick)         ; accent pattern — 1st and 3rd louder
 ```
 
-### `load-gist` — import a GitHub Gist
-
-Fetch a GitHub Gist into the editor and evaluate it:
+### `attack` — onset time in seconds
 
 ```lisp
-(load-gist "https://gist.github.com/user/abc123def")
-(load-gist "https://gist.githubusercontent.com/user/id/raw/file.clj")
+(attack 0.001 melody)   ; percussive / instant
+(attack 0.3 pad)        ; slow swell
 ```
 
-### `export` — render to WAV
-
-Render `n` cycles of the current tracks to a downloadable WAV file via `OfflineAudioContext`:
+### `decay` — decay time in seconds
 
 ```lisp
-(export 4)   ; 4 cycles → WAV download
-(export 1)   ; 1 cycle loop
+(decay 0.08 (chord :major :c4))   ; short stab
+(decay 2.0 (pure :c3))            ; long bass tone
+```
+
+> **Note:** `decay`, `attack`, and `release` only affect **synthesised** sounds (note
+> keywords like `:c4`, `saw`, `square`, `sine`, `noise`). They are silently ignored for
+> **sample-based** sounds (drum keywords like `:bd`, `:sd`, `:hh`, or any `(bank …)`
+> pattern). To shorten a sample, use the `:end` key via `(->> pat (params {:end 0.5}))`
+> instead.
+
+### `release` — release time in seconds
+
+```lisp
+(release 0.5 melody)   ; tail after note-off
+```
+
+### `pan` — stereo position (-1.0 to 1.0)
+
+```lisp
+(pan -0.5 melody)                      ; slightly left
+(pan (seq -0.8 0.8) (fast 2 hihat))    ; ping-pong hi-hat
+```
+
+### `synth` — apply a synthesis voice to a note pattern
+
+Write note sequences as plain keywords, then attach a voice with `synth`. This separates
+pitch from timbre — the same note pattern can be tried with different voices by changing
+one word:
+
+```lisp
+(->> (seq :c4 :eb4 :g4)
+     (synth :saw)
+     (amp 0.6) (attack 0.02) (decay 0.5))
+
+(->> (seq :c3 :eb3 :g3)
+     (synth :square :pw 0.25)    ; 25% duty cycle — brighter, thinner
+     (amp 0.4) (decay 0.3))
+
+(->> (seq :c4 :eb4 :g4)
+     (synth :fm :index 4 :ratio 2)
+     (amp 0.5) (attack 0.05) (decay 1.2))
+
+(->> (seq :_ :_ :_ :_)           ; timing/rest pattern drives noise hits
+     (synth :noise)
+     (amp 0.5) (decay 0.08))
+```
+
+Available voices:
+
+| Voice                | Keyword      | Options                                                                           |
+|----------------------|--------------|-----------------------------------------------------------------------------------|
+| Sawtooth             | `:saw`       | —                                                                                 |
+| Pulse/square         | `:square`    | `:pw` 0.0–1.0 — duty cycle (default `0.5` = square wave)                        |
+| FM synthesis         | `:fm`        | `:index` modulation depth (default `1.0`), `:ratio` mod/carrier ratio (default `2.0`) |
+| White noise          | `:noise`     | —                                                                                 |
+| Steel-string guitar  | `:western`   | Karplus-Strong; hard pick attack, dreadnought body resonances                     |
+| Classical guitar     | `:nylon`     | Soft fingertip attack, darker timbre, treble rolloff above 3.5 kHz                |
+| Guitar (alias)       | `:guitar`    | Alias for `:western`                                                              |
+| Harp                 | `:harp`      | Bright, long-decay pluck (feedback 0.998)                                         |
+| Pizzicato string     | `:pizz`      | Short staccato pluck (feedback 0.972)                                             |
+| Lute                 | `:lute`      | Warm plucked lute                                                                 |
+| Koto                 | `:koto`      | Japanese koto with subtle vibrato (5.5 Hz)                                        |
+| Mandolin             | `:mandolin`  | Bright mandolin with faster vibrato (6.0 Hz)                                      |
+
+#### FM instrument presets
+
+These voices use 2-operator FM synthesis with per-preset ADSR envelopes. No manual
+tuning needed — just name the instrument:
+
+| Voice                | Keyword          | Character                                                                         |
+|----------------------|------------------|-----------------------------------------------------------------------------------|
+| Saxophone            | `:sax`           | Reed-like; index 3, 20ms attack, sustained body                                   |
+| Trumpet              | `:trumpet`       | Bright brass; high index for harmonic grit                                        |
+| Muted trumpet        | `:trumpet-muted` | Inharmonic ratio (√2), high index — lo-fi nasal grit                             |
+| Cup-muted trumpet    | `:trumpet-cup`   | Darker than open, brighter than harmon                                            |
+| Trombone             | `:trombone`      | Warm brass with slower 40ms attack                                                |
+| Electric piano       | `:epiano`        | Rhodes-style; mod ratio 14×, metallic shimmer, fades naturally                   |
+| Bell                 | `:bell`          | Inharmonic ring (√2 ratio), 1.2s decay to silence                                |
+| Marimba              | `:marimba`       | Percussive; mod ratio 3.5×, 0.35s ring                                            |
+| Flute                | `:flute`         | Low index, breathy, 60ms soft attack                                              |
+
+```lisp
+;; Sax melody
+(->> (scale :minor :c3 (seq 0 3 5 7))
+     (synth :sax)
+     (amp 0.7))
+
+;; Rhodes electric piano chord
+(->> (chord :maj7 :c4 (slow 2 (seq 0 4 7 11)))
+     (synth :epiano)
+     (amp 0.5))
+
+;; Bell melody — rings for over a second
+(->> (fast 2 (scale :major :c5 (seq 0 2 4 5)))
+     (synth :bell))
+
+;; Lo-fi muted trumpet
+(->> (scale :major :c4 (seq 0 2 4 7))
+     (synth :trumpet-muted)
+     (amp 0.6))
+```
+
+```lisp
+;; Plucked string melody
+(->> (scale :minor :c3 (seq 0 3 5 7))
+     (synth :guitar)
+     (amp 0.8))
+
+;; Harp arpeggio
+(->> (chord :major :c4 (slow 2 (seq 0 2 4 7 4 2)))
+     (synth :harp))
+
+;; Pizzicato bass
+(->> (scale :minor :c2 (seq 0 :_ 5 :_))
+     (synth :pizz)
+     (amp 0.6))
+
+;; Fast koto figure
+(->> (scale :pentatonic :d4 (fast 4 (seq 0 2 4 7)))
+     (synth :koto))
+```
+
+`synth` works on any note-producing pattern: plain keywords, note names from `scale`, or
+already-transformed maps. All `amp`/`attack`/`decay`/`pan` parameters compose normally
+on top of it.
+
+The per-note forms `(fm :c4 :index 4)` and `(noise)` remain available when you need
+different voices on individual steps within the same `seq`. Pulse width of the square
+voice goes through `synth`: `(synth :square :pw 0.25 pat)`. (`saw` and `square` on their
+own are [signals](#signals--sine-saw-rand-perlin-segment-range); `(saw :c4)` is an error.)
+
+### Named voice presets
+
+One-argument forms return `(pat → pat)` transformers, enabling reusable presets with `def`
+and `comp`:
+
+```lisp
+(def pluck  (comp (amp 0.8) (attack 0.003) (decay 0.15)))
+(def pad    (comp (amp 0.4) (attack 0.3)   (decay 1.5)))
+(def punchy (comp (amp 1.0) (attack 0.001) (decay 0.08)))
+
+(stack
+  (pluck (scale :minor :a3 (seq 0 2 4 7)))
+  (pad   (chord :minor :a3))
+  (punchy (seq :bd :_ :bd :_)))
+```
+
+### `rate` — sample playback rate
+
+Scale the playback speed of a sample. `1.0` = normal, `2.0` = double speed (one octave up):
+
+```lisp
+(->> (sound :tabla 0) (rate 1.5))    ; 50% faster (higher pitch)
+(->> (seq :hh :oh)    (rate 0.5))    ; half speed
+```
+
+### `begin` / `end` — sample slice
+
+Play only a portion of the sample buffer. Values are fractions of buffer duration (0.0–1.0):
+
+```lisp
+(->> (sound :tabla 0) (begin 0.2) (end 0.8))   ; middle 60%
+(->> (sound :rave  0) (begin 0.5))              ; second half
+```
+
+### `loop-sample` — loop sample
+
+Loop the sample buffer continuously:
+
+```lisp
+(->> (sound :pad 0) (loop-sample true) (decay 4.0))
+```
+
+### Patterned parameters
+
+Parameters can be patterns themselves — they are combined with the note pattern
+cycle-aligned, so different densities create polyrhythmic parameter changes. The note
+pattern supplies the rhythm: each note takes the parameter value in force at its start
+(Tidal `#`, the same as `(set :in …)`):
+
+```lisp
+; 2-step amp pattern over a 3-step melody — creates shifting accents
+(amp (seq 0.9 0.4) (seq :c4 :e4 :g4))
+
+; independent amp and attack patterns stacked with melody
+(->> (scale :dorian :d3 (fast 3 (seq 0 2 4 5 6)))
+     (amp (slow 2 (seq 0.8 0.5 1.0 0.3)))
+     (attack 0.01))
 ```
 
 ---
 
-## Session persistence
+## Transitions
 
-REPuLse automatically saves all session state to `localStorage` and restores it on every page reload. No explicit save action is needed.
+A **transition** changes a parameter smoothly from one value to another over musical time. The
+audio engine handles per-sample interpolation — there is no polling:
 
-### What is persisted
+    (tween curve start end bars)
 
-| State | Notes |
-|-------|-------|
-| Editor text | Full buffer contents |
-| BPM | Current tempo |
-| FX chain | Effect names, parameters, bypass state |
-| Bank prefix | Active `(bank :Name)` prefix |
-| External sample repos | URLs loaded via `(samples! ...)` |
-| Track mute/solo state | Restored after the first eval |
+Every note that fires during the transition picks up the interpolated value at its scheduled time.
+When the transition completes the end value is held indefinitely. Re-evaluating the code restarts
+the transition.
 
-Playback state (playing/stopped), audio nodes, and active cycle position are **not** persisted — the page always starts stopped.
+| Curve      | Behaviour                                                  |
+|------------|------------------------------------------------------------|
+| `:linear`  | Constant rate — equal change per unit time                 |
+| `:exp`     | Slow start, fast end — good for volume fades               |
+| `:sine`    | S-curve — slow at both ends, fast in the middle            |
 
-### First visit
-
-When no session exists (first visit or after `(reset!)`), a random demo template is loaded into the editor. A welcome message tells you to press **Alt+Enter** to start playing.
-
-### `(reset!)` — wipe session
+### Examples
 
 ```lisp
-(reset!)
+;; Amp fade-in over 2 bars
+(->> (seq :c4 :e4 :g4 :c5)
+     (synth :saw)
+     (amp (tween :linear 0.0 1.0 2)))
+
+;; Exponential fade-out over 8 bars
+(->> (fast 2 (seq :hh))
+     (amp (tween :exp 1.0 0.0 8)))
+
+;; S-curve pan sweep over half a bar
+(->> (fast 4 (seq :sd))
+     (pan (tween :sine -1.0 1.0 0.5)))
+
+;; Different transitions per voice in a stack
+(stack
+  (->> (seq :bd :_ :bd :_) (amp (tween :linear 0.2 1.0 2)))
+  (->> (fast 4 (seq :hh))  (pan (tween :sine -0.8 0.8 1))))
 ```
 
-Stops playback, deletes all persisted state (editor, BPM, effects, bank, sample sources, mutes, and AI settings/history), and reloads the page to first-visit state with a fresh demo. Use this when you want a clean slate.
+### Transitions vs. envelopes
 
-### `(ai)` — AI assistant panel
-
-Open the built-in AI assistant panel. The assistant is a **tool-using agent** — it can read the editor buffer, query session state, browse snippets, propose edits with an Apply/Reject overlay, and silently evaluate code before suggesting it. Every change to the session requires explicit user confirmation.
+`attack`, `decay`, and `release` shape the amplitude of **individual notes** over milliseconds.
+`tween` changes **any parameter** across multiple bars. They operate at different timescales and
+complement each other:
 
 ```lisp
-(ai)                                          ; open the panel (or shows "enable AI" prompt)
-(ai "Give me a euclidean kick pattern")       ; open and immediately send prompt
-(ai "Add a dub delay to the bass track")      ; agent reads buffer, proposes an edit
-(ai "What tracks are active?")                ; agent queries session state
+;; A slow attack on each note, AND a fade-in across all notes
+(->> (seq :c4 :e4 :g4)
+     (synth :saw)
+     (attack 0.3)                     ; each note swells in over 300ms
+     (amp (tween :linear 0.0 1.0 4))) ; overall sequence fades in over 4 bars
 ```
 
-**Getting started:**
+### Signals vs. `tween`
 
-1. Click the **ai** button in the header, or run `(ai)` in the REPL
-2. Click **Enable AI assistant**
-3. Choose a provider and paste your API key (stored in localStorage; each request is relayed through the `/api/ai-stream` proxy, which never logs or stores the key)
-4. Type a question and press **Send** or **Cmd/Ctrl+Enter**
-
-**Agent tools** (the assistant calls these automatically — you never invoke them directly):
-
-| Tool | What it does |
-|---|---|
-| `read_buffer` | Reads the full editor text |
-| `propose_edit` | Replaces an exact-text match in the buffer (or appends when the match is empty); shows a before/after diff card with **Apply** / **Reject** buttons |
-| `eval_preview` | Evaluates code silently and returns event count + duration (no audio) |
-| `query_session` | Returns BPM, track names, muted tracks, global FX |
-| `query_track` | Returns details for one track (mute state, FX chain) |
-| `find_snippet` | Searches the community snippet library |
-| `insert_snippet` | Appends a snippet by ID to the end of the buffer — same **Apply** / **Reject** card as `propose_edit` (or applied immediately, with Revert, when auto-apply is on) |
-| `set_bpm_proposal` | Shows a confirm dialog before updating BPM |
-| `freesound_search` | Searches Freesound for samples; returns id, name, duration, tags (requires Freesound API key) |
-| `freesound_load` | Registers a Freesound sample by ID as `:freesound-<id>`; proposes a `(seq :freesound-<id>)` edit |
-| `list_banks` | Lists all registered sample bank names in the current session |
-| `list_samples_in_bank` | Lists sample keywords available in a named bank |
-| `web_search` | Searches the web via Brave Search for music theory / genre context (only shown when a Brave API key is set) |
-
-**Proposed edits:** When the agent calls `propose_edit`, a card appears below the editor showing the before and after text. Click **Apply** to commit the change, or **Reject** to tell the agent the suggestion was declined (it will try again with a revised proposal).
-
-**Auto-apply edits:** Enable **Auto-apply edits** in settings to have `propose_edit` and `insert_snippet` apply immediately without the overlay. When auto-apply is on, a **↩ Revert last turn** bar appears; clicking it restores the editor to exactly what it was before the most recent assistant turn — all of that turn's edits are undone together. Click again to step further back; the undo stack holds up to 20 turns.
-
-**Cancel:** A **cancel** button replaces the **send** button while an agent turn is in progress. Clicking it stops the loop immediately and dismisses any pending overlay.
-
-**Code blocks** in assistant responses include an **↓ insert** button that appends the code to the editor without replacing existing content.
-
-**Budget:** The assistant tracks token and tool-call usage across all turns in the session. Token counts come from the provider's reported usage (input + output, so the system prompt and history are included); when a provider reports none (common with local servers), a 4-characters-per-token estimate is used and the badge shows a `~` prefix (e.g. `~3.9k/50.0k tok`). A usage badge in the panel header shows `used/limit tok · used/limit tools`. A soft warning appears at 50%. Once either limit is reached the assistant refuses to send further requests until you raise the limit in settings or click **Reset session** in the tool log.
-
-**Rate limiting:** HTTP 429 responses from any provider trigger automatic exponential back-off (1 s, then 2 s; at most 3 requests in total). If all attempts are rate-limited, an error message is shown inline.
-
-**Prompt-injection protection:** Everything the model reads from outside sources is wrapped in `<untrusted>` tags: the editor buffer and session snapshot in the system prompt, and the results of `read_buffer`, `query_session`, `query_track`, `find_snippet`, `web_search`, `freesound_search`, and `list_banks`. Any `<untrusted>` tags inside that content are escaped so it cannot break out of the wrapper. The system prompt instructs the model never to follow commands inside those tags.
-
-**Activity log:** Once tool calls have been made, a collapsible **🔍 tool log** section appears above the input box showing the last 50 calls (time, tool, and any error). An **Export log** button downloads the log as JSON. **Reset session** clears both the log and the session budget counters.
-
-**Settings** (accessible via the ⚙ button):
-- **Provider** — `anthropic`, `openai`, `google`, `groq`, `xai`, `openrouter`, `mistral`, `custom` (any OpenAI-compatible endpoint — see [Local models & custom endpoints](#local-models--custom-endpoints))
-- **API key** — one per provider, stored in `repulse:ai:key:<provider>` in localStorage, so switching provider keeps each key. Hosted providers' requests are relayed per request through the `/api/ai-stream` proxy (never logged or stored); `custom` keys go only to the base URL you enter
-- **Model override** — override the default model (e.g. `claude-opus-4-7`, `grok-3-mini`, or on OpenRouter `meta-llama/llama-3.3-70b-instruct:free`); free text, with suggestions from the provider's live model list. Leave blank for the provider default. The ↻ button next to the field refetches the list; models marked `(no tools)` cannot run the agent tools (read buffer, propose edit, …) and fall back to plain chat. A saved override missing from a fresh list shows a warning but is kept.
-- **Share editor code with AI** — when enabled, the current editor buffer is included in the system prompt; disabled by default
-- **Auto-apply edits** — apply `propose_edit` immediately and show the Revert button; default off
-- **Token limit** — session token budget (default 50 000); remaining count shown next to the input
-- **Tool-call limit** — session budget of tool calls the assistant may make (default 100); remaining count shown next to the input
-- **Freesound API key** — enables `freesound_search` and `freesound_load`; get a key at [freesound.org/apiv2/](https://freesound.org/apiv2/); stored in `repulse:ai:freesound-key`
-- **Web Search API key** (optional) — enables `web_search` via Brave Search; get a key at [brave.com/search/api/](https://brave.com/search/api/); stored in `repulse:ai:search-key`; omit to hide the tool from the model entirely
-
-**Default models:** with a blank override, the default is chosen from the provider's live model list (fetched when the panel opens, then cached for 24 h; OpenRouter's list needs no key, the others load once a key is set). If the list can't be loaded the built-in fallbacks are used: `claude-sonnet-5-5` (Anthropic), `gpt-4o` (OpenAI), `gemini-2.0-flash` (Google), `llama-3.3-70b-versatile` (Groq), `grok-4.7` (xAI), `openrouter/auto` (OpenRouter), `mistral-medium-latest` (Mistral).
-
-> **Groq vs xAI:** `groq` is [Groq cloud](https://groq.com) — fast inference for open-source models like Llama. `xai` is [xAI](https://x.ai) — Elon Musk's company, makers of the Grok model family. Get an xAI key at [console.x.ai](https://console.x.ai).
->
-> **OpenRouter and Mistral:** `openrouter` gives one key for almost every model family, including rate-limited free-tier models (429s are retried with back-off); keys at [openrouter.ai/keys](https://openrouter.ai/keys). `mistral` is an EU-based provider with first-party models; keys at [console.mistral.ai](https://console.mistral.ai). Other families (DeepSeek, Kimi, Qwen, …) are reachable through OpenRouter model IDs.
-
-#### Local models & custom endpoints
-
-The `custom` provider talks to **any OpenAI-compatible `/v1` endpoint**: a local model server (LM Studio, Ollama, llama.cpp, vLLM), a self-hosted gateway (LiteLLM), or a hosted provider REPuLse doesn't list (Together, Fireworks, DeepSeek, …). With a local model the assistant is free and works offline. Your Lisp doesn't change — `(ai "write a dub techno chord stab pattern")` works the same.
-
-| Setting | What it does |
-|---------|--------------|
-| **Base URL** | The server's `/v1` root. Quick-fill chips: **LM Studio** `http://localhost:1234/v1`, **Ollama** `http://localhost:11434/v1`, **llama.cpp** `http://localhost:8080/v1`. A pasted `…/chat/completions` URL is trimmed to the base. |
-| **API key** *(optional)* | Sent as `Authorization: Bearer …` only when set. Leave blank for local servers. |
-| **Send tools** | On by default. Turn off if your model returns errors or garbage when given tools — no `tools` field is sent and the assistant works as plain chat. |
-| **Test connection** | Fetches `<base>/models` and reports `✓ N models` or an actionable error. The model field then suggests those models; a blank override uses the first one the server lists. |
-
-```text
-Provider:  custom
-Base URL:  http://localhost:1234/v1
-Model:     qwen3-coder-30b
-```
-
-**How requests travel.** Hosted providers go through REPuLse's server proxy. `custom` requests go **straight from your browser** to the base URL — including your key and any code you share — so only use endpoints you trust. Allowed URLs:
-
-- `https://…` — any host.
-- `http://localhost`, `http://127.0.0.1`, `http://[::1]` (any port).
-- Plain-HTTP LAN or remote addresses (`http://192.168.…`) are rejected in the settings: browsers block them as mixed content on an HTTPS page. Use HTTPS (e.g. a tunnel), or run the server on the same machine and use `localhost`.
-
-**Enable CORS on your server** so it accepts requests from the REPuLse origin:
-
-| Server | Setting |
-|--------|---------|
-| **LM Studio** | Developer tab → server settings → **Enable CORS**, or `lms server start --cors` |
-| **Ollama** | Set `OLLAMA_ORIGINS` to the REPuLse origin (or `*`) before starting the server, e.g. `OLLAMA_ORIGINS="*" ollama serve` |
-| **llama.cpp** `llama-server` | Answers cross-origin requests by default; check `llama-server --help` if your build differs |
-| **vLLM** | `--allowed-origins '["*"]'` (or the REPuLse origin) |
-| **LiteLLM** | Proxy allows all origins by default; restrict as needed in its config |
-
-**Chrome's local-network prompt.** When REPuLse runs on a public HTTPS site and connects to `localhost`, Chrome may ask for permission to access devices on your local network — allow it.
-
-**If it fails**, the panel says which problem is likely:
-- *Couldn't reach … Is the server running, and does it allow requests from this site?* — server down, CORS not enabled, or the local-network prompt was denied (the browser doesn't say which).
-- *HTTP 401/403* — the key was rejected. *HTTP 404* — wrong base URL (missing `/v1`?).
-
-**Tool calling depends heavily on the model.** Small local models often emit broken tool calls. REPuLse returns the error to the model once; if the next reply is broken too, it stops and shows the model's text instead of hanging. For editing your code via `read_buffer` → `propose_edit`, pick a model known for function calling (e.g. Qwen3 or Llama 3.x instruct). If a model struggles, turn **Send tools** off.
-
-**Conversation history** persists across page reloads (last 40 turns). Use the **clear** button to reset the chat and history.
-
-When AI is disabled, `(ai)` returns a descriptive string instead of opening the panel:
-```lisp
-(ai)
-; → "AI assistant is disabled — enable it in the AI panel settings"
-```
-
-### `(help-export)` — AI session snapshot
-
-Returns the live session state as a map. Useful for sharing context with an AI assistant without copying code.
+`tween` is a **one-shot ramp** that starts at the moment you evaluate and then holds its
+end value. A [signal](#signals--sine-saw-rand-perlin-segment-range) is a **cyclic**
+function of the cycle position: it is the same every time the cycle comes round, and the
+same on every evaluation. For a repeating 8-cycle sweep use `(slow 8 saw)`:
 
 ```lisp
-(help-export)
-; → {:bpm 130
-;    :tracks {:kick {:fx [{:name "reverb" :params {"value" 0.4} :bypassed false}]}
-;             :bass {:fx []}}
-;    :muted []
-;    :fx []        ; global FX chain only
-;    :bank nil
-;    :sources []}
-
-(:bpm (help-export))                         ; → 130
-(:tracks (help-export))                      ; → {:kick {:fx [...]}, ...}
-(:kick (:tracks (help-export)))              ; → {:fx [...]}
-(:fx (:kick (:tracks (help-export))))        ; → per-track FX for :kick
+(->> (fast 8 (seq :hh)) (pan (range -1 1 (slow 8 saw))))
 ```
-
-**Fields:**
-- `:bpm` — current tempo
-- `:tracks` — keyword-keyed map of active tracks. Each value is `{:fx [...]}` with the track's per-track FX chain. Pattern functions are never included.
-- `:muted` — vector of muted track name strings
-- `:fx` — global FX chain (effects added with a top-level `(fx ...)` call), as `[{:name :params :bypassed}]`
-- `:bank` — active drum bank prefix or `nil`
-- `:sources` — loaded external sample repos: `[{:type :id}]`
-
-Editor code is intentionally excluded. Copy-paste from the editor to share code.
-
-### URL sharing
-
-Click the **share** button or call `(share!)` to copy a full session URL to the clipboard. The URL encodes the complete session state (editor text, BPM, effects, bank, mutes) in the URL hash using base64. Loading the URL restores the full session immediately.
-
-```lisp
-(share!)  ; copies URL like https://repulse.app/#v2:eyJ2...
-```
-
-Old `#v1:...` share URLs are still supported.
 
 ---
 
@@ -1485,22 +2099,25 @@ Default tempo is **120 BPM** (one cycle = one bar = 4 beats = 2 seconds).
 
 `bpm` takes effect immediately, even mid-playback. One cycle = one bar regardless of BPM.
 
-### `tap` — tap tempo
+### `tap!` — tap tempo
 
-Call `(tap)` repeatedly on the beat to derive BPM from the average tap interval.
-The **tap** button in the header UI does the same thing with a mouse click:
+Run `(tap!)` repeatedly in the command bar, in time with the beat. After four taps the tempo is
+set to the average tap interval. The **tap** button in the header does the same with a click.
 
 ```lisp
-(tap)   ; call this expression several times in time with the beat
+(tap!)   ; => tap again…
+(tap!)
+(tap!)
+(tap!)   ; => 128.0 BPM
 ```
 
-### `midi-sync` — MIDI clock input
+### `midi-sync!` — MIDI clock input
 
 Synchronise playback to an incoming MIDI clock signal (24 ppqn):
 
 ```lisp
-(midi-sync true)    ; lock to MIDI clock from connected device
-(midi-sync false)   ; return to internal BPM
+(midi-sync! true)    ; lock to MIDI clock from connected device
+(midi-sync! false)   ; return to internal BPM
 ```
 
 MIDI sync overrides `(bpm ...)` while active. REPuLse listens on all available MIDI inputs.
@@ -1517,7 +2134,10 @@ Each track has a keyword name and loops independently.
 > loops its own pattern on every cycle. In REPuLse you give tracks meaningful keyword names
 > (`:kick`, `:bass`, `:lead`) rather than numbers.
 
-### `play` — start or replace a named track
+`track` belongs in the editor buffer. The commands ending in `!` (`mute!`, `solo!`, …) change
+the running session and belong in the [command bar](#command-bar).
+
+### `track` — start or replace a named track
 
 ```lisp
 (track :kick  (seq :bd :_ :bd :_))
@@ -1525,26 +2145,34 @@ Each track has a keyword name and loops independently.
 (track :hats  (fast 2 (seq :hh :_)))
 ```
 
-Evaluating a new `play` for the same name replaces the pattern without stopping others.
+Evaluating `track` again with the same name replaces that track's pattern without stopping the
+others.
 
-### `mute` / `unmute` — silence a track
+Tracks start once the **whole buffer** has evaluated, not at the moment their `track` form is
+read. A buffer is applied all-or-nothing: if any form fails, none of its tracks start. This lets
+a [`song`](#writing-a-song) at the bottom of the buffer decide which tracks play when; without
+a `song`, every track plays (in buffer order) exactly as before.
+
+### `mute!` / `unmute!` — silence a track
 
 ```lisp
-(mute :kick)      ; kick stops at the next cycle boundary
-(unmute :kick)    ; kick resumes
+(mute! :kick)      ; kick goes silent but keeps its place in the session
+(unmute! :kick)    ; kick plays again
 ```
 
-### `solo` — isolate one track
+### `solo!` — isolate one track
 
 ```lisp
-(solo :lead)   ; all other tracks are muted; re-evaluate another track to un-solo
+(solo! :lead)      ; mutes every other track
 ```
 
-### `clear` — remove a track
+`solo!` works by muting all other tracks. To undo it, `unmute!` the tracks you want back.
+
+### `clear!` — remove tracks
 
 ```lisp
-(clear :kick)   ; remove the kick track
-(clear)         ; stop everything and remove all tracks
+(clear! :kick)   ; remove the kick track
+(clear!)         ; stop everything and remove all tracks
 ```
 
 ### `tracks` — list active tracks
@@ -1560,58 +2188,7 @@ Evaluating a new `play` for the same name replaces the pattern without stopping 
 (track :kick  (seq :bd :_ :bd :_))
 (track :snare (seq :_ :sd :_ :sd))
 (track :hats  (fast 2 (seq :hh :_)))
-(track :bass  (scale :minor :c2 (seq 1 :_ 8 :_ 1 :_ 6 :_)))
-```
-
----
-
-## Combining patterns
-
-Patterns can be composed freely:
-
-```lisp
-; Layered groove
-(stack
-  (seq :bd :_ :bd :_)
-  (seq :_ :sd :_ :sd)
-  (fast 2 (seq :hh :_)))
-
-; Polyrhythm — 3 against 4
-(stack
-  (seq :bd :bd :bd)
-  (seq :hh :hh :hh :hh))
-
-; Conditional variation
-(every 4 (fast 2)
-  (stack (seq :bd :sd) (seq :hh :hh :hh :hh)))
-
-; Reverse every other bar
-(every 2 rev (seq :bd :hh :sd :oh))
-```
-
----
-
-## Defining names
-
-`def` binds a name in the current session:
-
-```lisp
-(def kick  (seq :bd :_ :bd :_))
-(def snare (seq :_ :sd :_ :sd))
-(def hats  (fast 2 (seq :hh :_)))
-
-(stack kick snare hats)
-```
-
-After re-evaluating a `def`, any pattern that references it will use the new value on the
-next cycle.
-
-`let` is for local, non-persistent bindings:
-
-```lisp
-(let [n 3
-      base (seq :bd :sd :hh)]
-  (every n (fast 2) base))
+(track :bass  (scale :minor :c2 (seq 0 :_ 7 :_ 0 :_ 5 :_)))
 ```
 
 ---
@@ -1662,199 +2239,123 @@ Shorthand where every section plays for exactly 1 cycle. Useful for short, bar-l
 
 ---
 
-## Lisp language features
+## Writing a song
 
-### `defsynth` — user-defined synthesis instruments
-
-Define custom instruments from Web Audio node graphs. UGen functions build the graph;
-`defsynth` registers it under a name usable with `synth`:
+`arrange` loops forever. A **song** has an end: you define your tracks at the top of the buffer
+and put one `song` block at the bottom that names sections, gives each a length in bars and says
+which tracks play in it.
 
 ```lisp
-(defsynth pluck [freq]
-  (->> (saw freq)
-       (lpf (* freq 2))
-       (env-perc 0.01 0.3)))
+(track :kick  (seq :bd :_ :bd :_))
+(track :snare (seq :_ :sd :_ :sd))
+(track :hats  (fast 2 (seq :hh :_)))
+(track :bass  (->> (scale :minor :c2 (seq 0 :_ 4 :_)) (synth :saw)))
 
-(defsynth pad [freq]
-  (->> (mix (sin freq) (sin (* freq 1.002)))
-       (lpf 2000)
-       (env-asr 0.3 0.8 1.0)))
-
-(->> (scale :minor :c4 (seq 1 3 5 8))
-     (synth :pluck)
-     (amp 0.7))
+(song
+  (section :intro  4 [:kick :hats])
+  (section :verse  8 [:kick :snare :bass])
+  (section :chorus 8 :all)
+  (section :outro  4 [:hats])
+  :end :stop)            ; or :end :loop
 ```
 
-Available UGens:
+The output line shows `song: 4 sections · 24 bars · 48.0 s at 120 BPM · :end :stop`. The intro
+plays kick and hats for 4 bars, the verse adds snare and bass (hats rest), the chorus plays every
+track, the outro only the hats — then playback stops and the output shows `song finished`.
 
-| UGen | Description |
+### Built-ins
+
+| Built-in | Description |
 |---|---|
-| `(sin freq)` | Sine oscillator |
-| `(saw freq)` | Sawtooth oscillator |
-| `(square freq)` | Square wave |
-| `(tri freq)` | Triangle wave |
-| `(noise)` | White noise |
-| `(lpf cutoff src)` | Lowpass filter |
-| `(hpf cutoff src)` | Highpass filter |
-| `(bpf freq src)` | Bandpass filter |
-| `(gain level src)` | Static gain |
-| `(delay-node time src)` | Delay line |
-| `(mix a b)` | Mix two signals |
-| `(env-perc attack decay src)` | Percussive envelope |
-| `(env-asr attack sustain release src)` | Sustain + release envelope |
-| `(env-gen env-data src)` | General envelope — takes data from `(env ...)` |
-| `(out :bus-name src)` | Write signal to a named bus |
-| `(in :bus-name)` | Read from a named bus as a UGen source |
-| `(kr rate src)` | Control-rate pass-through (informational wrapper) |
-| `(* depth sig)` | Scale a signal (two signals: ring modulation) |
-| `(+ offset sig)` | Add a constant or another signal |
+| `(section name bars tracks)` | A section: a keyword name (unique in the song), a length in whole bars ≥ 1, and the tracks that play — a vector of track names or `:all` (every track defined above the song) |
+| `(song section… [:end :stop\|:loop])` | Play the tracks above as a song. `:end :stop` (default) stops 2 s after the last bar so tails ring out; `:end :loop` starts again at bar 0. Returns the song value |
+| `(play-from :section)` / `(play-from bar)` | Start — or, while playing, jump — the song at a section's first bar or at a 0-based bar number. After `(stop)` it restarts the last song |
+| `(export :song)` / `(export :song :tail secs)` | Capture one pass of the song to WAV in real time (see below) |
 
-UGens take their source as the **last** argument, so thread them with `->>`.
-Every parameter (`freq`, `cutoff`, `level`, `time`) accepts a number or a signal —
-see [`bus` / `out` / `in`](#bus--out--in--named-audio-and-control-rate-buses).
+### Rules
 
-Trigger a synth with `(synth :name pat)`; its parameters (`freq`, …) come from the
-event. A parameterless synth can also be triggered by its bare name, e.g.
-`(seq :lfo-sine)` — useful for bus writers.
+- **1 bar = 1 cycle** (4 beats). Bars are numbered from 0, like cycles: the intro above is bars
+  0–3, the verse 4–11, the chorus 12–19, the outro 20–23.
+- **Tracks above, song below.** `song` checks every track name against the tracks defined above
+  it and suggests the closest name for typos (`Unknown track :snar in section :verse — did you
+  mean :snare?`). A `track` below the song is an error, and there is at most one `song` per
+  buffer.
+- **Song time.** Each track is played in song time: bar 12 of the song plays cycle 12 of the
+  track's pattern, so `every`, `cat` and `<a b>` line up with the song start — every loop pass
+  and the export sound the same.
+- **Variants are tracks.** A section only selects tracks. For a different chorus bass, define
+  `(track :bass-chorus …)` and list it in the chorus.
+- **Mute and solo still win.** `(mute! :kick)` silences the kick even in a section that lists it;
+  `solo!` works on top of the section selection.
 
-Synths are ephemeral — nodes are created at event time and disconnected after the envelope.
+### Rehearsing — `play-from`
 
-### `env` — general envelope constructor
-
-Build arbitrary multi-segment envelopes with per-segment curve types:
+Type these in the command bar:
 
 ```lisp
-;; (env levels times) — 3 levels, 2 segments, both linear
-(env [0 1 0] [0.01 0.5])
-
-;; (env levels times curves) — per-segment curve types
-(env [0 1 0.3 0] [0.01 0.1 0.5] [:lin :exp :exp])
+(play-from :chorus)   ; => playing from :chorus (bar 12)
+(play-from 20)        ; => playing from bar 20
 ```
 
-Curve types:
+While playing, the jump happens at the next bar boundary. After `(stop)`, `play-from` restarts
+the last evaluated song from that bar.
 
-| Curve | Behaviour |
-|---|---|
-| `:lin` | Linear ramp (default) |
-| `:exp` | Exponential ramp (values must be non-zero) |
-| `:sin` | Sine ease-in/ease-out (slow at both ends) |
-| `:welch` | Quarter-sine — fast at start, slow at end |
-| `:step` | Instant jump at segment end |
-| `2.5` (number) | Power curve — `>1` concave-up, `<1` concave-down |
+### Re-evaluating mid-song
 
-Use `env` with `env-gen` inside a `defsynth` body:
+Re-evaluating the buffer while the song plays keeps the current bar: edit the chorus, press
+Alt+Enter, and the new version takes over at the next bar. If you shortened the song so that the
+current bar no longer exists, playback continues at the first bar of the (new) last section.
+
+### Context panel
+
+While a song plays, the status row shows the current section and bar, e.g. `▶ chorus · bar
+13/24` (`▶ song · starting` until bar 0 begins). Tracks that rest in the current section are
+listed as `(not in :outro)` and drawn like muted tracks in the timeline.
+
+### `(export :song)` — capture the whole song
 
 ```lisp
-(defsynth pluck [freq]
-  (->> (saw freq)
-       (lpf 3000)
-       (env-gen (env [0 1 0.3 0] [0.001 0.05 0.4] [:lin :exp :exp]))))
+(export :song)           ; one pass + 2 s release tail
+(export :song :tail 4)   ; with a 4 s tail (0–30 s)
 ```
 
-### `bus` / `out` / `in` — named audio and control-rate buses
+The song restarts from bar 0 and the master output — after every global effect — is recorded
+in real time, so the WAV sounds exactly like playback (WASM voices, per-track and global FX).
+Export therefore takes as long as the song; the context panel shows `● REC 12.0 / 50.0 s`. A
+`:loop` song is captured as one pass. `(stop)` cancels (`export cancelled`); when it finishes,
+the WAV `repulse-song-24bars.wav` downloads (sample rate of your audio device) and the output
+shows `exported song — 24 bars, 50.0 s`.
 
-Buses let synths communicate — use an LFO to modulate a filter, sidechain one synth
-from another, or mix multiple sources.
+Inside `export`, `:song` is reserved: a track named `:song` can't be exported by name.
 
-```lisp
-;; Declare a control-rate bus (ConstantSourceNode)
-(bus :lfo :control)
+### `song` vs `arrange`
 
-;; Declare an audio-rate bus (GainNode)
-(bus :aux :audio)
+| | `arrange` / `play-scenes` | `song` |
+|---|---|---|
+| Sections are | patterns | named lists of tracks |
+| Length unit | cycles | bars (= cycles) |
+| End | loops forever | stops after the last bar (or `:end :loop`) |
+| Rehearsal | — | `(play-from :chorus)` |
+| Export | `(export n)` (offline) | `(export :song)` (real time, with FX) |
 
-;; LFO writer synth — plays on a track each cycle
-(defsynth lfo-sine []
-  (out :lfo (sin 4)))     ; 4 Hz sine (-1…1) to bus
+### Errors
 
-;; Synth that reads the LFO bus
-(defsynth wobble [freq]
-  (->> (saw freq)
-       (lpf (+ 1200 (* 800 (in :lfo))))   ; cutoff sweeps 400…2000 Hz
-       (env-perc 0.01 0.4)))
-
-;; Wire it up — a bare defsynth name triggers it
-(track :lfo-src (seq :lfo-sine))
-(track :lead
-  (->> (scale :minor :c3 (seq 0 3 5 7))
-       (synth :wobble)))
 ```
-
-Modulation:
-- Any UGen parameter — oscillator `freq`, filter `cutoff`, `gain` `level`, `delay-node`
-  `time` — takes a number or a signal. A signal is connected to the underlying
-  AudioParam and **replaces** its value, so a bare `(in :lfo)` (range -1…1) would be
-  a near-zero cutoff
-- Inside `defsynth`, `*` and `+` work on signals: `(* 800 sig)` scales, `(+ 1200 sig)`
-  adds an offset, `(* sig-a sig-b)` ring-modulates. Use `(+ centre (* depth sig))` to
-  sweep a parameter around a centre value
-- A parameterless synth (e.g. a bus writer) is triggered by its bare name in a
-  pattern: `(seq :lfo-sine)`. `(synth :name pat)` works too
-
-Bus rules:
-- `(bus :name)` defaults to `:control`
-- `(out :bus signal)` inside `defsynth` replaces the previous connection from that synth, preventing oscillator accumulation
-- `(in :bus)` returns silence and logs a warning if the bus has not been declared
-- `(stop)` and `(clear!)` destroy all buses and release their nodes
-
-| Function | Description |
-|---|---|
-| `(bus :name)` | Create a control-rate bus (ConstantSourceNode) |
-| `(bus :name :control)` | Same as above, explicit type |
-| `(bus :name :audio)` | Create an audio-rate bus (GainNode) |
-| `(out :bus signal)` | Write signal to bus inside `defsynth` |
-| `(in :bus)` | Read bus as a UGen source inside `defsynth` |
-| `(kr rate signal)` | Control-rate pass-through (no-op; informational) |
-
-### `defmacro` — compile-time transforms
-
-Define macros that expand at evaluate-time before execution:
-
-```lisp
-(defmacro swing [amount pat]
-  `(off ~amount identity ~pat))
-
-(swing 0.1 (seq :bd :sd))
-; expands to: (off 0.1 identity (seq :bd :sd))
-
-(defmacro build-seq [& vals]
-  `(seq ~@vals))
-```
-
-Quasiquote (`` ` ``), unquote (`~`), and splice-unquote (`~@`) work as in Clojure.
-
-### `loop` / `recur` — tail-recursive iteration
-
-Iterate without stack overflow using `loop` and `recur`:
-
-```lisp
-(loop [notes [] i 0]
-  (if (>= i 8)
-    (apply seq notes)
-    (recur (conj notes (+ 200 (* i 30))) (+ i 1))))
-; => (seq 200 230 260 290 320 350 380 410)
-```
-
-`recur` must be in tail position inside `loop`. Bindings are re-bound with the new values
-on each iteration.
-
-### Rational number literals
-
-Write time ratios as fractions directly in the source — cleaner than floats:
-
-```lisp
-(slow 1/4 (seq :bd :sd))    ; ≡ (slow 0.25 ...)
-(fast 3/2 melody)            ; ≡ (fast 1.5 ...)
-(late 1/8 (seq :hh :oh))    ; ≡ (late 0.125 ...)
-```
-
-### BPM notation
-
-Write BPM inline with a `bpm` suffix — the reader evaluates it as `(bpm N)`:
-
-```lisp
-120bpm    ; ≡ (bpm 120)
-140bpm    ; set tempo to 140 BPM inline in an expression
+section :intro: length must be a whole number of bars ≥ 1, got 0
+section :intro: unexpected argument 7 — sections take (section name bars tracks)
+Unknown track :snar in section :verse — did you mean :snare?
+Duplicate section name :verse — section names must be unique in a song
+Only one (song …) per buffer
+track :x is defined after (song …) — define tracks above the song
+song needs at least one (section …)
+song: unknown option :foo — expected :end
+song: :end must be :stop or :loop, got :fade
+Unknown section :chrous — did you mean :chorus?
+play-from: bar 30 is outside the song (0–23)
+play-from: no song — evaluate a buffer that ends with (song …) first
+Error: no song — evaluate a buffer that ends with (song …) first          ; (export :song)
+Error: :tail must be a number of seconds between 0 and 30
+Error: an export is already running — (stop) cancels it
 ```
 
 ---
@@ -1895,7 +2396,7 @@ Route a track through its own private effect chain by placing `fx` inside the `-
        (fx :filter 1000)))              ; kick only goes through lowpass
 
 (track :lead
-  (->> (scale :minor :c3 (seq 1 3 5 8))
+  (->> (scale :minor :c3 (seq 0 2 4 7))
        (decay 1.0)
        (fx :reverb 0.4)))              ; lead gets its own reverb
 
@@ -2348,65 +2849,277 @@ see [docs/PLUGINS.md](PLUGINS.md).
 
 ---
 
-## Available sample banks
+## Advanced language features
 
-Sample banks are loaded from the **Dirt-Samples** and **Tidal Drum Machines** collections.
-They are available after a short initial network fetch.
+### `defsynth` — user-defined synthesis instruments
 
-### Dirt-Samples (classic TidalCycles sounds)
-
-| Bank | Description |
-|---|---|
-| `:bd` | Bass drum / kick |
-| `:sd` | Snare drum |
-| `:hh` | Closed hi-hat |
-| `:oh` | Open hi-hat |
-| `:cp` | Clap |
-| `:cb` | Cowbell |
-| `:cr` | Crash cymbal |
-| `:ride` | Ride cymbal |
-| `:lt` `:mt` `:ht` | Low / mid / high tom |
-| `:arpy` | Arpeggio synth |
-| `:bass` `:bass0`–`:bass3` | Various bass sounds |
-| `:moog` | Moog synthesizer |
-| `:jvbass` | Bass guitar |
-| `:feel` | Texture / feel samples |
-| `:house` | House music hits |
-| `:tink` | Tink / high percussive |
-| `:peri` | Peridactyl synth |
-| `:glitch` | Glitch/noise textures |
-| `:birds` | Bird sounds |
-| `:alphabet` | Spoken letters |
-| `:numbers` | Spoken numbers |
-| `:diphone` | Speech diphones |
-| `:gabba` | Gabba kick |
-| `:tabla` | Tabla |
-| `:tabla2` | Tabla variation |
-| `:casio` | Casio keyboard |
-| `:flick` | Flick/snap |
-| `:psr` | PSR keyboard |
-| `:electro1` | Electro hits |
-| `:rave` `:rave2` | Rave stabs |
-| `:space` | Space textures |
-| `:metal` | Metal hits |
-| `:can` | Metal can percussion |
-| `:drum` | Drum machine hits |
-| `:v` | Vocal hits |
-
-### Tidal Drum Machines (full kit names)
-
-These use the format `:<MachineModel>_<part>`:
+Define custom instruments from Web Audio node graphs. UGen functions build the graph;
+`defsynth` registers it under a name usable with `synth`:
 
 ```lisp
-(seq :RolandTR808_bd :RolandTR808_sd :RolandTR808_hh :RolandTR808_cp)
-(seq :RolandTR909_bd :RolandTR909_sd)
-(seq :AkaiRhythm99_bd :AkaiRhythm99_sd)
+(defsynth pluck [freq]
+  (->> (saw freq)
+       (lpf (* freq 2))
+       (env-perc 0.01 0.3)))
+
+(defsynth pad [freq]
+  (->> (mix (sin freq) (sin (* freq 1.002)))
+       (lpf 2000)
+       (env-asr 0.3 0.8 1.0)))
+
+(->> (scale :minor :c4 (seq 0 2 4 7))
+     (synth :pluck)
+     (amp 0.7))
 ```
 
-Common drum machines in the library include: `RolandTR808`, `RolandTR909`, `RolandTR606`,
-`RolandTR707`, `LinnDrum`, `AkaiMPC60`, `EmuDrumulator`, `KorgKR55`, `YamahaRX5`, and many more.
+Inside a `defsynth` body, `saw`, `square` and `tri` are the UGens below. They are independent of the top-level [signals](#signals--sine-saw-rand-perlin-segment-range) of the same name.
 
-Use `(sound :RolandTR808_bd 2)` to pick from multiple kit variations.
+Available UGens:
+
+| UGen | Description |
+|---|---|
+| `(sin freq)` | Sine oscillator |
+| `(saw freq)` | Sawtooth oscillator |
+| `(square freq)` | Square wave |
+| `(tri freq)` | Triangle wave |
+| `(noise)` | White noise |
+| `(lpf cutoff src)` | Lowpass filter |
+| `(hpf cutoff src)` | Highpass filter |
+| `(bpf freq src)` | Bandpass filter |
+| `(gain level src)` | Static gain |
+| `(delay-node time src)` | Delay line |
+| `(mix a b)` | Mix two signals |
+| `(env-perc attack decay src)` | Percussive envelope |
+| `(env-asr attack sustain release src)` | Sustain + release envelope |
+| `(env-gen env-data src)` | General envelope — takes data from `(env ...)` |
+| `(out :bus-name src)` | Write signal to a named bus |
+| `(* depth sig)` | Scale a signal (two signals: ring modulation) |
+| `(+ offset sig)` | Add a constant or another signal |
+| `(in :bus-name)` | Read from a named bus as a UGen source |
+UGens take their source as the **last** argument, so thread them with `->>`.
+Every parameter (`freq`, `cutoff`, `level`, `time`) accepts a number or a signal —
+see [`bus` / `out` / `in`](#bus--out--in--named-audio-and-control-rate-buses).
+
+Trigger a synth with `(synth :name pat)`; its parameters (`freq`, …) come from the
+event. A parameterless synth can also be triggered by its bare name, e.g.
+`(seq :lfo-sine)` — useful for bus writers.
+
+| `(kr rate src)` | Control-rate pass-through (informational wrapper) |
+
+Synths are ephemeral — nodes are created at event time and disconnected after the envelope.
+
+### `env` — general envelope constructor
+
+Build arbitrary multi-segment envelopes with per-segment curve types:
+
+```lisp
+;; (env levels times) — 3 levels, 2 segments, both linear
+(env [0 1 0] [0.01 0.5])
+
+;; (env levels times curves) — per-segment curve types
+(env [0 1 0.3 0] [0.01 0.1 0.5] [:lin :exp :exp])
+```
+
+Curve types:
+
+| Curve | Behaviour |
+|---|---|
+| `:lin` | Linear ramp (default) |
+| `:exp` | Exponential ramp (values must be non-zero) |
+| `:sin` | Sine ease-in/ease-out (slow at both ends) |
+| `:welch` | Quarter-sine — fast at start, slow at end |
+| `:step` | Instant jump at segment end |
+| `2.5` (number) | Power curve — `>1` concave-up, `<1` concave-down |
+
+Use `env` with `env-gen` inside a `defsynth` body:
+
+```lisp
+(defsynth pluck [freq]
+  (->> (saw freq)
+       (lpf 3000)
+       (env-gen (env [0 1 0.3 0] [0.001 0.05 0.4] [:lin :exp :exp]))))
+```
+
+### `bus` / `out` / `in` — named audio and control-rate buses
+
+Buses let synths communicate — use an LFO to modulate a filter, sidechain one synth
+from another, or mix multiple sources.
+
+```lisp
+;; Declare a control-rate bus (ConstantSourceNode)
+(bus :lfo :control)
+
+;; Declare an audio-rate bus (GainNode)
+(bus :aux :audio)
+
+;; LFO writer synth — plays on a track each cycle
+(defsynth lfo-sine []
+  (out :lfo (sin 4)))     ; 4 Hz sine (-1…1) to bus
+
+;; Synth that reads the LFO bus
+(defsynth wobble [freq]
+  (->> (saw freq)
+       (lpf (+ 1200 (* 800 (in :lfo))))   ; cutoff sweeps 400…2000 Hz
+       (env-perc 0.01 0.4)))
+
+;; Wire it up — a bare defsynth name triggers it
+(track :lfo-src (seq :lfo-sine))
+(track :lead
+  (->> (scale :minor :c3 (seq 0 3 5 7))
+       (synth :wobble)))
+```
+
+Modulation:
+- Any UGen parameter — oscillator `freq`, filter `cutoff`, `gain` `level`, `delay-node`
+  `time` — takes a number or a signal. A signal is connected to the underlying
+  AudioParam and **replaces** its value, so a bare `(in :lfo)` (range -1…1) would be
+  a near-zero cutoff
+- Inside `defsynth`, `*` and `+` work on signals: `(* 800 sig)` scales, `(+ 1200 sig)`
+  adds an offset, `(* sig-a sig-b)` ring-modulates. Use `(+ centre (* depth sig))` to
+  sweep a parameter around a centre value
+- A parameterless synth (e.g. a bus writer) is triggered by its bare name in a
+  pattern: `(seq :lfo-sine)`. `(synth :name pat)` works too
+
+Bus rules:
+- `(bus :name)` defaults to `:control`
+- `(out :bus signal)` inside `defsynth` replaces the previous connection from that synth, preventing oscillator accumulation
+- `(in :bus)` returns silence and logs a warning if the bus has not been declared
+- `(stop)` and `(clear!)` destroy all buses and release their nodes
+
+| Function | Description |
+|---|---|
+| `(bus :name)` | Create a control-rate bus (ConstantSourceNode) |
+| `(bus :name :control)` | Same as above, explicit type |
+| `(bus :name :audio)` | Create an audio-rate bus (GainNode) |
+| `(out :bus signal)` | Write signal to bus inside `defsynth` |
+| `(in :bus)` | Read bus as a UGen source inside `defsynth` |
+| `(kr rate signal)` | Control-rate pass-through (no-op; informational) |
+
+### `defmacro` — compile-time transforms
+
+Define macros that expand at evaluate-time before execution:
+
+```lisp
+(defmacro swing [amount pat]
+  `(off ~amount identity ~pat))
+
+(swing 0.1 (seq :bd :sd))
+; expands to: (off 0.1 identity (seq :bd :sd))
+
+(defmacro build-seq [& vals]
+  `(seq ~@vals))
+```
+
+Quasiquote (`` ` ``), unquote (`~`), and splice-unquote (`~@`) work as in Clojure.
+
+### `loop` / `recur` — tail-recursive iteration
+
+Iterate without stack overflow using `loop` and `recur`:
+
+```lisp
+(loop [notes [] i 0]
+  (if (>= i 8)
+    (apply seq notes)
+    (recur (conj notes (+ 200 (* i 30))) (+ i 1))))
+; => (seq 200 230 260 290 320 350 380 410)
+```
+
+`recur` must be in tail position inside `loop`. Bindings are re-bound with the new values
+on each iteration.
+
+### Rational number literals
+
+Write time ratios as fractions directly in the source — cleaner than floats:
+
+```lisp
+(slow 1/4 (seq :bd :sd))    ; ≡ (slow 0.25 ...)
+(fast 3/2 melody)            ; ≡ (fast 1.5 ...)
+(late 1/8 (seq :hh :oh))    ; ≡ (late 0.125 ...)
+```
+
+### BPM notation
+
+Write BPM inline with a `bpm` suffix — the reader evaluates it as `(bpm N)`:
+
+```lisp
+120bpm    ; ≡ (bpm 120)
+140bpm    ; set tempo to 140 BPM inline in an expression
+```
+
+---
+
+## Standard library
+
+General-purpose functions for working with numbers, collections and strings — useful when you
+compute patterns instead of writing them out by hand.
+
+```lisp
+;; Eight-step pattern of scale degrees, computed
+(scale :minor :c3 (apply seq (map (fn [i] (mod (* i 3) 8)) (range 8))))
+
+;; Build a sequence from a list of sample names
+(def drums [:bd :sd :hh :sd])
+(apply seq (concat drums [:bd :bd]))
+```
+
+### Logic and comparison
+
+| Function | Description | Example |
+|---|---|---|
+| `=` / `not=` | Equal / not equal | `(= x :bd)` |
+| `<` `>` `<=` `>=` | Numeric comparison | `(<= x 8)` |
+| `and` / `or` | Logical and/or; stop at the first deciding value | `(and (> x 0) (< x 10))` |
+| `not` | Logical negation | `(not true)` |
+
+### Numbers
+
+| Function | Description | Example |
+|---|---|---|
+| `+` `-` `*` `/` | Arithmetic | `(* 2 (+ 1 3))` |
+| `quot` | Integer division | `(quot 7 2)` → `3` |
+| `mod` | Remainder | `(mod 7 4)` → `3` |
+| `abs` | Absolute value | `(abs -5)` → `5` |
+| `min` / `max` | Smallest / largest argument | `(min 3 7)` → `3` |
+
+### Collections
+
+| Function | Description | Example |
+|---|---|---|
+| `list` | Create a list | `(list 1 2 3)` |
+| `vec` | Convert to a vector | `(vec (range 4))` |
+| `range` | Number sequence: `(range n)`, `(range a b)`, `(range a b step)`. With a pattern as the last argument it scales a signal instead — see [Signals](#signals--sine-saw-rand-perlin-segment-range) | `(range 8)` |
+| `count` | Number of items | `(count [1 2 3])` → `3` |
+| `first` / `rest` | First item / all items except the first | `(first [1 2 3])` → `1` |
+| `nth` | Item at index (from 0) | `(nth [:bd :sd] 1)` → `:sd` |
+| `empty?` | True if the collection has no items | `(empty? [])` |
+| `cons` / `conj` | Add an item at the front / to the collection | `(cons 0 [1 2])` |
+| `concat` | Join collections | `(concat [1 2] [3 4])` |
+| `map` | Apply a function to each item | `(map (fn [x] (* x 2)) (range 4))` |
+| `filter` | Keep the items for which the function returns true | `(filter (fn [x] (> x 2)) (range 5))` |
+| `reduce` | Fold a collection: `(reduce f coll)` or `(reduce f init coll)` | `(reduce + (range 5))` |
+| `apply` | Call a function with a collection as its arguments | `(apply seq [:bd :sd :hh])` |
+| `identity` | Return the argument unchanged | `(identity :bd)` |
+
+Map functions (`get`, `assoc`, `merge`, `keys`, `vals`) are covered in
+[Map literals and operations](#map-literals-and-operations).
+
+### Strings, keywords and types
+
+| Function | Description | Example |
+|---|---|---|
+| `str` | Join values into a string | `(str "bd" 2)` → `"bd2"` |
+| `keyword` | String → keyword | `(keyword "bd")` → `:bd` |
+| `symbol` | String → symbol | `(symbol "kick")` |
+| `name` | Keyword or symbol → string | `(name :bd)` → `"bd"` |
+| `number?` `string?` `keyword?` `nil?` | Type checks | `(keyword? :bd)` → `true` |
+
+### Quoting
+
+| Form | Description | Example |
+|---|---|---|
+| `quote` | Return a form without evaluating it (the `'form` shorthand is not supported) | `(quote (seq :bd :sd))` |
+| `quasiquote` / `` ` `` | Template with `~` (unquote) and `~@` (splice) — mainly for `defmacro` | `` `(seq ~a ~b) `` |
+| `lambda` | Alias for `fn` | `(lambda [p] (fast 2 p))` |
 
 ---
 
@@ -2435,7 +3148,7 @@ Route pattern events as MIDI Note On/Off to external synths or DAWs:
 
 ```lisp
 (track :bass (midi-out 1 (seq :c4 :e4 :g4)))         ; channel 1
-(->> (scale :minor :c3 (seq 1 3 5 8)) (midi-out 2))  ; channel 2
+(->> (scale :minor :c3 (seq 0 2 4 7)) (midi-out 2))  ; channel 2
 
 ; Chains with other params — amp maps to MIDI velocity
 (->> (seq :c4 :e4 :g4) (midi-out 1) (amp 0.7))
@@ -2497,6 +3210,380 @@ output panel after `freesound!` completes to see which keywords were registered.
 
 ---
 
+## Session persistence and sharing
+
+REPuLse automatically saves all session state to `localStorage` and restores it on every page reload. No explicit save action is needed.
+
+### What is persisted
+
+| State | Notes |
+|-------|-------|
+| Editor text | Full buffer contents |
+| BPM | Current tempo |
+| FX chain | Effect names, parameters, bypass state |
+| Bank prefix | Active `(bank :Name)` prefix |
+| External sample repos | URLs loaded via `(samples! ...)` |
+| Track mute/solo state | Restored after the first eval |
+
+Playback state (playing/stopped), audio nodes, and active cycle position are **not** persisted — the page always starts stopped.
+
+### First visit
+
+When no session exists (first visit or after `(reset!)`), a random demo template is loaded into the editor. A welcome message tells you to press **Alt+Enter** to start playing.
+
+### `(reset!)` — wipe session
+
+```lisp
+(reset!)
+```
+
+Stops playback, deletes all persisted state (editor, BPM, effects, bank, sample sources, mutes, and AI settings/history), and reloads the page to first-visit state with a fresh demo. Use this when you want a clean slate.
+
+### URL sharing
+
+Click the **share** button or call `(share!)` to copy a full session URL to the clipboard. The URL encodes the complete session state (editor text, BPM, effects, bank, mutes) in the URL hash using base64. Loading the URL restores the full session immediately.
+
+```lisp
+(share!)  ; copies URL like https://repulse.app/#v2:eyJ2...
+```
+
+Old `#v1:...` share URLs are still supported.
+
+---
+
+## AI assistant
+
+### `(ai)` — open the assistant panel
+
+Open the built-in AI assistant panel. The assistant is a **tool-using agent** — it can read the editor buffer, query session state, browse snippets, propose edits with an Apply/Reject overlay, and silently evaluate code before suggesting it. Every change to the session requires explicit user confirmation.
+
+```lisp
+(ai)                                          ; open the panel (or shows "enable AI" prompt)
+(ai "Give me a euclidean kick pattern")       ; open and immediately send prompt
+(ai "Add a dub delay to the bass track")      ; agent reads buffer, proposes an edit
+(ai "What tracks are active?")                ; agent queries session state
+```
+
+**Getting started:**
+
+1. Click the **ai** button in the header, or run `(ai)` in the REPL
+2. Click **Enable AI assistant**
+3. Choose a provider and paste your API key (stored in localStorage; each request is relayed through the `/api/ai-stream` proxy, which never logs or stores the key)
+4. Type a question and press **Send** or **Cmd/Ctrl+Enter**
+
+**Agent tools** (the assistant calls these automatically — you never invoke them directly):
+
+| Tool | What it does |
+|---|---|
+| `read_buffer` | Reads the full editor text |
+| `propose_edit` | Replaces an exact-text match in the buffer (or appends when the match is empty); shows a before/after diff card with **Apply** / **Reject** buttons |
+| `eval_preview` | Evaluates code silently and returns event count + duration (no audio) |
+| `query_session` | Returns BPM, track names, muted tracks, global FX |
+| `query_track` | Returns details for one track (mute state, FX chain) |
+| `find_snippet` | Searches the community snippet library |
+| `insert_snippet` | Appends a snippet by ID to the end of the buffer — same **Apply** / **Reject** card as `propose_edit` (or applied immediately, with Revert, when auto-apply is on) |
+| `set_bpm_proposal` | Shows a confirm dialog before updating BPM |
+| `freesound_search` | Searches Freesound for samples; returns id, name, duration, tags (requires Freesound API key) |
+| `freesound_load` | Registers a Freesound sample by ID as `:freesound-<id>`; proposes a `(seq :freesound-<id>)` edit |
+| `list_banks` | Lists all registered sample bank names in the current session |
+| `list_samples_in_bank` | Lists sample keywords available in a named bank |
+| `web_search` | Searches the web via Brave Search for music theory / genre context (only shown when a Brave API key is set) |
+
+**Proposed edits:** When the agent calls `propose_edit`, a card appears below the editor showing the before and after text. Click **Apply** to commit the change, or **Reject** to tell the agent the suggestion was declined (it will try again with a revised proposal).
+
+**Auto-apply edits:** Enable **Auto-apply edits** in settings to have `propose_edit` and `insert_snippet` apply immediately without the overlay. When auto-apply is on, a **↩ Revert last turn** bar appears; clicking it restores the editor to exactly what it was before the most recent assistant turn — all of that turn's edits are undone together. Click again to step further back; the undo stack holds up to 20 turns.
+
+**Cancel:** A **cancel** button replaces the **send** button while an agent turn is in progress. Clicking it stops the loop immediately and dismisses any pending overlay.
+
+**Code blocks** in assistant responses include an **↓ insert** button that appends the code to the editor without replacing existing content.
+
+**Budget:** The assistant tracks token and tool-call usage across all turns in the session. Token counts come from the provider's reported usage (input + output, so the system prompt and history are included); when a provider reports none (common with local servers), a 4-characters-per-token estimate is used and the badge shows a `~` prefix (e.g. `~3.9k/50.0k tok`). A usage badge in the panel header shows `used/limit tok · used/limit tools`. A soft warning appears at 50%. Once either limit is reached the assistant refuses to send further requests until you raise the limit in settings or click **Reset session** in the tool log.
+
+**Rate limiting:** HTTP 429 responses from any provider trigger automatic exponential back-off (1 s, then 2 s; at most 3 requests in total). If all attempts are rate-limited, an error message is shown inline.
+
+**Prompt-injection protection:** Everything the model reads from outside sources is wrapped in `<untrusted>` tags: the editor buffer and session snapshot in the system prompt, and the results of `read_buffer`, `query_session`, `query_track`, `find_snippet`, `web_search`, `freesound_search`, and `list_banks`. Any `<untrusted>` tags inside that content are escaped so it cannot break out of the wrapper. The system prompt instructs the model never to follow commands inside those tags.
+
+**Activity log:** Once tool calls have been made, a collapsible **🔍 tool log** section appears above the input box showing the last 50 calls (time, tool, and any error). An **Export log** button downloads the log as JSON. **Reset session** clears both the log and the session budget counters.
+
+**Settings** (accessible via the ⚙ button):
+- **Provider** — `anthropic`, `openai`, `google`, `groq`, `xai`, `openrouter`, `mistral`, `custom` (any OpenAI-compatible endpoint — see [Local models & custom endpoints](#local-models--custom-endpoints))
+- **API key** — one per provider, stored in `repulse:ai:key:<provider>` in localStorage, so switching provider keeps each key. Hosted providers' requests are relayed per request through the `/api/ai-stream` proxy (never logged or stored); `custom` keys go only to the base URL you enter
+- **Model override** — override the default model (e.g. `claude-opus-4-7`, `grok-3-mini`, or on OpenRouter `meta-llama/llama-3.3-70b-instruct:free`); free text, with suggestions from the provider's live model list. Leave blank for the provider default. The ↻ button next to the field refetches the list; models marked `(no tools)` cannot run the agent tools (read buffer, propose edit, …) and fall back to plain chat. A saved override missing from a fresh list shows a warning but is kept.
+- **Share editor code with AI** — when enabled, the current editor buffer is included in the system prompt; disabled by default
+- **Auto-apply edits** — apply `propose_edit` immediately and show the Revert button; default off
+- **Token limit** — session token budget (default 50 000); remaining count shown next to the input
+- **Tool-call limit** — session budget of tool calls the assistant may make (default 100); remaining count shown next to the input
+- **Freesound API key** — enables `freesound_search` and `freesound_load`; get a key at [freesound.org/apiv2/](https://freesound.org/apiv2/); stored in `repulse:ai:freesound-key`
+- **Web Search API key** (optional) — enables `web_search` via Brave Search; get a key at [brave.com/search/api/](https://brave.com/search/api/); stored in `repulse:ai:search-key`; omit to hide the tool from the model entirely
+
+**Default models:** with a blank override, the default is chosen from the provider's live model list (fetched when the panel opens, then cached for 24 h; OpenRouter's list needs no key, the others load once a key is set). If the list can't be loaded the built-in fallbacks are used: `claude-sonnet-5-5` (Anthropic), `gpt-4o` (OpenAI), `gemini-2.0-flash` (Google), `llama-3.3-70b-versatile` (Groq), `grok-4.7` (xAI), `openrouter/auto` (OpenRouter), `mistral-medium-latest` (Mistral).
+
+> **Groq vs xAI:** `groq` is [Groq cloud](https://groq.com) — fast inference for open-source models like Llama. `xai` is [xAI](https://x.ai) — Elon Musk's company, makers of the Grok model family. Get an xAI key at [console.x.ai](https://console.x.ai).
+>
+> **OpenRouter and Mistral:** `openrouter` gives one key for almost every model family, including rate-limited free-tier models (429s are retried with back-off); keys at [openrouter.ai/keys](https://openrouter.ai/keys). `mistral` is an EU-based provider with first-party models; keys at [console.mistral.ai](https://console.mistral.ai). Other families (DeepSeek, Kimi, Qwen, …) are reachable through OpenRouter model IDs.
+
+#### Local models & custom endpoints
+
+The `custom` provider talks to **any OpenAI-compatible `/v1` endpoint**: a local model server (LM Studio, Ollama, llama.cpp, vLLM), a self-hosted gateway (LiteLLM), or a hosted provider REPuLse doesn't list (Together, Fireworks, DeepSeek, …). With a local model the assistant is free and works offline. Your Lisp doesn't change — `(ai "write a dub techno chord stab pattern")` works the same.
+
+| Setting | What it does |
+|---------|--------------|
+| **Base URL** | The server's `/v1` root. Quick-fill chips: **LM Studio** `http://localhost:1234/v1`, **Ollama** `http://localhost:11434/v1`, **llama.cpp** `http://localhost:8080/v1`. A pasted `…/chat/completions` URL is trimmed to the base. |
+| **API key** *(optional)* | Sent as `Authorization: Bearer …` only when set. Leave blank for local servers. |
+| **Send tools** | On by default. Turn off if your model returns errors or garbage when given tools — no `tools` field is sent and the assistant works as plain chat. |
+| **Test connection** | Fetches `<base>/models` and reports `✓ N models` or an actionable error. The model field then suggests those models; a blank override uses the first one the server lists. |
+
+```text
+Provider:  custom
+Base URL:  http://localhost:1234/v1
+Model:     qwen3-coder-30b
+```
+
+**How requests travel.** Hosted providers go through REPuLse's server proxy. `custom` requests go **straight from your browser** to the base URL — including your key and any code you share — so only use endpoints you trust. Allowed URLs:
+
+- `https://…` — any host.
+- `http://localhost`, `http://127.0.0.1`, `http://[::1]` (any port).
+- Plain-HTTP LAN or remote addresses (`http://192.168.…`) are rejected in the settings: browsers block them as mixed content on an HTTPS page. Use HTTPS (e.g. a tunnel), or run the server on the same machine and use `localhost`.
+
+**Enable CORS on your server** so it accepts requests from the REPuLse origin:
+
+| Server | Setting |
+|--------|---------|
+| **LM Studio** | Developer tab → server settings → **Enable CORS**, or `lms server start --cors` |
+| **Ollama** | Set `OLLAMA_ORIGINS` to the REPuLse origin (or `*`) before starting the server, e.g. `OLLAMA_ORIGINS="*" ollama serve` |
+| **llama.cpp** `llama-server` | Answers cross-origin requests by default; check `llama-server --help` if your build differs |
+| **vLLM** | `--allowed-origins '["*"]'` (or the REPuLse origin) |
+| **LiteLLM** | Proxy allows all origins by default; restrict as needed in its config |
+
+**Chrome's local-network prompt.** When REPuLse runs on a public HTTPS site and connects to `localhost`, Chrome may ask for permission to access devices on your local network — allow it.
+
+**If it fails**, the panel says which problem is likely:
+- *Couldn't reach … Is the server running, and does it allow requests from this site?* — server down, CORS not enabled, or the local-network prompt was denied (the browser doesn't say which).
+- *HTTP 401/403* — the key was rejected. *HTTP 404* — wrong base URL (missing `/v1`?).
+
+**Tool calling depends heavily on the model.** Small local models often emit broken tool calls. REPuLse returns the error to the model once; if the next reply is broken too, it stops and shows the model's text instead of hanging. For editing your code via `read_buffer` → `propose_edit`, pick a model known for function calling (e.g. Qwen3 or Llama 3.x instruct). If a model struggles, turn **Send tools** off.
+
+**Conversation history** persists across page reloads (last 40 turns). Use the **clear** button to reset the chat and history.
+
+When AI is disabled, `(ai)` returns a descriptive string instead of opening the panel:
+```lisp
+(ai)
+; → "AI assistant is disabled — enable it in the AI panel settings"
+```
+
+### `(help-export)` — AI session snapshot
+
+Returns the live session state as a map. Useful for sharing context with an AI assistant without copying code.
+
+```lisp
+(help-export)
+; → {:bpm 130
+;    :tracks {:kick {:fx [{:name "reverb" :params {"value" 0.4} :bypassed false}]}
+;             :bass {:fx []}}
+;    :muted []
+;    :fx []        ; global FX chain only
+;    :bank nil
+;    :sources []}
+
+(:bpm (help-export))                         ; → 130
+(:tracks (help-export))                      ; → {:kick {:fx [...]}, ...}
+(:kick (:tracks (help-export)))              ; → {:fx [...]}
+(:fx (:kick (:tracks (help-export))))        ; → per-track FX for :kick
+```
+
+**Fields:**
+- `:bpm` — current tempo
+- `:tracks` — keyword-keyed map of active tracks. Each value is `{:fx [...]}` with the track's per-track FX chain. Pattern functions are never included.
+- `:muted` — vector of muted track name strings
+- `:fx` — global FX chain (effects added with a top-level `(fx ...)` call), as `[{:name :params :bypassed}]`
+- `:bank` — active drum bank prefix or `nil`
+- `:sources` — loaded external sample repos: `[{:type :id}]`
+
+Editor code is intentionally excluded. Copy-paste from the editor to share code.
+
+---
+
+## Snippet library
+
+The snippet library lets you browse community-submitted patterns — rhythms, basslines, melodies, chords, and FX demos — that you can audition and insert into your session.
+
+### Opening the panel
+
+Click the **lib** button in the header to open or close the snippet browser. You can also press **Escape** to close it.
+
+### Browsing, sorting, and filtering
+
+The toolbar provides multiple ways to narrow the list:
+
+| Control | Description |
+|---------|-------------|
+| **Search box** | Client-side filter by title, description, or code content |
+| **Tag dropdown** | Filter by genre/role tag |
+| **Sort dropdown** | `★ top rated` (default) · `🕐 newest` · `📈 uses` · `🔥 trending` |
+| **Author input** | Server-side filter by author display name (debounced, 400 ms) |
+
+Top rated sorts by average rating first, then rating count. Trending score uses
+a time-decay formula based on weighted rating and usage.
+
+### Preview and insert
+
+Each card has three action buttons:
+
+| Button | Action |
+|---|---|
+| `▶ solo` | Stops the current session and plays the snippet in isolation |
+| `⊕ mix` | Adds the snippet track alongside your running session |
+| `↓ insert` | Appends the snippet code to the editor and triggers `(upd)`; increments usage counter |
+
+Insert warns you if the snippet's track name already exists in your session.
+
+### Star and report
+
+Each card also has:
+
+| Element | Description |
+|---------|-------------|
+| **★ N** button | Toggle star (requires sign-in); optimistic update, reverts on error |
+| **⚑ report** button | Flag the snippet for review (requires sign-in); prompts for optional reason |
+
+### Share as snippet (sign-in required)
+
+Click **+ share** in the snippet panel toolbar to open the submit modal:
+
+1. Fill in **Title** (required), Description, Tags (comma-separated), and BPM (pre-filled from current session)
+2. The **Code preview** shows what will be submitted (current editor content)
+3. Click **submit** — on success the panel refreshes and a toast confirms the submission
+4. Close at any time with **cancel**, **Escape**, or clicking outside the modal
+
+### Lisp built-in
+
+```clojure
+(snippet :four-on-the-floor)  ;; insert snippet by ID
+(snippet)                     ;; list available snippet IDs
+```
+
+`snippet` supports autocomplete and hover docs in the editor.
+
+---
+
+## User accounts & community
+
+### Sign in
+
+Click **sign in** in the top-right of the header to authenticate with GitHub via
+Supabase OAuth. After sign-in your avatar and username appear in the button.
+
+Click the button again while signed in to sign out.
+
+Anonymous users can browse, preview, and insert any snippet — sign-in is required
+to submit, star, or report snippets.
+
+### REST API
+
+The app exposes a serverless REST API on Vercel:
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/env` | GET | None | Returns public Supabase credentials |
+| `/api/snippets` | GET | None | List snippets (`?tag=`, `?q=`, `?sort=`, `?author=`, `?limit=`) |
+| `/api/snippets` | POST | Required | Create a new snippet |
+| `/api/snippets/:id` | DELETE | Required | Delete your own snippet |
+| `/api/snippets/:id/star` | POST | Required | Set or remove a 1-5 rating |
+| `/api/snippets/:id/use` | POST | None | Increment usage counter |
+| `/api/snippets/:id/report` | POST | Required | Flag snippet for moderation |
+
+**Sort values:** `top-rated` (default) · `newest` · `most-used` · `trending`
+
+### Snippet loading
+
+- **Anonymous:** the snippet browser loads `app/public/snippets/library.json` (the curated built-in patterns)
+- **Authenticated:** the snippet browser loads snippets from `/api/snippets` (Supabase DB), falling back to static JSON on error
+
+---
+
+## Embeddable component
+
+REPuLse ships a `<repulse-editor>` [Custom Element](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements) so you can drop a live, editable REPuLse pattern into any static webpage without a build step.
+
+### Quick start
+
+```html
+<!-- 1. Load the embed bundle (served from the REPuLse host) -->
+<script src="https://repulse.example.com/embed.js" defer></script>
+
+<!-- 2. Place the element wherever you want the editor -->
+<repulse-editor
+  code='(track :kick (seq :bd :bd :bd :bd))'
+  autoplay
+  height="220px">
+</repulse-editor>
+```
+
+### Attributes
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `code` | string | `""` | REPuLse-Lisp code to pre-load into the editor |
+| `snippet` | string | — | Snippet ID from `library.json`; overrides `code` if both present |
+| `autoplay` | boolean (presence) | false | Evaluate code automatically on connect |
+| `bpm` | number | 120 | Initial BPM; applied before autoplay |
+| `height` | CSS length | `"220px"` | Height of the editor region |
+| `theme` | `"dark"` | `"dark"` | Colour theme (light TBD) |
+
+### Examples
+
+**Inline code with autoplay:**
+```html
+<repulse-editor
+  code='(track :bass (fast 2 (seq :bd :sd :bd :sd)))'
+  autoplay
+  height="200px">
+</repulse-editor>
+```
+
+**Pre-seed from the snippet library:**
+```html
+<repulse-editor snippet="acid-303" autoplay height="240px"></repulse-editor>
+```
+
+**No autoplay — reader presses Alt+Enter to evaluate:**
+```html
+<repulse-editor
+  code='(track :melody (scale :minor :c4 (seq 0 3 5 7)))'
+  height="180px">
+</repulse-editor>
+```
+
+**Custom BPM:**
+```html
+<repulse-editor
+  code='(track :kick (seq :bd :bd :bd :bd))'
+  bpm="140"
+  autoplay>
+</repulse-editor>
+```
+
+### Shadow DOM isolation
+
+Each `<repulse-editor>` uses Shadow DOM (`mode: "open"`), so:
+- Host-page CSS cannot style the editor internals.
+- The editor's styles cannot leak into the surrounding page.
+- Multiple instances on the same page are visually independent.
+
+### Known limitations
+
+- Multiple instances on the same page **share the audio scheduler**. Track names must be unique across all instances; a `:kick` track in one embed will conflict with a `:kick` in another.
+- The `(upd)` command and some editor-centric builtins operate on the **globally tracked editor view** (the most recently mounted embed). In practice this is not an issue for read-only embeds. Full per-instance isolation is not implemented yet.
+
+### Building the embed bundle
+
+```bash
+npx shadow-cljs compile embed    # dev build → app/public/embed.js
+npx shadow-cljs release embed    # optimised release build (much smaller)
+```
+
+---
+
 ## Error messages
 
 REPuLse shows structured errors in the footer:
@@ -2517,6 +3604,19 @@ track :boom playing — Warning: unknown sound :kick — did you mean :bd?
 ```
 
 See [Keywords as sounds](#keywords-as-sounds).
+
+Calling a signal as a function is an error with a hint:
+
+```
+Error: saw is a signal (a continuous pattern), not a function. Use it without parentheses ...
+```
+
+A track that contains a continuous signal with no rhythm plays nothing, and a warning is
+shown (once per evaluation):
+
+```
+Warning: track :_ contains a continuous signal with no rhythm, which plays nothing. A signal needs structure, e.g. (segment 8 ...) or (pan sine pat)
+```
 
 ---
 
@@ -2553,8 +3653,15 @@ transform  = "(fast"  number pattern ")"
            | "(early" number pattern ")"
            | "(jux"   fn pattern ")"
            | "(off"   number fn pattern ")"
-           | "(sometimes" fn pattern ")"
+           | "(superimpose" fn+ pattern ")" | "(layer" fn+ pattern ")"
+           | "(echo" times time feedback pattern ")" | "(echo-with" n t fn pattern ")"
+           | "(arp" mode pattern ")" | "(rolled" pattern ")" | "(voicing" [opts] pattern ")"
+           | "(sometimes" fn pattern ")"      ; per event
+           | "(some-cycles" fn pattern ")"    ; per cycle
            | "(degrade" pattern ")"
+           | "(randcat" pattern+ ")"
+           | "(shuffle" n pattern ")"
+           | "(whenmod" a b fn pattern ")"
            | "(fmap"  fn pattern ")"
 
 ;; Per-event parameters (value + pattern, or pattern → pattern transformer)
@@ -2583,6 +3690,11 @@ track-expr = "(track" keyword pattern ")"
 ;; Arrangement
 arrange    = "(arrange" "[[" pattern cycles "]" ["[" pattern cycles "]"]* "])"
 
+;; Song form
+song       = "(song" section+ [":end" (":stop" | ":loop")] ")"
+section    = "(section" keyword bars ("[" keyword* "]" | ":all") ")"
+play-from  = "(play-from" (keyword | bar) ")"
+
 ;; Curve generators (for fx :waveshape)
 generator  = "(chebyshev" order ")"              ;; order 1-8
            | "(fold)"                            ;; wavefolder
@@ -2595,41 +3707,6 @@ fn-expr    = "(fn [" name* "]" expr+ ")"
 if-expr    = "(if" expr expr [expr] ")"
 do-expr    = "(do" expr+ ")"
 ```
-
----
-
-## User accounts & community
-
-### Sign in
-
-Click **sign in** in the top-right of the header to authenticate with GitHub via
-Supabase OAuth. After sign-in your avatar and username appear in the button.
-
-Click the button again while signed in to sign out.
-
-Anonymous users can browse, preview, and insert any snippet — sign-in is required
-to submit, star, or report snippets.
-
-### REST API
-
-The app exposes a serverless REST API on Vercel:
-
-| Endpoint | Method | Auth | Description |
-|----------|--------|------|-------------|
-| `/api/env` | GET | None | Returns public Supabase credentials |
-| `/api/snippets` | GET | None | List snippets (`?tag=`, `?q=`, `?sort=`, `?author=`, `?limit=`) |
-| `/api/snippets` | POST | Required | Create a new snippet |
-| `/api/snippets/:id` | DELETE | Required | Delete your own snippet |
-| `/api/snippets/:id/star` | POST | Required | Set or remove a 1-5 rating |
-| `/api/snippets/:id/use` | POST | None | Increment usage counter |
-| `/api/snippets/:id/report` | POST | Required | Flag snippet for moderation |
-
-**Sort values:** `top-rated` (default) · `newest` · `most-used` · `trending`
-
-### Snippet loading
-
-- **Anonymous:** the snippet browser loads `app/public/snippets/library.json` (the curated built-in patterns)
-- **Authenticated:** the snippet browser loads snippets from `/api/snippets` (Supabase DB), falling back to static JSON on error
 
 ---
 
@@ -2717,11 +3794,13 @@ The app exposes a serverless REST API on Vercel:
 (~ "bd [sd hh]")             ; subdivision: sd and hh share one slot
 (~ "hh*4 sd")                ; repetition: four hats then a snare
 (~ "<bd sd cp>")             ; alternation: cycles through bd → sd → cp
-(~ "bd? sd")                 ; bd plays with ~50% probability
+(~ "bd? sd")                 ; bd is deterministically dropped on ~half of the cycles
 (~ "bd:2 sd:0")              ; sample index: (sound :bd 2), (sound :sd 0)
 (~ "bd@3 sd")                ; elongation: bd takes ¾ of the cycle
 (~ "c4 e4 g4")               ; note names → keywords (:c4 :e4 :g4)
 (~ "440 330 220")            ; numbers pass through as Hz values
+(~ "bd!3 sd . hh hh hh, cp(3,8)")  ; ! repeat, . groups, , layers, (k,n,r) euclid
+(~ "{a b c}%4")              ; polymeter: 4 steps per cycle
 
 ;; Mini-notation composes with all Lisp functions:
 (fast 2 (~ "bd sd"))
@@ -2751,6 +3830,9 @@ The app exposes a serverless REST API on Vercel:
 
 ;; Render 1 cycle (useful for short loops)
 (export 1)
+
+;; Capture the whole song (buffer ending in (song …)) in real time, with FX
+(export :song)
 ```
 
 ### Per-track effects
@@ -2765,7 +3847,7 @@ The app exposes a serverless REST API on Vercel:
 
 ;; Lead: its own reverb + delay, independent of the kick
 (track :lead
-  (->> (scale :minor :c3 (seq 1 3 5 8))
+  (->> (scale :minor :c3 (seq 0 2 4 7))
        (amp 0.6)
        (decay 0.8)
        (fx :reverb 0.5)
@@ -2779,87 +3861,4 @@ The app exposes a serverless REST API on Vercel:
 
 ```lisp
 (stop)
-```
-
----
-
-## Embeddable component
-
-Phase O1 ships a `<repulse-editor>` [Custom Element](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements) so you can drop a live, editable REPuLse pattern into any static webpage without a build step.
-
-### Quick start
-
-```html
-<!-- 1. Load the embed bundle (served from the REPuLse host) -->
-<script src="https://repulse.example.com/embed.js" defer></script>
-
-<!-- 2. Place the element wherever you want the editor -->
-<repulse-editor
-  code='(track :kick (seq :bd :bd :bd :bd))'
-  autoplay
-  height="220px">
-</repulse-editor>
-```
-
-### Attributes
-
-| Attribute | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `code` | string | `""` | REPuLse-Lisp code to pre-load into the editor |
-| `snippet` | string | — | Snippet ID from `library.json`; overrides `code` if both present |
-| `autoplay` | boolean (presence) | false | Evaluate code automatically on connect |
-| `bpm` | number | 120 | Initial BPM; applied before autoplay |
-| `height` | CSS length | `"220px"` | Height of the editor region |
-| `theme` | `"dark"` | `"dark"` | Colour theme (light TBD) |
-
-### Examples
-
-**Inline code with autoplay:**
-```html
-<repulse-editor
-  code='(track :bass (fast 2 (seq :bd :sd :bd :sd)))'
-  autoplay
-  height="200px">
-</repulse-editor>
-```
-
-**Pre-seed from the snippet library:**
-```html
-<repulse-editor snippet="acid-303" autoplay height="240px"></repulse-editor>
-```
-
-**No autoplay — reader presses Alt+Enter to evaluate:**
-```html
-<repulse-editor
-  code='(track :melody (scale :minor :c4 (seq 0 3 5 7)))'
-  height="180px">
-</repulse-editor>
-```
-
-**Custom BPM:**
-```html
-<repulse-editor
-  code='(track :kick (seq :bd :bd :bd :bd))'
-  bpm="140"
-  autoplay>
-</repulse-editor>
-```
-
-### Shadow DOM isolation
-
-Each `<repulse-editor>` uses Shadow DOM (`mode: "open"`), so:
-- Host-page CSS cannot style the editor internals.
-- The editor's styles cannot leak into the surrounding page.
-- Multiple instances on the same page are visually independent.
-
-### Known limitations (O1)
-
-- Multiple instances on the same page **share the audio scheduler**. Track names must be unique across all instances; a `:kick` track in one embed will conflict with a `:kick` in another.
-- The `(upd)` command and some editor-centric builtins operate on the **globally tracked editor view** (the most recently mounted embed). In practice this is not an issue for read-only embeds. Full per-instance isolation is deferred to Phase O.
-
-### Building the embed bundle
-
-```bash
-npx shadow-cljs compile embed    # dev build → app/public/embed.js
-npx shadow-cljs release embed    # optimised release build (much smaller)
 ```

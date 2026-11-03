@@ -1,6 +1,11 @@
 (ns repulse.lisp.eval
-  (:require [repulse.lisp.util :as util]
+  (:require [repulse.core :as core]
+            [repulse.lisp.util :as util]
             [repulse.lisp.builtins.pattern :as b-pattern]
+            [repulse.lisp.builtins.signals :as b-signals]
+            [repulse.lisp.builtins.structure :as b-structure]
+            [repulse.lisp.builtins.random :as b-random]
+            [repulse.lisp.builtins.arith :as b-arith]
             [repulse.lisp.builtins.math :as b-math]
             [repulse.lisp.builtins.music :as b-music]
             [repulse.lisp.builtins.params :as b-params]
@@ -92,6 +97,22 @@
 
     ;; Symbols, keywords, numbers, strings — return as-is (quoted)
     :else form))
+
+(defn- not-a-function-msg
+  "Error text for calling a non-function. Signals/patterns get a hint."
+  [head-form f]
+  (let [nm  (let [h (unwrap head-form)] (when (symbol? h) (str h)))
+        raw (unwrap f)]
+    (cond
+      (and (core/pattern? raw) (#{"saw" "square"} nm))
+      (str nm " is a signal (a continuous pattern), not a function. Use it without "
+           "parentheses, e.g. (segment 8 " nm "). For the " nm " synth voice use "
+           "(synth :" nm " pat), e.g. (synth :" nm " (seq :c4 :e4))")
+      (core/pattern? raw)
+      (str nm " is a pattern, not a function. Use it without parentheses, "
+           "e.g. (segment 8 " nm ") or (pan " nm " pat)")
+      :else
+      (str (pr-str head-form) " is not a function"))))
 
 (defn eval-form [form env]
   (cond
@@ -201,13 +222,13 @@
                     args (mapv #(eval-form % env) fargs)]
                 (if (fn? f)
                   (apply f (concat args [acc]))
-                  (throw (ex-info (str (pr-str fhead) " is not a function")
+                  (throw (ex-info (not-a-function-msg fhead f)
                                   {:type :eval-error}))))
               ;; Bare symbol — call as unary function
               (let [f (eval-form form env)]
                 (if (fn? f)
                   (f acc)
-                  (throw (ex-info (str (pr-str form) " is not a function")
+                  (throw (ex-info (not-a-function-msg form f)
                                   {:type :eval-error}))))))
           (eval-form (first tail) env)
           (rest tail))
@@ -222,12 +243,12 @@
                     args (mapv #(eval-form % env) fargs)]
                 (if (fn? f)
                   (apply f acc args)
-                  (throw (ex-info (str (pr-str fhead) " is not a function")
+                  (throw (ex-info (not-a-function-msg fhead f)
                                   {:type :eval-error}))))
               (let [f (eval-form form env)]
                 (if (fn? f)
                   (f acc)
-                  (throw (ex-info (str (pr-str form) " is not a function")
+                  (throw (ex-info (not-a-function-msg form f)
                                   {:type :eval-error}))))))
           (eval-form (first tail) env)
           (rest tail))
@@ -330,7 +351,7 @@
                       (get m raw (first more))
                       (get m raw)))
                   :else
-                  (throw (ex-info (str (pr-str head) " is not a function")
+                  (throw (ex-info (not-a-function-msg head f)
                                   {:type :eval-error :from (:from src) :to (:to src)})))))))))
 
     :else
@@ -342,6 +363,10 @@
         synths (atom {})]
     (merge
       (b-pattern/make-builtins)
+      (b-signals/make-builtins)
+      (b-structure/make-builtins)
+      (b-random/make-builtins)
+      (b-arith/make-builtins)
       (b-math/make-builtins)
       (b-music/make-builtins)
       (b-params/make-builtins)

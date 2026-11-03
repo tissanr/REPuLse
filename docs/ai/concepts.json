@@ -65,8 +65,9 @@
 
   "synthesis": {
     "sample-playback": "Default audio output. Keywords like :bd look up WAV samples in the active bank.",
-    "synth-voices": "(synth :saw pat) applies a built-in oscillator voice. Available voices: :saw, :square, :fm. Alternatively: (saw :c4), (square :c4), (fm :c4 :index 3).",
+    "synth-voices": "(synth :saw pat) applies a built-in oscillator voice. Available voices: :saw, :square, :fm. Per-note form: (fm :c4 :index 3). Pulse width: (synth :square :pw 0.25 pat).",
     "defsynth": "(defsynth name [params] body) defines a custom synthesizer using Web Audio UGens: sin, tri, saw, lpf, hpf, bpf, mix, gain, env-perc, env-asr, env-gen, bus, out, in.",
+    "signals": "sine, saw, tri, square, rand, perlin, ... are continuous patterns (values, no parentheses). Give them rhythm with (segment n sig) or by using them as a parameter of a rhythmic pattern: (pan sine pat). Scale with (range lo hi sig). A bare signal plays nothing.",
     "ugen-graph": "UGens are composable audio-graph nodes. (->> (sin freq) (lpf 2000) (env-perc 0.01 0.3)) wires a sine oscillator through a filter and percussive envelope."
   },
 
@@ -78,11 +79,11 @@
   },
 
   "music-theory": {
-    "scale": "(scale :minor :c4 (seq 0 2 4 7)) maps degree integers to Hz using a named scale. Degree 0 is the root. Negative degrees and degrees > scale-length wrap into adjacent octaves.",
-    "scales": ["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "harmonic-minor", "melodic-minor", "pentatonic-major", "pentatonic-minor", "blues", "chromatic", "whole-tone", "diminished"],
-    "chord": "(chord :major7 :c4) stacks all tones of the named chord as simultaneous Hz values in a pattern.",
+    "scale": "(scale :minor :c4 (seq 0 2 4 7)) maps 0-based degree integers to note names using a named scale (or a vector of semitone offsets). Degree 0 is the root. Negative degrees and degrees > scale-length wrap into adjacent octaves. Note names are MIDI-note values, so (add 12 ...) is one octave. Changed in TL5: degrees used to start at 1 and the result was Hz.",
+    "scales": ["major", "ionian", "minor", "aeolian", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "pentatonic", "major-pentatonic", "minor-pentatonic", "blues", "harmonic-minor", "melodic-minor", "whole-tone", "chromatic", "hirajoshi", "phrygian-dominant", "lydian-dominant", "altered", "diminished", "bebop-dominant"],
+    "chord": "(chord :major7 :c4) stacks all tones of the named chord as simultaneous note names in a pattern. Chord symbols work too: (chord \"Cm7\"), (chord \"<C F>\"); (voicing \"<C^7 Dm7 G7>\") voices them with smooth voice leading.",
     "chords": ["major", "minor", "dim", "aug", "sus2", "sus4", "major7", "minor7", "dom7", "dim7", "half-dim7", "aug7"],
-    "transpose": "(transpose n pat) shifts all Hz values by n semitones. Keywords that are not note-keywords (e.g. :bd, :_) pass through unchanged."
+    "transpose": "(transpose n pat) shifts notes by n semitones (n may be a pattern or an interval string like \"3M\"); note names stay note names, plain numbers (Hz) are scaled. Keywords that are not note-keywords (e.g. :bd, :_) pass through unchanged."
   },
 
   "session-snapshot": {

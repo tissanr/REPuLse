@@ -1,6 +1,7 @@
 (ns repulse.lisp.builtins.collection
   "Collection and data-structure builtins: get, assoc, map, filter, reduce, etc."
-  (:require [repulse.lisp.util :as u]))
+  (:require [repulse.core :as core]
+            [repulse.lisp.util :as u]))
 
 (defn make-builtins []
   {"get"     (fn [m k & rest]
@@ -35,7 +36,13 @@
    "range"   (fn
                ([n]        (range (u/unwrap n)))
                ([a b]      (range (u/unwrap a) (u/unwrap b)))
-               ([a b step] (range (u/unwrap a) (u/unwrap b) (u/unwrap step))))
+               ([a b c]
+                ;; A pattern as last argument selects Tidal's (range lo hi pat);
+                ;; otherwise it is the Lisp collection (range start end step).
+                (let [c' (u/unwrap c)]
+                  (if (core/pattern? c')
+                    (core/range-pat (u/pat-arg a) (u/pat-arg b) c')
+                    (range (u/unwrap a) (u/unwrap b) c')))))
    "str"     (fn [& args] (apply str (map u/unwrap args)))
    "symbol"  (fn [s] (symbol (u/unwrap s)))
    "keyword" (fn [s] (keyword (u/unwrap s)))

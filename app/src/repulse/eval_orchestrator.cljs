@@ -14,6 +14,8 @@
             [repulse.synth :as synth]
             [repulse.fx :as fx]
             [repulse.env.builtins :as builtins]
+            [repulse.song :as song]
+            [repulse.song-transport :as song-transport]
             [repulse.ui.editor :as editor]
             [repulse.ui.context-panel :as ctx-panel]
             [repulse.lisp-patcher :as patcher]
@@ -42,6 +44,9 @@
   "Evaluate REPuLse-Lisp code silently (no audio, no UI side-effects).
    Returns {:ok true :event-count N :duration-bars 1} or {:ok false :error msg}."
   [code]
+  ;; track/song/play-from/export only collect into song-transport's pending
+  ;; atoms; nothing is activated here, so the AI preview stays silent.
+  (song-transport/reset-pending!)
   (try
     (builtins/ensure-env!)
     (let [env    @builtins/env-atom
@@ -54,7 +59,9 @@
               {:ok true :event-count (count events) :duration-bars 1})
             {:ok true :event-count 0 :duration-bars 0 :value (pr-str val)}))))
     (catch :default e
-      {:ok false :error (.-message e)})))
+      {:ok false :error (.-message e)})
+    (finally
+      (song-transport/reset-pending!))))
 
 (defn init!
   "Wire app-level callback fns into this module.
@@ -66,7 +73,13 @@
                :set-playing! set-playing!-fn
                :set-output!  set-output!-fn})
   ;; Wire the silent eval function for the AI agent eval_preview tool.
-  (reset! ai-tools/eval-preview-fn evaluate-in-context!))
+  (reset! ai-tools/eval-preview-fn evaluate-in-context!)
+  ;; A finished (song … :end :stop) stops itself — reflect that in the UI.
+  (swap! audio/scheduler-state assoc :on-song-end
+         (fn []
+           (editor/clear-highlights!)
+           (set-playing!-fn false)
+           (set-output!-fn "song finished" :idle))))
 
 ;;; Diagnostics
 
@@ -116,6 +129,26 @@
                         r           (sound-check/keyword-ranges code (:name entry))]
                     (assoc r :message msg))))))))))))
 
+;;; Continuous signals without structure
+
+(defn- report-structureless-signals!
+  "Warn about tracks (just evaluated) whose pattern yields continuous signal
+   events: those have no onsets, so nothing sounds. Runs once per evaluation.
+   Appends to the current output line, like the unknown-sound warning."
+  [track-names last-output set-output!]
+  (let [tracks (:tracks @audio/scheduler-state)
+        bad    (filter (fn [tn]
+                         (when-let [pat (get tracks tn)]
+                           (try (sound-check/has-analog-events? pat)
+                                (catch :default _ false))))
+                       track-names)
+        msgs   (map sound-check/structure-warning-message bad)]
+    (when (seq msgs)
+      (doseq [m msgs] (js/console.warn "[REPuLse]" m))
+      (set-output! (str (when @last-output (str @last-output " — "))
+                        "Warning: " (cstr/join "; " msgs))
+                   :warning))))
+
 ;;; Evaluation
 
 (defn evaluate! [code]
@@ -133,6 +166,8 @@
     (fx/reset-global-effects!)
     ;; Clear per-evaluation duplicate-track detector
     (reset! builtins/seen-tracks #{})
+    ;; Clear tracks/song/play-from/export collected by the previous evaluation
+    (song-transport/reset-pending!)
     ;; Keep stop fn up to date (in case env was reset)
     (let [env    (assoc @builtins/env-atom "stop" (make-stop-fn))
           result (lisp/eval-string code env)]
@@ -150,7 +185,23 @@
           (when (some? val)
             (when-let [view @editor/editor-view]
               (set-diagnostics! view nil nil nil)))
+          ;; SONG1: start the tracks collected during evaluation (under the
+          ;; buffer's song, if any), then apply (play-from …) / (export :song).
+          ;; Runs before the cond so a buffer ending in a bare pattern still
+          ;; replaces all tracks with :_ exactly as before.
+          (song-transport/activate-buffer! {:on-beat      on-beat
+                                            :on-event     editor/highlight-range!
+                                            :set-playing! set-playing!})
           (cond
+            ;; Song value — tracks were activated under it above
+            (song/song? val)
+            (set-output! (str "song: " (count (:sections val)) " sections · "
+                              (song/song-length val) " bars · "
+                              (.toFixed (song/song-duration-secs val (audio/get-bpm)) 1)
+                              " s at " (Math/round (audio/get-bpm)) " BPM · :end :"
+                              (name (:end val)))
+                         :success)
+
             ;; Pattern — start playing (legacy single-pattern mode).
             ;; Uses play-track! on the anonymous :_ track so that :track-fx
             ;; metadata (from per-track fx calls in ->>) is applied correctly.
@@ -165,8 +216,8 @@
               (set-playing! true)
               (set-output! "playing pattern — Alt+Enter to re-evaluate, (stop) to stop" :success))
 
-            ;; Plain event-value map: (saw :c4), (sound :tabla 0), (noise), etc.
-            ;; Auto-wrap in pure so users don't need to write (pure (saw :c4)).
+            ;; Plain event-value map: (sound :tabla 0), (noise), (fm :c4), etc.
+            ;; Auto-wrap in pure so users don't need to write (pure (fm :c4)).
             (and (map? val) (or (:note val) (:bank val) (:synth val)))
             (do
               (audio/stop!)
@@ -210,6 +261,10 @@
                   (when (contains? tracks tk)
                     (audio/mute-track! tk)))
                 (reset! pending-mutes #{}))))
+
+          ;; ── Continuous signals with no rhythm ─────────────────────────────
+          (report-structureless-signals! (sort (conj @builtins/seen-tracks :_))
+                                         last-output set-output!)
 
           ;; ── Unknown sound names ───────────────────────────────────────────
           ;; Tracks defined by this evaluation, plus the anonymous :_ track.
