@@ -348,6 +348,41 @@ program — muting a track, tapping the tempo, loading samples:
 The outer parentheses are optional: `mute! :kick` works the same as `(mute! :kick)`. The command
 bar has the same highlighting and autocompletion as the editor, but its content is not saved.
 
+### Outline & go-to-definition
+
+A column to the left of the editor lists every top-level `def`, `defn`, `defsynth` (shown as
+`synth`), `track` and the `song` with its `section`s, each with its line number. The list is
+read from the editor's syntax tree, so it keeps working while the code is invalid: forms that
+still parse stay listed and a `~ partial` tag appears in the header. It updates about 150 ms
+after you stop typing.
+
+```lisp
+(def kick (seq :bd :_ :bd :_))      ; def   kick        L1
+(track :drums (stack kick))         ; track :drums      L2
+(song                               ; ▾ song  8 bars    L3
+  (section :verse 8 [:drums]))      ;     :verse 8b •   L4
+```
+
+- **Click a row** to move the cursor to the form's `(`, scroll it into view and flash it.
+- **Cursor inside** a form highlights its row (a section wins over its song).
+- **Playing section** — while a song plays, the sounding section is marked `▶` in cyan with a
+  thin progress line. Tracks show `■` (muted, dimmed) or a cyan `•` when audible in the playing
+  section, and are dimmed when they rest in it. `▾` / `▸` folds the song's sections.
+- **Collapse** with `‹` (or `Cmd/Ctrl-Shift-O`) to a 28 px rail that shows one bar per section;
+  click the rail or press the shortcut to restore. The choice is remembered across reloads, and
+  the outline starts collapsed on narrow windows.
+
+| Action | Shortcut |
+|---|---|
+| Go to definition of the name under the cursor | `Cmd/Ctrl-click` on the name, or `F12` |
+| Jump back (up to 50 jumps) | `Shift+F12` |
+| Show / hide the outline | `Cmd/Ctrl-Shift-O` |
+
+Names resolve to the **last** matching form: a symbol finds `def` / `defn` / `defsynth`, a
+keyword such as `:drums` (also inside a `section` vector) finds `(track :drums …)`. Names that
+are not defined in the buffer (like `:bd` or built-ins) do nothing. The `<repulse-editor>` embed
+has no outline and no go-to-definition.
+
 ### Context panel
 
 A sidebar to the right of the editor shows live session state:
