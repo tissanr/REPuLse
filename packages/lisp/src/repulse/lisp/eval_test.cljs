@@ -324,3 +324,45 @@
 (deftest keyword-as-function-via-def
   (testing "keyword lookup works on a def'd map"
     (is (= 99 (eval-seq "(def m {:x 99}) (:x m)")))))
+
+;;; ── Phase SONG4: eval-string {:offset n} ──────────────────────────────
+
+(deftest eval-string-offset-shifts-event-sources
+  (testing "L1: {:offset 1000} shifts event :source ranges"
+    (let [env (make-test-env)
+          evs (core/query (:result (lisp/eval-string "(seq :bd :sd)" env {:offset 1000})) one-cycle)]
+      (is (= [{:from 1005 :to 1008} {:from 1009 :to 1012}] (mapv :source evs)))))
+  (testing "L1: 2-arity result is unchanged"
+    (let [env (make-test-env)
+          evs (core/query (:result (lisp/eval-string "(seq :bd :sd)" env)) one-cycle)]
+      (is (= [{:from 5 :to 8} {:from 9 :to 12}] (mapv :source evs)))))
+  (testing "mini-notation positions are shifted too"
+    (let [env (make-test-env)
+          evs (core/query (:result (lisp/eval-string "(~ \"bd sd\")" env {:offset 1000})) one-cycle)]
+      (is (= [{:from 1004 :to 1006} {:from 1007 :to 1009}] (mapv :source evs))))))
+
+(deftest eval-string-offset-shifts-eval-error
+  (testing "L2: undefined symbol error position is shifted"
+    (let [r (lisp/eval-string "(qqqqqqqq 1)" (make-test-env) {:offset 1000})]
+      (is (lisp/eval-error? r))
+      (is (= "Undefined symbol: qqqqqqqq" (:message r)))
+      (is (= {:from 1001 :to 1009} (:source r))))))
+
+(deftest eval-string-offset-shifts-read-error
+  (testing "L3: reader error position is shifted"
+    (let [r (lisp/eval-string "(seq \"ab" (make-test-env) {:offset 1000})]
+      (is (lisp/eval-error? r))
+      (is (= "Unterminated string — missing closing \"" (:message r)))
+      (is (= {:from 1005 :to 1006} (:source r))))))
+
+(deftest shift-sources-preserves-collection-types
+  (let [[form] (reader/read-all "(def m {:a [1 (x)]})" 10)]
+    (is (seq? form))
+    (is (= {:from 10 :to 30} (:source (meta form))))
+    (let [m (nth form 2)]
+      (is (map? m))
+      (is (= {:from 17 :to 29} (:source (meta m))))
+      (let [[k v] (first m)]
+        (is (= {:from 18 :to 20} (:source k)))
+        (is (vector? v))
+        (is (seq? (second v)))))))
