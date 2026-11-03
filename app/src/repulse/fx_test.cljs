@@ -7,7 +7,8 @@
             [repulse.lisp.eval :as leval]
             [repulse.midi :as midi]
             [repulse.theory :as theory]
-            [repulse.plugins :as plugins]))
+            [repulse.plugins :as plugins]
+            [repulse.song-transport :as st]))
 
 (defn- node-stub []
   #js {:connect (fn [_] nil)
@@ -146,3 +147,100 @@
   (testing "note keywords from scale/chord/voicing convert to the right MIDI numbers (MIDI out / export)"
     (is (= 63 (midi/hz->midi (theory/note->hz :ds4))))
     (is (= [60 63 67 70] (mapv #(midi/hz->midi (theory/note->hz %)) [:c4 :ds4 :g4 :as4])))))
+
+;;; ── master form (Phase WS2) ──────────────────────────────────────────
+
+(defn- master-fixture
+  "Run f with a two-effect stub chain; f receives [log eval!]. eval! resets state
+   then evaluates the source, returning the eval result."
+  [f]
+  (let [log   (atom [])
+        mk    (fn [nm] #js {:setParam   (fn [p v] (swap! log conj [nm p v]))
+                            :resetParams (fn [])})
+        p-rev (mk "reverb")
+        p-del (mk "delay")
+        env   (assoc (merge (leval/make-env (fn [] nil) (fn [_] nil))
+                            (b-fx/make-builtins nil))
+                     :*master-fn* b-fx/run-master!)
+        eval! (fn [src]
+                (reset! fx/chain [{:name "reverb" :plugin p-rev :active? false :bypassed? false}
+                                  {:name "delay"  :plugin p-del :active? false :bypassed? false}])
+                (fx/reset-global-effects!)
+                (b-fx/reset-master-run!)
+                (reset! log [])
+                (let [r (lisp/eval-string src env)]
+                  {:result r :chain @fx/chain :log @log}))]
+    (f log eval! p-rev p-del)))
+
+(deftest master-equals-top-level-fx
+  (master-fixture
+   (fn [_ eval! p-rev p-del]
+     (testing "F1"
+       (let [a (eval! "(master (fx :reverb 0.3))")
+             b (eval! "(fx :reverb 0.3)")]
+         (is (= (:chain a) (:chain b)))
+         (is (= [{:name "reverb" :plugin p-rev :active? true :bypassed? false}
+                 {:name "delay" :plugin p-del :active? false :bypassed? false}]
+                (:chain a)))
+         (is (= [["reverb" "value" 0.3]] (:log a)))
+         (is (= (:log a) (:log b)))))
+     (testing "F2"
+       (let [a (eval! "(master (fx :delay :time 0.375 :feedback 0.4) (fx :reverb 0.3))")
+             b (eval! "(fx :delay :time 0.375 :feedback 0.4)\n(fx :reverb 0.3)")
+             expected [["delay" "time" 0.375] ["delay" "feedback" 0.4] ["reverb" "value" 0.3]]]
+         (is (= (:chain a) (:chain b)))
+         (is (every? :active? (:chain a)))
+         (is (= expected (:log a)))
+         (is (= expected (:log b))))))))
+
+(deftest master-result-string
+  (master-fixture
+   (fn [_ eval! _ _]
+     (let [a (eval! "(master (fx :reverb 0.3))")]
+       (is (= {:result "=> master: 1 fx"} (:result a)))
+       (is (true? (b-fx/master-result? "=> master: 1 fx")))))))
+
+(deftest master-second-block-is-error
+  (master-fixture
+   (fn [_ eval! _ _]
+     (testing "F4: same buffer"
+       (let [a (eval! "(master (fx :reverb 0.3))\n(master (fx :delay 0.25))")]
+         (is (lisp/eval-error? (:result a)))
+         (is (= "Only one (master …) per buffer — move these (fx …) forms into the first (master …)"
+                (:message (:result a))))
+         (is (= {:from 26 :to 51} (:source (:result a))))
+         (is (= [["reverb" "value" 0.3]] (:log a)))))
+     (testing "F5: other project buffer"
+       (reset! st/buffer-of (fn [src] (if (< (:from src) 26) "fx" "main")))
+       (try
+         (let [a (eval! "(master (fx :reverb 0.3))\n(master (fx :delay 0.25))")]
+           (is (= "Only one (master …) per project — already defined in buffer :fx"
+                  (:message (:result a)))))
+         (finally (reset! st/buffer-of nil)))))))
+
+(deftest master-per-track-child-is-error
+  (master-fixture
+   (fn [_ eval! _ _]
+     (let [a (eval! "(master (fx :reverb 0.3 (seq :bd)))")]
+       (is (lisp/eval-error? (:result a)))
+       (is (= "master only takes global (fx …) forms — (fx :reverb 0.3 (seq :bd)) is a per-track effect; put it in the track's ->> chain"
+              (:message (:result a))))
+       (is (= {:from 8 :to 34} (:source (:result a))))))))
+
+(deftest master-loose-fx-hint
+  (master-fixture
+   (fn [_ eval! _ _]
+     (let [orig js/console.info
+           msgs (atom [])]
+       (set! js/console.info (fn [m] (swap! msgs conj m)))
+       (try
+         (reset! b-fx/hinted? false)
+         (eval! "(fx :delay 0.25)\n(master (fx :reverb 0.3))")
+         (is (= b-fx/LOOSE-FX-HINT (b-fx/loose-fx-hint!)))
+         (eval! "(fx :delay 0.25)\n(master (fx :reverb 0.3))")
+         (is (nil? (b-fx/loose-fx-hint!)))
+         (reset! b-fx/hinted? false)
+         (eval! "(master (fx :reverb 0.3))")
+         (is (nil? (b-fx/loose-fx-hint!)))
+         (is (= [b-fx/LOOSE-FX-HINT] @msgs))
+         (finally (set! js/console.info orig)))))))

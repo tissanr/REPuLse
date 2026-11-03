@@ -48,6 +48,16 @@
 
 (declare eval-form)
 
+(defn- form-str
+  "Short printed form for error messages: deep-unwrapped pr-str, max 40 chars."
+  [form]
+  (let [s (pr-str (deep-unwrap form))]
+    (if (> (count s) 40) (str (subs s 0 39) "…") s)))
+
+(defn- fx-form? [child]
+  (and (seq? child) (symbol? (first child)) (= "fx" (str (first child)))))
+
+
 (defn make-closure [params body env]
   (fn [& args]
     (let [bound (zipmap (map str params) args)
@@ -268,6 +278,29 @@
           (when-let [macros (:*macros* env)]
             (swap! macros assoc (str name-sym) macro-fn))
           nil)
+
+        "master"
+        ;; (master (fx …) …) — Phase WS2. Only (fx …) children; they run in order.
+        ;; The app hook :*master-fn* (repulse.env.builtins.fx/run-master!) enforces one
+        ;; master per evaluation and returns the result string; without it → nil.
+        (let [msrc (source-of form)]
+          (doseq [child tail]
+            (when-not (fx-form? child)
+              (throw (ex-info (str "master only takes (fx …) forms — got " (form-str child))
+                              (merge {:type :eval-error}
+                                     (select-keys (or (source-of child) msrc) [:from :to]))))))
+          (let [run (fn []
+                      (doseq [child tail]
+                        (let [r (eval-form child env)]
+                          (when (core/pattern? (unwrap r))
+                            (throw (ex-info (str "master only takes global (fx …) forms — "
+                                                 (form-str child)
+                                                 " is a per-track effect; put it in the track's ->> chain")
+                                            (merge {:type :eval-error}
+                                                   (select-keys (source-of child) [:from :to]))))))))]
+            (if-let [mf (:*master-fn* env)]
+              (mf msrc (count tail) run)
+              (do (run) nil))))
 
         "defsynth"
         ;; (defsynth name [params] body...)

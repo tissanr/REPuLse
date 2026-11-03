@@ -221,3 +221,54 @@
                                       (recur (inc j) (dec depth)))
                     :else           (recur (inc j) depth)))))
             (recur (inc i))))))))
+
+;; ─── Scoped fx edits (Phase WS2) ──────────────────────────────────────────────
+
+(defn fx-form-range
+  "When doc at offset `at` starts the form `(fx :<effect-name> …)` and it closes,
+   returns {:from at :to <index after its )>}. Otherwise nil (also for a nil,
+   negative or out-of-range `at`)."
+  [doc at effect-name]
+  (when (and (number? at) (>= at 0) (< at (count doc)))
+    (let [toks (tokenize doc at (count doc))
+          [t0 t1 t2] toks]
+      (when (and t0 t1 t2
+                 (= at (:from t0))
+                 (= :lp (:t t0))
+                 (= "fx" (atom-text doc t1))
+                 (= (str ":" effect-name) (atom-text doc t2)))
+        (when-let [close (find-fx-form-close doc at (count doc) effect-name)]
+          {:from at :to (inc close)})))))
+
+(defn- fx-scope
+  "→ [start end] to search, or nil when `at` is given but does not match."
+  [doc effect-name at]
+  (if (nil? at)
+    [0 (count doc)]
+    (when-let [{:keys [from to]} (fx-form-range doc at effect-name)]
+      [from to])))
+
+(defn fx-param-edit
+  "Edit to set a numeric fx parameter: {:from :to :insert} or nil.
+   Order: named `:param NUMBER` → replace; else when `primary?` the positional
+   number → replace; else insert \" :param v\" before the form's `)`.
+   With `at` the search is limited to the `(fx …)` form starting there (nil when
+   stale); without it, the whole doc (first matching form)."
+  [doc effect-name param-name fmtd primary? at]
+  (when-let [[s e] (fx-scope doc effect-name at)]
+    (if-let [{:keys [from to]} (find-fx-named-param-num doc s e effect-name param-name)]
+      {:from from :to to :insert fmtd}
+      (if-let [{:keys [from to]} (when primary? (find-fx-pos-param-num doc s e effect-name))]
+        {:from from :to to :insert fmtd}
+        (when-let [close (find-fx-form-close doc s e effect-name)]
+          {:from close :to close :insert (str " :" param-name " " fmtd)})))))
+
+(defn fx-keyword-param-edit
+  "Like fx-param-edit for `:param :keyword` values (no positional case).
+   kw-text includes the leading colon."
+  [doc effect-name param-name kw-text at]
+  (when-let [[s e] (fx-scope doc effect-name at)]
+    (if-let [{:keys [from to]} (find-fx-named-param-keyword doc s e effect-name param-name)]
+      {:from from :to to :insert kw-text}
+      (when-let [close (find-fx-form-close doc s e effect-name)]
+        {:from close :to close :insert (str " :" param-name " " kw-text)}))))

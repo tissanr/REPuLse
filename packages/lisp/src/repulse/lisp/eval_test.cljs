@@ -366,3 +366,35 @@
         (is (= {:from 18 :to 20} (:source k)))
         (is (vector? v))
         (is (seq? (second v)))))))
+
+;;; ── master special form (Phase WS2, no app hook) ─────────────────────
+
+(defn- master-env [calls]
+  (assoc (make-test-env)
+         "fx" (fn [& args] (swap! calls conj (mapv leval/deep-unwrap args)) nil)))
+
+(deftest master-form-runs-fx-children-in-order
+  (testing "E1: children run in source order, result nil"
+    (let [calls (atom [])
+          r (lisp/eval-string "(master (fx :reverb 0.3) (fx :delay 0.25))" (master-env calls))]
+      (is (= {:result nil} r))
+      (is (= [[:reverb 0.3] [:delay 0.25]] @calls)))))
+
+(deftest master-form-rejects-non-fx-child
+  (testing "E2: non-fx child is an eval error with the child's range"
+    (let [calls (atom [])
+          r (lisp/eval-string "(master (seq :bd))" (master-env calls))]
+      (is (lisp/eval-error? r))
+      (is (= "master only takes (fx …) forms — got (seq :bd)" (:message r)))
+      (is (= {:from 8 :to 17} (:source r)))
+      (is (= [] @calls))))
+  (testing "E3: children are checked before any runs"
+    (let [calls (atom [])
+          r (lisp/eval-string "(master (fx :reverb 0.3) :reverb)" (master-env calls))]
+      (is (lisp/eval-error? r))
+      (is (= "master only takes (fx …) forms — got :reverb" (:message r)))
+      (is (= [] @calls)))))
+
+(deftest master-form-empty
+  (testing "E4: (master) is allowed"
+    (is (= {:result nil} (lisp/eval-string "(master)" (master-env (atom [])))))))

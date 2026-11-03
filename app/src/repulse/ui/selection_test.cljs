@@ -59,3 +59,35 @@
   (is (= "def" (:kind (sel/header ["def:kick"] idx))))
   (is (= {:kind "fx" :title ":reverb" :from 162} (sel/header ["fx:0"] idx)))
   (is (nil? (sel/header [] idx))))
+
+;;; ── Phase WS2: master group ──────────────────────────────────────────
+
+(def MS
+  (str/join "\n"
+    ["(track :drums (->> (seq :bd :_ :bd :_) (fx :reverb 0.5)))"
+     "(master"
+     "  (fx :delay :time 0.375 :feedback 0.4)"
+     "  (fx :reverb 0.3))"]))
+
+(def MS-DUP
+  "(master (seq :bd) (fx :reverb 0.3))\n(master (fx :delay 0.25))")
+
+(defn- midx [text]
+  (sel/index-entries (:entries (outline/extract (.parse parser text) text))))
+
+(deftest master-selection-test
+  (let [mi (midx MS)]
+    (testing "S1"
+      (is (= ["master" "master:0" "master:1" "track::drums"] (sort (keys mi)))))
+    (testing "S2"
+      (is (= [{:from 58 :to 125}] (sel/ranges ["master"] mi)))
+      (is (= [{:from 108 :to 124}] (sel/ranges ["master:1"] mi))))
+    (testing "S3"
+      (is (= {:kind "master" :title "fx" :from 58} (sel/header ["master"] mi))))
+    (testing "S4"
+      (is (= {:kind "master fx" :title ":reverb" :from 108} (sel/header ["master:1"] mi)))))
+  (testing "S5: only the first master is indexed"
+    (let [ks (set (keys (midx MS-DUP)))]
+      (is (contains? ks "master"))
+      (is (contains? ks "master:0"))
+      (is (not (contains? ks "master:1"))))))

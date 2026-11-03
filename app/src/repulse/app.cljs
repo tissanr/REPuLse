@@ -310,7 +310,11 @@
                  :muted      (fn [] (clj->js (sort (map name (:muted @audio/scheduler-state)))))
                  :selection  (fn [] (clj->js @outline-panel/selection))
                  :trackParam (fn [track param]
-                               (inspector/track-param (keyword track) (keyword param)))})
+                               (inspector/track-param (keyword track) (keyword param)))
+                 :fxParam    (fn [effect param]
+                               (when-let [e (some #(when (and (:active? %) (= effect (:name %))) %)
+                                                  @fx/chain)]
+                                 (get (js->clj (.getParams ^js (:plugin e))) param)))})
       (.focus view))
 
     ;; Register the project getter for session snapshots

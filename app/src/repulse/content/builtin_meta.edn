@@ -1081,6 +1081,13 @@
                          "(->> (seq :bd :_ :bd :_) (fx :filter 1000))"]
               :see-also ["track" "distort" "amp-sim" "cab"]}
 
+ :master     {:category "effect"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(master (fx :reverb 0.3))"
+                         "(master (fx :delay :time 0.375 :feedback 0.4) (fx :reverb 0.3))"]
+              :see-also ["fx" "track" "song"]}
+
  :distort    {:category "effect"
               :returns "nil"
               :side-effects ["audio"]
