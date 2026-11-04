@@ -180,6 +180,7 @@ export default {
     if (name === "di") {
       this._conv.buffer = null;
       this._connectWetPath();
+      this._irPending = Promise.resolve();
       return;
     }
 
@@ -195,19 +196,27 @@ export default {
 
     if (this._irBuffers[name]) {
       this._conv.buffer = this._irBuffers[name];
+      this._irPending = Promise.resolve();
       return;
     }
 
     const serial = ++this._loadSerial;
-    generateIR(this._ctx, spec).then((buf) => {
+    this._irPending = generateIR(this._ctx, spec).then((buf) => {
       if (this._destroyed) return;
       this._irBuffers[name] = buf;
       if (this._ir === name && this._loadSerial === serial && this._conv) {
         this._conv.buffer = buf;
       }
-    }).catch((err) => {
+    });
+    this._irPending.catch((err) => {
       console.warn(`[cab] failed to generate :${name} IR`, err);
     });
+  },
+
+  // Optional protocol method (EXP1): resolves once the current IR is loaded
+  // into the convolver, rejects when IR generation failed.
+  ready() {
+    return this._irPending ?? Promise.resolve();
   },
 
   setParam(name, value) {
@@ -257,6 +266,7 @@ export default {
     clone._out = null;
     clone._irBuffers = {};
     clone._loadSerial = 0;
+    clone._irPending = null;
     clone._destroyed = false;
     clone.resetParams();
     return clone;
