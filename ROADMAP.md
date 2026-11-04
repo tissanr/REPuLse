@@ -58,7 +58,7 @@ without a human:
 | 16 | LIVE2 | Latency compensation, nudge & per-track outputs | 🧑 | outline | sonnet |
 | **M4** | | **Sketchpad** | | | |
 | 17 | EXP1 | Export parity: offline render with WASM voices & FX | 🤖 | outline | opus |
-| 18 | SK1 | Stem export & full-song MIDI export | 🤖 | outline | sonnet |
+| 18 | SK1 | Stem export & full-song MIDI export | 🤖 | full | sonnet |
 | 19 | SK2 | Session snapshots & eval history | 🤖 | outline | sonnet |
 | 20 | SK3 | MIDI capture 1: click, fixed grid, velocity → code | 🤖👂 | outline | sonnet |
 | 21 | SK4 | MIDI capture 2: always-on capture | 🤖👂 | outline | sonnet |
@@ -2379,7 +2379,7 @@ See full spec: [PROMPTS/PHASE-EXP1.md](PROMPTS/PHASE-EXP1.md)
 
 ---
 
-## Phase SK1 — Stem Export & Full-Song MIDI Export 📋 *planned*
+## Phase SK1 — Stem Export & Full-Song MIDI Export ✅ *delivered*
 
 > **Milestone 4** · **Automation:** 🤖 auto
 
@@ -2389,6 +2389,28 @@ Hand a song to a DAW: one WAV per track and one multi-track MIDI file.
 - Fix `midi-export` (events from every cycle are currently stacked on cycle 0)
 - Stems for the full song length with identical frame counts, rendered through the EXP1 offline path (WASM voices + FX)
 - Format-1 MIDI with one track per REPuLse track, velocity, tempo and section markers; drums on channel 10
+
+**Delivered:**
+- `(export :stems [n | :tail secs])` renders every track of the song (or `n` cycles of every track)
+  to its own WAV of identical length through the EXP1 offline path and downloads
+  `repulse-stems.zip` (hand-written STORE-only zip writer `repulse.zip`, fixed timestamp,
+  4 GB guard; `repulse.download/download-parts!` replaces the inline `<a>` code). Stems carry the
+  track's own FX chain but not the master chain (`offline-render/render!` job keys `:stem` and
+  `:master? false`); event-driven plugins (sidechain) still see every track's events. No
+  real-time fallback: `Error: stems need the offline renderer — <reason>`.
+- `(export :track n)` takes a cycle count; other argument shapes are a usage error.
+- `(midi-export :song)` writes a format-1 MIDI file with one track per REPuLse track, a conductor
+  track (tempo, 4/4, section markers) and velocity from `amp`; drums map to the GM drum notes on
+  channel 10 (`:drum-map` extends/overrides; unmapped names are reported). `(midi-export :track n)`
+  uses the same encoder (`repulse.midi/midi-file`, `repulse.midi-export`).
+- Fixed `midi-export`: absolute event times (every cycle used to land on cycle 0), overlapping
+  notes/chords (negative delta times corrupted the file), exact rational-to-tick rounding, tempo
+  rounding, tracks defined in the same buffer.
+- Docs: USAGE (stems, MIDI export, GM table, DAW import walkthrough), hover/completions/AI docs.
+- Tests: `zip-test`, `midi-export-test` (song S byte vectors), export/stems/midi-export grammar in
+  `song-transport-test`, `offline-render-test` additions; `e2e/stems-midi.spec.ts` (identical
+  length, isolation by section, Σ stems = dry mix within 2.5e-4, per-track FX in / master FX out,
+  sidechain ducking, no real-time fallback, `(export :track n)`, MIDI file bytes).
 
 See full spec: [PROMPTS/PHASE-SK1.md](PROMPTS/PHASE-SK1.md)
 

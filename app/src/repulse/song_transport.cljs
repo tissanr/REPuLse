@@ -13,6 +13,9 @@
             [repulse.offline-render :as offline-render]
             [repulse.song :as song]
             [repulse.wav :as wav]
+            [repulse.zip :as zip]
+            [repulse.download :as download]
+            [clojure.string :as str]
             [repulse.lisp.eval :as leval]))
 
 ;;; Per-evaluation pending state
@@ -22,6 +25,7 @@
 (defonce pending-play-from (atom nil))  ; integer bar
 ;; {:kind :cycles :n n :track kw-or-nil :set-output! f}
 ;; {:kind :song :tail secs :realtime? bool :set-output! f}
+;; {:kind :stems :n n-or-nil :tail secs :set-output! f}   (SK1)
 (defonce pending-export    (atom nil))
 (defonce pending-track-srcs (atom {}))  ; {kw src} — first definition's source
 
@@ -51,6 +55,14 @@
   "The song of this evaluation, else the last activated one."
   []
   (or @pending-song (:song @song-buffer)))
+
+(defn current-song-buffer
+  "SK1: {:song s :tracks [[kw pat] …]} of this evaluation's song, else the last
+   activated song buffer, else nil."
+  []
+  (if @pending-song
+    {:song @pending-song :tracks @pending-tracks}
+    @song-buffer))
 
 (defn- src-data [src]
   (when (and src (:from src)) {:from (:from src) :to (:to src)}))
@@ -190,6 +202,26 @@
       (select-keys all [track])
       all)))
 
+(defn stem-tracks
+  "K2. The tracks of song s that are listed in at least one section, in song
+   track order — a track used in no section would be pure silence."
+  [s]
+  (let [used (set (mapcat :tracks (:sections s)))]
+    (filterv used (:tracks s))))
+
+(defn stem-filenames
+  "K1. [kw …] → [\"repulse-<track>.wav\" …]; characters outside [A-Za-z0-9._-]
+   become `_`, names that collide get -2, -3, … appended."
+  [track-kws]
+  (:names
+   (reduce (fn [{:keys [seen names]} kw]
+             (let [base (str/replace (name kw) #"[^A-Za-z0-9._-]" "_")
+                   k    (inc (get seen base 0))]
+               {:seen  (assoc seen base k)
+                :names (conj names (str "repulse-" base (when (> k 1) (str "-" k)) ".wav"))}))
+           {:seen {} :names []}
+           track-kws)))
+
 (defn- download! [{:keys [left right sample-rate]} filename]
   (wav/download-wav! (wav/encode-wav-16 left right sample-rate) filename))
 
@@ -217,16 +249,87 @@
          :done     (str "exported song — " (song-summary s tail))
          :capture  #(capture-song! buf {:tail tail})}))))
 
+(defn- stems-job
+  "→ {:job offline-render base job :kws [kw …] :done str} for a pending :stems
+   export. A song without a cycle count renders the song (K3); otherwise n
+   cycles (default 4) of every active track, sorted by name."
+  [{:keys [n tail]}]
+  (let [cd  (:cycle-dur @audio/scheduler-state)
+        buf @song-buffer
+        s   (:song buf)]
+    (if (and s (nil? n))
+      (let [kws (stem-tracks s)]
+        {:job  {:kind :song :tracks (into {} (:tracks buf)) :song s :tail tail :cycle-dur cd}
+         :kws  kws
+         :done (str "exported " (count kws) " stems — " (song-summary s tail))})
+      (let [tracks (export-tracks nil)
+            kws    (vec (sort (keys tracks)))
+            n'     (or n 4)]
+        {:job  {:kind :cycles :tracks tracks :n n' :cycle-dur cd}
+         :kws  kws
+         :done (str "exported " (count kws) " stems — " n' " cycles")}))))
+
 (defn- report-failure! [out e]
   (cond
     (:cancelled (ex-data e)) (out "export cancelled" :idle)
     :else (do (js/console.error "[REPuLse] export failed:" e)
               (out (str "Error: export failed — " (ex-message e)) :error))))
 
-(defn start-export!
-  "Run a pending export after the buffer has evaluated (E5): render offline
-   (or capture in real time for (export :song :realtime) and as the fallback)
-   and download the WAV."
+(def stems-too-large-error
+  "Error: stems too large for one zip (over 4 GB) — export fewer bars or tracks")
+
+(defn- render-stems!
+  "Render the stems one after the other (K7) → Promise<[ArrayBuffer …]> (WAVs)."
+  [out job kws]
+  (let [total (count kws)]
+    (reduce
+     (fn [p [i kw]]
+       (.then p
+              (fn [wavs]
+                (out (str "rendering stem " (inc i) "/" total " — :" (name kw) "…") :idle)
+                (-> (offline-render/render! (assoc job :stem kw :master? false))
+                    (.then (fn [{:keys [left right sample-rate]}]
+                             (conj wavs (wav/encode-wav-16 left right sample-rate))))))))
+     (js/Promise.resolve [])
+     (map-indexed vector kws))))
+
+(defn- start-stems!
+  "(export :stems …) — one WAV per track in repulse-stems.zip. Offline only (K4)."
+  [{:keys [set-output!] :as pending}]
+  (let [out (or set-output! (fn [_ _]))
+        {:keys [job kws done]} (stems-job pending)]
+    (cond
+      (empty? kws)
+      (out "Error: no active tracks to export" :error)
+
+      @export-running?
+      (out "Error: an export is already running — (stop) cancels it" :error)
+
+      :else
+      (let [sr     (.-sampleRate ^js (audio/get-ctx))
+            size   (* 4 (offline-render/job-frames job sr))
+            names  (stem-filenames kws)]
+        (if (> (zip/zip-size (map (fn [nm] {:name nm :size (+ 44 size)}) names))
+               zip/max-zip-bytes)
+          (out stems-too-large-error :error)
+          (do
+            (reset! export-running? true)
+            (-> (render-stems! out job kws)
+                (.then (fn [wavs]
+                         (download/download-parts!
+                          (zip/zip-parts (map (fn [nm w] {:name nm :data (js/Uint8Array. w)})
+                                              names wavs))
+                          "application/zip" "repulse-stems.zip")
+                         (out (str done " (offline)") :success)))
+                (.catch (fn [e]
+                          (if (:fallback (ex-data e))
+                            (out (str "Error: stems need the offline renderer — " (ex-message e))
+                                 :error)
+                            (report-failure! out e))))
+                (.finally (fn [] (reset! export-running? false))))))))))
+
+(defn- start-wav-export!
+  "Offline render (or real-time capture) of one WAV."
   [{:keys [kind realtime? set-output!] :as pending}]
   (let [out (or set-output! (fn [_ _]))
         {:keys [job filename done capture]} (export-job pending)
@@ -263,6 +366,15 @@
                               (throw e))))))
             (.catch (fn [e] (report-failure! out e)))
             (.finally (fn [] (reset! export-running? false))))))))
+
+(defn start-export!
+  "Run a pending export after the buffer has evaluated (E5): render offline
+   (or capture in real time for (export :song :realtime) and as the fallback)
+   and download the WAV. (export :stems …) renders one WAV per track into a zip."
+  [{:keys [kind] :as pending}]
+  (if (= :stems kind)
+    (start-stems! pending)
+    (start-wav-export! pending)))
 
 (defn activate-buffer!
   "Called after every successful evaluation. Starts the collected tracks (under

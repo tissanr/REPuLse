@@ -55,12 +55,17 @@
 
 (defn used-effects
   "Names of the effects an export uses: active global chain entries plus every
-   effect named in the exported tracks' :track-fx metadata."
-  [entries tracks]
-  (into (set (keep #(when (:active? %) (:name %)) entries))
-        (for [[_ pat] tracks
-              {:keys [name]} (:track-fx pat)]
-          name)))
+   effect named in the exported tracks' :track-fx metadata.
+   opts {:master? false} (SK1 stems, K5) leaves the global chain out: only the
+   track chains count."
+  ([entries tracks] (used-effects entries tracks {}))
+  ([entries tracks {:keys [master?] :or {master? true}}]
+   (into (if master?
+           (set (keep #(when (:active? %) (:name %)) entries))
+           #{})
+         (for [[_ pat] tracks
+               {:keys [name]} (:track-fx pat)]
+           name))))
 
 (defn fx-plan-reason
   "The fallback reason for a failed plan, or nil."
@@ -153,16 +158,22 @@
 
 (defn- build-graph!
   "Build master + global chain + per-track chains in offline.
+   master? false (SK1 stems, K5): unity master gain straight to the destination,
+   no global chain; the plan's entries are only used to look track-FX plugins up.
    → {:master node :instances [inst…] :track-dests {kw node}}."
-  [^js offline sr plan tracks]
+  [^js offline sr plan tracks master?]
   (let [master   (.createGain offline)
         _        (set! (.. master -gain -value)
-                       (if-let [^js mg @audio/master-gain] (.. mg -gain -value) 1.0))
+                       (if-let [^js mg (and master? @audio/master-gain)]
+                         (.. mg -gain -value)
+                         1.0))
         host     (offline-host offline sr master)
-        global   (vec (for [{:keys [name plugin] :as entry} (:build plan)]
-                        (let [inst (build-instance! name plugin offline host)]
-                          (replay-global-params! entry (:plugin inst))
-                          inst)))
+        global   (if master?
+                   (vec (for [{:keys [name plugin] :as entry} (:build plan)]
+                          (let [inst (build-instance! name plugin offline host)]
+                            (replay-global-params! entry (:plugin inst))
+                            inst)))
+                   [])
         _        (wire-chain! master global (.-destination offline))
         by-name  (into {} (map (juxt :name :plugin) (:build plan)))
         tracks'  (vec
@@ -225,12 +236,18 @@
 
 (defn render!
   "job — {:kind :cycles|:song, :tracks {kw pattern}, :song s (for :song), :n n,
-          :tail secs, :cycle-dur cd}
+          :tail secs, :cycle-dur cd,
+          :stem kw (SK1: play only this track, build only its FX chain),
+          :master? false (SK1: no global chain, unity master gain)}
    → Promise<{:left Float32Array :right Float32Array :sample-rate sr :frames n}>;
    rejects with (ex-info reason {:fallback true}) when the offline path can't run."
-  [{:keys [tracks cycle-dur] :as job}]
-  (let [entries @fx/chain
-        plan    (fx-plan entries (used-effects entries tracks))]
+  [{:keys [tracks cycle-dur stem] :as job}]
+  (let [master?      (not (false? (:master? job)))
+        ;; SK1 stems: only the stem track gets a chain; every track's events
+        ;; are still scheduled (K6)
+        plan-tracks  (if stem (select-keys tracks [stem]) tracks)
+        entries      @fx/chain
+        plan         (fx-plan entries (used-effects entries plan-tracks {:master? master?}))]
     (if-let [reason (precondition-failure plan)]
       (js/Promise.reject (fallback-error reason))
       (let [sr      (.-sampleRate ^js (audio/get-ctx))
@@ -240,7 +257,7 @@
         (if (nil? (.-audioWorklet offline))
           (js/Promise.reject (fallback-error "AudioWorklet unavailable offline"))
           (-> (js/Promise.resolve nil)
-              (.then (fn [_] (build-graph! offline sr plan tracks)))
+              (.then (fn [_] (build-graph! offline sr plan plan-tracks master?)))
               (.then
                (fn [{:keys [master instances track-dests]}]
                  (-> (audio/init-offline-worklet! offline master)
@@ -270,7 +287,8 @@
                                                     value (audio/resolve-tweens
                                                            (:value event) (get tween-st track)
                                                            t' cycle-dur)
-                                                    ret   (audio/play-event offline t' value track)]
+                                                    ret   (when (or (nil? stem) (= track stem))
+                                                            (audio/play-event offline t' value track))]
                                                 (fx/notify-plugins! plugins value t')
                                                 (when (thenable? ret)
                                                   (.catch ret (fn [_] nil))))))

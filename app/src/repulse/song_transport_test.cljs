@@ -8,7 +8,8 @@
             [repulse.audio :as audio]
             [repulse.ui.status-model :as status-model]
             [repulse.env.builtins.song :as b-song]
-            [repulse.env.builtins.export :as b-export]))
+            [repulse.env.builtins.export :as b-export]
+            [repulse.env.builtins.midi :as b-midi]))
 
 (defn- make-env []
   (merge (leval/make-env (fn [] nil) (fn [_] nil))
@@ -250,3 +251,156 @@
   (testing "short bars (640 BPM): the margin can skip more than one boundary"
     ;; now 4.40 s is in cycle 11; bars 12 (4.5 s) and 13 (4.875 s) are too close
     (is (= 14 (audio/first-song-bar 11 0.375 4.40 0.5)))))
+
+
+;;; Phase SK1 — (export :track n), (export :stems …), stems helpers, midi-export grammar
+
+(def ^:private usage-error
+  "Error: usage — (export [cycles]), (export :track [cycles]), (export :stems …) or (export :song …)")
+
+(deftest export-track-cycles-test
+  (let [saved @audio/scheduler-state]
+    (try
+      (swap! audio/scheduler-state assoc :tracks {} :capture nil :cycle-dur 2.0)
+      (reset! st/export-running? false)
+      (is (= {:result "rendering :a — 8 cycles offline…"
+              :pending {:kind :cycles :n 8 :track :a}}
+             (run-export "(track :a (seq :bd)) (export :a 8)")))
+      (is (= {:result "Error: export needs at least 1 cycle" :pending nil}
+             (run-export "(track :a (seq :bd)) (export :a 0)")))
+      (testing "the old silently-ignored shapes are usage errors now"
+        (is (= {:result usage-error :pending nil}
+               (run-export "(track :a (seq :bd)) (export 8 :a)")))
+        (is (= {:result usage-error :pending nil}
+               (run-export "(track :a (seq :bd)) (export :a 8 2)")))
+        (is (= {:result usage-error :pending nil}
+               (run-export "(track :a (seq :bd)) (export \"x\")"))))
+      (testing ":realtime is still checked first"
+        (is (= {:result "Error: :realtime only applies to (export :song)" :pending nil}
+               (run-export "(track :a (seq :bd)) (export :a 8 :realtime)"))))
+      (finally
+        (reset! st/export-running? false)
+        (reset! audio/scheduler-state saved)))))
+
+(def ^:private two-tracks-and-song
+  "(track :kick (seq :bd :sd :hh :oh))
+   (track :bass (amp 0.5 (seq :c2 :_ :g2 :_)))
+   (song (section :intro 2 [:kick]) (section :verse 4 :all) (section :outro 2 [:bass])) ")
+
+(deftest export-stems-grammar-test
+  (let [saved @audio/scheduler-state]
+    (try
+      (swap! audio/scheduler-state assoc :tracks {} :capture nil :cycle-dur 2.0)
+      (reset! st/export-running? false)
+      (testing "with a song: the song, default tail 2 s"
+        (is (= {:result "rendering stems — 2 tracks, 8 bars, 18.0 s offline…"
+                :pending {:kind :stems :n nil :tail 2}}
+               (run-export (str two-tracks-and-song "(export :stems)"))))
+        (is (= {:result "rendering stems — 2 tracks, 8 bars, 17.0 s offline…"
+                :pending {:kind :stems :n nil :tail 1}}
+               (run-export (str two-tracks-and-song "(export :stems :tail 1)")))))
+      (testing "(export :stems n) is cycles, with or without a song"
+        (is (= {:result "rendering stems — 2 tracks, 8 cycles offline…"
+                :pending {:kind :stems :n 8 :tail 2}}
+               (run-export (str two-tracks-and-song "(export :stems 8)"))))
+        (is (= {:result "rendering stems — 2 tracks, 8 cycles offline…"
+                :pending {:kind :stems :n 8 :tail 2}}
+               (run-export "(track :a (seq :bd)) (track :b (seq :sd)) (export :stems 8)"))))
+      (testing "without a song: 4 cycles of every track"
+        (is (= {:result "rendering stems — 2 tracks, 4 cycles offline…"
+                :pending {:kind :stems :n nil :tail 2}}
+               (run-export "(track :a (seq :bd)) (track :b (seq :sd)) (export :stems)"))))
+      (testing "errors"
+        (is (= {:result "Error: no song — evaluate a buffer that ends with (song …) first" :pending nil}
+               (run-export "(track :a (seq :bd)) (export :stems :tail 1)")))
+        (is (= {:result "Error: :realtime only applies to (export :song)" :pending nil}
+               (run-export (str two-tracks-and-song "(export :stems :realtime)"))))
+        (is (= {:result "Error: (export :stems) takes a cycle count or :tail secs" :pending nil}
+               (run-export (str two-tracks-and-song "(export :stems :foo)"))))
+        (is (= {:result "Error: :tail must be a number of seconds between 0 and 30" :pending nil}
+               (run-export (str two-tracks-and-song "(export :stems :tail 40)"))))
+        (is (= {:result "Error: export needs at least 1 cycle" :pending nil}
+               (run-export (str two-tracks-and-song "(export :stems 0)"))))
+        (is (= {:result "Error: no active tracks to export" :pending nil}
+               (run-export "(export :stems)")))
+        (reset! st/export-running? true)
+        (is (= {:result "Error: an export is already running — (stop) cancels it" :pending nil}
+               (run-export (str two-tracks-and-song "(export :stems)"))))
+        (reset! st/export-running? false))
+      (finally
+        (reset! st/export-running? false)
+        (reset! audio/scheduler-state saved)))))
+
+(deftest parse-stems-opts-test
+  (is (= {} (b-export/parse-stems-opts [])))
+  (is (= {:n 8} (b-export/parse-stems-opts [8])))
+  (is (= {:n 2} (b-export/parse-stems-opts [2.5])))
+  (is (= {:tail 0} (b-export/parse-stems-opts [:tail 0])))
+  (is (= {:tail 30} (b-export/parse-stems-opts [:tail 30])))
+  (doseq [opts [[:tail] [:tail 31] [:tail -1] [:tail "x"] [:tail 1 :x]]]
+    (is (= {:error "Error: :tail must be a number of seconds between 0 and 30"}
+           (b-export/parse-stems-opts opts)) (pr-str opts)))
+  (doseq [opts [[:foo] [1 2] ["x"]]]
+    (is (= {:error "Error: (export :stems) takes a cycle count or :tail secs"}
+           (b-export/parse-stems-opts opts)) (pr-str opts)))
+  (is (= {:error "Error: :realtime only applies to (export :song)"}
+         (b-export/parse-stems-opts [:realtime])))
+  (is (= {:error "Error: export needs at least 1 cycle"} (b-export/parse-stems-opts [0]))))
+
+(deftest stem-tracks-test
+  (let [r (run "(track :k (seq :bd)) (track :bass (seq :c2)) (track :unused (seq :sd))
+                (song (section :a 2 [:k]) (section :b 2 [:k :bass]))")
+        s (:result r)]
+    (is (not (lisp/eval-error? r)) (:message r))
+    (is (= [:k :bass] (st/stem-tracks s)))))
+
+(deftest stem-filenames-test
+  (is (= ["repulse-kick.wav" "repulse-bass.wav" "repulse-kick-2.wav" "repulse-a_b.wav"]
+         (st/stem-filenames [:kick :bass :drums/kick :a?b])))
+  (is (= ["repulse-x.wav" "repulse-x-2.wav" "repulse-x-3.wav"]
+         (st/stem-filenames [:x :x :x]))))
+
+(deftest current-song-buffer-test
+  (is (nil? (st/current-song-buffer)))
+  (let [s (:result (run (str two-tracks-and-song)))]
+    (is (= s (:song (st/current-song-buffer))) "this evaluation's song")
+    (is (= [:kick :bass] (mapv first (:tracks (st/current-song-buffer)))))))
+
+(defn- run-midi-args [code]
+  (st/reset-pending!)
+  (reset! st/song-buffer nil)
+  (let [env (merge (make-env) (b-midi/make-builtins {:set-output! (fn [_ _])}))
+        r   (lisp/eval-string code env)]
+    (if (lisp/eval-error? r) (:message r) (:result r))))
+
+(deftest midi-export-grammar-test
+  (let [saved @audio/scheduler-state]
+    (try
+      (swap! audio/scheduler-state assoc :tracks {} :cycle-dur 2.0)
+      (testing "parse-midi-args"
+        (is (= {:target :song :n nil :drum-map {}} (b-midi/parse-midi-args [:song])))
+        (is (= {:target :song :n nil :drum-map {:x 60}}
+               (b-midi/parse-midi-args [:song :drum-map {:x 60}])))
+        (is (= {:target :bass :n 4 :drum-map {}} (b-midi/parse-midi-args [:bass])))
+        (is (= {:target :bass :n 8 :drum-map {}} (b-midi/parse-midi-args [:bass 8])))
+        (is (= {:target :bass :n 4 :drum-map {:x 1}} (b-midi/parse-midi-args [:bass :drum-map {:x 1}])))
+        (is (= {:target :bass :n 8 :drum-map {:x 1}} (b-midi/parse-midi-args [:bass 8 :drum-map {:x 1}]))))
+      (testing "messages"
+        (let [usage "Error: usage — (midi-export :track [cycles]) or (midi-export :song), optionally followed by :drum-map {…}"]
+          (is (= usage (run-midi-args "(midi-export)")))
+          (is (= usage (run-midi-args "(midi-export 4)")))
+          (is (= usage (run-midi-args "(midi-export :song 4)")))
+          (is (= usage (run-midi-args "(midi-export :a 4 5)")))
+          (is (= usage (run-midi-args "(midi-export :a :drum-map)"))))
+        (is (= "Error: midi-export needs at least 1 cycle" (run-midi-args "(midi-export :a 0)")))
+        (is (= "Error: :drum-map must map keywords to MIDI notes 0–127, e.g. {:perc 60}"
+               (run-midi-args "(midi-export :a :drum-map {:x 200})")))
+        (is (= "Error: :drum-map must map keywords to MIDI notes 0–127, e.g. {:perc 60}"
+               (run-midi-args "(midi-export :a :drum-map 5)")))
+        (is (= "Error: :drum-map must map keywords to MIDI notes 0–127, e.g. {:perc 60}"
+               (run-midi-args "(midi-export :a :drum-map {:x 60.5})")))
+        (is (= "Error: no song — evaluate a buffer that ends with (song …) first"
+               (run-midi-args "(midi-export :song)")))
+        (is (= "Error: no track :zz" (run-midi-args "(midi-export :zz)"))))
+      (finally
+        (reset! audio/scheduler-state saved)))))

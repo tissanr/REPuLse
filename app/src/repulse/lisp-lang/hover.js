@@ -919,9 +919,9 @@ const DOCS = {
     example: "(midi-clock-out! true)",
   },
   "midi-export": {
-    signature: "(midi-export :track n)",
-    description: "Export n cycles of the named track as a Standard MIDI File (.mid) and trigger a browser download. The file contains correct pitch, timing, duration, and tempo. Works in all browsers — no MIDI hardware required.",
-    example: "(midi-export :bass 4)",
+    signature: "(midi-export :track [n]) / (midi-export :song) — optionally followed by :drum-map {:name note}",
+    description: "Download a Standard MIDI File (format 1, 480 ppqn). (midi-export :track n) writes n cycles of one track; (midi-export :song) writes every track of the song as its own MIDI track with tempo and section markers. Velocity comes from amp, drum keywords map to General MIDI drum notes on channel 10 (:drum-map overrides or adds names). Works in all browsers — no MIDI hardware required.",
+    example: "(midi-export :song)",
   },
 
   // --- Freesound ---
@@ -1042,9 +1042,9 @@ const DOCS = {
     example: "(use :drums :bass)",
   },
   "export": {
-    signature: "(export) / (export n) / (export :track) / (export :song [:tail secs])",
-    description: "Download a WAV. (export n) renders n cycles of all tracks offline (default 4); (export :track) renders one track; (export :song) plays the song once from bar 0 and records the master output in real time (with FX), plus a release tail (default 2 s). (stop) cancels a song export.",
-    example: "(export :song :tail 4)",
+    signature: "(export [n]) / (export :track [n]) / (export :stems [n | :tail secs]) / (export :song [:tail secs] [:realtime])",
+    description: "Download a WAV, rendered offline (faster than real time) with the same voices and FX as playback. (export n) renders n cycles of all tracks (default 4); (export :track n) renders n cycles of one track; (export :song) renders the whole song plus a release tail (default 2 s); add :realtime to record it live instead. (export :stems) renders every track of the song to its own WAV of identical length and downloads them as repulse-stems.zip (per-track FX included, master FX not; (export :stems n) = n cycles without a song).",
+    example: "(export :stems)",
   },
 
   // --- Special forms ---

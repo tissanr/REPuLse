@@ -84,6 +84,30 @@
                                          {:name "filter" :active? false}]
                                         {:a pat})))))
 
+(deftest used-effects-master-false-test
+  (let [pat (assoc (eval-pat "(seq :bd)")
+                   :track-fx [{:name "delay" :params {"value" 0.25}}])
+        entries [{:name "reverb" :active? true} {:name "third-party" :active? true}]]
+    (testing "SK1 stems (K5): the global chain doesn't count, track FX still do"
+      (is (= #{"delay"} (offline-render/used-effects entries {:a pat} {:master? false})))
+      (is (= #{"delay" "reverb" "third-party"}
+             (offline-render/used-effects entries {:a pat} {:master? true})))
+      (is (= #{"delay" "reverb" "third-party"}
+             (offline-render/used-effects entries {:a pat}))
+          "default = today's behaviour"))))
+
+(deftest stems-job-frames-test
+  (testing "SK1: every stem of a job has the same length; the job keys don't change it"
+    (let [pat (eval-pat "(seq :bd)")
+          s   (song/make-song [(song/make-section :a 8 [:a])] {:end :stop} [:a] nil)
+          job {:kind :song :tracks {:a pat} :song s :tail 2 :cycle-dur (/ 240.0 140)}]
+      (is (= 693000 (offline-render/job-frames job 44100)))
+      (is (= 754286 (offline-render/job-frames job 48000)))
+      (is (= (offline-render/job-frames job 44100)
+             (offline-render/job-frames (assoc job :stem :a :master? false) 44100)))
+      (is (= 352800 (offline-render/job-frames {:kind :cycles :tracks {:a pat} :n 4 :cycle-dur 2.0} 44100)))
+      (is (= 384000 (offline-render/job-frames {:kind :cycles :tracks {:a pat} :n 4 :cycle-dur 2.0} 48000))))))
+
 (deftest job-frames-and-events-test
   (let [pat (eval-pat "(seq :bd :_ :hh :_)")]
     (testing ":cycles — n cycles, t = whole start × cycle-dur (rests pass through, as in the scheduler)"

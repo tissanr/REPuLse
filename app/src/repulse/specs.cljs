@@ -90,15 +90,14 @@
        (or (nil? (:on-change x)) (fn? (:on-change x)))))
 
 (defn midi-export-event?
+  "A note of a MIDI file export (Phase SK1): ticks, not seconds."
   [x]
   (and (map? x)
-       (number? (:time-sec x))
-       (not (neg? (:time-sec x)))
-       (number? (:duration-sec x))
-       (pos? (:duration-sec x))
-       (integer? (:midi-note x))
-       (<= 0 (:midi-note x) 127)
-       (safe-midi-channel? (or (:channel x) 1))))
+       (integer? (:tick x)) (<= 0 (:tick x))
+       (integer? (:dur x)) (<= 1 (:dur x))
+       (integer? (:note x)) (<= 0 (:note x) 127)
+       (integer? (:velocity x)) (<= 1 (:velocity x) 127)
+       (integer? (:channel x)) (<= 1 (:channel x) 16)))
 
 (s/def ::non-empty-string non-empty-string?)
 (s/def ::event-payload event-payload?)
