@@ -1,19 +1,24 @@
 (ns repulse.ui.assistant-panel
   "AI assistant chat panel — BYO API key, tool-using agent, code insert.
    Exports: init!, show-panel!, hide-panel!, toggle-panel!, send!, visible?,
-            add-message!, set-pending!, log-tool-call!"
+            add-message!, set-pending!, log-tool-call!, extension"
   (:require [repulse.ai.settings :as settings]
             [repulse.ai.agent-loop :as agent-loop]
             [repulse.ai.budget :as budget]
             [repulse.ai.client :as client]
             [repulse.ai.models :as models]
             [repulse.ai.undo :as undo]
+            [repulse.ai.context :as ai-ctx]
+            [repulse.ai.system-prompt :as sys-prompt]
+            [repulse.ui.outline-panel :as outline-panel]
+            ["@codemirror/view" :refer [keymap]]
+            ["@codemirror/state" :refer [Prec]]
             [repulse.ui.editor :as editor]
             [repulse.ui.html :refer [escape-html]]
             [clojure.string :as str]))
 
 ;;; Forward declarations
-(declare render-panel! render-settings!)
+(declare render-panel! render-settings! render-rail! update-ctx-chip!)
 
 ;; ── History persistence ───────────────────────────────────────────────────────
 
@@ -48,6 +53,29 @@
 
 (defn- el [id] (.getElementById js/document id))
 
+(defn- mac? []
+  (boolean (re-find #"Mac" (str (.-platform js/navigator)))))
+
+;; ── AI context (WS4) ──────────────────────────────────────────────────────────
+
+(defn- current-context []
+  (ai-ctx/resolve-context @outline-panel/selection (outline-panel/selection-index)
+                          @outline-panel/entries @outline-panel/cursor-pos))
+
+(defn- editor-text []
+  (if-let [v @editor/editor-view] (.. v -state -doc (toString)) ""))
+
+(defn- update-ctx-chip! []
+  (when-let [chip (el "ai-ctx-chip")]
+    (let [t (ai-ctx/chip-text (current-context))]
+      (set! (.-textContent chip) (or t ""))
+      (.toggle (.-classList chip) "hidden" (nil? t)))))
+
+(defn- ctx-chip-html []
+  (let [t (ai-ctx/chip-text (current-context))]
+    (str "<span id=\"ai-ctx-chip\" class=\"ai-ctx-chip" (when-not t " hidden")
+         "\" title=\"Sent to the AI as context\">" (escape-html (or t "")) "</span>")))
+
 ;; ── Insert code into editor ───────────────────────────────────────────────────
 
 (defn- insert-code! [code]
@@ -73,7 +101,8 @@
   "Set the pending (typing indicator) state and re-render."
   [v]
   (reset! pending v)
-  (render-panel!))
+  (render-panel!)
+  (render-rail!))
 
 (defn log-tool-call!
   "Append a tool call record to the activity log (max 50 entries)."
@@ -262,7 +291,18 @@
    hint once it lands."
   [force?]
   (when-let [pr (client/refresh-models! {:force? force?})]
-    (.then pr (fn [_] (if (el "ai-model-hint") (render-settings!) (render-panel!))))))
+    (.then pr (fn [_]
+                (if (el "ai-model-hint")
+                  (render-settings!)
+                  ;; The catalogue lands asynchronously: keep what the user already
+                  ;; typed in the input and its focus across the re-render.
+                  (let [inp    (el "ai-input")
+                        txt    (some-> inp .-value)
+                        focus? (and inp (identical? inp (.-activeElement js/document)))]
+                    (render-panel!)
+                    (when-let [n (el "ai-input")]
+                      (when (seq txt) (set! (.-value n) txt))
+                      (when focus? (.focus n)))))))))
 
 (defn- custom-fields-html
   "Base URL, presets, Send tools, Test connection and the trust warning —
@@ -457,6 +497,7 @@
                      "<span class=\"ai-provider-badge\">"
                      (escape-html @settings/provider) " &middot; " (escape-html (settings/effective-model))
                      "</span>"
+                     (ctx-chip-html)
                      "<span class=\"ai-budget-badge"
                      (when (budget/exhausted?) " ai-budget-badge--exhausted")
                      "\" title=\"Session usage: " tokens-used " / " tokens " tokens"
@@ -479,7 +520,9 @@
                      "<div id=\"ai-messages\" class=\"ai-messages\">"
                      (str/join "" (map render-message @messages))
                      (when @pending
-                       "<div class=\"ai-msg ai-msg--assistant ai-thinking\">&#8230;</div>")
+                       (str "<div id=\"ai-working\" class=\"ai-working\"><span class=\"ai-dots\">"
+                            "<span class=\"ai-dot\"></span><span class=\"ai-dot\"></span><span class=\"ai-dot\"></span>"
+                            "</span>thinking</div>"))
                      "</div>"
                      ;; Activity log section — only shown when there are entries
                      (when (pos? log-count)
@@ -497,9 +540,11 @@
                                    "<button id=\"ai-log-reset-btn\" class=\"ai-btn ai-btn--secondary\">Reset session</button>"
                                    "</div>"))
                             "</div>"))
-                     "<div class=\"ai-input-row\">"
+                     (if @pending
+                       "<div class=\"ai-input-row ai-input-row--busy\"><div class=\"ai-sweep\"></div>"
+                       "<div class=\"ai-input-row\">")
                      "<textarea id=\"ai-input\" class=\"ai-textarea\""
-                     " placeholder=\"Describe a pattern, ask for help…\" rows=\"2\"></textarea>"
+                     " placeholder=\"" (if @pending "working…" "Describe a pattern, ask for help…") "\" rows=\"2\"></textarea>"
                      (if @pending
                        "<button id=\"ai-cancel-btn\" class=\"ai-btn ai-btn--secondary\">cancel</button>"
                        "<button id=\"ai-send-btn\" class=\"ai-btn\">send</button>")
@@ -510,20 +555,66 @@
 
 ;; ── Panel visibility ──────────────────────────────────────────────────────────
 
+(def ^:private STORAGE-KEY "repulse:ai:panel-open")
+
+(defn- persist-open! [open?]
+  (try (.setItem js/localStorage STORAGE-KEY (if open? "1" "0"))
+       (catch :default _ nil)))
+
+(defn- render-rail! []
+  (when-let [r (el "ai-rail")]
+    (let [open? @visible?]
+      (.toggle (.-classList r) "open" open?)
+      (.toggle (.-classList r) "busy" (boolean (and @pending (not open?))))
+      (.setAttribute r "aria-expanded" (str open?))
+      (when-let [a (.querySelector r ".ai-rail-arrow")]
+        (set! (.-textContent a) (if open? "›" "‹"))))))
+
 (defn show-panel! []
   (reset! visible? true)
   (when-let [panel (el "ai-panel")]
     (.remove (.-classList panel) "hidden"))
   (render-panel!)
+  (update-ctx-chip!)
+  (persist-open! true)
+  (render-rail!)
   (when @settings/enabled? (refresh-catalogue! false)))
 
 (defn hide-panel! []
   (reset! visible? false)
   (when-let [panel (el "ai-panel")]
-    (.add (.-classList panel) "hidden")))
+    (.add (.-classList panel) "hidden"))
+  (persist-open! false)
+  (render-rail!))
 
 (defn toggle-panel! []
   (if @visible? (hide-panel!) (show-panel!)))
+
+(defn- toggle-from-ui!
+  "Toggle from the rail or the shortcut, moving focus (WS4 decision 7)."
+  []
+  (if @visible?
+    (let [inside? (boolean (some-> (el "ai-panel") (.contains (.-activeElement js/document))))]
+      (hide-panel!)
+      (when inside? (some-> @editor/editor-view .focus)))
+    (do (show-panel!) (some-> (el "ai-input") .focus)))
+  true)
+
+(def extension
+  "CodeMirror extension: Mod-i toggles the AI rail (Prec.high beats defaultKeymap's
+   selectParentSyntax)."
+  (.high Prec (.of keymap #js [#js {:key "Mod-i" :preventDefault true
+                                     :run (fn [_] (toggle-from-ui!))}])))
+
+(defn- on-doc-keydown [^js e]
+  (when (and (not (.-defaultPrevented e))
+             (= "i" (str/lower-case (str (.-key e))))
+             (if (mac?) (.-metaKey e) (.-ctrlKey e))
+             (not (.-shiftKey e)) (not (.-altKey e)))
+    (.preventDefault e)
+    (toggle-from-ui!)))
+
+(defonce ^:private doc-listener? (atom false))
 
 ;; ── Send a message ────────────────────────────────────────────────────────────
 
@@ -687,4 +778,18 @@
             (let [txt (.-value inp)]
               (set! (.-value inp) "")
               (send! txt)))))
-      false)))
+      false))
+
+  ;; WS4 — focus context, rail, shortcut, persisted open state
+  (reset! sys-prompt/focus-fn
+          #(ai-ctx/prompt-block (current-context) (editor-text) @settings/include-code?))
+  (when-let [rail (el "ai-rail")]
+    (.setAttribute rail "title" (str "AI  " (if (mac?) "⌘I" "Ctrl+I")))
+    (.addEventListener rail "click" (fn [_] (toggle-from-ui!))))
+  (when (compare-and-set! doc-listener? false true)
+    (.addEventListener js/document "keydown" on-doc-keydown))
+  (doseq [a [outline-panel/selection outline-panel/cursor-pos outline-panel/entries]]
+    (add-watch a ::ctx-chip (fn [_ _ o n] (when (not= o n) (update-ctx-chip!)))))
+  (when (= "1" (try (.getItem js/localStorage STORAGE-KEY) (catch :default _ nil)))
+    (show-panel!))
+  (render-rail!))
