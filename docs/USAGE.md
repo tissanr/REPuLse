@@ -3551,10 +3551,26 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 
 **Getting started:**
 
-1. Click the **ai** button in the header, or run `(ai)` in the REPL
+1. Click the **AI rail** on the right edge, press **⌘I** (Ctrl+I), or run `(ai)` in the REPL
 2. Click **Enable AI assistant**
 3. Choose a provider and paste your API key (stored in localStorage; each request is relayed through the `/api/ai-stream` proxy, which never logs or stores the key)
 4. Type a question and press **Send** or **Cmd/Ctrl+Enter**
+
+### The AI rail
+
+The assistant lives in a right-hand **rail**: a 28 px strip on the right edge of the app (arrow `‹`, vertical "AI" label). Click it, press **⌘I** / **Ctrl+I**, or run `(ai)` to open a 300 px panel beside the editor. The editor shrinks when the panel opens and is never covered; click the rail (arrow `›`) or press the shortcut again to close it. The old **ai** button in the top nav is gone.
+
+- **Shortcut:** ⌘I / Ctrl+I works from the editor (it replaces CodeMirror's "select parent syntax" there), the command bar, the AI textarea and with nothing focused. Opening focuses the AI input; closing from inside the panel returns focus to the editor.
+- **Persistence:** open or closed is remembered across reloads (`localStorage` key `repulse:ai:panel-open`; `(reset!)` clears it). The first visit starts closed.
+- **Working state:** while a request runs, the panel shows three pulsing cyan dots with "thinking", a thin cyan sweep along the top of the input, and the placeholder `working…`. If the panel is closed, the rail shows a pulsing dot instead. Use **cancel** to stop a request.
+- **Context chip:** the header shows `ctx :bass` for what the model is told you mean. It is the outline selection (several tracks show `ctx 2 tracks`), or, with nothing selected, the outline entry under the cursor (`ctx :chorus`, `ctx kick`, `ctx song`). With no context the chip is hidden. The focus (kind and name) is added to the system prompt; the selected form's **source text is sent only when "Share editor code with AI" is on** in the AI settings.
+
+```lisp
+; Select the :bass row in the outline, then ask "give it more movement":
+; the header shows "ctx :bass" and the model is told the user means (track :bass ...).
+(track :bass (->> (seq :c2 :eb2) (amp 0.6)))
+(ai "give the bass more movement")   ; still works, opens the rail panel
+```
 
 **Agent tools** (the assistant calls these automatically — you never invoke them directly):
 

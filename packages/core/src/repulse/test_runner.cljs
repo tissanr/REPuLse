@@ -26,6 +26,7 @@
             [repulse.ai.models-test]
             [repulse.ai.tool-calls-test]
             [repulse.ai.knowledge-test]
+            [repulse.ai.context-test]
             [repulse.audio-clock-test]
             [repulse.ui.slider-model-test]
             [repulse.ui.status-model-test]
@@ -59,6 +60,7 @@
                   'repulse.ai.models-test
                   'repulse.ai.tool-calls-test
                   'repulse.ai.knowledge-test
+                  'repulse.ai.context-test
                   'repulse.audio-clock-test
                   'repulse.ui.slider-model-test
                   'repulse.ui.status-model-test

@@ -2276,7 +2276,7 @@ See full spec: [PROMPTS/PHASE-WS3.md](PROMPTS/PHASE-WS3.md)
 
 ---
 
-## Phase WS4 — AI Assistant Rail 📋 *planned*
+## Phase WS4 — AI Assistant Rail ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2285,6 +2285,24 @@ The assistant moves from the editor column to a 28 px right rail with a 300 px p
 **Key additions:**
 - Rail toggle (⌘I) replaces the `ai` nav button; the open state persists
 - Working-state animation (pulsing dots, sweep on the input); the selection is sent as context
+
+**Delivered:**
+- `#ai-panel` is now a 300 px column and `#ai-rail` a 28 px button, both direct children of
+  `.app-shell` (after `.workbench`); the `ai` nav button and its CSS are gone. Open/closed is
+  stored in `localStorage["repulse:ai:panel-open"]` (`"1"`/`"0"`, default closed).
+- ⌘I / Ctrl+I: a `Prec.high` `Mod-i` keymap (`assistant-panel/extension`, added to the main editor
+  in `app.cljs`) plus a document `keydown` listener for everywhere else, toggling exactly once;
+  opening focuses `#ai-input`, closing from the panel refocuses the editor.
+- Working state: `#ai-working` (three `ai-dot-pulse` dots + "thinking"), `.ai-sweep` on the busy
+  input row, `working…` placeholder, rail `busy` dot only while the panel is closed;
+  reduced-motion disables the animations.
+- Context: new pure `repulse.ai.context` (`resolve-context`, `chip-text`, `prompt-block`) — the WS1
+  selection, else the outline entry under the cursor — shown as the `ctx …` chip (updated in
+  place via `add-watch`) and appended to the system prompt through the additive
+  `system-prompt/focus-fn` hook; source text only with "Share editor code with AI" on.
+- Tests: K1–K12 (+ master/fx) in `repulse.ai.context-test`; `e2e/ai-rail.spec.ts` (T1–T10) with a
+  mocked `/api/ai-stream` and `/api/ai-models`. Docs: USAGE "The AI rail". No providers, tool
+  calling, budgets or guard changes.
 
 See full spec: [PROMPTS/PHASE-WS4.md](PROMPTS/PHASE-WS4.md)
 

@@ -19,6 +19,11 @@
        "- Any other sample (claps, percussion, drum machines) must come from list_banks / "
        "list_samples_in_bank or freesound_load — never guess a sample name\n\n"))
 
+(defonce focus-fn
+  ;; 0-arg fn returning the user-focus prompt block (string) or nil.
+  ;; Set by repulse.ui.assistant-panel (Phase WS4).
+  (atom nil))
+
 (defn build
   "Build the system prompt string from the live session plus the compiled-in
    knowledge base (built-in vocabulary and cookbook examples)."
@@ -65,6 +70,7 @@
       "Current session:\n"
       snap
       (or code-ctx "")
+      (or (when-let [f @focus-fn] (f)) "")
       (let [vocab (knowledge/builtins-summary)]
         (when (seq vocab)
           (str "\n\nBuilt-in vocabulary (all built-in names, by category):\n" vocab)))
