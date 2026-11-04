@@ -401,3 +401,50 @@ for (const realtime of [false, true]) {
     }
   });
 }
+
+const SONG_D = `(bpm 240)
+(track :kick (seq :bd :_ :bd :_))
+(track :bass (->> (seq :c2 :_ :g2 :_) (synth :saw)))
+(song (section :a 2 :all))`;
+
+// A real-time capture must not lose its downbeat when the main thread stalls
+// right after the song start is chosen. Before the fix a fresh capture could
+// start on a bar boundary only 50 ms ahead, so a busy CI runner dropped bar 0's
+// events (this flaked 'offline (export :song) matches the real-time capture').
+// The stall is timed deterministically against the audio clock.
+test('real-time capture keeps the downbeat across a main-thread stall', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.addInitScript(() => {
+    const C = window.AudioContext;
+    (window as unknown as { AudioContext: unknown }).AudioContext = class extends C {
+      constructor(...a: ConstructorParameters<typeof AudioContext>) {
+        super(...a);
+        (window as unknown as { __ctx: AudioContext }).__ctx = this;
+      }
+    };
+  });
+  await load(page);
+  await page.evaluate(() => (window as unknown as { __REPULSE_APP__: ExpApp }).__REPULSE_APP__.evaluate('(bpm 240)'));
+  const { wav } = await readDownload(page, () =>
+    page.evaluate(async (code) => {
+      const w = window as unknown as { __ctx: AudioContext; __REPULSE_APP__: ExpApp };
+      const ctx = w.__ctx;
+      // Trigger ~0.16 s before a bar boundary (1 s bars at 240 BPM) …
+      while (!(ctx.currentTime % 1 > 0.82 && ctx.currentTime % 1 < 0.86)) {
+        await new Promise((r) => setTimeout(r, 2));
+      }
+      const boundary = Math.ceil(ctx.currentTime);
+      w.__REPULSE_APP__.evaluate(code);
+      // … then block the main thread until 0.1 s past that boundary.
+      const ms = (boundary - ctx.currentTime + 0.1) * 1000 - 20;
+      setTimeout(() => {
+        const t = performance.now();
+        while (performance.now() - t < ms) { /* stall */ }
+      }, 20);
+    }, `${SONG_D}\n(export :song :tail 0.5 :realtime)`),
+  );
+  const q = rmsPerWindow(mono(wav), Math.round(wav.sampleRate / 4));
+  console.log('stalled capture quarter-second windows', q);
+  // Beat 1 (bd + c2) is about as loud as beat 3 (bd + g2); a lost downbeat is silence.
+  expect(q[0]).toBeGreaterThan(0.5 * q[2]);
+});
