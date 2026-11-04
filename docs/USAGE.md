@@ -430,8 +430,8 @@ The **status head** sits at the top of the outline column:
   its bars; the playing section is bright cyan and fills up bar by bar. Hover it for
   `▶ chorus · bar 13/20`. **Click a segment to cue that section**: while the song plays it starts
   at the next bar; while stopped, the last evaluated song starts there.
-- **Latency** — `latency 5.3 ms` (the audio output latency) once audio has started. During an
-  `(export :song)` capture it shows `● REC 12.0 / 50.0 s` instead.
+- **Latency** — `latency 5.3 ms` (the audio output latency) once audio has started. During a
+  real-time `(export :song :realtime)` capture it shows `● REC 12.0 / 50.0 s` instead.
 
 The **inspector** opens to the right of the outline whenever a row is selected and shows only
 that selection. Its header names the kind and the name, `↗ L3` (move the cursor there) and
@@ -1452,23 +1452,48 @@ Fetch a GitHub Gist into the editor and evaluate it:
 
 ### `export` — render to WAV
 
-Render `n` cycles of the current tracks to a downloadable WAV file via `OfflineAudioContext`:
+Render the current tracks to a downloadable WAV file. Exports render **offline, faster than real
+time**, through the same sound engine as playback: WASM voices (FM, plucked strings, saw, drums…),
+per-track `(fx …)` chains and the global / `(master …)` chain all sound exactly as you hear them.
 
 ```lisp
-(export 4)       ; 4 cycles → WAV download
-(export 1)       ; 1 cycle loop
-(export :kick)   ; 4 cycles of the :kick track only
-(export :song)   ; capture the whole song in real time — see "Writing a song"
+(export 4)                ; 4 cycles → WAV download
+(export 1)                ; 1 cycle loop
+(export :kick)            ; 4 cycles of the :kick track only
+(export :song)            ; the whole song, offline — see "Writing a song"
+(export :song :realtime)  ; the whole song, recorded in real time
 ```
 
 | Form | What it does |
 |---|---|
-| `(export)` / `(export n)` | Render `n` cycles (default 4) of all tracks offline, 44.1 kHz → `repulse-all-<n>cycles.wav` |
+| `(export)` / `(export n)` | Render `n` cycles (default 4) of all tracks offline → `repulse-all-<n>cycles.wav` |
 | `(export :track)` | Render 4 cycles of one track offline → `repulse-<track>-4cycles.wav` |
-| `(export :song)` / `(export :song :tail secs)` | Play the song once from bar 0 and record the master output (with all FX) in real time, plus a release tail (default 2 s, 0–30) → `repulse-song-<bars>bars.wav`. `(stop)` cancels. |
+| `(export :song)` / `(export :song :tail secs)` | Render one pass of the song from bar 0 offline, plus a release tail (default 2 s, 0–30) → `repulse-song-<bars>bars.wav` |
+| `(export :song :realtime)` / `(export :song :tail secs :realtime)` | Play the song once and record the master output in real time (takes as long as the song; `(stop)` cancels). Same WAV as the offline render |
 
-The offline `(export n)` / `(export :track)` path uses JS fallbacks for WASM voices and skips
-FX; `(export :song)` sounds exactly like playback because it records it.
+- **When it runs.** The export starts after the whole buffer has evaluated, so `(fx …)` and
+  `(master …)` forms below `(export 4)` are included. The output shows
+  `rendering all tracks — 4 cycles offline…`, then `exported all tracks — 4 cycles (offline)`.
+- **Sample rate** = the sample rate of your audio device (e.g. 44.1 or 48 kHz); `n` cycles are
+  exactly `round(n × seconds-per-cycle × rate)` frames.
+- **Tweens start at bar 0 of the export**, in both paths: `(amp (tween :linear 0 1 4))` ramps
+  over the first 4 bars of the file, no matter how long the pattern was playing before.
+- **Mute is ignored** — exports always contain every exported track.
+- **Fallback.** If the offline engine can't start (no AudioWorklet in the offline context, the
+  WASM file can't be loaded, an active `(bus …)`, or an active third-party effect plugin without
+  `getParams`), the output says `offline render unavailable (<reason>) — capturing in real time
+  instead…` and the export is recorded in real time instead. It never falls back to sine tones.
+- **WASM synths on a track with its own `(fx …)`** play through the JS fallback voice — in
+  playback *and* in the export, so the two match. Example: in
+  `(->> (seq :c4) (synth :epiano) (fx :reverb 0.4))` the e-piano is a plain tone through the
+  reverb. To keep the FM e-piano and still add reverb, put the effect on the master:
+  `(master (fx :reverb 0.4))`. Built-in drums and `(synth :saw)` / `:square` also use their JS
+  voices on an FX track (samples are unaffected). Routing WASM voices through per-track FX is
+  planned for a later phase.
+- One export at a time: `Error: an export is already running — (stop) cancels it`.
+  `:realtime` only applies to the song: `(export 4 :realtime)` →
+  `Error: :realtime only applies to (export :song)`. `(export 0)` →
+  `Error: export needs at least 1 cycle`.
 
 ---
 
@@ -2397,7 +2422,7 @@ track, the outro only the hats — then playback stops and the output shows `son
 | `(section name bars tracks)` | A section: a keyword name (unique in the song), a length in whole bars ≥ 1, and the tracks that play — a vector of track names or `:all` (every track defined above the song) |
 | `(song section… [:end :stop\|:loop])` | Play the tracks above as a song. `:end :stop` (default) stops 2 s after the last bar so tails ring out; `:end :loop` starts again at bar 0. Returns the song value |
 | `(play-from :section)` / `(play-from bar)` | Start — or, while playing, jump — the song at a section's first bar or at a 0-based bar number. After `(stop)` it restarts the last song |
-| `(export :song)` / `(export :song :tail secs)` | Capture one pass of the song to WAV in real time (see below) |
+| `(export :song)` / `(export :song :tail secs)` | Render one pass of the song to WAV offline; add `:realtime` to record it in real time (see below) |
 
 ### Rules
 
@@ -2442,21 +2467,29 @@ segment** — or `▶ cue` in a section's inspector — to jump there at the nex
 `(play-from :chorus)`. Tracks that rest in the current section show `rests in :outro` in their
 inspector and are drawn like muted tracks in the timeline.
 
-### `(export :song)` — capture the whole song
+### `(export :song)` — render the whole song
 
 ```lisp
-(export :song)           ; one pass + 2 s release tail
-(export :song :tail 4)   ; with a 4 s tail (0–30 s)
+(export :song)                    ; one pass + 2 s release tail, offline
+(export :song :tail 4)            ; with a 4 s tail (0–30 s)
+(export :song :realtime)          ; recorded in real time instead
+(export :song :tail 4 :realtime)  ; both options, in any order
 ```
 
-The song restarts from bar 0 and the master output — after every global effect — is recorded
-in real time, so the WAV sounds exactly like playback (WASM voices, per-track and global FX).
-Export therefore takes as long as the song; the status head shows `● REC 12.0 / 50.0 s`. A
-`:loop` song is captured as one pass. `(stop)` cancels (`export cancelled`); when it finishes,
-the WAV `repulse-song-24bars.wav` downloads (sample rate of your audio device) and the output
-shows `exported song — 24 bars, 50.0 s`.
+`(export :song)` renders one pass of the song from bar 0 **offline**, faster than real time,
+with WASM voices, per-track and global FX — the WAV sounds exactly like playback. Playback is
+not interrupted. The output shows `rendering song — 24 bars, 50.0 s offline…`, then
+`exported song — 24 bars, 50.0 s (offline)`, and `repulse-song-24bars.wav` downloads (sample rate
+of your audio device). A `:loop` song is exported as one pass.
 
-Inside `export`, `:song` is reserved: a track named `:song` can't be exported by name.
+`(export :song :realtime)` restarts the song from bar 0 and records the master output — after
+every global effect — in real time, so it takes as long as the song; the status head shows
+`● REC 12.0 / 50.0 s`. `(stop)` cancels (`export cancelled`); when it finishes the output shows
+`exported song — 24 bars, 50.0 s`. The offline render falls back to this path (and says so) when
+it can't start — see "`export` — render to WAV".
+
+Inside `export`, `:song` and `:realtime` are reserved: tracks with these names can't be
+exported by name.
 
 ### `song` vs `arrange`
 
@@ -2466,7 +2499,7 @@ Inside `export`, `:song` is reserved: a track named `:song` can't be exported by
 | Length unit | cycles | bars (= cycles) |
 | End | loops forever | stops after the last bar (or `:end :loop`) |
 | Rehearsal | — | `(play-from :chorus)` |
-| Export | `(export n)` (offline) | `(export :song)` (real time, with FX) |
+| Export | `(export n)` (offline) | `(export :song)` (offline), `(export :song :realtime)` (real time) |
 
 ### Errors
 
@@ -2486,6 +2519,8 @@ play-from: no song — evaluate a buffer that ends with (song …) first
 Error: no song — evaluate a buffer that ends with (song …) first          ; (export :song)
 Error: :tail must be a number of seconds between 0 and 30
 Error: an export is already running — (stop) cancels it
+Error: :realtime only applies to (export :song)
+offline render unavailable (<reason>) — capturing in real time instead…   ; notice, not an error
 ```
 
 ---
@@ -4140,8 +4175,11 @@ do-expr    = "(do" expr+ ")"
 ;; Render 1 cycle (useful for short loops)
 (export 1)
 
-;; Capture the whole song (buffer ending in (song …)) in real time, with FX
+;; Render the whole song (buffer ending in (song …)) offline, with FX
 (export :song)
+
+;; …or record it in real time
+(export :song :realtime)
 ```
 
 ### Per-track effects

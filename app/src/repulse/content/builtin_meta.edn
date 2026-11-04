@@ -1312,7 +1312,7 @@
               :returns "nil"
               :side-effects ["audio" "dom"]
               :examples ["(export)" "(export 4)" "(export :kick)" "(export :song)"
-                         "(export :song :tail 4)"]
+                         "(export :song :tail 4)" "(export :song :realtime)"]
               :see-also ["midi-export" "share!" "song"]}
 
  ;; ── Content ──────────────────────────────────────────────────────────────────

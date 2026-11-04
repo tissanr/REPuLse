@@ -146,7 +146,7 @@ export const BUILTINS = [
   // --- Sharing ---
   { label: "share!",       type: "function", detail: "(share!) — copy shareable session URL to clipboard" },
   { label: "load-gist",    type: "function", detail: "(load-gist url) — fetch a Gist and load into editor" },
-  { label: "export",       type: "function", detail: "(export) — render all tracks to WAV; (export n) — n cycles; (export :track) — single track; (export :song) — capture the whole song in real time" },
+  { label: "export",       type: "function", detail: "(export) — render all tracks to WAV; (export n) — n cycles; (export :track) — single track; (export :song) — render the whole song offline; (export :song :realtime) — record it in real time" },
   // --- Sample playback control ---
   { label: "rate",        type: "function", detail: "(rate n pat) — playback rate: 1.0 = normal, 2.0 = octave up; (rate n) returns transformer" },
   { label: "begin",       type: "function", detail: "(begin frac pat) — sample start offset 0.0–1.0; (begin frac) returns transformer" },
