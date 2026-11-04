@@ -53,11 +53,13 @@ and **when** — not **how** synthesis works internally.
   bar in the editor; dragging rewrites the number in the code (`Cmd/Ctrl+K S` wraps/unwraps)
 - **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`, `(fx :cab :ir :4x12)`;
   group the global chain with `(master (fx :delay 0.25) (fx :reverb 0.3))`
-- **Performance:** named tracks you can mute, solo and replace live; MIDI in/out; WAV and
-  MIDI export
+- **Performance:** named tracks you can mute, solo and replace live; MIDI in/out; WAV, stem
+  and MIDI export
 - **Songs:** `song` and `section` turn the tracks of a buffer into a song with an end;
   `(play-from :chorus)` rehearses from any section and `(export :song)` renders the whole song
-  to WAV offline, with every voice and effect (`(export :song :realtime)` records it in real time):
+  to WAV offline, with every voice and effect (`(export :song :realtime)` records it in real time);
+  `(export :stems)` renders one WAV per track into a zip and `(midi-export :song)` writes the
+  whole song as a multi-track MIDI file:
 
   ```clojure
   (song (section :intro  4 [:kick :hats])

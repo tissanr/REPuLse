@@ -1460,6 +1460,8 @@ per-track `(fx …)` chains and the global / `(master …)` chain all sound exac
 (export 4)                ; 4 cycles → WAV download
 (export 1)                ; 1 cycle loop
 (export :kick)            ; 4 cycles of the :kick track only
+(export :kick 8)          ; 8 cycles of the :kick track
+(export :stems)           ; one WAV per track, in repulse-stems.zip — see "Stems"
 (export :song)            ; the whole song, offline — see "Writing a song"
 (export :song :realtime)  ; the whole song, recorded in real time
 ```
@@ -1467,7 +1469,9 @@ per-track `(fx …)` chains and the global / `(master …)` chain all sound exac
 | Form | What it does |
 |---|---|
 | `(export)` / `(export n)` | Render `n` cycles (default 4) of all tracks offline → `repulse-all-<n>cycles.wav` |
-| `(export :track)` | Render 4 cycles of one track offline → `repulse-<track>-4cycles.wav` |
+| `(export :track)` / `(export :track n)` | Render `n` cycles (default 4) of one track offline → `repulse-<track>-<n>cycles.wav` |
+| `(export :stems)` | Render every track of the song to its own WAV (the whole song plus a 2 s tail); without a song, 4 cycles of every track → `repulse-stems.zip` |
+| `(export :stems n)` / `(export :stems :tail secs)` | `n` cycles of every track (with or without a song) / the song with a tail of `secs` (0–30, song only) |
 | `(export :song)` / `(export :song :tail secs)` | Render one pass of the song from bar 0 offline, plus a release tail (default 2 s, 0–30) → `repulse-song-<bars>bars.wav` |
 | `(export :song :realtime)` / `(export :song :tail secs :realtime)` | Play the song once and record the master output in real time (takes as long as the song; `(stop)` cancels). Same WAV as the offline render |
 
@@ -1493,7 +1497,51 @@ per-track `(fx …)` chains and the global / `(master …)` chain all sound exac
 - One export at a time: `Error: an export is already running — (stop) cancels it`.
   `:realtime` only applies to the song: `(export 4 :realtime)` →
   `Error: :realtime only applies to (export :song)`. `(export 0)` →
-  `Error: export needs at least 1 cycle`.
+  `Error: export needs at least 1 cycle`. The argument order is `(export :track n)`:
+  `(export 8 :drums)` and `(export :drums 8 2)` →
+  `Error: usage — (export [cycles]), (export :track [cycles]), (export :stems …) or (export :song …)`.
+- `:song`, `:stems` and `:realtime` are reserved: tracks with these names can't be exported by name.
+
+#### Stems
+
+`(export :stems)` renders **each track separately** and downloads them together as
+`repulse-stems.zip` — one `repulse-<track>.wav` per track, in the order the tracks appear in the
+buffer (sorted by name for `(export :stems n)`). Drop the files into a DAW at bar 1 and they line
+up.
+
+```lisp
+(bpm 120)
+(track :kick (seq :bd :sd :hh :oh))
+(track :bass (amp 0.5 (seq :c2 :_ :g2 :_)))
+(song (section :intro 2 [:kick]) (section :verse 4 :all) (section :outro 2 [:bass]))
+(export :stems)           ; repulse-kick.wav + repulse-bass.wav, both 18.0 s
+```
+
+- **Identical length.** Every stem has exactly the same number of frames: the whole song plus the
+  tail (default 2 s), or `n` cycles for `(export :stems n)`. A stem is silent where its track is
+  not in a section.
+- **Which tracks.** With a song, every track that is listed in at least one section (a track defined
+  above the song but used in no section would be silence and is left out). Without a song, every
+  active track. Mute is ignored. Characters outside `A–Z a–z 0–9 . _ -` in a track name become
+  `_`, and names that collide get `-2`, `-3`, … appended.
+- **Per-track FX are in, master FX are out.** A stem is "the track before the master": its own
+  `(fx …)` chain is rendered into it, but the global / `(master …)` chain and the master gain are
+  *not* — so the stems sum to the dry mix, not to `(export :song)`, which always runs through the
+  global chain (the always-on compressor, the default reverb entry, your `(master (fx …))`). Add
+  the master effects in your DAW. Event-driven plugins still see every track: a pad with
+  `(fx :sidechain :trigger :bd …)` is ducked in its stem by the kick, even though the kick is not
+  in that file.
+- **Offline only.** Recording N tracks in real time would take N × the song length, so there is no
+  real-time fallback: `Error: stems need the offline renderer — <reason>`.
+- **Progress.** Stems render one after another: `rendering stem 2/3 — :bass…`, then
+  `exported 3 stems — 24 bars, 50.0 s (offline)` (`exported 3 stems — 4 cycles (offline)` for a
+  cycle count).
+- **The zip** is uncompressed (STORE, WAV does not compress usefully), written by REPuLse itself
+  with a fixed timestamp, so the same song gives byte-identical archives. A zip over 4 GB is
+  refused up front: `Error: stems too large for one zip (over 4 GB) — export fewer bars or tracks`.
+- Errors: `(export :stems :realtime)` → `Error: :realtime only applies to (export :song)`;
+  `(export :stems :foo)` → `Error: (export :stems) takes a cycle count or :tail secs`;
+  `(export :stems :tail 1)` without a song → `Error: no song — evaluate a buffer that ends with (song …) first`.
 
 ---
 
@@ -2488,8 +2536,8 @@ every global effect — in real time, so it takes as long as the song; the statu
 `exported song — 24 bars, 50.0 s`. The offline render falls back to this path (and says so) when
 it can't start — see "`export` — render to WAV".
 
-Inside `export`, `:song` and `:realtime` are reserved: tracks with these names can't be
-exported by name.
+Inside `export`, `:song`, `:stems` and `:realtime` are reserved: tracks with these names can't be
+exported by name. `(export :stems)` renders every track to its own WAV — see "`export` — render to WAV".
 
 ### `song` vs `arrange`
 
@@ -3454,15 +3502,71 @@ Broadcast 24ppqn MIDI clock so external hardware/DAWs lock to REPuLse tempo:
 
 ### MIDI file export
 
-Export a track as a standard MIDI file (Type 0, 480 ticks/quarter note):
+Export a track — or the whole song — as a standard MIDI file (format 1, 480 ticks per quarter
+note, 4/4, one bar = one cycle):
 
 ```lisp
+(bpm 120)
 (track :lead (seq :c4 :e4 :g4 :b4))
-(midi-export :lead 4)    ; downloads repulse-lead.mid (4 cycles)
-(midi-export :lead 8)    ; 8 cycles
+(midi-export :lead 4)    ; repulse-lead.mid — 4 cycles of one track
+(midi-export :lead)      ; 4 cycles is the default
+(midi-export :song)      ; repulse-song-<bars>bars.mid — every track of the song
+(midi-export :drums 4 :drum-map {:perc 60})   ; add or override drum notes
 ```
 
-The `.mid` file opens in any DAW (Logic, Ableton, Reaper). Tempo is embedded in the file.
+| Form | What it does |
+|---|---|
+| `(midi-export :track [n])` | `n` cycles (default 4) of one track → `repulse-<track>.mid`. The track may be defined earlier in the same buffer |
+| `(midi-export :song)` | One pass of the song: one MIDI track per REPuLse track (those used in a section), plus a conductor track → `repulse-song-<bars>bars.mid`. Output: `exported song as MIDI — 3 tracks, 24 bars` |
+| `… :drum-map {:name note}` | Extra drum names (or overrides) merged over the GM table below; notes are integers 0–127 |
+
+- **Conductor track:** the tempo (the `(bpm …)` in effect when `midi-export` runs — put `(bpm …)`
+  above it), a 4/4 time signature and, for `:song`, one **marker** per section (`intro`, `verse`, …)
+  at the section's first bar. Every track ends at the last bar of the song / the cycle count, so a
+  DAW shows the full length even when the last bars are silent.
+- **Notes:** note keywords (`:c4` = 60), frequencies in Hz (`440` → 69) and `{:note …}` / `{:freq …}`
+  values become pitched notes; chords and overlapping notes are written correctly. Rests are skipped.
+  Note lengths are the event lengths (at least one tick). Ticks are computed from the pattern's exact
+  rational time, so long exports don't drift.
+- **Velocity from `amp`:** `velocity = round(amp × 127)`, limited to 1–127 (`amp 0.5` → 64; no `amp`
+  → 127). Tweened amps, e.g. `(amp (tween :linear 0 1 4))`, export as a velocity ramp.
+- **Drums on channel 10.** Drum keywords become General MIDI drum notes on channel 10 (the GM
+  drum channel); a track may mix drums and notes. Melodic notes use channels 1–9, 11–16 in track
+  order (a single-track export uses channel 1).
+
+  | Name | Note | Name | Note | Name | Note | Name | Note |
+  |---|---|---|---|---|---|---|---|
+  | `:bd` | 36 | `:rim` | 37 | `:sd` | 38 | `:cp` | 39 |
+  | `:hh` | 42 | `:lt` | 45 | `:oh` | 46 | `:mt` | 47 |
+  | `:cr` | 49 | `:ht` | 50 | `:rd` | 51 | `:tb` | 54 |
+  | `:cb` | 56 | `:sh` | 70 | | | | |
+
+  Bank-prefixed names (`:RolandTR808_oh`) and `(sound :bd 2)` use the part after the last `_` /
+  the sound name (`:oh` → 46). A drum-map entry wins over a note name, so `:cb` is the cowbell,
+  not C♭ (write `:cb4` for the note).
+- **Unmapped names.** Sample names with no pitch and no drum-map entry (`:tabla`, a bare
+  `defsynth` name) are left out, and the output tells you:
+  `exported 2 cycles of :p as MIDI — skipped 6 events with no GM drum note (:perc :tabla); map them with :drum-map`.
+  `(midi-export :p 2 :drum-map {:tabla 60 :perc 61})` writes them.
+- Errors: `Error: usage — (midi-export :track [cycles]) or (midi-export :song), optionally followed by :drum-map {…}`,
+  `Error: midi-export needs at least 1 cycle`,
+  `Error: :drum-map must map keywords to MIDI notes 0–127, e.g. {:perc 60}`,
+  `Error: no song — evaluate a buffer that ends with (song …) first`, `Error: no track :zz`.
+
+Live `midi-out` is unchanged (velocity there is `clamp(round(amp × 127), 0, 127)`).
+
+#### Getting a song into a DAW
+
+1. Set the DAW project tempo to the REPuLse BPM (the stems have no tempo information).
+2. **Stems:** run `(export :stems)`, unzip `repulse-stems.zip` and drag the WAV files into the
+   arrangement at **bar 1** (Ableton Live, Logic Pro, Reaper, Bitwig… all work the same). Every
+   file has the same length, so they stay aligned. Add reverb / compression on the master bus
+   yourself — master effects are not part of the stems.
+3. **MIDI:** run `(midi-export :song)` and open (or drag in) the `.mid` file. The tracks, tempo and
+   the section markers come in automatically; each REPuLse track is its own MIDI track named after
+   it. Assign an instrument to each; for the drum track (channel 10) pick a General MIDI drum kit
+   (in most DAWs the default drum rack or a GM kit works — `:bd` is C1 = 36 on a GM map).
+4. Mix and master both: stems for the sound you designed, MIDI to replay it with other instruments.
 
 ### MIDI sync input
 
@@ -4180,6 +4284,13 @@ do-expr    = "(do" expr+ ")"
 
 ;; …or record it in real time
 (export :song :realtime)
+
+;; One WAV per track (zip), or 8 cycles of a single track
+(export :stems)
+(export :kick 8)
+
+;; The whole song as a MIDI file, drums on channel 10
+(midi-export :song)
 ```
 
 ### Per-track effects

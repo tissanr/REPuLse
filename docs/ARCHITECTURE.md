@@ -336,6 +336,9 @@ app/src/repulse/
 ├── app.cljs                      Orchestrator: DOM helpers, session, bootstrap, init
 ├── eval_orchestrator.cljs        evaluate!, set-diagnostics!, slider code-patching
 ├── plugin_loading.cljs           load-plugin consent dialog + load/unload builtins
+├── download.cljs                 download-parts!: one Blob → file download (WAV, zip, MIDI)
+├── zip.cljs                      Pure STORE-only zip writer (CRC-32, headers) for stems
+├── midi_export.cljs              Pure: events → MIDI file spec (GM drums, velocity, ticks, markers)
 ├── env/
 │   ├── builtins.cljs             Facade: owns atoms, init!, ensure-env! assembler
 │   └── builtins/
@@ -344,7 +347,7 @@ app/src/repulse/
 │       ├── samples.cljs          samples!, sample-banks, bank
 │       ├── midi.cljs             midi-sync!, midi-map, midi-out, midi-clock-out!, midi-export
 │       ├── content.cljs          snippet, demo, tutorial, load-gist
-│       ├── export.cljs           export (WAV rendering)
+│       ├── export.cljs           export (cycles, :stems, :song validation)
 │       ├── session.cljs          share!, reset!
 │       └── routing.cljs          bus, load-plugin, unload-plugin, freesound-key!, freesound!
 ├── ui/

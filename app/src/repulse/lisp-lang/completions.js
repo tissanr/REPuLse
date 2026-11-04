@@ -146,7 +146,7 @@ export const BUILTINS = [
   // --- Sharing ---
   { label: "share!",       type: "function", detail: "(share!) — copy shareable session URL to clipboard" },
   { label: "load-gist",    type: "function", detail: "(load-gist url) — fetch a Gist and load into editor" },
-  { label: "export",       type: "function", detail: "(export) — render all tracks to WAV; (export n) — n cycles; (export :track) — single track; (export :song) — render the whole song offline; (export :song :realtime) — record it in real time" },
+  { label: "export",       type: "function", detail: "(export) — render all tracks to WAV; (export n) — n cycles; (export :track n) — n cycles of one track; (export :stems) — one WAV per track in a zip; (export :song) — render the whole song offline; (export :song :realtime) — record it in real time" },
   // --- Sample playback control ---
   { label: "rate",        type: "function", detail: "(rate n pat) — playback rate: 1.0 = normal, 2.0 = octave up; (rate n) returns transformer" },
   { label: "begin",       type: "function", detail: "(begin frac pat) — sample start offset 0.0–1.0; (begin frac) returns transformer" },
@@ -240,7 +240,7 @@ export const BUILTINS = [
   { label: "midi-map",       type: "function", detail: "(midi-map :cc N :target) — map MIDI CC number N to :filter, :amp, or :bpm" },
   { label: "midi-out",       type: "function", detail: "(midi-out ch pat) — route pattern events as MIDI notes on channel 1–16; (midi-out ch) returns transformer" },
   { label: "midi-clock-out!", type: "function", detail: "(midi-clock-out! true/false) — broadcast 24ppqn MIDI clock at current BPM" },
-  { label: "midi-export",    type: "function", detail: "(midi-export :track n) — export n cycles of :track as a downloadable .mid file" },
+  { label: "midi-export",    type: "function", detail: "(midi-export :track n) — n cycles of :track as a .mid file; (midi-export :song) — whole song, one MIDI track per track; :drum-map {:perc 60} — extra drum notes" },
   // --- Freesound ---
   { label: "freesound-key!", type: "function", detail: "(freesound-key! \"key\") — set your Freesound API key (one-time setup)" },
   { label: "freesound!",     type: "function", detail: "(freesound! \"query\") — search Freesound and load up to 5 results as :freesound-N" },

@@ -1277,7 +1277,8 @@
  :midi-export {:category "midi"
                :returns "nil"
                :side-effects ["dom"]
-               :examples ["(midi-export :bass 4)" "(midi-export :kick 8)"]
+               :examples ["(midi-export :bass 4)" "(midi-export :song)"
+                          "(midi-export :drums 4 :drum-map {:perc 60})"]
                :see-also ["midi-out" "export"]}
 
  ;; ── Freesound ────────────────────────────────────────────────────────────────
@@ -1311,7 +1312,8 @@
  :export     {:category "io"
               :returns "nil"
               :side-effects ["audio" "dom"]
-              :examples ["(export)" "(export 4)" "(export :kick)" "(export :song)"
+              :examples ["(export)" "(export 4)" "(export :kick)" "(export :kick 8)"
+                         "(export :stems)" "(export :song)"
                          "(export :song :tail 4)" "(export :song :realtime)"]
               :see-also ["midi-export" "share!" "song"]}
 
