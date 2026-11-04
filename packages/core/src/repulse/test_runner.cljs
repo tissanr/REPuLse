@@ -11,6 +11,7 @@
             [repulse.fx-test]
             [repulse.session-test]
             [repulse.song-transport-test]
+            [repulse.offline-render-test]
             [repulse.wav-test]
             [repulse.samples-test]
             [repulse.sound-check-test]
@@ -45,7 +46,8 @@
                   'repulse.lisp.eval-test 'repulse.lisp.mini-test
                   'repulse.lisp.integration-test
                   'repulse.fx-test 'repulse.session-test
-                  'repulse.song-transport-test 'repulse.wav-test
+                  'repulse.song-transport-test 'repulse.offline-render-test
+                  'repulse.wav-test
                   'repulse.samples-test
                   'repulse.sound-check-test
                   'repulse.content.demos-test
