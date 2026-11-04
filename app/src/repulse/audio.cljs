@@ -755,8 +755,22 @@
 (def song-release-secs 2.0)
 
 ;; A fresh song start never begins on a bar that starts less than this far ahead
-;; of currentTime, so the first bar (and a capture's first frame) is never cut.
+;; of currentTime, so the first bar is never cut.
 (def ^:private song-start-margin-secs 0.05)
+
+;; The same margin for a fresh start that a real-time capture is waiting on.
+;; The first bar is scheduled on a later tick than the one that resolves the
+;; origin, and schedule-event! drops events whose time has passed, so a
+;; main-thread stall longer than the margin used to lose the song's downbeat
+;; from the export (flaky e2e/export-parity.spec.ts on busy CI runners).
+;; An export can afford to wait: the capture starts at bar 0 whenever that is.
+(def ^:private capture-start-margin-secs 0.5)
+
+(defn first-song-bar
+  "Pure. The first bar index ≥ cycle whose start time (bar × cycle-dur) is at
+   least margin seconds after now."
+  [cycle cycle-dur now margin]
+  (max cycle (int (Math/ceil (/ (+ now margin) cycle-dur)))))
 
 (defn coerce-bpm
   "Clamp BPM to the safe scheduler range [20, 640]. Invalid, NaN, or
@@ -938,9 +952,10 @@
         sg    (:song state)]
     (when (and sg (nil? (:origin sg)))
       (let [{:keys [cycle cycle-dur]} state
-            first-bar (if (< (* cycle cycle-dur) (+ now song-start-margin-secs))
-                        (inc cycle)
-                        cycle)]
+            margin    (if (= :waiting (:status (:capture state)))
+                        capture-start-margin-secs
+                        song-start-margin-secs)
+            first-bar (first-song-bar cycle cycle-dur now margin)]
         (swap! scheduler-state assoc-in [:song :origin] (- first-bar (:start-bar sg)))
         (arm-capture! ac @scheduler-state)))))
 

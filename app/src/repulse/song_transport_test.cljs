@@ -238,3 +238,15 @@
   (is (= ":kick" (st/cycles-label :kick)))
   (is (= "repulse-all-4cycles.wav" (st/cycles-filename nil 4)))
   (is (= "repulse-kick-2cycles.wav" (st/cycles-filename :kick 2))))
+
+(deftest first-song-bar-honours-the-start-margin
+  (testing "live start: next boundary unless it is closer than the margin"
+    (is (= 4 (audio/first-song-bar 3 1.0 3.50 0.05)))
+    (is (= 5 (audio/first-song-bar 3 1.0 3.97 0.05)))
+    (is (= 3 (audio/first-song-bar 3 1.0 2.90 0.05)) "never before the current cycle"))
+  (testing "capture start: a bar boundary 0.16 s ahead is skipped with a 0.5 s margin"
+    (is (= 4 (audio/first-song-bar 3 1.0 3.84 0.05)))
+    (is (= 5 (audio/first-song-bar 3 1.0 3.84 0.5))))
+  (testing "short bars (640 BPM): the margin can skip more than one boundary"
+    ;; now 4.40 s is in cycle 11; bars 12 (4.5 s) and 13 (4.875 s) are too close
+    (is (= 14 (audio/first-song-bar 11 0.375 4.40 0.5)))))
