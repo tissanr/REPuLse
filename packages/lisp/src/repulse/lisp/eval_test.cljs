@@ -3,7 +3,8 @@
             [repulse.core :as core]
             [repulse.lisp.core :as lisp]
             [repulse.lisp.eval :as leval]
-            [repulse.lisp.reader :as reader]))
+            [repulse.lisp.reader :as reader]
+            [repulse.lisp.builtins.slider :as b-slider]))
 
 ;;; Helpers
 
@@ -398,3 +399,90 @@
 (deftest master-form-empty
   (testing "E4: (master) is allowed"
     (is (= {:result nil} (lisp/eval-string "(master)" (master-env (atom [])))))))
+
+;;; ── slider (Phase WS3) ────────────────────────────────────────────────
+
+(defn- slider-envw [warns]
+  (assoc (make-test-env) "slider" (b-slider/make-slider-fn #(swap! warns conj %))))
+
+(defn- R [s env] (:result (lisp/eval-string s env)))
+
+(def ^:private arity-msg
+  "slider expects 3 or 4 arguments: (slider value min max) or (slider value min max :log) — got ")
+
+(deftest slider-evaluates-to-value
+  (let [env (make-test-env)]
+    (testing "E1"
+      (is (= 0.7 (R "(slider 0.7 0 1)" env))))
+    (testing "E6"
+      (is (= 800 (R "(slider 800 20 20000)" env)))
+      (is (= 800 (R "(slider 800 20 20000 :lin)" env)))
+      (is (= 800 (R "(slider 800 20 20000 :log)" env))))
+    (testing "E7"
+      (is (= 0.25 (R "(slider 1/4 0 1)" env))))
+    (testing "E8"
+      (is (= 0.5 (R "(do (def v 0.5) (slider v 0 1))" env))))))
+
+(deftest slider-clamps-with-warning
+  (testing "E2"
+    (let [warns (atom [])]
+      (is (= 1 (R "(slider 2 0 1)" (slider-envw warns))))
+      (is (= [{:message "slider value 2 is outside [0, 1] — clamped to 1" :from 8 :to 9}]
+             @warns))))
+  (testing "E3"
+    (let [warns (atom [])]
+      (is (= 0 (R "(slider -0.5 0 1)" (slider-envw warns))))
+      (is (= ["slider value -0.5 is outside [0, 1] — clamped to 0"] (mapv :message @warns)))))
+  (testing "E4: no hook, no throw"
+    (is (= 1 (R "(slider 2 0 1)" (make-test-env)))))
+  (testing "E5: bounds are inside"
+    (let [warns (atom [])]
+      (is (= 0 (R "(slider 0 0 1)" (slider-envw warns))))
+      (is (= 1 (R "(slider 1 0 1)" (slider-envw warns))))
+      (is (= [] @warns)))))
+
+(deftest slider-errors
+  (let [env (make-test-env)
+        err (fn [s] (lisp/eval-string s env))]
+    (testing "E9: arity"
+      (let [r (err "(slider 0.7 0)")]
+        (is (lisp/eval-error? r))
+        (is (= (str arity-msg 2) (:message r)))
+        (is (= {:from 1 :to 7} (:source r))))
+      (is (= (str arity-msg 0) (:message (err "(slider)"))))
+      (is (= (str arity-msg 5) (:message (err "(slider 1 0 1 :log 2)")))))
+    (testing "E10"
+      (let [r (err "(slider :a 0 1)")]
+        (is (= "slider value must be a number — got :a" (:message r)))
+        (is (= {:from 8 :to 10} (:source r)))))
+    (testing "E11"
+      (let [r (err "(slider 0.5 \"0\" 1)")]
+        (is (= "slider min must be a number — got \"0\"" (:message r)))
+        (is (= {:from 12 :to 15} (:source r)))))
+    (testing "E12"
+      (is (= "slider max must be a number — got a pattern"
+             (:message (err "(slider 0.5 0 (seq 1 2))")))))
+    (testing "E13"
+      (let [r (err "(slider 0.5 1 0)")]
+        (is (= "slider min must be less than max — got min 1, max 0" (:message r)))
+        (is (= {:from 1 :to 7} (:source r))))
+      (is (= "slider min must be less than max — got min 1, max 1"
+             (:message (err "(slider 0.5 1 1)")))))
+    (testing "E14"
+      (let [r (err "(slider 0.5 0 1 :exp)")]
+        (is (= "slider scale must be :log or :lin — got :exp" (:message r)))
+        (is (= {:from 16 :to 20} (:source r)))))
+    (testing "E15"
+      (let [r (err "(slider 0.5 0 1 :log)")]
+        (is (= "slider :log needs min > 0 — got min 0" (:message r)))
+        (is (= {:from 16 :to 20} (:source r)))))))
+
+(deftest slider-in-amp-equals-literal
+  (testing "E16"
+    (let [env (make-test-env)
+          a   (core/query (R "(amp (slider 0.7 0 1) (seq :c4 :e4))" env) one-cycle)
+          b   (core/query (R "(amp 0.7 (seq :c4 :e4))" env) one-cycle)]
+      (is (= 2 (count a)))
+      ;; :source differs by construction (the tokens sit at other offsets)
+      (is (= (map #(dissoc % :source) a) (map #(dissoc % :source) b)))
+      (is (every? #(= 0.7 (:amp (:value %))) a)))))

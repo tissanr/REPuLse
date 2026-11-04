@@ -319,6 +319,7 @@ open while something in the outline is selected), the **editor** (your program) 
 | **Ctrl+.** or **F9** | Run `(upd)` — apply changes without restarting running patterns |
 | **Escape** | Close the inspector (clear the outline selection); with nothing selected, jump to the command bar |
 | **F12** | With an outline selection: move the cursor to it; otherwise go to the definition under the cursor |
+| **Cmd+K S** / **Ctrl+K S** | Wrap the number under the cursor in (slider …), or unwrap the slider under the cursor |
 | **Ctrl+A** / **Cmd+A** | Select all |
 | **Ctrl+Z** / **Cmd+Z** | Undo |
 | **Ctrl+Shift+Z** / **Cmd+Shift+Z** | Redo |
@@ -438,7 +439,7 @@ that selection. Its header names the kind and the name, `↗ L3` (move the curso
 
 | Selection | Inspector shows |
 |---|---|
-| **track** | `M` (mute) / `S` (solo) buttons and the state (`live`, `muted`, `solo`, `rests in :outro`); **params** sliders for `amp`, `pan`, `decay`, `attack`, `release`, `rate`, `begin`, `end` and text rows for `synth` / `bank`; the track's **fx chain** in signal order with a slider per parameter |
+| **track** | `M` (mute) / `S` (solo) buttons and the state (`live`, `muted`, `solo`, `rests in :outro`); **params** sliders for `amp`, `pan`, `decay`, `attack`, `release`, `rate`, `begin`, `end` and text rows for `synth` / `bank`; a `≋` toggle on each param slider whose value is a literal number in the code (cyan when it is an inline `(slider …)`, click to wrap/unwrap — see [Inline sliders](#inline-sliders--slider)); the track's **fx chain** in signal order with a slider per parameter |
 | several tracks (⇧-click) | one block per track, each with its own `↗ L` link |
 | **section** | its length, a bar strip (current bar cyan), `▶ bar k/n` while it plays or a `▶ cue` button (cue it at the next bar), and its tracks with `M` / `S` and an `amp` slider |
 | **def / defn / synth** | a syntax-coloured preview of the form (first 12 lines) and `Used by :drums, :bass.` |
@@ -457,6 +458,63 @@ inspector's right edge to resize it (180–380 px; the width is remembered).
 
 A track that has not been evaluated yet shows `not evaluated — Alt+Enter`; its sliders appear
 after the first evaluation.
+
+### Inline sliders — `slider`
+
+`(slider value min max)` evaluates to `value` — a plain number, so it works wherever a number
+works. In the editor the whole form is drawn as a small draggable bar (cyan fill, the value on
+the right):
+
+```lisp
+;; before
+(track :bass (->> (seq :e1 :g1) (synth :saw) (amp 0.7)))
+
+;; after — drag the bar to change 0.7 in the code
+(track :bass (->> (seq :e1 :g1) (synth :saw) (amp (slider 0.7 0 1))))
+
+(fx :filter :freq (slider 800 20 20000))   ; log scale automatically
+(slider 5 1 10 :log)                        ; force log; :lin forces linear
+```
+
+- **Drag** left/right: 140 px is the full range. The new value is written into the code on every
+  move and the buffer re-evaluates 150 ms after the pointer stops (the same path as the inspector
+  sliders). Hold **⇧** for 10× finer steps (a `×0.1` tag shows). A whole drag is **one undo step**.
+- **Scale:** logarithmic when `min > 0` and `max / min ≥ 100` (e.g. `20 20000`), linear otherwise.
+  An optional 4th argument `:log` or `:lin` forces it; `:log` needs `min > 0`.
+- **Formatting:** whole numbers when `max ≥ 100` (`632`), otherwise two decimals (`0.70`). The
+  number written into the code uses the same text.
+- **Editing the text:** when the cursor (or a selection) touches the form — including right before
+  its `(` or after its `)` — the widget turns back into text so you can type. Double-click a widget
+  to select its value. Only single-line forms whose value, min and max are number literals become
+  widgets; `(slider x 0 1)` with a symbol evaluates but stays text.
+- **Cmd+K S / Ctrl+K S** on a number literal wraps it: `(decay 0.25)` → `(decay (slider 0.25 0 2))`.
+  On an existing slider it unwraps back to the number. The range comes from the parameter name
+  (the keyword before the number, the effect's main parameter in `(fx :filter 800)`, or the
+  function name):
+
+  | Param | Range |
+  |---|---|
+  | `amp` | 0 – 1 |
+  | `pan` | -1 – 1 |
+  | `decay` | 0 – 2 |
+  | `freq` | 20 – 20000 (log) |
+  | `bpm` | 40 – 300 |
+  | anything else | 0 – 1 |
+
+  If the number lies outside, the range is widened to include it (`(amp 1.5)` →
+  `(slider 1.5 0 1.5)`).
+- **Clamping:** a value outside `[min, max]` is clamped, and the evaluation shows a warning
+  (yellow underline + output line), e.g.
+  `Warning: slider value 2 is outside [0, 1] — clamped to 1`.
+- **Errors:** wrong argument count, non-numbers, `min ≥ max`, a 4th argument other than
+  `:log` / `:lin`, and `:log` with `min ≤ 0` are evaluation errors, e.g.
+  `slider min must be less than max — got min 1, max 0`.
+- **Inspector `≋`:** a track's param row shows `≋` when the param is a literal number in the code
+  (dim — click to wrap it in `(slider …)`) or an inline slider (cyan — click to unwrap). Inspector
+  sliders on a wrapped param write into the slider's value (clamped to its range).
+
+Inline sliders are drawn in the main editor only (not in the `<repulse-editor>` embed or the
+command bar); `slider` itself evaluates everywhere.
 
 ---
 

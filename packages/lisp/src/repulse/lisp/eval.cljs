@@ -12,7 +12,8 @@
             [repulse.lisp.builtins.collection :as b-collection]
             [repulse.lisp.builtins.types :as b-types]
             [repulse.lisp.builtins.synth :as b-synth]
-            [repulse.lisp.builtins.arrangement :as b-arrangement]))
+            [repulse.lisp.builtins.arrangement :as b-arrangement]
+            [repulse.lisp.builtins.slider :as b-slider]))
 
 ;;; Re-export helpers used by app-layer code (e.g. env/builtins.cljs)
 
@@ -407,6 +408,7 @@
       (b-types/make-builtins)
       (b-synth/make-builtins)
       (b-arrangement/make-builtins)
+      (b-slider/make-builtins)
       {"bpm"     (fn [b] (bpm-fn (->num b)) nil)
        "stop"    stop-fn
        :*defs*   defs

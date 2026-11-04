@@ -18,6 +18,7 @@ export const BUILTINS = [
   // --- Per-event parameters ---
   { label: "->>",          type: "keyword",  detail: "(->> pat (amp 0.8) (attack 0.02)) — thread pattern through transformers (last arg)" },
   { label: "tween",        type: "function", detail: "(tween curve start end bars) — smooth parameter transition over bars; curve: :linear :exp :sine" },
+  { label: "slider",       type: "function", detail: "(slider value min max [:log|:lin]) — a number drawn as a draggable slider in the editor; ⌘K S wraps/unwraps" },
   { label: "amp",          type: "function", detail: "(amp val pat) — amplitude 0.0–1.0; (amp val) returns transformer" },
   { label: "attack",       type: "function", detail: "(attack secs pat) — envelope attack time in seconds; (attack secs) returns transformer" },
   { label: "decay",        type: "function", detail: "(decay secs pat) — envelope decay time in seconds; (decay secs) returns transformer" },

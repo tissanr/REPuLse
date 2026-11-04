@@ -804,6 +804,11 @@ const DOCS = {
     description: "Interpolate a parameter from start to end over the given duration in bars. The audio engine handles per-sample interpolation — a single message is sent; no polling occurs. After the transition completes, the end value is held. Re-evaluating code restarts the transition.\n\ncurve: :linear — constant rate of change\n       :exp    — slow start, fast end (good for volume fades)\n       :sine   — S-curve: slow at both ends, fast in the middle",
     example: "(->> (seq :c4 :e4 :g4) (synth :saw) (amp (tween :linear 0.0 1.0 2)))",
   },
+  "slider": {
+    signature: "(slider value min max) or (slider value min max :log)",
+    description: "Evaluates to value, clamped to [min, max] (a warning names the clamp). In the editor the form is drawn as a draggable bar: drag to change the number in the code (⇧ = 10× finer), move the cursor onto it to edit the text, ⌘K S / Ctrl-K S to unwrap. Log scale when min > 0 and max/min ≥ 100, or with :log; :lin forces linear.",
+    example: "(->> (seq :e1 :g1) (synth :saw) (amp (slider 0.7 0 1)))",
+  },
   "amp": {
     signature: "(amp val pat) or (amp val)",
     description: "Set event amplitude (0.0 = silent, 1.0 = full). One-arg form returns a transformer for use with ->> or comp.",

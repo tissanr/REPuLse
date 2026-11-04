@@ -426,6 +426,13 @@
                          "(def bright (comp (amp 1.0) (release 0.05)))"]
               :see-also ["->>" "amp" "decay"]}
 
+ :slider     {:category "util"
+              :returns "number"
+              :side-effects []
+              :examples ["(->> (seq :e1 :g1) (synth :saw) (amp (slider 0.7 0 1)))"
+                         "(fx :filter :freq (slider 800 20 20000))"]
+              :see-also ["amp" "tween" "range"]}
+
  :tween      {:category "transform"
               :returns "number"
               :side-effects ["audio"]
