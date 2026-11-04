@@ -55,8 +55,16 @@ melodic tracks, with velocity — as one multi-track MIDI file.
 ## Open design questions
 
 1. Multiple downloads vs. a zip (needs a zip writer — no external CLJS libs in core, but app may allow one?).
+   **Decided (2026-11-04):** a single `<project>-stems.zip` download, produced by a small
+   hand-written STORE-only (uncompressed) zip writer in `app/` (local file headers, central
+   directory, CRC32). No new npm dependency.
 2. Render FX into stems now, or after TL7 per-event effects land?
+   **Decided (2026-11-04):** now. EXP1's offline path renders WASM voices and FX, so each stem
+   includes its per-track FX chain. Global/master FX are applied to the mix export only, not
+   to stems; document this as a limitation.
 3. Velocity mapping: `amp` 0–1 → velocity 1–127 linear, or a curve?
+   **Decided (2026-11-04):** linear, `velocity = clamp(round(amp × 127), 1, 127)`
+   (amp 0.5 → 64, matching the Definition of done).
 
 ## Definition of done
 
