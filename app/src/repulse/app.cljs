@@ -24,6 +24,8 @@
             [repulse.auth :as auth]
             [repulse.env.builtins :as builtins]
             [repulse.eval-orchestrator :as eo]
+            [repulse.offline-render :as offline-render]
+            [repulse.song-transport :as song-transport]
             [repulse.plugin-loading :as plugin-loading]
             [repulse.content.first-visit :as first-visit]
             [repulse.snippets :as snippets]
@@ -320,7 +322,23 @@
                  ;; command bar, and report whether the live WASM backend is up.
                  :evaluate     (fn [code] (eo/evaluate! code))
                  :audioBackend (fn [] (if (and @audio/worklet-ready? @audio/recorder-node)
-                                        "audioworklet+wasm" "js"))})
+                                        "audioworklet+wasm" "js"))
+                 ;; Phase SK1 (e2e/stems-midi.spec.ts): the last song buffer's
+                 ;; stem tracks in ONE pass with no master — the reference the
+                 ;; sum of the stems must equal (K5).
+                 :renderDryMix (fn [tail]
+                                 (let [{:keys [tracks] s :song} @song-transport/song-buffer
+                                       kws (song-transport/stem-tracks s)
+                                       all (into {} tracks)]
+                                   (-> (offline-render/render!
+                                        {:kind :song :tracks (select-keys all kws) :song s
+                                         :tail tail :master? false
+                                         :cycle-dur (:cycle-dur @audio/scheduler-state)})
+                                       (.then (fn [{:keys [left right sample-rate frames]}]
+                                                #js {:sampleRate sample-rate
+                                                     :frames     frames
+                                                     :left       (js/Array.from left)
+                                                     :right      (js/Array.from right)})))))})
       (.focus view))
 
     ;; Register the project getter for session snapshots

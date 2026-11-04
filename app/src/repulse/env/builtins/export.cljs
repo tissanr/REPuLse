@@ -1,6 +1,6 @@
 (ns repulse.env.builtins.export
-  "WAV export builtin (Phase EXP1). (export n), (export :track) and
-   (export :song [:tail secs]) render offline, faster than real time, through
+  "WAV export builtin (Phase EXP1, SK1). (export n), (export :track [n]),
+   (export :stems …) and (export :song [:tail secs]) render offline, faster than real time, through
    the same WASM voices and FX as playback; (export :song … :realtime) captures
    the song in real time (SONG1). The call only validates its arguments and
    sets song-transport/pending-export; the export starts once the buffer has
@@ -15,6 +15,13 @@
 (def ^:private realtime-error "Error: :realtime only applies to (export :song)")
 (def ^:private tail-error "Error: :tail must be a number of seconds between 0 and 30")
 (def ^:private running-error "Error: an export is already running — (stop) cancels it")
+
+(def ^:private usage-error
+  "Error: usage — (export [cycles]), (export :track [cycles]), (export :stems …) or (export :song …)")
+(def ^:private no-song-error
+  "Error: no song — evaluate a buffer that ends with (song …) first")
+(def ^:private cycles-error "Error: export needs at least 1 cycle")
+(def ^:private stems-args-error "Error: (export :stems) takes a cycle count or :tail secs")
 
 (defn- export-running? []
   (or @song-transport/export-running?
@@ -48,7 +55,7 @@
       error error
 
       (nil? (song-transport/current-song))
-      "Error: no song — evaluate a buffer that ends with (song …) first"
+      no-song-error
 
       (and realtime?
            (or (not (.-AudioWorkletNode js/globalThis))
@@ -67,12 +74,25 @@
                " in real time… (stop) cancels")
           (str "rendering song — " (song-transport/song-summary s tail) " offline…"))))))
 
+(defn- cycles-shape
+  "Valid argument shapes of (export …) without :song / :stems: [], [n], [kw],
+   [kw n] → {:track kw-or-nil :n n-or-nil}; anything else nil."
+  [args]
+  (case (count args)
+    0 {}
+    1 (let [a (first args)]
+        (cond (number? a)  {:n a}
+              (keyword? a) {:track a}))
+    2 (let [[a b] args]
+        (when (and (keyword? a) (number? b)) {:track a :n b}))
+    nil))
+
 (defn- export-cycles
-  "(export n) / (export :track) / (export). Returns a status or \"Error: …\" string."
+  "(export [n]) / (export :track [n]). Returns a status or \"Error: …\" string."
   [args set-output!]
-  (let [arg      (first args)
-        n        (if (number? arg) arg default-cycles)
-        track-kw (when (keyword? arg) arg)
+  (let [shape    (cycles-shape args)
+        n        (or (:n shape) default-cycles)
+        track-kw (:track shape)
         ;; tracks defined earlier in this same buffer are activated only after
         ;; evaluation (SONG1) — include them so (export n) sees them
         all      (merge (:tracks @audio/scheduler-state)
@@ -81,8 +101,11 @@
       (some #{:realtime} args)
       realtime-error
 
-      (and (number? arg) (or (js/isNaN arg) (< arg 1)))
-      "Error: export needs at least 1 cycle"
+      (nil? shape)
+      usage-error
+
+      (and (:n shape) (or (js/isNaN n) (< n 1)))
+      cycles-error
 
       (and track-kw (not (contains? all track-kw)))
       (str "Error: no track :" (name track-kw))
@@ -100,12 +123,60 @@
         (str "rendering " (song-transport/cycles-label track-kw)
              " — " n' " cycles offline…")))))
 
+(defn parse-stems-opts
+  "Pure (K3). Options after :stems → {:n n} | {:tail secs} | {} or {:error str}.
+   Valid: [], [n], [:tail s]. :realtime is never accepted."
+  [opts]
+  (let [[a b] opts]
+    (cond
+      (some #{:realtime} opts) {:error realtime-error}
+      (empty? opts) {}
+      (and (= 1 (count opts)) (number? a))
+      (if (or (js/isNaN a) (< a 1)) {:error cycles-error} {:n (int a)})
+      (= :tail a)
+      (if (and (= 2 (count opts)) (number? b) (not (js/isNaN b)) (<= 0 b 30))
+        {:tail b}
+        {:error tail-error})
+      :else {:error stems-args-error})))
+
+(defn- export-stems
+  "(export :stems [n | :tail secs]). Returns a status or \"Error: …\" string."
+  [opts set-output!]
+  (let [{:keys [error n tail]} (parse-stems-opts opts)
+        s       (song-transport/current-song)
+        all     (merge (:tracks @audio/scheduler-state)
+                       (into {} @song-transport/pending-tracks))
+        song?   (and s (nil? n))
+        count-t (if song? (count (song-transport/stem-tracks s)) (count all))]
+    (cond
+      error error
+
+      (and tail (nil? s))
+      no-song-error
+
+      (zero? count-t)
+      "Error: no active tracks to export"
+
+      (export-running?)
+      running-error
+
+      :else
+      (let [tail' (or tail default-tail-secs)]
+        (reset! song-transport/pending-export
+                {:kind :stems :n n :tail tail' :set-output! set-output!})
+        (str "rendering stems — " count-t " tracks, "
+             (if song?
+               (song-transport/song-summary s tail')
+               (str (or n default-cycles) " cycles"))
+             " offline…")))))
+
 (defn make-builtins
   "ctx — {:set-output! f}"
   [{:keys [set-output!]}]
   {"export"
    (fn [& args]
      (let [args' (mapv leval/unwrap args)]
-       (if (= :song (first args'))
-         (export-song (vec (rest args')) set-output!)
+       (case (first args')
+         :song  (export-song (vec (rest args')) set-output!)
+         :stems (export-stems (vec (rest args')) set-output!)
          (export-cycles args' set-output!))))})

@@ -13,6 +13,8 @@
             [repulse.song-transport-test]
             [repulse.offline-render-test]
             [repulse.wav-test]
+            [repulse.zip-test]
+            [repulse.midi-export-test]
             [repulse.samples-test]
             [repulse.sound-check-test]
             [repulse.content.demos-test]
@@ -47,7 +49,7 @@
                   'repulse.lisp.integration-test
                   'repulse.fx-test 'repulse.session-test
                   'repulse.song-transport-test 'repulse.offline-render-test
-                  'repulse.wav-test
+                  'repulse.wav-test 'repulse.zip-test 'repulse.midi-export-test
                   'repulse.samples-test
                   'repulse.sound-check-test
                   'repulse.content.demos-test
