@@ -182,29 +182,56 @@
       (.connect gain @master-gain)
       (swap! track-nodes assoc track-name {:gain-node gain :fx-chain []}))))
 
+;;; Offline graphs (Phase EXP1)
+;; OfflineAudioContext → {:master-gain node :worklet-node node :track-dests {kw node}}
+;; registered by repulse.offline-render. An OfflineAudioContext WITHOUT a
+;; registered graph keeps the JS-only path (TEST1 harness, backend "offline-js").
+(defonce ^:private offline-graphs
+  (when (exists? js/WeakMap) (js/WeakMap.)))
+
+(defn register-offline-graph!
+  "Register the offline graph of an OfflineAudioContext so play-event routes and
+   dispatches exactly like the real-time graph (decision E2)."
+  [ac graph]
+  (.set offline-graphs ac graph)
+  ac)
+
+(defn- offline-context? [ac]
+  (and (exists? js/OfflineAudioContext) (instance? js/OfflineAudioContext ac)))
+
+(defn- offline-graph [ac]
+  (when (offline-context? ac) (.get offline-graphs ac)))
+
 (defn- output-for-track
   "Returns the AudioNode that a source should connect to for the given track.
-   Falls back to masterGain (or destination for offline) when track-name is nil."
+   Falls back to masterGain (or destination for an unregistered offline
+   context) when track-name is nil. A registered offline graph mirrors the
+   real-time routing: first track-FX input, else the offline master gain."
   [ac track-name]
-  (if (and track-name (not (instance? js/OfflineAudioContext ac)))
-    (if-let [tn (get @track-nodes track-name)]
-      (if-let [first-fx (first (:fx-chain tn))]
-        (:input first-fx)
-        @master-gain)
-      ;; track-name given but no node yet — fallback
-      (or @master-gain (.-destination ac)))
-    ;; no track-name or offline render
-    (if (instance? js/OfflineAudioContext ac)
-      (.-destination ac)
-      (or @master-gain (.-destination ac)))))
+  (if-let [g (offline-graph ac)]
+    (get-in g [:track-dests track-name] (:master-gain g))
+    (if (and track-name (not (offline-context? ac)))
+      (if-let [tn (get @track-nodes track-name)]
+        (if-let [first-fx (first (:fx-chain tn))]
+          (:input first-fx)
+          @master-gain)
+        ;; track-name given but no node yet — fallback
+        (or @master-gain (.-destination ac)))
+      ;; no track-name or unregistered offline render
+      (if (offline-context? ac)
+        (.-destination ac)
+        (or @master-gain (.-destination ac))))))
 
 ;;; Synthesized voices (JS fallback when AudioWorklet is unavailable)
 
 (defn- output-node [ac]
-  ;; OfflineAudioContext has no master-gain — route directly to its destination.
-  (if (instance? js/OfflineAudioContext ac)
-    (.-destination ac)
-    (or @master-gain (.-destination ac))))
+  ;; A registered offline graph has its own master gain; an unregistered
+  ;; OfflineAudioContext has none — route directly to its destination.
+  (if-let [g (offline-graph ac)]
+    (:master-gain g)
+    (if (offline-context? ac)
+      (.-destination ac)
+      (or @master-gain (.-destination ac)))))
 
 (defn- make-kick [ac t amp pan dest]
   (let [osc    (.createOscillator ac)
@@ -389,22 +416,32 @@
 
 ;;; Synthesis dispatch
 
+(defn- worklet-target
+  "The WASM worklet that play-event dispatches to for context ac:
+   {:node :ready? :master}. A registered offline graph has its own worklet and
+   master gain; otherwise the real-time atoms."
+  [ac]
+  (if-let [g (offline-graph ac)]
+    {:node (:worklet-node g) :ready? true :master (:master-gain g)}
+    {:node @worklet-node :ready? @worklet-ready? :master @master-gain}))
+
 (defn- worklet-trigger!
   "Send a trigger message to the AudioWorklet. Returns true if worklet is ready.
-   dest must be master-gain — worklet always outputs there and cannot be redirected."
-  [value t dest]
-  (when (and @worklet-ready? @worklet-node (= dest @master-gain))
-    (.. @worklet-node -port
+   dest must be the target's master gain — the worklet always outputs there and
+   cannot be redirected (decision E1: same rule offline and in real time)."
+  [{:keys [node ready? master]} value t dest]
+  (when (and ready? node (= dest master))
+    (.. ^js node -port
         (postMessage #js {:type "trigger" :value value :time t}))
     true))
 
 (defn- worklet-trigger-v2!
   "Send a trigger_v2 message with explicit synthesis parameters. Returns true if ready.
-   dest must be master-gain — worklet always outputs there and cannot be redirected."
-  [value t amp attack decay pan dest]
-  (when (and @worklet-ready? @worklet-node (= dest @master-gain))
+   dest must be the target's master gain — the worklet always outputs there."
+  [{:keys [node ready? master]} value t amp attack decay pan dest]
+  (when (and ready? node (= dest master))
     (when debug? (js/console.log "[REPuLse] triggering WASM:" value "at t=" t "amp=" amp))
-    (.. @worklet-node -port
+    (.. ^js node -port
         (postMessage #js {:type "trigger_v2" :value value :time t
                           :amp amp :attack attack :decay decay :pan pan}))
     true))
@@ -423,8 +460,11 @@
 (defn play-event
   ([ac t value] (play-event ac t value nil))
   ([ac t value track-name]
-   ;; OfflineAudioContext has no worklet — skip to JS fallbacks for rendering.
-   (let [offline? (instance? js/OfflineAudioContext ac)
+   ;; An OfflineAudioContext without a registered graph has no worklet — skip
+   ;; to JS fallbacks (TEST1 harness). A registered offline graph (EXP1 export)
+   ;; takes exactly the real-time branches.
+   (let [offline? (and (offline-context? ac) (nil? (offline-graph ac)))
+         wt       (when-not offline? (worklet-target ac))
          dest     (output-for-track ac track-name)]
      (cond
        ;; Silence / rest
@@ -457,14 +497,14 @@
            (= synth :saw)
            (let [hz (if (theory/note-keyword? note) (theory/note->hz note) (double note))]
              (or (when-not offline?
-                   (worklet-trigger-v2! (str "saw:" hz) t amp-v attack-v decay-v pan-v dest))
+                   (worklet-trigger-v2! wt (str "saw:" hz) t amp-v attack-v decay-v pan-v dest))
                  (make-saw ac t hz decay-v amp-v attack-v pan-v dest)))
 
            (= synth :square)
            (let [hz  (if (theory/note-keyword? note) (theory/note->hz note) (double note))
                  pw' (double (or (:pw value) 0.5))]
              (or (when-not offline?
-                   (worklet-trigger-v2! (str "square:" hz ":" pw')
+                   (worklet-trigger-v2! wt (str "square:" hz ":" pw')
                                         t amp-v attack-v decay-v pan-v dest))
                  (make-square ac t hz decay-v amp-v attack-v pan-v dest pw')))
 
@@ -473,7 +513,7 @@
                  index (or (:index value) 1.0)
                  ratio (or (:ratio value) 2.0)]
              (or (when-not offline?
-                   (worklet-trigger-v2! (str "fm:" hz ":" index ":" ratio)
+                   (worklet-trigger-v2! wt (str "fm:" hz ":" index ":" ratio)
                                         t amp-v attack-v decay-v pan-v dest))
                  ;; JS fallback: sine (FM needs two connected oscillators — WASM only)
                  (make-sine ac t hz decay-v amp-v attack-v pan-v dest)))
@@ -483,7 +523,7 @@
            (let [hz     (if (theory/note-keyword? note) (theory/note->hz note) (double note))
                  preset (clojure.core/name synth)]
              (or (when-not offline?
-                   (worklet-trigger-v2! (str "fm:" preset ":" hz)
+                   (worklet-trigger-v2! wt (str "fm:" preset ":" hz)
                                         t amp-v attack-v decay-v pan-v dest))
                  (make-sine ac t hz decay-v amp-v attack-v pan-v dest)))
 
@@ -491,7 +531,7 @@
            (let [hz     (if (theory/note-keyword? note) (theory/note->hz note) (double note))
                  preset (clojure.core/name synth)]
              (or (when-not offline?
-                   (worklet-trigger-v2! (str "ks:" preset ":" hz)
+                   (worklet-trigger-v2! wt (str "ks:" preset ":" hz)
                                         t amp-v attack-v decay-v pan-v dest))
                  (make-sine ac t hz decay-v amp-v attack-v pan-v dest)))
 
@@ -501,7 +541,7 @@
              (let [hz (theory/note->hz note)]
                (if offline?
                  (make-sine ac t hz decay-v amp-v attack-v pan-v dest)
-                 (or (worklet-trigger-v2! (str hz) t amp-v attack-v decay-v pan-v dest)
+                 (or (worklet-trigger-v2! wt (str hz) t amp-v attack-v decay-v pan-v dest)
                      (make-sine ac t hz decay-v amp-v attack-v pan-v dest))))
              (let [resolved (samples/resolve-keyword note)
                    extra    {:rate  (:rate value)
@@ -514,13 +554,13 @@
                  :else
                  (if offline?
                    (js-synth ac t note amp-v pan-v dest)
-                   (or (worklet-trigger-v2! (name note) t amp-v attack-v decay-v pan-v dest)
+                   (or (worklet-trigger-v2! wt (name note) t amp-v attack-v decay-v pan-v dest)
                        (js-synth ac t note amp-v pan-v dest))))))
 
            (number? note)
            (if offline?
              (make-sine ac t note decay-v amp-v attack-v pan-v dest)
-             (or (worklet-trigger-v2! (str note) t amp-v attack-v decay-v pan-v dest)
+             (or (worklet-trigger-v2! wt (str note) t amp-v attack-v decay-v pan-v dest)
                  (make-sine ac t note decay-v amp-v attack-v pan-v dest)))))
 
        ;; Map {:bank :bd :n 2} from (sound :bd 2) — always use samples
@@ -534,7 +574,7 @@
            (samples/play! ac t bank n amp-v pan-v extra dest)
            (if offline?
              (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)
-             (or (worklet-trigger-v2! (name bank) t amp-v 0.001 1.5 pan-v dest)
+             (or (worklet-trigger-v2! wt (name bank) t amp-v 0.001 1.5 pan-v dest)
                  (make-sine ac t 440 1.5 amp-v 0.001 pan-v dest)))))
 
        ;; Keyword — note name → Hz tone, or sample bank
@@ -543,14 +583,14 @@
          (let [hz (theory/note->hz value)]
            (if offline?
              (make-sine ac t hz 1.5 1.0 0.001 0.0 dest)
-             (or (worklet-trigger! (str hz) t dest)
+             (or (worklet-trigger! wt (str hz) t dest)
                  (make-sine ac t hz 1.5 1.0 0.001 0.0 dest))))
          (let [resolved (samples/resolve-keyword value)]
            (cond
              (samples/has-bank? resolved) (samples/play! ac t resolved 0 1.0 0.0 {} dest)
              :else (if offline?
                      (js-synth ac t value dest)
-                     (or (worklet-trigger! (name value) t dest)
+                     (or (worklet-trigger! wt (name value) t dest)
                          (js-synth ac t value dest))))))
 
        ;; Map with :synth :noise — no :note key
@@ -559,17 +599,77 @@
              decay-v (float (:decay value 0.3))
              pan-v  (float (:pan value 0.0))]
          (or (when-not offline?
-               (worklet-trigger-v2! "noise" t amp-v 0.001 decay-v pan-v dest))
+               (worklet-trigger-v2! wt "noise" t amp-v 0.001 decay-v pan-v dest))
              (make-noise ac t decay-v amp-v pan-v dest)))
 
        ;; Number — frequency in Hz
        (number? value)
        (if offline?
          (make-sine ac t value 1.5 1.0 0.001 0.0 dest)
-         (or (worklet-trigger! (str value) t dest)
+         (or (worklet-trigger! wt (str value) t dest)
              (make-sine ac t value 1.5 1.0 0.001 0.0 dest)))
 
        :else (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)))))
+
+;;; Offline WASM worklet (Phase EXP1, decision E11)
+
+(def ^:private offline-init-timeout-ms 5000)
+
+(defn init-offline-worklet!
+  "Load the WASM worklet into an OfflineAudioContext, connect it to dest (the
+   offline master gain) and initialise the engine with freshly fetched WASM
+   bytes. → Promise<node>; rejects on any addModule/fetch failure, on the
+   worklet's \"error\" message and after 5 s without \"ready\"."
+  [^js offline dest]
+  (js/Promise.
+   (fn [resolve reject]
+     (let [done?  (atom false)
+           finish (fn [f v] (when-not @done? (reset! done? true) (f v)))
+           timer  (js/setTimeout
+                   #(finish reject (js/Error. "WASM worklet did not report ready within 5 s"))
+                   offline-init-timeout-ms)
+           fail   (fn [e] (js/clearTimeout timer) (finish reject e))]
+       (if-let [worklet (.-audioWorklet offline)]
+         (-> (.addModule worklet (public-url "worklet.js"))
+             (.then (fn []
+                      (let [node (js/AudioWorkletNode. offline "repulse-processor"
+                                                       #js {:outputChannelCount #js [2]})]
+                        (.connect node dest)
+                        (set! (.. node -port -onmessage)
+                              (fn [e]
+                                (let [d (.-data e)]
+                                  (case (.-type d)
+                                    "ready" (do (js/clearTimeout timer) (finish resolve node))
+                                    "error" (fail (js/Error. (str "WASM init failed: " (.-message d))))
+                                    "synced" (when-let [cb (aget node "__repulseOnSynced")]
+                                               (cb (.-id d)))
+                                    nil))))
+                        (-> (js/fetch (public-url "repulse_audio_bg.wasm"))
+                            (.then (fn [^js resp]
+                                     (if (.-ok resp)
+                                       (.arrayBuffer resp)
+                                       (throw (js/Error. (str "WASM fetch failed (HTTP " (.-status resp) ")"))))))
+                            (.then (fn [buf]
+                                     (.. node -port
+                                         (postMessage #js {:type "init" :wasmBytes buf} #js [buf]))))))))
+             (.catch fail))
+         (fail (js/Error. "AudioWorklet unavailable offline")))))))
+
+(defonce ^:private sync-counter (atom 0))
+
+(defn sync-worklet!
+  "Post {type: \"sync\", id} to an offline worklet node and resolve once it
+   answers \"synced\" — every message posted before has then been handled.
+   Rejects after 5 s."
+  [^js node]
+  (js/Promise.
+   (fn [resolve reject]
+     (let [id    (swap! sync-counter inc)
+           timer (js/setTimeout #(reject (js/Error. "WASM worklet did not answer sync within 5 s"))
+                                offline-init-timeout-ms)]
+       (aset node "__repulseOnSynced"
+             (fn [got] (when (= got id) (js/clearTimeout timer) (resolve true))))
+       (.. node -port (postMessage #js {:type "sync" :id id}))))))
 
 ;;; Scheduler state
 
@@ -590,6 +690,44 @@
             :sine (* 0.5 (- 1.0 (Math/cos (* Math/PI u))))
             u)]
     (+ start (* (- end start) k))))
+
+(defn export-frames
+  "Frame count for secs at sample rate sr — shared by the offline render and
+   the real-time capture (Phase EXP1, decision E3)."
+  [secs sr]
+  (Math/round (* secs sr)))
+
+(defn tween-state-for
+  "Pure core of arm-transitions!: detect tween descriptors in the first cycle of
+   pattern → {param {:tween pv :start-time start-time}}."
+  [pattern start-time]
+  (let [sp  {:start [0 1] :end [1 1]}
+        evs (try (core/query pattern sp) (catch :default _ []))]
+    (into {}
+          (for [ev   evs
+                :let [v (:value ev)]
+                :when (map? v)
+                [k pv] v
+                :when (tween? pv)]
+            [k {:tween pv :start-time start-time}]))))
+
+(defn rearm-tweens
+  "Set every :start-time in a tween-state map (track → param → ts) to t0
+   (decision 3: exports start tweens at the export's bar 0)."
+  [tween-state t0]
+  (update-vals tween-state (fn [m] (update-vals m #(assoc % :start-time t0)))))
+
+(defn resolve-tweens
+  "Interpolate the tweened params of event value raw at audio time t.
+   tween-st — {param ts} of the event's track; cycle-dur — seconds per bar."
+  [raw tween-st t cycle-dur]
+  (if (and (map? raw) (seq tween-st))
+    (reduce-kv (fn [m k ts]
+                 (if (tween? (get m k))
+                   (assoc m k (interp-tween ts t cycle-dur))
+                   m))
+               raw tween-st)
+    raw))
 
 (def scheduler-state
   (atom {:playing?     false
@@ -694,14 +832,7 @@
   (let [{:keys [cycle-dur on-beat on-event on-fx-event]} state]
     (when (> t (.-currentTime ac))
       (let [tween-st (get-in state [:tween-state track-name] {})
-            raw      (:value ev)
-            value    (if (and (map? raw) (seq tween-st))
-                       (reduce-kv (fn [m k ts]
-                                    (if (tween? (get m k))
-                                      (assoc m k (interp-tween ts t cycle-dur))
-                                      m))
-                                  raw tween-st)
-                       raw)]
+            value    (resolve-tweens (:value ev) tween-st t cycle-dur)]
         (play-event ac t value track-name)
         ;; MIDI note output — triggered by :midi-ch key added via (midi-out ch pat)
         (when-let [midi-ch (:midi-ch (:value ev))]
@@ -784,7 +915,10 @@
             dur         (song/song-duration-secs s (/ 240.0 cd))
             t1          (+ t0 dur tail)
             start-frame (Math/round (* t0 sr))
-            frames      (Math/round (* (+ dur tail) sr))]
+            frames      (export-frames (+ dur tail) sr)]
+        ;; Decision 3 (EXP1): every tween starts at the captured song's bar 0.
+        ;; No event of the song has been scheduled yet (pre-roll bars are empty).
+        (swap! scheduler-state update :tween-state rearm-tweens t0)
         (swap! capture-ctl assoc
                :left   (js/Float32Array. frames)
                :right  (js/Float32Array. frames)
@@ -974,17 +1108,8 @@
    schedule-cycle! uses this to interpolate values per event at schedule time,
    which works uniformly for WASM synths, JS synths, and sample-based sounds."
   [track-name pattern ac]
-  (let [sp   {:start [0 1] :end [1 1]}
-        evs  (try (core/query pattern sp) (catch :default _ []))
-        now  (.-currentTime ac)
-        ts   (into {}
-               (for [ev   evs
-                     :let [v (:value ev)]
-                     :when (map? v)
-                     [k pv] v
-                     :when (tween? pv)]
-                 [k {:tween pv :start-time now}]))]
-    (swap! scheduler-state update :tween-state assoc track-name ts)))
+  (swap! scheduler-state update :tween-state assoc track-name
+         (tween-state-for pattern (.-currentTime ac))))
 
 (defn play-track!
   "Add or replace a named track. Creates a per-track GainNode if needed.

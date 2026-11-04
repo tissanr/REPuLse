@@ -2337,7 +2337,7 @@ See full spec: [PROMPTS/PHASE-LIVE2.md](PROMPTS/PHASE-LIVE2.md)
 
 ---
 
-## Phase EXP1 — Export Parity: Offline Render with WASM Voices & FX 📋 *planned*
+## Phase EXP1 — Export Parity: Offline Render with WASM Voices & FX ✅ *delivered*
 
 > **Milestone 4** · **Automation:** 🤖 auto
 
@@ -2347,6 +2347,32 @@ Offline export that sounds exactly like playback, faster than real time.
 - WASM worklet loaded into the `OfflineAudioContext` (today `play-event` falls back to JS sines offline)
 - Per-track and global FX chains rebuilt offline from cloned plugins and their current params, incl. plugin worklets
 - `(export n)`, `(export :track)` and `(export :song)` use it; fallback to SONG1 real-time capture, never to sines
+
+**Delivered:**
+- New `repulse.offline-render` (`fx-plan`, `render!`): an `OfflineAudioContext` at the live
+  device sample rate with a 0.25 s trimmed pre-roll, master gain → global FX chain →
+  destination, per-track FX chains → master, and the WASM worklet (`init-offline-worklet!`,
+  `sync`/`synced` message) — so FM, Karplus-Strong, saw and drum voices and every effect render
+  offline. Sample voices are awaited before rendering starts.
+- `audio/play-event` looks up a graph registered per `OfflineAudioContext` (`WeakMap`) and then
+  takes exactly the real-time branches, including the "WASM only into master gain" rule
+  (decision E1); unregistered offline contexts (TEST1 `"offline-js"` harness) are unchanged.
+  Shared helpers `export-frames`, `tween-state-for`, `rearm-tweens`, `resolve-tweens`.
+- Plugins are rebuilt like per-track FX (`fx/instantiate-plugin`), re-`init`ed with an offline
+  host, then `getParams` → `setParam` plus the `(fx …)` parameter log (`fx/param-log`); visual
+  plugins are skipped. Optional `ready()` protocol method on `bitcrusher`, `dattorro-reverb` and
+  `cab`.
+- `(export n)`, `(export :track)` and `(export :song [:tail s])` start after evaluation and
+  render offline (`… (offline)`); `(export :song … :realtime)` keeps the SONG1 capture. If the
+  offline path can't start (worklet/WASM load, buses, plugin without `getParams`), the output
+  says `offline render unavailable (<reason>) — capturing in real time instead…` and the
+  capture runs instead (a synthetic one-section song for `(export n)`).
+- Tweens are re-armed to the export's bar 0 in both paths, so exports are reproducible;
+  `export-running?` guards one export at a time.
+- Tests: `offline-render-test` + fx/song-transport unit tests; `e2e/export-parity.spec.ts`
+  (length, FM sidebands, KS harmonics, track reverb tail, master delay echo, bitcrusher /
+  dattorro worklets, offline vs real-time song within 1 dB, fallback, `:realtime`, visualisers,
+  tween reproducibility within 0.1 dB).
 
 See full spec: [PROMPTS/PHASE-EXP1.md](PROMPTS/PHASE-EXP1.md)
 

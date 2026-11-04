@@ -56,8 +56,8 @@ and **when** — not **how** synthesis works internally.
 - **Performance:** named tracks you can mute, solo and replace live; MIDI in/out; WAV and
   MIDI export
 - **Songs:** `song` and `section` turn the tracks of a buffer into a song with an end;
-  `(play-from :chorus)` rehearses from any section and `(export :song)` records the whole song
-  to WAV in real time:
+  `(play-from :chorus)` rehearses from any section and `(export :song)` renders the whole song
+  to WAV offline, with every voice and effect (`(export :song :realtime)` records it in real time):
 
   ```clojure
   (song (section :intro  4 [:kick :hats])

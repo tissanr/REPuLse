@@ -315,7 +315,12 @@
                  :fxParam    (fn [effect param]
                                (when-let [e (some #(when (and (:active? %) (= effect (:name %))) %)
                                                   @fx/chain)]
-                                 (get (js->clj (.getParams ^js (:plugin e))) param)))})
+                                 (get (js->clj (.getParams ^js (:plugin e))) param)))
+                 ;; Phase EXP1 (e2e/export-parity.spec.ts): evaluate like the
+                 ;; command bar, and report whether the live WASM backend is up.
+                 :evaluate     (fn [code] (eo/evaluate! code))
+                 :audioBackend (fn [] (if (and @audio/worklet-ready? @audio/recorder-node)
+                                        "audioworklet+wasm" "js"))})
       (.focus view))
 
     ;; Register the project getter for session snapshots

@@ -3267,14 +3267,15 @@
       "(export 4)",
       "(export :kick)",
       "(export :song)",
-      "(export :song :tail 4)"
+      "(export :song :tail 4)",
+      "(export :song :realtime)"
     ],
     "see-also": [
       "midi-export",
       "share!",
       "song"
     ],
-    "detail": "(export) — render all tracks to WAV; (export n) — n cycles; (export :track) — single track; (export :song) — capture the whole song in real time",
+    "detail": "(export) — render all tracks to WAV; (export n) — n cycles; (export :track) — single track; (export :song) — render the whole song offline; (export :song :realtime) — record it in real time",
     "description": "Download a WAV. (export n) renders n cycles of all tracks offline (default 4); (export :track) renders one track; (export :song) plays the song once from bar 0 and records the master output in real time (with FX), plus a release tail (default 2 s). (stop) cancels a song export."
   },
   "rate": {

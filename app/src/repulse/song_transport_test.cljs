@@ -7,7 +7,8 @@
             [repulse.song-transport :as st]
             [repulse.audio :as audio]
             [repulse.ui.status-model :as status-model]
-            [repulse.env.builtins.song :as b-song]))
+            [repulse.env.builtins.song :as b-song]
+            [repulse.env.builtins.export :as b-export]))
 
 (defn- make-env []
   (merge (leval/make-env (fn [] nil) (fn [_] nil))
@@ -143,3 +144,97 @@
       (finally
         (reset! audio/scheduler-state saved)))))
 
+
+;;; Phase EXP1 — export argument grammar (E13) → pending-export
+
+(defn- export-env [out]
+  (merge (make-env) (b-export/make-builtins {:set-output! out})))
+
+(defn- run-export [code]
+  (st/reset-pending!)
+  (let [out (fn [_ _] nil)
+        r   (lisp/eval-string code (export-env out))]
+    {:result (if (lisp/eval-error? r) (:message r) (:result r))
+     :pending (some-> @st/pending-export (dissoc :set-output!))}))
+
+(deftest export-grammar-test
+  (let [saved @audio/scheduler-state]
+    (try
+      (swap! audio/scheduler-state assoc :tracks {} :capture nil :cycle-dur 2.0)
+      (reset! st/export-running? false)
+      (testing "(export n) / (export :track) render offline after evaluation"
+        (is (= {:result "rendering all tracks — 4 cycles offline…"
+                :pending {:kind :cycles :n 4 :track nil}}
+               (run-export "(track :a (seq :bd)) (export 4)")))
+        (is (= {:result "rendering all tracks — 4 cycles offline…"
+                :pending {:kind :cycles :n 4 :track nil}}
+               (run-export "(track :a (seq :bd)) (export)")))
+        (is (= {:result "rendering :a — 4 cycles offline…"
+                :pending {:kind :cycles :n 4 :track :a}}
+               (run-export "(track :a (seq :bd)) (track :b (seq :sd)) (export :a)")))
+        (is (= {:result "rendering all tracks — 2 cycles offline…"
+                :pending {:kind :cycles :n 2 :track nil}}
+               (run-export "(track :a (seq :bd)) (export 2.5)"))
+            "fractional cycle counts are truncated, as before")
+        (is (= "rendering :a — 4 cycles offline…"
+               (:result (run-export "(track :a (seq :bd)) (export :a)")))))
+      (testing "(export n) errors"
+        (is (= {:result "Error: no track :zz" :pending nil}
+               (run-export "(track :a (seq :bd)) (export :zz)")))
+        (is (= {:result "Error: no active tracks to export" :pending nil}
+               (run-export "(export 4)")))
+        (is (= {:result "Error: export needs at least 1 cycle" :pending nil}
+               (run-export "(track :a (seq :bd)) (export 0)")))
+        (is (= {:result "Error: :realtime only applies to (export :song)" :pending nil}
+               (run-export "(track :a (seq :bd)) (export 4 :realtime)")))
+        (is (= {:result "Error: :realtime only applies to (export :song)" :pending nil}
+               (run-export "(track :a (seq :bd)) (export :realtime)"))))
+      (testing "(export :song …) renders offline by default"
+        (let [song-src "(track :a (seq :bd)) (song (section :a 1 [:a])) "]
+          (is (= {:result "rendering song — 1 bars, 4.0 s offline…"
+                  :pending {:kind :song :tail 2 :realtime? false}}
+                 (run-export (str song-src "(export :song)"))))
+          (is (= {:result "rendering song — 1 bars, 2.5 s offline…"
+                  :pending {:kind :song :tail 0.5 :realtime? false}}
+                 (run-export (str song-src "(export :song :tail 0.5)"))))
+          (is (= {:result "Error: :tail must be a number of seconds between 0 and 30" :pending nil}
+                 (run-export (str song-src "(export :song :tail 40)"))))
+          (is (= {:result "Error: :tail must be a number of seconds between 0 and 30" :pending nil}
+                 (run-export (str song-src "(export :song :fade)"))))
+          (testing ":realtime needs AudioWorklet (absent under node)"
+            (is (= {:result "Error: (export :song) needs AudioWorklet support for real-time capture"
+                    :pending nil}
+                   (run-export (str song-src "(export :song :realtime)")))))
+          (testing "one export at a time (E14)"
+            (reset! st/export-running? true)
+            (is (= {:result "Error: an export is already running — (stop) cancels it" :pending nil}
+                   (run-export (str song-src "(export :song)"))))
+            (is (= {:result "Error: an export is already running — (stop) cancels it" :pending nil}
+                   (run-export (str song-src "(export 2)"))))
+            (reset! st/export-running? false))))
+      (testing "(export :song) without a song"
+        (is (= {:result "Error: no song — evaluate a buffer that ends with (song …) first" :pending nil}
+               (run-export "(export :song)"))))
+      (finally
+        (reset! st/export-running? false)
+        (reset! audio/scheduler-state saved)))))
+
+(deftest parse-song-opts-test
+  (testing "every valid E13 form"
+    (is (= {:tail 2 :realtime? false} (b-export/parse-song-opts [])))
+    (is (= {:tail 1 :realtime? false} (b-export/parse-song-opts [:tail 1])))
+    (is (= {:tail 2 :realtime? true} (b-export/parse-song-opts [:realtime])))
+    (is (= {:tail 1 :realtime? true} (b-export/parse-song-opts [:tail 1 :realtime])))
+    (is (= {:tail 1 :realtime? true} (b-export/parse-song-opts [:realtime :tail 1]))))
+  (testing "invalid forms"
+    (doseq [opts [[:tail] [:tail -1] [:tail 31] [:tail "x"] [:realtime :realtime]
+                  [:tail 1 :tail 2] [:foo] [3]]]
+      (is (= {:error "Error: :tail must be a number of seconds between 0 and 30"}
+             (b-export/parse-song-opts opts))
+          (pr-str opts)))))
+
+(deftest cycles-labels-test
+  (is (= "all tracks" (st/cycles-label nil)))
+  (is (= ":kick" (st/cycles-label :kick)))
+  (is (= "repulse-all-4cycles.wav" (st/cycles-filename nil 4)))
+  (is (= "repulse-kick-2cycles.wav" (st/cycles-filename :kick 2))))

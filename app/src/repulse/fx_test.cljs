@@ -244,3 +244,59 @@
          (is (nil? (b-fx/loose-fx-hint!)))
          (is (= [b-fx/LOOSE-FX-HINT] @msgs))
          (finally (set! js/console.info orig)))))))
+
+;;; ── Phase EXP1 — param log, plugin instantiation, getParams flag ──────
+
+(deftest set-param-writes-param-log
+  (let [saved-chain @fx/chain
+        saved-log   @fx/param-log
+        calls       (atom [])
+        plugin      #js {:setParam    (fn [p v] (swap! calls conj [p v]))
+                         :resetParams (fn [] nil)}]
+    (try
+      (reset! fx/chain [{:name "bitcrusher" :plugin plugin :active? false :bypassed? false}])
+      (reset! fx/param-log {})
+      (fx/set-param! "bitcrusher" "wet" 1)
+      (fx/set-param! "bitcrusher" "bits" 3)
+      (fx/set-param! "missing" "x" 1)
+      (testing "set-param! logs every call in order (E6)"
+        (is (= {"bitcrusher" [["wet" 1] ["bits" 3]]} @fx/param-log))
+        (is (= [["wet" 1] ["bits" 3]] @calls))
+        (is (:active? (first @fx/chain))))
+      (testing "reset-global-effects! clears the log"
+        (fx/reset-global-effects!)
+        (is (= {} @fx/param-log)))
+      (finally
+        (reset! fx/chain saved-chain)
+        (reset! fx/param-log saved-log)))))
+
+(deftest instantiate-plugin-test
+  (testing "clone() wins when present"
+    (let [made (atom 0)
+          p    #js {:name "c" :clone (fn [] (swap! made inc) #js {:name "fresh"})}]
+      (is (= "fresh" (.-name (fx/instantiate-plugin p))))
+      (is (= 1 @made))))
+  (testing "otherwise a copy that shares the prototype"
+    (let [p     #js {:name "plain" :_x 1}
+          fresh (fx/instantiate-plugin p)]
+      (is (not (identical? p fresh)))
+      (is (= "plain" (.-name fresh)))
+      (is (= 1 (.-_x fresh))))))
+
+(deftest normalize-plugin-flags-default-get-params
+  (let [bare  #js {:type "effect" :name "bare"
+                   :createNodes (fn [_] nil) :setParam (fn [_ _] nil) :destroy (fn [] nil)}
+        own   #js {:type "effect" :name "own" :getParams (fn [] #js {:wet 1})
+                   :createNodes (fn [_] nil) :setParam (fn [_ _] nil) :destroy (fn [] nil)}]
+    (plugins/normalize-plugin! bare)
+    (plugins/normalize-plugin! own)
+    (is (true? (aget bare "__repulseDefaultGetParams")))
+    (is (nil? (aget own "__repulseDefaultGetParams")))))
+
+(deftest notify-plugins-test
+  (let [seen (atom [])
+        p    #js {:onEvent (fn [n t] (swap! seen conj [n t]))}]
+    (fx/notify-plugins! [p #js {} nil] :bd 1.5)
+    (fx/notify-plugins! [p] {:note :c4} 2.0)
+    (fx/notify-plugins! [p] 440 3.0)
+    (is (= [["bd" 1.5] ["c4" 2.0]] @seen))))
