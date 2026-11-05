@@ -1187,6 +1187,69 @@ More random sources:
 `when-pat` is Strudel's `when` (named so to keep `when` free); Tidal's `while` is the same
 thing with a pattern condition, so it has no separate name.
 
+### Pick — `pick` `pick-out` `pick-restart` `pick-reset` `inhabit` `pick-f`
+
+Choose a pattern (or function) out of a **lookup** under the control of an **index
+pattern**. The lookup is a vector (indexed by number) or a map (looked up by name); the
+index pattern is a pattern or a mini-notation string. The lookup comes first and the index
+pattern last, so every name also works curried in `->>`.
+
+```lisp
+(pick {:a (seq :bd :sd) :b (seq :hh :hh :hh)} "<a b>")   ; choose a pattern by name
+(pick ["bd sd" "hh*3"] "<0 1>")                           ; or by index; strings are mini-notation
+(pick-mod [(seq :bd :sd) (seq :hh :hh)] "0 1 2")          ; index wraps around (2 -> 0)
+(pick-out [:bd :sd :hh] "0 1 2 1")                        ; structure from the index pattern
+(pick-f "<0 1>" [(fast 2) rev] (seq :a :b))               ; choose a function
+(pick-restart [(slow 2 (seq :a :b :c :d)) :x] "1 0")      ; chosen pattern restarts at each step
+(inhabit {:a (seq :bd :sd) :b :hh} "a b")                 ; squeeze one cycle into each step
+```
+
+| Function | Join | What it does |
+|---|---|---|
+| `pick` | inner | The chosen pattern keeps its own structure |
+| `pick-out` | outer | Structure comes from the index pattern: each step plays the chosen pattern's value at the step start |
+| `pick-restart` | restart | The chosen pattern starts again from its cycle 0 at every step |
+| `pick-reset` | reset | The chosen pattern's current cycle starts again at every step |
+| `inhabit` | squeeze | One cycle of the chosen pattern is squeezed into each step |
+| `pick-f` | inner | `ipat` selects a function that is applied to `pat` |
+
+- **Vector** lookups are indexed by number, rounded (`1.5` -> 2) and **clamped** to the
+  vector's range. The `-mod` variants (`pick-mod`, `pick-mod-out`, `pick-mod-restart`,
+  `pick-mod-reset`, `inhabit-mod`, `pick-mod-f`) **wrap** the index instead (floored mod, so
+  `-1` is the last element).
+- **Map** lookups are by name: `"a"` or `:a` match the key `:a`. A name that is not in the map
+  is **silent** for that step. The `-mod` variants treat maps like the plain ones.
+- Entries: a pattern stays a pattern, a string is mini-notation, any other value becomes
+  `(pure value)`. An empty lookup is silence.
+- **Plain values with `pick` give one onset per cycle.** `pick` keeps the *chosen* pattern's
+  structure, so `(pick [:bd :sd] "0 1")` plays `:bd` once and the `:sd` is only the second half
+  of that same event (a fragment, no onset). For one value per index step use `pick-out` or
+  `inhabit`.
+- Errors: a lookup that is not a vector or map, entries of `pick-f` that are not functions.
+
+### `fix` — transform only matching events
+
+```lisp
+(fix (fast 2) {:s :bd} (seq :hh :bd))                 ; only the kick is sped up
+(fix (amp 0.3) {:s [:sd :hh]} (seq :bd :hh :sd :hh))  ; any-of: snare or hat
+(->> (seq :bd :hh) (fix (fast 2) {:s :bd}))           ; curried
+```
+
+`(fix f cond pat)` applies `f` to the events whose controls match the condition map `cond`
+and leaves the others untouched (Tidal `fix`; `f` only sees the matching events).
+
+- **All keys must match** (AND); a **vector** value means *any of* (`{:s [:bd :sd]}`).
+- **Numbers** compare numerically (`{:amp 1}` matches `1.0`); **keywords and strings** compare
+  exactly: `{:s :bd}` does not match `:AkaiLinn_bd`, and `{:s "bd"}` does not match `:bd`.
+- A key that is missing from the event means **no match**. `{}` matches every non-rest event.
+- Rests (`:_`) never match.
+- **Derived `:s`**: events have no `:s` key yet, so `fix` derives one: from `:bank`
+  (`(sound :bd 2)`, `"bd:2"`), else from a `:note` keyword that is not a note name. So
+  `:bd`, `{:note :bd :amp 0.5}` and `(sound :bd 2)` all match `{:s :bd}`, while `:c4` has a
+  `:note` of `:c4` but no `:s`. A real `:s` key will win over the derived one.
+- **Rationals**: `{:amp 1/2}` matches amp 0.5, but `{:amp [1 2]}` is *any of 1 or 2* and
+  `{:amp [1/2 1]}` any of 0.5 or 1.
+
 ### `run` `signal` `steady` `time`
 
 ```lisp
