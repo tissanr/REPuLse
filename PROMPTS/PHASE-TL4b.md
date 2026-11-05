@@ -35,10 +35,22 @@ that match given control values.
 
 ## Open design questions
 
-- Lookup form: Lisp map with keyword keys vs vector with indices; how a string pattern
-  index maps to map keys.
-- `fix` matching rules for numeric controls and sample banks.
-- Whether `restartJoin`/`resetJoin` belong in `core` (yes, with tests) or in the app layer.
+All decided by the user on 2026-11-05.
+
+- **Decided — Lookup form:** accept both. A vector is indexed by integer pattern values
+  (clamped to the vector's range for `pick`, wrapped with `mod` for `pick-mod`). A map is
+  looked up by name: pattern values `"a"` or `:a` match the keyword key `:a`. A name that
+  isn't in the map produces no event (silence) for that slot.
+- **Decided — `fix` ships in TL4b** (not split out until TL7). It matches against the
+  event-map keys that exist today (`:s`, `:note`, `:amp`, …) and will pick up TL7's
+  per-event controls later without a rewrite.
+- **Decided — `fix` matching rules:** numbers compare numerically (`==`, so `1` matches
+  `1.0`); keywords and strings compare exactly (`{:s :bd}` does **not** match
+  bank-prefixed `:AkaiLinn_bd`); a key missing from the event means no match; all keys in
+  the condition map must match (AND).
+- **Decided — any-of:** a vector value in the condition map means "any of"
+  (`(fix f {:s [:bd :sd]} p)` applies `f` to bd or sd events).
+- **Decided — `restartJoin`/`resetJoin`** live in `core`, with tests.
 
 ## What NOT to do
 
