@@ -294,8 +294,11 @@
       (is (m {:s :bd} {:note :bd :amp 0.5}))
       (is (m {:s :bd} {:bank :bd :n 1}))
       (is (m {:note :c4} :c4))
-      (is (not (m {:s :c4} :c4)))
+      (is (m {:s :c4} :c4) "any keyword :note derives :s, no note-name guessing")
       (is (not (m {:s :c4} :bd)))
+      (is (m {:s :cb} :cb) "cowbell :cb looks like C-flat but still matches")
+      (is (m {:s :a} {:note :a :amp 0.5}) "single-letter sample names match")
+      (is (not (m {:s :bd} 60)) "numeric :note derives no :s")
       (is (m {:s :kick} {:s :kick :note :bd}) "a real :s wins")
       (is (not (m {:s :bd} {:s :kick :note :bd}))))
     (testing "bare numbers and rationals become {:note v}"
@@ -341,8 +344,11 @@
                                (core/seq* [{:bank :bd :n 2} {:bank :bd :n 0}])))))
   (is (= [[{:note :bd :amp 0.2} (t 0 1) (t 1 3)] [:_ (t 1 3) (t 2 3)] [{:note 3 :amp 0.2} (t 2 3) (t 1 1)]]
          (tl4b-evs (params/fix a02 {} (core/seq* [:bd :_ 3])))))
-  (is (= [[:c4 (t 0 1) (t 1 2)] [:bd (t 1 2) (t 1 1)]]
+  (is (= [[{:note :c4 :amp 0.2} (t 0 1) (t 1 2)] [:bd (t 1 2) (t 1 1)]]
          (tl4b-evs (params/fix a02 {:s :c4} (core/seq* [:c4 :bd])))))
+  (is (= [[{:note :cb :amp 0.2} (t 0 1) (t 1 2)] [:bd (t 1 2) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:s :cb} (core/seq* [:cb :bd]))))
+      "cowbell :cb is not mistaken for C-flat")
   (is (= [[{:note :c4 :amp 0.2} (t 0 1) (t 1 2)] [:bd (t 1 2) (t 1 1)]]
          (tl4b-evs (params/fix a02 {:note :c4} (core/seq* [:c4 :bd])))))
   (is (= [[:bd (t 0 1) (t 1 1)]]

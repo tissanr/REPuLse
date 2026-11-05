@@ -1244,9 +1244,11 @@ and leaves the others untouched (Tidal `fix`; `f` only sees the matching events)
 - A key that is missing from the event means **no match**. `{}` matches every non-rest event.
 - Rests (`:_`) never match.
 - **Derived `:s`**: events have no `:s` key yet, so `fix` derives one: from `:bank`
-  (`(sound :bd 2)`, `"bd:2"`), else from a `:note` keyword that is not a note name. So
-  `:bd`, `{:note :bd :amp 0.5}` and `(sound :bd 2)` all match `{:s :bd}`, while `:c4` has a
-  `:note` of `:c4` but no `:s`. A real `:s` key will win over the derived one.
+  (`(sound :bd 2)`, `"bd:2"`), else from any keyword `:note`. So `:bd`,
+  `{:note :bd :amp 0.5}` and `(sound :bd 2)` all match `{:s :bd}`. There is no guessing
+  whether a name is a pitch: `{:s :cb}` matches a cowbell `:cb` even though `cb` looks like
+  C-flat (and `{:s :c4}` would match a `:c4` note). A real `:s` key will win over the
+  derived one.
 - **Rationals**: `{:amp 1/2}` matches amp 0.5, but `{:amp [1 2]}` is *any of 1 or 2* and
   `{:amp [1/2 1]}` any of 0.5 or 1.
 

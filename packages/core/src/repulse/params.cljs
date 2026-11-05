@@ -1,6 +1,5 @@
 (ns repulse.params
-  (:require [repulse.core :as core]
-            [repulse.theory :as theory]))
+  (:require [repulse.core :as core]))
 
 ;;; ── Value map helpers ────────────────────────────────────────────────
 
@@ -214,8 +213,9 @@
         (if (contains? m :s)
           m
           (let [n (:note m)
-                s (or (:bank m)
-                      (when (and (keyword? n) (not (theory/note-keyword? n))) n))]
+                ;; Any keyword :note counts — no note-name guessing, so sample
+                ;; names that look like pitches (:cb cowbell = C-flat) still match.
+                s (or (:bank m) (when (keyword? n) n))]
             (cond-> m s (assoc :s s))))))))
 
 (defn- val-match? [cv ev]
