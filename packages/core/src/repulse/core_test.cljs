@@ -1247,3 +1247,163 @@
   (is (= [60 64 67]
          (map :value (sort-by (comp c/rat->float :start :whole)
                               (tl5-cyc (c/rolled-by 0 (tl5-chord [60 64 67])) 0))))))
+
+;;; ── Phase TL4b: pick family & restart/reset joins ────────────────────
+
+(defn- t4b-time [s]
+  (let [[n d] (clojure.string/split s #"/")]
+    (c/rat (js/parseInt n) (if d (js/parseInt d) 1))))
+
+(defn- t4b-key [[v ws we ps pe]]
+  [(c/rat->float ps) (pr-str v) (c/rat->float ws) (c/rat->float we) (c/rat->float pe)])
+
+(defn- on
+  "Onset tuple: value whole = part = [s,e)."
+  [v s e] (let [s (t4b-time s) e (t4b-time e)] [v s e s e]))
+
+(defn- fr
+  "Fragment tuple: value whole [ws,we) part [ps,pe)."
+  [v ws we ps pe]
+  [v (t4b-time ws) (t4b-time we) (t4b-time ps) (t4b-time pe)])
+
+(defn- t4b-sorted [tuples] (vec (sort-by t4b-key tuples)))
+
+(defn- t4b-cycles
+  "Events of cycles [from,to) as sorted [v ws we ps pe] tuples (nil whole -> nil)."
+  [pat from to]
+  (t4b-sorted
+   (for [cy (range from to)
+         e (c/query pat (c/cycle-span cy))]
+     [(:value e) (:start (:whole e)) (:end (:whole e)) (:start (:part e)) (:end (:part e))])))
+
+(defn- exp [& tuples] (t4b-sorted tuples))
+
+(def ^:private s2 (c/slow 2 (c/seq* [:a :b :c :d])))
+(def ^:private n-ons #(count (c/query-onsets % (c/cycle-span 0))))
+
+(deftest tl4b-joins-reset-restart
+  (let [pp (c/seq* [s2 s2])]
+    (is (= (exp (on :a "0" "1/2") (on :b "1/2" "1") (on :c "1" "3/2") (on :d "3/2" "2"))
+           (t4b-cycles (c/inner-join pp) 0 2)))
+    (is (= (exp (on :a "0" "1/2") (on :a "1/2" "1") (on :c "1" "3/2") (on :c "3/2" "2"))
+           (t4b-cycles (c/reset-join pp) 0 2)))
+    (is (= (exp (on :a "0" "1/2") (on :a "1/2" "1") (on :a "1" "3/2") (on :a "3/2" "2"))
+           (t4b-cycles (c/restart-join pp) 0 2))))
+  (let [pp (c/pure s2)]
+    (is (= (exp (on :a "0" "1/2") (on :b "1/2" "1") (on :c "1" "3/2") (on :d "3/2" "2")
+                (on :a "2" "5/2") (on :b "5/2" "3"))
+           (t4b-cycles (c/reset-join pp) 0 3)))
+    (is (= (exp (on :a "0" "1/2") (on :b "1/2" "1") (on :a "1" "3/2") (on :b "3/2" "2")
+                (on :a "2" "5/2") (on :b "5/2" "3"))
+           (t4b-cycles (c/restart-join pp) 0 3)))
+    (testing "one span query equals cycle by cycle"
+      (doseq [j [c/reset-join c/restart-join]]
+        (is (= (t4b-cycles (j pp) 0 2)
+               (t4b-sorted (for [e (c/query (j pp) (c/span (c/rat 0 1) (c/rat 2 1)))]
+                             [(:value e) (:start (:whole e)) (:end (:whole e))
+                              (:start (:part e)) (:end (:part e))]))))))))
+
+(deftest tl4b-joins-whole-intersection
+  (let [pp (c/seq* [(c/pure :x) (c/pure :x)])]
+    (doseq [j [c/reset-join c/restart-join]]
+      (is (= (exp (on :x "0" "1/2") (on :x "1/2" "1")) (t4b-cycles (j pp) 0 1))))
+    (is (= (exp (fr :x "0" "1" "0" "1/2") (fr :x "0" "1" "1/2" "1"))
+           (t4b-cycles (c/inner-join pp) 0 1)))))
+
+(deftest tl4b-joins-analog-and-source
+  (doseq [j [c/reset-join c/restart-join]]
+    (is (empty? (c/query (j (c/fmap (fn [_] (c/pure :x)) c/sine)) (c/cycle-span 0))))
+    (let [evs (c/query (j (c/pure c/saw)) (c/cycle-span 0))]
+      (is (= 1 (count evs)))
+      (is (= 0 (:value (first evs))))
+      (is (nil? (:whole (first evs))))
+      (is (= (c/span (c/rat 0 1) (c/rat 1 1)) (:part (first evs)))))
+    (let [evs (c/query (j (c/pure (c/pure :x {:from 1 :to 3}))) (c/cycle-span 0))]
+      (is (= [{:from 1 :to 3}] (mapv :source evs))))))
+
+(deftest tl4b-pick-name
+  (let [lk {:a (c/seq* [:bd :sd]) :b (c/seq* [:hh :hh :hh])}
+        ip (c/cat* [(c/pure :a) (c/pure :b) (c/pure :c)])
+        exp3 (exp (on :bd "0" "1/2") (on :sd "1/2" "1")
+                  (on :hh "1" "4/3") (on :hh "4/3" "5/3") (on :hh "5/3" "2"))]
+    (is (= exp3 (t4b-cycles (c/pick lk ip) 0 3)))
+    (is (= (exp (on :bd "0" "1/2") (fr :hh "0" "1" "1/2" "1"))
+           (t4b-cycles (c/pick {:a (c/seq* [:bd :sd]) :b (c/pure :hh)} (c/seq* ["a" :b])) 0 1)))
+    (testing "empty lookups are silent"
+      (is (empty? (c/query (c/pick [] (c/pure 0)) (c/cycle-span 0))))
+      (is (empty? (c/query (c/pick {} (c/pure :a)) (c/cycle-span 0)))))))
+
+(deftest tl4b-pick-vector-clamp
+  (let [lk [(c/pure :a) (c/pure :b)]]
+    (is (= (exp (on :a "0" "1") (on :a "1" "2") (on :b "2" "3") (on :b "3" "4"))
+           (t4b-cycles (c/pick lk (c/cat* [(c/pure -1) (c/pure 0.4) (c/pure 0.5) (c/pure 7)])) 0 4)))
+    (is (= (exp (on :a "0" "1") (on :b "1" "2") (on :b "2" "3"))
+           (t4b-cycles (c/pick lk (c/cat* [(c/pure -0.5) (c/pure 1.5) (c/pure [1 2]) (c/pure :x)])) 0 4)))))
+
+(deftest tl4b-pick-k7-fragments
+  (let [p (c/pick [(c/pure :a) (c/pure :b)] (c/seq* [0 1]))]
+    (is (= (exp (fr :a "0" "1" "0" "1/2") (fr :b "0" "1" "1/2" "1")) (t4b-cycles p 0 1)))
+    (is (= [:a] (mapv :value (c/query-onsets p (c/cycle-span 0)))))))
+
+(deftest tl4b-pick-mod
+  (let [lk [(c/pure :a) (c/pure :b) (c/pure :c)]]
+    (is (= (exp (on :a "0" "1") (on :c "1" "2") (on :b "2" "3") (on :b "3" "4"))
+           (t4b-cycles (c/pick-mod lk (c/cat* [(c/pure 3) (c/pure -1) (c/pure 4) (c/pure 7)])) 0 4))))
+  (let [p (c/pick-mod [(c/seq* [:bd :sd]) (c/seq* [:hh :hh])] (c/seq* [0 1 2]))]
+    (is (= (exp (fr :bd "0" "1/2" "0" "1/3") (fr :hh "0" "1/2" "1/3" "1/2")
+                (fr :hh "1/2" "1" "1/2" "2/3") (fr :sd "1/2" "1" "2/3" "1"))
+           (t4b-cycles p 0 1)))
+    (is (= [[:bd 0] [:hh 0.5]]
+           (mapv (fn [e] [(:value e) (c/rat->float (:start (:whole e)))])
+                 (sort-by #(c/rat->float (:start (:part %))) (c/query-onsets p (c/cycle-span 0)))))
+        "onsets bd [0,1/2) and hh [1/2,1)"))
+  (testing "map lookups ignore -mod"
+    (is (= (t4b-cycles (c/pick {:a (c/pure :x)} (c/pure :a)) 0 2)
+           (t4b-cycles (c/pick-mod {:a (c/pure :x)} (c/pure :a)) 0 2)))))
+
+(deftest tl4b-pick-f
+  (let [fs [#(c/fast 2 %) c/rev]
+        pat (c/seq* [:a :b])
+        q4 [(on :a "0" "1/4") (on :b "1/4" "1/2") (on :a "1/2" "3/4") (on :b "3/4" "1")]]
+    (is (= (t4b-sorted (concat q4 [(on :b "1" "3/2") (on :a "3/2" "2")
+                                   (on :b "2" "5/2") (on :a "5/2" "3")]))
+           (t4b-cycles (c/pick-f (c/cat* [(c/pure 0) (c/pure 1) (c/pure 5)]) fs pat) 0 3)))
+    (is (= (exp (on :a "0" "1/4") (on :b "1/4" "1/2") (on :a "1/2" "1"))
+           (t4b-cycles (c/pick-f (c/seq* [0 1]) fs pat) 0 1)))
+    (is (= (t4b-sorted (concat q4 [(on :b "1" "3/2") (on :a "3/2" "2")]))
+           (t4b-cycles (c/pick-mod-f (c/cat* [(c/pure 2) (c/pure -1)]) fs pat) 0 2)))
+    (is (= (t4b-sorted (concat q4 [(on :b "1" "3/2") (on :a "3/2" "2")]))
+           (t4b-cycles (c/pick-f (c/cat* [(c/pure :fast) (c/pure :rev) (c/pure :nope)])
+                                 {:fast #(c/fast 2 %) :rev c/rev} pat) 0 3)))
+    (is (empty? (c/query (c/pick-f (c/pure 0) [] pat) (c/cycle-span 0))))))
+
+(deftest tl4b-pick-out
+  (is (= (exp (on :a "0" "1/4") (on :b "1/4" "1/2") (on :b "1/2" "3/4") (on :a "3/4" "1"))
+         (t4b-cycles (c/pick-out [(c/pure :a) (c/pure :b)] (c/seq* [0 1 1 0])) 0 1)))
+  (is (= (exp (on :a "0" "1/4") (on :a "1/4" "1/2") (on :c "1/2" "3/4") (on :b "3/4" "1"))
+         (t4b-cycles (c/pick-out [(c/seq* [:a :b]) (c/pure :c)] (c/seq* [0 0 1 0])) 0 1)))
+  (is (= (exp (on :a "0" "1/4") (on :b "1/4" "1/2") (on :a "1/2" "3/4") (on :b "3/4" "1"))
+         (t4b-cycles (c/pick-mod-out [(c/pure :a) (c/pure :b)] (c/seq* [0 1 2 3])) 0 1)))
+  (is (= 4 (n-ons (c/pick-out [(c/pure :a) (c/pure :b)] (c/seq* [0 1 1 0]))))))
+
+(deftest tl4b-pick-restart-reset
+  (let [lk [s2 (c/pure :x)]
+        pk  (exp (fr :x "0" "1" "0" "1/2") (on :b "1/2" "1")
+                 (fr :x "1" "2" "1" "3/2") (on :d "3/2" "2"))
+        rs  (exp (on :x "0" "1/2") (on :a "1/2" "1") (on :x "1" "3/2") (on :c "3/2" "2"))
+        rt  (exp (on :x "0" "1/2") (on :a "1/2" "1") (on :x "1" "3/2") (on :a "3/2" "2"))]
+    (is (= pk (t4b-cycles (c/pick lk (c/seq* [1 0])) 0 2)))
+    (is (= rs (t4b-cycles (c/pick-reset lk (c/seq* [1 0])) 0 2)))
+    (is (= rt (t4b-cycles (c/pick-restart lk (c/seq* [1 0])) 0 2)))
+    (is (= rs (t4b-cycles (c/pick-mod-reset lk (c/seq* [3 2])) 0 2)))
+    (is (= rt (t4b-cycles (c/pick-mod-restart lk (c/seq* [3 2])) 0 2)))))
+
+(deftest tl4b-inhabit
+  (is (= (exp (on :bd "0" "1/4") (on :sd "1/4" "1/2") (on :hh "1/2" "1")
+              (on :bd "1" "5/4") (on :sd "5/4" "3/2") (on :hh "3/2" "2"))
+         (t4b-cycles (c/inhabit {:a (c/seq* [:bd :sd]) :b (c/pure :hh)} (c/seq* [:a :b])) 0 2)))
+  (is (= (exp (on :x "0" "1/6") (on :y "1/6" "1/3") (on :z "1/3" "2/3")
+              (on :x "2/3" "5/6") (on :y "5/6" "1"))
+         (t4b-cycles (c/inhabit-mod [(c/seq* [:x :y]) (c/pure :z)] (c/seq* [0 1 2])) 0 1)))
+  (is (= (exp (on :bd "0" "1/4") (on :sd "1/4" "1/2"))
+         (t4b-cycles (c/inhabit {:a (c/seq* [:bd :sd])} (c/seq* [:a :z])) 0 1))))
