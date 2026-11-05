@@ -72,6 +72,9 @@ and **when** — not **how** synthesis works internally.
 - **Projects:** split a song over several editor tabs (buffers); the main buffer loads the
   others with `(use :drums :bass)`. Projects persist locally, travel in `#v3:` share links and
   export/import as one `.repulse` file
+- **Snapshots & history:** every Alt+Enter is kept in a local eval history with line diffs;
+  save named takes with `(snapshot! "take A")` and come back with `(restore! "take A")`
+  (the current state is always saved first)
 
 REPuLse is **not** a signal-flow language like SuperCollider, Overtone or Extempore. There is
 no oscillator routing in pattern code. The one exception is `defsynth`, which defines reusable

@@ -3692,7 +3692,7 @@ When no session exists (first visit or after `(reset!)`), a random demo template
 (reset!)
 ```
 
-Stops playback, deletes all persisted state (editor, BPM, effects, bank, sample sources, mutes, and AI settings/history), and reloads the page to first-visit state with a fresh demo. Use this when you want a clean slate.
+Stops playback, deletes all persisted state (editor, BPM, effects, bank, sample sources, mutes, and AI settings/history), and reloads the page to first-visit state with a fresh demo. Use this when you want a clean slate. Saved snapshots and the eval history are kept (see [Snapshots & history](#snapshots--history)).
 
 ### URL sharing
 
@@ -3737,6 +3737,102 @@ Import failed: duplicate buffer name "main"
 Import failed: main buffer "song" not found
 Import failed: file too large (max 5 MB)
 ```
+
+---
+
+## Snapshots & history
+
+Never lose an idea. Every project evaluation is kept in a bounded **eval history** you can
+scroll back through, preview as a line diff and restore with one click. Named **snapshots**
+("take A", "take B") save the whole project and can be restored, renamed, deleted and shared.
+
+### What is recorded
+
+- **Alt+Enter** and the **play** button record one history entry per evaluation, whether it
+  succeeded or failed. The entry stores the whole project: every buffer, BPM, bank prefix,
+  sample sources, mutes and MIDI mappings, captured right after the evaluation (so a
+  `(bpm 140)` in the code is part of it). Which tab is shown is not part of the state.
+- A new entry identical to the newest one replaces it (same `#id`, new time and status), so
+  pressing Alt+Enter ten times on the same code leaves one entry.
+- **Not recorded:** slider and inspector re-evaluations (a drag would push dozens of entries;
+  the next Alt+Enter records the result) and single-string evaluations: command bar, `(upd)` /
+  F9, tap tempo, demos, `load-gist`, the embed and AI previews.
+- The history keeps at most **500 entries** and about **20 000 000 characters** of stored
+  state; the oldest entries go first, but the newest is never dropped. Snapshots are never
+  evicted automatically (at most **100**).
+
+### Built-ins
+
+```lisp
+(snapshot! "take A")              ; => snapshot "take A" saved   (again: … updated)
+(snapshots)                       ; => ["take A"]  (newest first)
+(restore! "take A")               ; => restored snapshot "take A" — previous state is history #7
+(restore! 7)                      ; back to where you were (history entry #7)
+(rename-snapshot! "take A" "verse")   ; => snapshot "take A" renamed to "verse"
+(delete-snapshot! "verse")            ; => snapshot "verse" deleted
+(history)                         ; opens the panel: => history: 7 evaluations, 0 snapshots
+```
+
+| Built-in | Description |
+|---|---|
+| `(snapshot! name)` | Save the whole project under `name` (1-64 characters). An existing name is overwritten and becomes the newest snapshot. |
+| `(snapshots)` | Vector of snapshot names, newest first. |
+| `(restore! name)` / `(restore! id)` | Restore a snapshot by name or a history entry by number. |
+| `(rename-snapshot! old new)` | Rename a snapshot. |
+| `(delete-snapshot! name)` | Delete a snapshot permanently. |
+| `(history)` | Open the history panel and report the entry and snapshot counts. |
+
+### Restoring
+
+`restore!` (and the panel's **restore** buttons) never destroy anything: the current state is
+first recorded in the history as a "before restore" entry (unless the newest entry already holds
+exactly that state), and the message names it. `(restore! 7)` takes you back.
+
+A restore applies buffers (the `main` tab is shown), BPM, bank prefix, GitHub sample sources
+(loaded if missing) and mutes (applied after the next evaluation). It does **not** evaluate, stop
+playback or restore MIDI mappings. Press Alt+Enter to hear the restored project. When `restore!`
+is called from code, the project is replaced just after the running evaluation finishes.
+
+### The history panel
+
+Open it with the **hist** button in the top bar or `(history)`. It lists the snapshots and the
+newest 100 evaluations (**show older** loads 100 more). Each evaluation row shows the time, a
+green or red dot for success or error (hover for the error text), and a `+a -b` line summary
+against the previous entry. Click a row to preview a read-only line diff against the current
+project: `-` lines exist only in the entry, `+` lines were added since; unchanged buffers collapse
+to one line. **restore** applies it. Snapshot rows also have **link** (copies a `#v3:` share link
+for that snapshot, see [URL sharing](#url-sharing); a project over 64 000 characters shows the
+usual `Share failed: …` message), **rename** and **delete**. **clear history** removes all
+evaluation entries and keeps the snapshots. Previewing is code only; there is no audio audition.
+
+### Storage
+
+History and snapshots live in the browser's IndexedDB database `repulse-history`, local to your
+browser, and survive reloads. Identical states are stored once. `(reset!)` does not touch them;
+remove snapshots with `(delete-snapshot! …)` or the panel and the history with **clear history**.
+If IndexedDB is unavailable (some private windows) everything works but lasts only until reload;
+`(history)` then appends `— not saved across reloads (IndexedDB unavailable)`.
+
+### Errors
+
+```
+snapshot! expects one name string, e.g. (snapshot! "take A")
+restore! expects a snapshot name or a history number, e.g. (restore! "take A") or (restore! 12)
+rename-snapshot! expects two name strings, e.g. (rename-snapshot! "take A" "verse")
+delete-snapshot! expects one name string, e.g. (delete-snapshot! "take A")
+snapshot name must be 1–64 characters
+too many snapshots (max 100) — delete one with (delete-snapshot! "name")
+unknown snapshot "take B" — did you mean "take A"?
+unknown snapshot "zzz" — (snapshots) lists the saved names
+a snapshot named "verse" already exists
+unknown history entry #99
+snapshot "take A" is unreadable (corrupt data)
+history #3 is unreadable (corrupt data)
+snapshot store is still loading — try again in a moment
+snapshots and history are only available in the full app
+```
+
+The last one appears in the embedded `<repulse-editor>`, which has no history.
 
 ---
 

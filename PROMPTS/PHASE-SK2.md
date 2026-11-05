@@ -800,10 +800,10 @@ one test (one page, state carries over); W7 is a separate test.
   `=> restored history #1 — previous state is history #3`, still 3 entries (the
   current state already was #3, K8).
 - **W4. Snapshots via built-ins.** `__REPULSE_APP__.evaluate('(snapshot! "take A")')` →
-  output `=> snapshot "take A" saved`; edit to `(seq :cp)`; `evaluate('(restore! "take A")')`
-  → output `=> restored snapshot "take A" — previous state is history #4`, and after the
+  output `snapshot "take A" saved`; edit to `(seq :cp)`; `evaluate('(restore! "take A")')`
+  → output `restored snapshot "take A" — previous state is history #4`, and after the
   deferred apply the editor shows `(seq :bd :sd)`, entry #4 has `kind: "restore-point"`.
-  `evaluate('(snapshots)')` → output `=> ["take A"]`. `evaluate('(restore! "take B")')` →
+  `evaluate('(snapshots)')` → output `["take A"]`. `evaluate('(restore! "take B")')` →
   `Error: unknown snapshot "take B" — did you mean "take A"?`.
   `evaluate('(snapshot! 1)')` → `Error: snapshot! expects one name string, e.g. (snapshot! "take A")`.
 - **W5. Copy link.** Snapshot row `take A` → `[data-act="link"]` → output
@@ -815,9 +815,10 @@ one test (one page, state carries over); W7 is a separate test.
 - **W7. Reload persistence.** Fresh page, W1's three evaluations, then
   `evaluate('(snapshot! "take A")')`; `page.reload()` → `ready()` true, `persistent()`
   true, the same entry ids/hashes and `snapshots()` = `["take A"]`.
-  `evaluate("(history)")` → output `=> history: 3 evaluations, 1 snapshot` and
-  `#history-panel` visible. Then `evaluate('(restore! "take A")')` → editor shows
-  `(seq :bd :sd)` again.
+  `evaluate("(history)")` → output `history: 3 evaluations, 1 snapshot` and
+  `#history-panel` visible. Then set the editor to `(seq :cp)` and `evaluate('(restore! "take A")')` → editor shows
+  `(qqqqqqqq)` (the snapshot was taken while `main` was `(qqqqqqqq)`; the original vector
+  expected `(seq :bd :sd)`, which is inconsistent with K2/K7).
 
 ### Checklist
 
