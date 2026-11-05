@@ -77,6 +77,13 @@ condition map. Two new joins, `restart-join` and `reset-join`, land in `repulse.
 | K13 | Where `fix` lives | `repulse.params` (core package), next to `to-map`: it needs `repulse.theory/note-keyword?`, and `repulse.theory` requires `repulse.core`, so `core.cljs` cannot host it without a cycle. `params` already requires `core`; it adds `[repulse.theory :as theory]` (no cycle: `theory` requires only `core`). |
 | K14 | Errors | Thrown eagerly by the Lisp wrappers (also in the curried arity), as `js/Error` like `tween`: **E1** `"<name>: the lookup must be a vector [...] or a map {...}. Usage: (<name> lookup index-pattern)"` (for `pick-f`/`pick-mod-f`: `"<name>: the lookup must be a vector [...] or a map {...} of functions. Usage: (<name> index-pattern [f1 f2] pat)"`); **E2** `"<name>: every lookup entry must be a function, e.g. (fast 2) or rev"`; **E3** `"fix: the condition must be a map like {:s :bd}. Usage: (fix f {:s :bd} pat)"`. `<name>` is the built-in's own name. |
 
+> **Amendment (2026-11-05, owner-approved, after delivery):** K9 no longer excludes note
+> names. The derived `:s` is `(:bank m)`, else **any** keyword `(:note m)`. The
+> `note-keyword?` check made sample names that look like pitches (`:cb` cowbell = C-flat,
+> single letters `:a`–`:g`) silently unmatchable by `{:s …}`. `{:s :c4}` now matches a `:c4`
+> event, which is harmless. K13's `repulse.theory` dependency is gone; `fix` stays in
+> `repulse.params`.
+
 ## Function list
 
 `ipat` = index pattern (a pattern, a mini-notation string, or a scalar → `pure`).
