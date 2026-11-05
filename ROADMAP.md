@@ -59,7 +59,7 @@ without a human:
 | **M4** | | **Sketchpad** | | | |
 | 17 | EXP1 | Export parity: offline render with WASM voices & FX | 🤖 | outline | opus |
 | 18 | SK1 | Stem export & full-song MIDI export | 🤖 | full | sonnet |
-| 19 | SK2 | Session snapshots & eval history | 🤖 | outline | sonnet |
+| 19 | SK2 | Session snapshots & eval history | 🤖 | full | sonnet |
 | 20 | SK3 | MIDI capture 1: click, fixed grid, velocity → code | 🤖👂 | outline | sonnet |
 | 21 | SK4 | MIDI capture 2: always-on capture | 🤖👂 | outline | sonnet |
 | 22 | SK5 | MIDI capture 3: grid & feel detection | 🤖👂 | outline | opus |
@@ -2432,7 +2432,7 @@ See full spec: [PROMPTS/PHASE-SK1.md](PROMPTS/PHASE-SK1.md)
 
 ---
 
-## Phase SK2 — Session Snapshots & Eval History 📋 *planned*
+## Phase SK2 — Session Snapshots & Eval History ✅ *delivered*
 
 > **Milestone 4** · **Automation:** 🤖 auto
 
@@ -2441,6 +2441,22 @@ Never lose an idea: every evaluation is kept, and named takes can be restored.
 **Key additions:**
 - Append-only eval history (deduplicated, bounded) with preview, restore and diff
 - Named project snapshots ("take A / take B"); restore auto-snapshots the current state
+
+**Delivered:**
+- Pure `repulse.history` store: content-addressed blobs (canonical text of the sanitized v3
+  session map, 64-bit FNV-1a hash), bounded eval history (500 entries / 20 000 000 characters,
+  identical consecutive states collapsed, oldest evicted, unreferenced blobs collected), named
+  snapshots (max 100), restore points and a line/project diff, all over a `HistoryStorage`
+  protocol (`memory-storage` for tests and as fallback)
+- Hand-written IndexedDB adapter (`repulse.history-idb`) and write-behind in-memory mirror
+  (`repulse.history-store`); history and snapshots survive reloads, `(reset!)` leaves them alone
+- `evaluate-project!` (Alt+Enter, play) records every evaluation, success or error; slider
+  re-evaluations and single-string evaluations are not recorded
+- Built-ins `snapshot!`, `snapshots`, `restore!`, `rename-snapshot!`, `delete-snapshot!`, `history`
+  and the `hist` panel: preview diff, restore, copy `#v3:` link, rename, delete, clear history,
+  show older
+- Tests: `history-test` (H1-H12 vectors) and `e2e/history.spec.ts` (recording, panel, restore,
+  snapshots, link, reload persistence)
 
 See full spec: [PROMPTS/PHASE-SK2.md](PROMPTS/PHASE-SK2.md)
 

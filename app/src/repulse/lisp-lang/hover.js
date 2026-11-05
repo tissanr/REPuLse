@@ -1155,6 +1155,36 @@ const DOCS = {
     description: "Load tutorial chapter n into the editor without auto-playing. Defaults to chapter 1. Press Alt+Enter to hear it.",
     example: "(tutorial 3)",
   },
+  "snapshot!": {
+    signature: "(snapshot! name)",
+    description: "Save the whole project (every buffer, BPM, bank, sample sources, mutes) as a named snapshot. An existing name is overwritten. Snapshots are stored locally and never evicted automatically.",
+    example: '(snapshot! "take A")',
+  },
+  "snapshots": {
+    signature: "(snapshots)",
+    description: "Return the names of all saved snapshots, newest first.",
+    example: "(snapshots)",
+  },
+  "restore!": {
+    signature: "(restore! name) or (restore! id)",
+    description: "Restore a snapshot by name or an eval-history entry by number. The current state is saved to the history first, so a restore can always be undone. Does not evaluate: press Alt+Enter to hear it.",
+    example: '(restore! "take A")',
+  },
+  "rename-snapshot!": {
+    signature: "(rename-snapshot! old new)",
+    description: "Rename a saved snapshot. Fails when the new name is already taken.",
+    example: '(rename-snapshot! "take A" "verse")',
+  },
+  "delete-snapshot!": {
+    signature: "(delete-snapshot! name)",
+    description: "Delete a saved snapshot permanently.",
+    example: '(delete-snapshot! "take A")',
+  },
+  "history": {
+    signature: "(history)",
+    description: "Open the eval history and snapshots panel: scroll back through past evaluations, preview a line diff against the current code, and restore.",
+    example: "(history)",
+  },
   "reset!": {
     signature: "(reset!)",
     description: "Stop playback, clear all persisted state (editor, BPM, effects, bank, sample sources, mute/solo, MIDI mappings), and reload the page with a fresh demo. Use when you want a clean slate.",

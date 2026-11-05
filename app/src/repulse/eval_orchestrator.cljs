@@ -27,6 +27,8 @@
             [repulse.ui.slider-model :as sm]
             [repulse.lisp-patcher :as patcher]
             [repulse.ai.tools :as ai-tools]
+            [repulse.history-store :as history-store]
+            [repulse.session :as session]
             [clojure.string :as cstr]
             ["@codemirror/lint" :refer [setDiagnostics]]
             ["@codemirror/state" :refer [Transaction]]
@@ -262,7 +264,8 @@
             {:value (lisp/eval-string code env)})
           on-event (if project (project-highlighter bases) editor/highlight-range!)]
       (if (lisp/eval-error? result)
-        (report-eval-error! result project set-output!)
+        (do (report-eval-error! result project set-output!)
+            {:ok? false :error (:message result)})
         (let [slider-diags (slider-warning-diags @builtins/eval-warnings project bases)
               run-song @song-transport/pending-song
               ;; WS2: `(song …)` followed by `(master …)` still reports the song.
@@ -372,19 +375,28 @@
                                   (if project
                                     (or (project/code-of project (:active project)) "")
                                     code)
-                                  @last-output set-output!))))))
+                                  @last-output set-output!)
+          {:ok? true})))))
 
 (defn evaluate!
-  "Evaluate a single code string (command bar, (upd), tap, demos, …)."
+  "Evaluate a single code string (command bar, (upd), tap, demos, …).
+   Not recorded in the eval history (Phase SK2, K1)."
   [code]
-  (evaluate* code nil))
+  (evaluate* code nil)
+  nil)
 
 (defn evaluate-project!
   "Evaluate the whole project starting from its main buffer (Alt+Enter, play
-   button, slider re-evaluation) — Phase SONG4."
-  []
-  (let [p (buffers/current-project)]
-    (evaluate* (project/code-of p (:main p)) {:project p})))
+   button, slider re-evaluation) — Phase SONG4. Records the result in the eval
+   history unless :record? is false (Phase SK2; slider re-evals pass false)."
+  ([] (evaluate-project! {:record? true}))
+  ([{:keys [record?]}]
+   (let [p (buffers/current-project)
+         r (evaluate* (project/code-of p (:main p)) {:project p})]
+     (when record?
+       (history-store/record-eval! (session/build-session-snapshot)
+                                   (:ok? r) (:error r)))
+     nil)))
 
 ;;; Code patching for live slider updates
 
@@ -412,7 +424,7 @@
     (js/setTimeout
       (fn []
         (reset! slider-timeout nil)
-        (evaluate-project!))
+        (evaluate-project! {:record? false}))
       150)))
 
 (defn- clamp-to-slider

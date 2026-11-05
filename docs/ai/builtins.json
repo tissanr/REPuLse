@@ -2624,6 +2624,114 @@
     "detail": "(share!) — copy shareable session URL to clipboard",
     "description": ""
   },
+  "snapshot!": {
+    "category": "session",
+    "signature": "(snapshot! name)",
+    "returns": "String",
+    "side-effects": [
+      "storage"
+    ],
+    "examples": [
+      "(snapshot! \"take A\")"
+    ],
+    "see-also": [
+      "snapshots",
+      "restore!",
+      "history"
+    ],
+    "detail": "(snapshot! \"take A\") — save the whole project as a named snapshot (overwrites)",
+    "description": "Save the whole project (every buffer, BPM, bank, sample sources, mutes) as a named snapshot. An existing name is overwritten. Snapshots are stored locally and never evicted automatically."
+  },
+  "snapshots": {
+    "category": "session",
+    "signature": "(snapshots)",
+    "returns": "Vector",
+    "side-effects": [],
+    "examples": [
+      "(snapshots)"
+    ],
+    "see-also": [
+      "snapshot!",
+      "restore!"
+    ],
+    "detail": "(snapshots) — names of saved snapshots, newest first",
+    "description": "Return the names of all saved snapshots, newest first."
+  },
+  "restore!": {
+    "category": "session",
+    "signature": "(restore! name) or (restore! id)",
+    "returns": "String",
+    "side-effects": [
+      "storage",
+      "dom",
+      "audio"
+    ],
+    "examples": [
+      "(restore! \"take A\")",
+      "(restore! 12)"
+    ],
+    "see-also": [
+      "snapshot!",
+      "history",
+      "snapshots"
+    ],
+    "detail": "(restore! \"take A\") or (restore! 12) — restore a snapshot or history entry (current state kept in history)",
+    "description": "Restore a snapshot by name or an eval-history entry by number. The current state is saved to the history first, so a restore can always be undone. Does not evaluate: press Alt+Enter to hear it."
+  },
+  "rename-snapshot!": {
+    "category": "session",
+    "signature": "(rename-snapshot! old new)",
+    "returns": "String",
+    "side-effects": [
+      "storage"
+    ],
+    "examples": [
+      "(rename-snapshot! \"take A\" \"verse\")"
+    ],
+    "see-also": [
+      "snapshot!",
+      "delete-snapshot!",
+      "snapshots"
+    ],
+    "detail": "(rename-snapshot! \"take A\" \"verse\") — rename a snapshot",
+    "description": "Rename a saved snapshot. Fails when the new name is already taken."
+  },
+  "delete-snapshot!": {
+    "category": "session",
+    "signature": "(delete-snapshot! name)",
+    "returns": "String",
+    "side-effects": [
+      "storage"
+    ],
+    "examples": [
+      "(delete-snapshot! \"take A\")"
+    ],
+    "see-also": [
+      "snapshot!",
+      "rename-snapshot!",
+      "snapshots"
+    ],
+    "detail": "(delete-snapshot! \"take A\") — delete a snapshot",
+    "description": "Delete a saved snapshot permanently."
+  },
+  "history": {
+    "category": "session",
+    "signature": "(history)",
+    "returns": "String",
+    "side-effects": [
+      "dom"
+    ],
+    "examples": [
+      "(history)"
+    ],
+    "see-also": [
+      "snapshot!",
+      "restore!",
+      "snapshots"
+    ],
+    "detail": "(history) — open the eval history & snapshots panel",
+    "description": "Open the eval history and snapshots panel: scroll back through past evaluations, preview a line diff against the current code, and restore."
+  },
   "struct": {
     "category": "transform",
     "signature": "(struct bools pat)",
