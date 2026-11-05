@@ -959,6 +959,213 @@
     "detail": "(apply-n n f pat) — apply f n times; n may be a pattern",
     "description": "Apply the transform f n times in a row."
   },
+  "pick": {
+    "category": "source",
+    "signature": "(pick lookup ipat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(pick {:a (seq :bd :sd) :b (seq :hh :hh :hh)} \"<a b>\")",
+      "(pick [\"bd sd\" \"hh*3\"] \"<0 1>\")"
+    ],
+    "see-also": [
+      "pick-mod",
+      "pick-out",
+      "inhabit",
+      "choose-in-with"
+    ],
+    "detail": "(pick lookup ipat) — choose a pattern from a vector (by index, clamped) or map (by name); inner join",
+    "description": "Choose a pattern out of a vector (indexed by number, clamped to its range) or a map (looked up by name) under the control of an index pattern. The chosen pattern keeps its own structure (inner join). Strings in the lookup are mini-notation; an unknown name is silent. Plain values give one onset per cycle (the index step only supplies a fragment) — use pick-out or inhabit for one value per step."
+  },
+  "pick-mod": {
+    "category": "source",
+    "signature": "(pick-mod lookup ipat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(pick-mod [(seq :bd :sd) (seq :hh :hh)] \"0 1 2\")"
+    ],
+    "see-also": [
+      "pick",
+      "pick-mod-out",
+      "inhabit-mod"
+    ],
+    "detail": "(pick-mod lookup ipat) — like pick, but a vector index wraps around (floored mod)",
+    "description": "Like pick, but a vector index wraps around instead of clamping (2 on a two-element vector selects element 0, -1 the last). Map lookups behave exactly like pick."
+  },
+  "pick-f": {
+    "category": "transform",
+    "signature": "(pick-f ipat fs pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(pick-f \"<0 1>\" [(fast 2) rev] (seq :a :b))",
+      "(pick-f \"<fast rev>\" {:fast (fast 2) :rev rev} (seq :a :b))"
+    ],
+    "see-also": [
+      "pick-mod-f",
+      "pick",
+      "every"
+    ],
+    "detail": "(pick-f ipat fs pat) — apply the function chosen by ipat (vector or map of functions) to pat",
+    "description": "Choose a function from a vector or map under the control of an index pattern and apply it to pat. The vector index is clamped; use pick-mod-f to wrap. Every entry must be a function."
+  },
+  "pick-mod-f": {
+    "category": "transform",
+    "signature": "(pick-mod-f ipat fs pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(pick-mod-f \"<2 -1>\" [(fast 2) rev] (seq :a :b))"
+    ],
+    "see-also": [
+      "pick-f",
+      "pick-mod"
+    ],
+    "detail": "(pick-mod-f ipat fs pat) — like pick-f, but the vector index wraps around",
+    "description": "Like pick-f, but a vector index wraps around instead of clamping."
+  },
+  "pick-out": {
+    "category": "source",
+    "signature": "(pick-out lookup ipat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(pick-out [:bd :sd :hh] \"0 1 2 1\")"
+    ],
+    "see-also": [
+      "pick",
+      "pick-mod-out",
+      "inhabit"
+    ],
+    "detail": "(pick-out lookup ipat) — like pick, but the structure comes from the index pattern (outer join)",
+    "description": "Like pick, but structure comes from the index pattern: each index step plays the chosen pattern's value at the step start (outer join). This is the one to use for one value per step."
+  },
+  "pick-mod-out": {
+    "category": "source",
+    "signature": "(pick-mod-out lookup ipat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(pick-mod-out [:bd :sd] \"0 1 2 3\")"
+    ],
+    "see-also": [
+      "pick-out",
+      "pick-mod"
+    ],
+    "detail": "(pick-mod-out lookup ipat) — like pick-out, but a vector index wraps around",
+    "description": "Like pick-out, but a vector index wraps around instead of clamping."
+  },
+  "pick-restart": {
+    "category": "source",
+    "signature": "(pick-restart lookup ipat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(pick-restart [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")"
+    ],
+    "see-also": [
+      "pick-reset",
+      "pick-mod-restart",
+      "pick"
+    ],
+    "detail": "(pick-restart lookup ipat) — the chosen pattern restarts from its cycle 0 at every index step",
+    "description": "Like pick, but at every index step the chosen pattern starts again from its cycle 0 (restart join)."
+  },
+  "pick-mod-restart": {
+    "category": "source",
+    "signature": "(pick-mod-restart lookup ipat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(pick-mod-restart [(slow 2 (seq :a :b :c :d)) :x] \"3 2\")"
+    ],
+    "see-also": [
+      "pick-restart",
+      "pick-mod"
+    ],
+    "detail": "(pick-mod-restart lookup ipat) — like pick-restart, but a vector index wraps around",
+    "description": "Like pick-restart, but a vector index wraps around instead of clamping."
+  },
+  "pick-reset": {
+    "category": "source",
+    "signature": "(pick-reset lookup ipat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(pick-reset [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")"
+    ],
+    "see-also": [
+      "pick-restart",
+      "pick-mod-reset",
+      "pick"
+    ],
+    "detail": "(pick-reset lookup ipat) — the chosen pattern's current cycle restarts at every index step",
+    "description": "Like pick, but at every index step the current cycle of the chosen pattern starts again (reset join)."
+  },
+  "pick-mod-reset": {
+    "category": "source",
+    "signature": "(pick-mod-reset lookup ipat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(pick-mod-reset [(slow 2 (seq :a :b :c :d)) :x] \"3 2\")"
+    ],
+    "see-also": [
+      "pick-reset",
+      "pick-mod"
+    ],
+    "detail": "(pick-mod-reset lookup ipat) — like pick-reset, but a vector index wraps around",
+    "description": "Like pick-reset, but a vector index wraps around instead of clamping."
+  },
+  "inhabit": {
+    "category": "source",
+    "signature": "(inhabit lookup ipat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(inhabit {:a (seq :bd :sd) :b :hh} \"a b\")"
+    ],
+    "see-also": [
+      "inhabit-mod",
+      "pick-out",
+      "choose-in-with"
+    ],
+    "detail": "(inhabit lookup ipat) — squeeze one cycle of the chosen pattern into each index step",
+    "description": "Squeeze one cycle of the chosen pattern into each step of the index pattern (squeeze join). Vector index clamped; map by name."
+  },
+  "inhabit-mod": {
+    "category": "source",
+    "signature": "(inhabit-mod lookup ipat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(inhabit-mod [(seq :bd :sd) :hh] \"0 1 2\")"
+    ],
+    "see-also": [
+      "inhabit",
+      "pick-mod"
+    ],
+    "detail": "(inhabit-mod lookup ipat) — like inhabit, but a vector index wraps around",
+    "description": "Like inhabit, but a vector index wraps around instead of clamping."
+  },
+  "fix": {
+    "category": "transform",
+    "signature": "(fix f cond pat)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(fix (fast 2) {:s :bd} (seq :hh :bd))",
+      "(fix (amp 0.3) {:s [:sd :hh]} (seq :bd :hh :sd :hh))"
+    ],
+    "see-also": [
+      "when-pat",
+      "sometimes-by",
+      "amp"
+    ],
+    "detail": "(fix f cond pat) — apply f only to events whose controls match the condition map",
+    "description": "Tidal fix: apply f only to the events matching the condition map; the rest are kept. All keys must match (AND); a vector value means any-of; numbers compare numerically, keywords and strings exactly; a missing key is no match. :s is derived from :bank or a non-note :note, so {:s :bd} matches :bd and (sound :bd 2)."
+  },
   "jux": {
     "category": "transform",
     "signature": "(jux f pat)",

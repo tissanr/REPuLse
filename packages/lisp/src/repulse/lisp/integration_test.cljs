@@ -1109,6 +1109,166 @@
       (when (core/pattern? pat)
         (is (seq (mapcat #(cycle-evs pat %) (range 16))) code)))))
 
+;;; ── Phase TL4b: pick family & fix (Lisp level) ──────────────────────
+
+(defn- tl4b-rs [[n d]] (if (= d 1) (str n) (str n "/" d)))
+
+(defn- tl4b-evs
+  "Events of cycles [from,to) as [value ws we ps pe] with times as strings, sorted by
+   part start then value; fragments included."
+  ([code] (tl4b-evs code 0 1))
+  ([code from to]
+   (let [pat (eval-pat code)]
+     (->> (for [c (range from to) e (cycle-evs pat c)]
+            [(:value e) (tl4b-rs (:start (:whole e))) (tl4b-rs (:end (:whole e)))
+             (tl4b-rs (:start (:part e))) (tl4b-rs (:end (:part e)))])
+          (sort-by (fn [[v _ _ ps _]] [(let [[n d] (map js/parseInt (clojure.string/split ps #"/"))]
+                                         (/ n (or d 1)))
+                                       (pr-str v)]))
+          vec))))
+
+(defn- tl4b-ons
+  "Onsets of cycles [from,to) as [value start end]."
+  ([code] (tl4b-ons code 0 1))
+  ([code from to]
+   (->> (for [c (range from to) e (onsets (eval-pat code) c)]
+          [(:value e) (tl4b-rs (:start (:whole e))) (tl4b-rs (:end (:whole e)))])
+        (sort-by (fn [[v s _]] [(let [[n d] (map js/parseInt (clojure.string/split s #"/"))] (/ n (or d 1)))
+                               (pr-str v)]))
+        vec)))
+
+(defn- tl4b-err [code]
+  (let [r (lisp/eval-string code (make-test-env))]
+    (is (lisp/eval-error? r) code)
+    (:message r)))
+
+(deftest tl4b-lisp-pick
+  (testing "map + name pattern (mini-notation string)"
+    (is (= [[:bd "0" "1/2"] [:sd "1/2" "1"]
+            [:hh "1" "4/3"] [:hh "4/3" "5/3"] [:hh "5/3" "2"]]
+           (tl4b-ons "(pick {:a (seq :bd :sd) :b (seq :hh :hh :hh)} \"<a b>\")" 0 2))))
+  (testing "vector with mini-notation strings"
+    (is (= [[:bd "0" "1/2"] [:sd "1/2" "1"]
+            [:hh "1" "4/3"] [:hh "4/3" "5/3"] [:hh "5/3" "2"]]
+           (tl4b-ons "(pick [\"bd sd\" \"hh*3\"] \"<0 1>\")" 0 2))))
+  (testing "K7: plain values give one onset per cycle"
+    (is (= [[:bd "0" "1"]] (tl4b-ons "(pick [:bd :sd] \"0 1\")"))))
+  (testing "pick-mod wraps"
+    (is (= [[:a "0" "1"] [:c "1" "2"] [:b "2" "3"]]
+           (tl4b-ons "(pick-mod [:a :b :c] \"<3 -1 4>\")" 0 3))))
+  (testing "pick-out / inhabit outline examples"
+    (is (= 4 (count (tl4b-ons "(pick-out [:bd :sd :hh :sd] \"0 1 2 3\")"))))
+    (is (= [[:bd "0" "1/4"] [:sd "1/4" "1/2"] [:hh "1/2" "1"]]
+           (tl4b-ons "(inhabit {:a (seq :bd :sd) :b :hh} \"a b\")")))
+    (is (= [[:bd "0" "1/4"] [:sd "1/4" "1/2"] [:hh "1/2" "1"]]
+           (tl4b-ons "(inhabit {:a (seq :bd :sd) :b (pure :hh)} \"a b\")"))))
+  (testing "pick-restart / pick-reset"
+    (is (= [[:x "0" "1/2"] [:a "1/2" "1"] [:x "1" "3/2"] [:a "3/2" "2"]]
+           (tl4b-ons "(pick-restart [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")" 0 2)))
+    (is (= [[:x "0" "1/2"] [:a "1/2" "1"] [:x "1" "3/2"] [:c "3/2" "2"]]
+           (tl4b-ons "(pick-reset [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")" 0 2)))
+    (is (= (tl4b-ons "(pick-restart [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")" 0 2)
+           (tl4b-ons "(pick-mod-restart [(slow 2 (seq :a :b :c :d)) :x] \"3 2\")" 0 2)))
+    (is (= (tl4b-ons "(pick-reset [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")" 0 2)
+           (tl4b-ons "(pick-mod-reset [(slow 2 (seq :a :b :c :d)) :x] \"3 2\")" 0 2))))
+  (testing "pick-mod-out and inhabit-mod"
+    (is (= [[:a "0" "1/4"] [:b "1/4" "1/2"] [:a "1/2" "3/4"] [:b "3/4" "1"]]
+           (tl4b-ons "(pick-mod-out [:a :b] \"0 1 2 3\")")))
+    (is (= [[:x "0" "1/6"] [:y "1/6" "1/3"] [:z "1/3" "2/3"] [:x "2/3" "5/6"] [:y "5/6" "1"]]
+           (tl4b-ons "(inhabit-mod [(seq :x :y) :z] \"0 1 2\")")))))
+
+(deftest tl4b-lisp-pick-f
+  (let [q4 [[:a "0" "1/4"] [:b "1/4" "1/2"] [:a "1/2" "3/4"] [:b "3/4" "1"]]]
+    (is (= (conj q4 [:b "1" "3/2"] [:a "3/2" "2"])
+           (tl4b-ons "(pick-f \"<0 1>\" [(fast 2) rev] (seq :a :b))" 0 2)))
+    (is (= (conj q4 [:b "1" "3/2"] [:a "3/2" "2"])
+           (tl4b-ons "(pick-mod-f \"<2 -1>\" [(fast 2) rev] (seq :a :b))" 0 2)))
+    (is (= (conj q4 [:b "1" "3/2"] [:a "3/2" "2"])
+           (tl4b-ons "(->> (seq :a :b) (pick-f \"<0 1>\" [(fast 2) rev]))" 0 2)))
+    (is (= (conj q4 [:b "1" "3/2"] [:a "3/2" "2"])
+           (tl4b-ons "(pick-f \"<fast rev nope>\" {:fast (fast 2) :rev rev} (seq :a :b))" 0 2)))))
+
+(deftest tl4b-lisp-source-and-curry
+  (testing "keyword entries carry their literal's source; strings carry token sources"
+    (let [evs (cycle-evs (eval-pat "(pick-out [:bd :sd] \"0 1\")") 0)]
+      (is (every? :source evs)))
+    (let [evs (cycle-evs (eval-pat "(pick [\"bd sd\" \"hh*3\"] \"<0 1>\")") 0)]
+      (is (every? :source evs))))
+  (testing "curried forms in ->> equal the uncurried forms"
+    (doseq [[n u c] [["pick" "(pick {:a (seq :bd :sd) :b (seq :hh :hh)} \"<a b>\")"
+                      "(->> \"<a b>\" (pick {:a (seq :bd :sd) :b (seq :hh :hh)}))"]
+                     ["pick-mod" "(pick-mod [(seq :bd :sd) :hh] \"0 1 2\")"
+                      "(->> \"0 1 2\" (pick-mod [(seq :bd :sd) :hh]))"]
+                     ["pick-out" "(pick-out [:bd :sd] \"0 1 1\")" "(->> \"0 1 1\" (pick-out [:bd :sd]))"]
+                     ["pick-mod-out" "(pick-mod-out [:bd :sd] \"0 1 2\")" "(->> \"0 1 2\" (pick-mod-out [:bd :sd]))"]
+                     ["pick-restart" "(pick-restart [(seq :a :b) :x] \"1 0\")" "(->> \"1 0\" (pick-restart [(seq :a :b) :x]))"]
+                     ["pick-mod-restart" "(pick-mod-restart [(seq :a :b) :x] \"1 0\")" "(->> \"1 0\" (pick-mod-restart [(seq :a :b) :x]))"]
+                     ["pick-reset" "(pick-reset [(seq :a :b) :x] \"1 0\")" "(->> \"1 0\" (pick-reset [(seq :a :b) :x]))"]
+                     ["pick-mod-reset" "(pick-mod-reset [(seq :a :b) :x] \"1 0\")" "(->> \"1 0\" (pick-mod-reset [(seq :a :b) :x]))"]
+                     ["inhabit" "(inhabit {:a (seq :bd :sd) :b :hh} \"a b\")" "(->> \"a b\" (inhabit {:a (seq :bd :sd) :b :hh}))"]
+                     ["inhabit-mod" "(inhabit-mod [(seq :bd :sd) :hh] \"0 1 2\")" "(->> \"0 1 2\" (inhabit-mod [(seq :bd :sd) :hh]))"]
+                     ["fix" "(fix (fast 2) {:s :bd} (seq :bd :hh))" "(->> (seq :bd :hh) (fix (fast 2) {:s :bd}))"]]]
+      (is (= (tl4b-evs u 0 2) (tl4b-evs c 0 2)) n))))
+
+(deftest tl4b-lisp-fix
+  (testing "structure-changing f"
+    (is (= [[:bd "0" "1/4"] [:bd "1/2" "3/4"] [:hh "1/2" "1"]
+            [:bd "1" "5/4"] [:bd "3/2" "7/4"] [:hh "3/2" "2"]]
+           (tl4b-ons "(fix (fast 2) {:s :bd} (seq :bd :hh))" 0 2))))
+  (testing "derived :s from (sound ...) and mini bd:2"
+    (is (= [[{:bank :bd :n 2 :amp 0.2} "0" "1/2"] [:bd "1/2" "1"]]
+           (tl4b-ons "(fix (amp 0.2) {:s :bd :n 2} (~ \"bd:2 bd\"))")))
+    (is (= [{:bank :bd :n 2 :amp 0.2} {:bank :bd :n 0}]
+           (mapv first (tl4b-ons "(fix (amp 0.2) {:s :bd :n 2} (seq (sound :bd 2) (sound :bd 0)))")))))
+  (testing "K11: rational literal vs any-of"
+    (is (= [[{:note :bd :amp 0.9} "0" "1"]]
+           (tl4b-ons "(fix (amp 0.9) {:amp 1/2} (amp 0.5 (seq :bd)))")))
+    (is (= [{:note :a :amp 0.9} {:note :b :amp 0.5} {:note :c :amp 0.9}]
+           (mapv first (tl4b-ons "(fix (amp 0.9) {:amp [1 2]} (amp (seq 1 0.5 2) (seq :a :b :c)))"))))
+    (is (= [{:note :a :amp 0.9} {:note :b :amp 0.9} {:note :c :amp 2}]
+           (mapv first (tl4b-ons "(fix (amp 0.9) {:amp [1/2 1]} (amp (seq 1 0.5 2) (seq :a :b :c)))"))))))
+
+(deftest tl4b-lisp-errors-and-empty
+  (is (= "pick: the lookup must be a vector [...] or a map {...}. Usage: (pick lookup index-pattern)"
+         (tl4b-err "(pick \"<0 1>\" [:bd :sd])")))
+  (is (= "inhabit: the lookup must be a vector [...] or a map {...}. Usage: (inhabit lookup index-pattern)"
+         (tl4b-err "(inhabit 3 \"a\")")))
+  (is (= "pick-mod-restart: the lookup must be a vector [...] or a map {...}. Usage: (pick-mod-restart lookup index-pattern)"
+         (tl4b-err "(->> \"0\" (pick-mod-restart 3))")))
+  (is (= "pick-f: the lookup must be a vector [...] or a map {...} of functions. Usage: (pick-f index-pattern [f1 f2] pat)"
+         (tl4b-err "(pick-f \"<0 1>\" rev (seq :a))")))
+  (is (= "pick-f: every lookup entry must be a function, e.g. (fast 2) or rev"
+         (tl4b-err "(pick-f \"<0 1>\" [rev :bd] (seq :a))")))
+  (is (= "fix: the condition must be a map like {:s :bd}. Usage: (fix f {:s :bd} pat)"
+         (tl4b-err "(fix rev :bd (seq :bd))")))
+  (is (= "fix: the condition must be a map like {:s :bd}. Usage: (fix f {:s :bd} pat)"
+         (tl4b-err "(fix rev :bd)")))
+  (testing "empty lookups are silent, not errors"
+    (is (empty? (cycle-evs (eval-pat "(pick [] \"0\")") 0)))
+    (is (empty? (cycle-evs (eval-pat "(pick-f \"0\" [] (seq :a))") 0)))))
+
+(deftest tl4b-documented-examples-evaluate
+  (doseq [code ["(pick {:a (seq :bd :sd) :b (seq :hh :hh :hh)} \"<a b>\")"
+                "(pick [\"bd sd\" \"hh*3\"] \"<0 1>\")"
+                "(pick-mod [(seq :bd :sd) (seq :hh :hh)] \"0 1 2\")"
+                "(pick-out [:bd :sd :hh] \"0 1 2 1\")"
+                "(pick-mod-out [:bd :sd] \"0 1 2 3\")"
+                "(pick-f \"<0 1>\" [(fast 2) rev] (seq :a :b))"
+                "(pick-mod-f \"<2 -1>\" [(fast 2) rev] (seq :a :b))"
+                "(pick-restart [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")"
+                "(pick-mod-restart [(slow 2 (seq :a :b :c :d)) :x] \"3 2\")"
+                "(pick-reset [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")"
+                "(pick-mod-reset [(slow 2 (seq :a :b :c :d)) :x] \"3 2\")"
+                "(inhabit {:a (seq :bd :sd) :b :hh} \"a b\")"
+                "(inhabit-mod [(seq :bd :sd) :hh] \"0 1 2\")"
+                "(fix (fast 2) {:s :bd} (seq :hh :bd))"
+                "(fix (amp 0.3) {:s [:sd :hh]} (seq :bd :hh :sd :hh))"]]
+    (let [pat (eval-pat code)]
+      (is (core/pattern? pat) code)
+      (when (core/pattern? pat)
+        (is (seq (mapcat #(cycle-evs pat %) (range 4))) code)))))
+
+
 ;;; ── Phase TL5: layering, pitch & harmony ────────────────────────────
 
 (defn- note->m [v] (repulse.theory/note->midi v))

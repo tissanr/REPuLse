@@ -247,6 +247,71 @@ const DOCS = {
     description: "Apply the transform f n times in a row.",
     example: "(apply-n 2 (fast 2) (seq :a :b))",
   },
+  "pick": {
+    signature: "(pick lookup ipat)",
+    description: "Choose a pattern out of a vector (indexed by number, clamped to its range) or a map (looked up by name) under the control of an index pattern. The chosen pattern keeps its own structure (inner join). Strings in the lookup are mini-notation; an unknown name is silent. Plain values give one onset per cycle (the index step only supplies a fragment) \u2014 use pick-out or inhabit for one value per step.",
+    example: "(pick {:a (seq :bd :sd) :b (seq :hh :hh :hh)} \"<a b>\")",
+  },
+  "pick-mod": {
+    signature: "(pick-mod lookup ipat)",
+    description: "Like pick, but a vector index wraps around instead of clamping (2 on a two-element vector selects element 0, -1 the last). Map lookups behave exactly like pick.",
+    example: "(pick-mod [(seq :bd :sd) (seq :hh :hh)] \"0 1 2\")",
+  },
+  "pick-f": {
+    signature: "(pick-f ipat fs pat)",
+    description: "Choose a function from a vector or map under the control of an index pattern and apply it to pat. The vector index is clamped; use pick-mod-f to wrap. Every entry must be a function.",
+    example: "(pick-f \"<0 1>\" [(fast 2) rev] (seq :a :b))",
+  },
+  "pick-mod-f": {
+    signature: "(pick-mod-f ipat fs pat)",
+    description: "Like pick-f, but a vector index wraps around instead of clamping.",
+    example: "(pick-mod-f \"<2 -1>\" [(fast 2) rev] (seq :a :b))",
+  },
+  "pick-out": {
+    signature: "(pick-out lookup ipat)",
+    description: "Like pick, but structure comes from the index pattern: each index step plays the chosen pattern's value at the step start (outer join). This is the one to use for one value per step.",
+    example: "(pick-out [:bd :sd :hh] \"0 1 2 1\")",
+  },
+  "pick-mod-out": {
+    signature: "(pick-mod-out lookup ipat)",
+    description: "Like pick-out, but a vector index wraps around instead of clamping.",
+    example: "(pick-mod-out [:bd :sd] \"0 1 2 3\")",
+  },
+  "pick-restart": {
+    signature: "(pick-restart lookup ipat)",
+    description: "Like pick, but at every index step the chosen pattern starts again from its cycle 0 (restart join).",
+    example: "(pick-restart [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")",
+  },
+  "pick-mod-restart": {
+    signature: "(pick-mod-restart lookup ipat)",
+    description: "Like pick-restart, but a vector index wraps around instead of clamping.",
+    example: "(pick-mod-restart [(slow 2 (seq :a :b :c :d)) :x] \"3 2\")",
+  },
+  "pick-reset": {
+    signature: "(pick-reset lookup ipat)",
+    description: "Like pick, but at every index step the current cycle of the chosen pattern starts again (reset join).",
+    example: "(pick-reset [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")",
+  },
+  "pick-mod-reset": {
+    signature: "(pick-mod-reset lookup ipat)",
+    description: "Like pick-reset, but a vector index wraps around instead of clamping.",
+    example: "(pick-mod-reset [(slow 2 (seq :a :b :c :d)) :x] \"3 2\")",
+  },
+  "inhabit": {
+    signature: "(inhabit lookup ipat)",
+    description: "Squeeze one cycle of the chosen pattern into each step of the index pattern (squeeze join). Vector index clamped; map by name.",
+    example: "(inhabit {:a (seq :bd :sd) :b :hh} \"a b\")",
+  },
+  "inhabit-mod": {
+    signature: "(inhabit-mod lookup ipat)",
+    description: "Like inhabit, but a vector index wraps around instead of clamping.",
+    example: "(inhabit-mod [(seq :bd :sd) :hh] \"0 1 2\")",
+  },
+  "fix": {
+    signature: "(fix f cond pat)",
+    description: "Tidal fix: apply f only to the events matching the condition map; the rest are kept. All keys must match (AND); a vector value means any-of; numbers compare numerically, keywords and strings exactly; a missing key is no match. :s is derived from :bank or a non-note :note, so {:s :bd} matches :bd and (sound :bd 2).",
+    example: "(fix (fast 2) {:s :bd} (seq :hh :bd))",
+  },
   "jux": {
     signature: "(jux f pat)",
     description: "Juxtapose: play pat panned left, and (f pat) panned right, simultaneously.",

@@ -359,6 +359,84 @@
   :examples ["(apply-n 2 (fast 2) (seq :a :b))" "(apply-n \"<1 2>\" (fast 2) (seq :a :b))"]
   :see-also ["every" "fast"]}
 
+ :pick {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick {:a (seq :bd :sd) :b (seq :hh :hh :hh)} \"<a b>\")" "(pick [\"bd sd\" \"hh*3\"] \"<0 1>\")"]
+  :see-also ["pick-mod" "pick-out" "inhabit" "choose-in-with"]}
+
+ :pick-mod {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-mod [(seq :bd :sd) (seq :hh :hh)] \"0 1 2\")"]
+  :see-also ["pick" "pick-mod-out" "inhabit-mod"]}
+
+ :pick-f {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-f \"<0 1>\" [(fast 2) rev] (seq :a :b))" "(pick-f \"<fast rev>\" {:fast (fast 2) :rev rev} (seq :a :b))"]
+  :see-also ["pick-mod-f" "pick" "every"]}
+
+ :pick-mod-f {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-mod-f \"<2 -1>\" [(fast 2) rev] (seq :a :b))"]
+  :see-also ["pick-f" "pick-mod"]}
+
+ :pick-out {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-out [:bd :sd :hh] \"0 1 2 1\")"]
+  :see-also ["pick" "pick-mod-out" "inhabit"]}
+
+ :pick-mod-out {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-mod-out [:bd :sd] \"0 1 2 3\")"]
+  :see-also ["pick-out" "pick-mod"]}
+
+ :pick-restart {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-restart [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")"]
+  :see-also ["pick-reset" "pick-mod-restart" "pick"]}
+
+ :pick-mod-restart {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-mod-restart [(slow 2 (seq :a :b :c :d)) :x] \"3 2\")"]
+  :see-also ["pick-restart" "pick-mod"]}
+
+ :pick-reset {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-reset [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")"]
+  :see-also ["pick-restart" "pick-mod-reset" "pick"]}
+
+ :pick-mod-reset {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-mod-reset [(slow 2 (seq :a :b :c :d)) :x] \"3 2\")"]
+  :see-also ["pick-reset" "pick-mod"]}
+
+ :inhabit {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(inhabit {:a (seq :bd :sd) :b :hh} \"a b\")"]
+  :see-also ["inhabit-mod" "pick-out" "choose-in-with"]}
+
+ :inhabit-mod {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(inhabit-mod [(seq :bd :sd) :hh] \"0 1 2\")"]
+  :see-also ["inhabit" "pick-mod"]}
+
+ :fix {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(fix (fast 2) {:s :bd} (seq :hh :bd))" "(fix (amp 0.3) {:s [:sd :hh]} (seq :bd :hh :sd :hh))"]
+  :see-also ["when-pat" "sometimes-by" "amp"]}
+
  :jux        {:category "transform"
               :returns "Pattern"
               :side-effects []
