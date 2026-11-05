@@ -797,7 +797,7 @@ one test (one page, state carries over); W7 is a separate test.
 - **W3. Preview & restore by click.** Click the `data-id="1"` row → `.hist-preview`
   contains `.hist-del` with `- (seq :bd :sd)` and `.hist-add` with `+ (qqqqqqqq)`.
   Click `[data-act="restore-selected"]` → editor text `(seq :bd :sd)`, output
-  `=> restored history #1 — previous state is history #3`, still 3 entries (the
+  `restored history #1 — previous state is history #3`, still 3 entries (the
   current state already was #3, K8).
 - **W4. Snapshots via built-ins.** `__REPULSE_APP__.evaluate('(snapshot! "take A")')` →
   output `snapshot "take A" saved`; edit to `(seq :cp)`; `evaluate('(restore! "take A")')`
