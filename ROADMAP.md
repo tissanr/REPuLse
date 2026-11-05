@@ -59,7 +59,7 @@ without a human:
 | **M4** | | **Sketchpad** | | | |
 | 17 | EXP1 | Export parity: offline render with WASM voices & FX | 🤖 | outline | opus |
 | 18 | SK1 | Stem export & full-song MIDI export | 🤖 | full | sonnet |
-| 19 | SK2 | Session snapshots & eval history | 🤖 | outline | sonnet |
+| 19 | SK2 | Session snapshots & eval history | 🤖 | full | sonnet |
 | 20 | SK3 | MIDI capture 1: click, fixed grid, velocity → code | 🤖👂 | outline | sonnet |
 | 21 | SK4 | MIDI capture 2: always-on capture | 🤖👂 | outline | sonnet |
 | 22 | SK5 | MIDI capture 3: grid & feel detection | 🤖👂 | outline | opus |
