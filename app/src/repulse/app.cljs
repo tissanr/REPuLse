@@ -18,6 +18,10 @@
             [repulse.project :as project]
             [repulse.outline :as outline]
             [repulse.ui.snippet-panel :as snippet-panel]
+            [repulse.ui.history-panel :as history-panel]
+            [repulse.history :as history]
+            [repulse.history-store :as history-store]
+            [repulse.history-idb :as history-idb]
             [repulse.ui.snippet-submit-modal :as snippet-submit-modal]
             [repulse.snippets.preview :as snippet-preview]
             [repulse.ui.auth-button :as auth-button]
@@ -171,6 +175,7 @@
                "  <div class=\"header-controls nav-actions\">"
                "    <button id=\"tap-btn\" class=\"tap-btn\">tap</button>"
                "    <button id=\"snippet-toggle-btn\" class=\"snippet-toggle-btn\">lib</button>"
+               "    <button id=\"history-toggle-btn\" class=\"history-toggle-btn\">hist</button>"
                "    <button id=\"share-btn\" class=\"share-btn\">share</button>"
                "  </div>"
                "  <div class=\"nav-spacer\"></div>"
@@ -190,6 +195,7 @@
                "    <div id=\"buffer-tabs\" class=\"buffer-tabs\"></div>"
                "    <div id=\"editor-container\" class=\"editor-container\"></div>"
                "    <div id=\"snippet-panel\" class=\"snippet-panel hidden\"></div>"
+               "    <div id=\"history-panel\" class=\"history-panel hidden\"></div>"
                "    <div id=\"cmd-bar\" class=\"cmd-bar console-panel\">"
                "      <div class=\"console-history\">"
                "        <div class=\"console-line console-line-out\">"
@@ -216,7 +222,8 @@
   (.addEventListener (el "play-btn")           "click" on-play-btn-click)
   (.addEventListener (el "tap-btn")            "click" (fn [] (eo/evaluate! "(tap!)")))
   (.addEventListener (el "share-btn")          "click" share!)
-  (.addEventListener (el "snippet-toggle-btn") "click" snippet-panel/toggle-panel!))
+  (.addEventListener (el "snippet-toggle-btn") "click" snippet-panel/toggle-panel!)
+  (.addEventListener (el "history-toggle-btn") "click" history-panel/toggle!))
 
 (defn init []
   (injectSpeedInsights)
@@ -343,6 +350,15 @@
 
     ;; Register the project getter for session snapshots
     (reset! session/project-fn buffers/current-project)
+
+    ;; Phase SK2: eval history + snapshots (IndexedDB, in-memory fallback)
+    (history-panel/init! {:set-output!        set-output!
+                          :set-pending-mutes! #(reset! eo/pending-mutes %)})
+    (history-idb/open!
+      (fn [idb]
+        (when-not idb
+          (js/console.warn "[REPuLse] IndexedDB unavailable — history and snapshots last only until reload"))
+        (history-store/init! (or idb (history/memory-storage)) (some? idb))))
 
     (if active-sess
       ;; ── Restore existing session ──────────────────────────────────────────

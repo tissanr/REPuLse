@@ -1430,6 +1430,37 @@
                           "(:fx (:kick (:tracks (help-export))))"]
                :see-also ["tracks" "bpm" "fx"]}
 
+ :snapshot!        {:category "session"
+                    :returns "String"
+                    :side-effects ["storage"]
+                    :examples ["(snapshot! \"take A\")"]
+                    :see-also ["snapshots" "restore!" "history"]}
+ :snapshots        {:category "session"
+                    :returns "Vector"
+                    :side-effects []
+                    :examples ["(snapshots)"]
+                    :see-also ["snapshot!" "restore!"]}
+ :restore!         {:category "session"
+                    :returns "String"
+                    :side-effects ["storage" "dom" "audio"]
+                    :examples ["(restore! \"take A\")" "(restore! 12)"]
+                    :see-also ["snapshot!" "history" "snapshots"]}
+ :rename-snapshot! {:category "session"
+                    :returns "String"
+                    :side-effects ["storage"]
+                    :examples ["(rename-snapshot! \"take A\" \"verse\")"]
+                    :see-also ["snapshot!" "delete-snapshot!" "snapshots"]}
+ :delete-snapshot! {:category "session"
+                    :returns "String"
+                    :side-effects ["storage"]
+                    :examples ["(delete-snapshot! \"take A\")"]
+                    :see-also ["snapshot!" "rename-snapshot!" "snapshots"]}
+ :history          {:category "session"
+                    :returns "String"
+                    :side-effects ["dom"]
+                    :examples ["(history)"]
+                    :see-also ["snapshot!" "restore!" "snapshots"]}
+
  ;; ── Special forms ────────────────────────────────────────────────────────────
  :def        {:category "special"
               :returns "nil"

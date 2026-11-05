@@ -22,6 +22,7 @@
             [repulse.outline-test]
             [repulse.lisp-patcher-test]
             [repulse.project-test]
+            [repulse.history-test]
             [repulse.project-eval-test]
             [repulse.ai.safety-test]
             [repulse.ai.edit-test]
@@ -56,7 +57,7 @@
                   'repulse.ui.timeline-test
                   'repulse.outline-test
                   'repulse.lisp-patcher-test
-                  'repulse.project-test
+                  'repulse.project-test 'repulse.history-test
                   'repulse.project-eval-test
                   'repulse.ai.safety-test
                   'repulse.ai.edit-test

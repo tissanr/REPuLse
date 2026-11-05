@@ -158,6 +158,12 @@ export const BUILTINS = [
   { label: "binary-n", type: "function", detail: "(binary-n n [bits]) \u2014 The low `bits` bits of n (default 16), most significant first, as a true/false step sequence. n and bits may be patterns." },
   // --- Sharing ---
   { label: "share!",       type: "function", detail: "(share!) — copy shareable session URL to clipboard" },
+  { label: "snapshot!",        type: "function", detail: "(snapshot! \"take A\") — save the whole project as a named snapshot (overwrites)" },
+  { label: "snapshots",        type: "function", detail: "(snapshots) — names of saved snapshots, newest first" },
+  { label: "restore!",         type: "function", detail: "(restore! \"take A\") or (restore! 12) — restore a snapshot or history entry (current state kept in history)" },
+  { label: "rename-snapshot!", type: "function", detail: "(rename-snapshot! \"take A\" \"verse\") — rename a snapshot" },
+  { label: "delete-snapshot!", type: "function", detail: "(delete-snapshot! \"take A\") — delete a snapshot" },
+  { label: "history",          type: "function", detail: "(history) — open the eval history & snapshots panel" },
   { label: "load-gist",    type: "function", detail: "(load-gist url) — fetch a Gist and load into editor" },
   { label: "export",       type: "function", detail: "(export) — render all tracks to WAV; (export n) — n cycles; (export :track n) — n cycles of one track; (export :stems) — one WAV per track in a zip; (export :song) — render the whole song offline; (export :song :realtime) — record it in real time" },
   // --- Sample playback control ---
