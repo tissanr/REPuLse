@@ -39,7 +39,7 @@ without a human:
 | 4 | TL3b | Zoom, compress & structure extras | 🤖 | full | sonnet |
 | 5 | TL4 | Randomness & conditionals | 🤖 | full | sonnet |
 | 6 | TL5 | Layering, pitch & harmony | 🤖 | full | sonnet |
-| 6a | TL4b | Pick & fix | 🤖 | outline | sonnet |
+| 6a | TL4b | Pick & fix | 🤖 | full | sonnet |
 | 7 | TL6 | Sample slicing & playback control | 🤖👂 | outline | opus |
 | 8 | TL7 | Per-event effects & control parameters | 🤖👂 | outline | opus |
 | 9 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
@@ -1952,16 +1952,32 @@ See full spec: [PROMPTS/PHASE-TL4.md](PROMPTS/PHASE-TL4.md)
 
 ---
 
-## Phase TL4b — Pick & Fix 📋 *planned*
+## Phase TL4b — Pick & Fix ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖 auto
 
 The selection and matching functions deferred from TL4.
 
 **Key additions:**
-- `pick pick-mod pick-f pick-out pick-restart pick-reset inhabit` — choose patterns or
-  functions from a lookup by an index/name pattern
-- Tidal `fix` — apply a function to events matching control values
+- `pick pick-mod pick-f pick-mod-f pick-out pick-mod-out pick-restart pick-mod-restart
+  pick-reset pick-mod-reset inhabit inhabit-mod` — choose patterns or functions from a vector
+  (by index) or map (by name) under an index pattern
+- `fix` — Tidal `fix`: apply a function to events matching a control map (AND, any-of, derived `:s`)
+
+**Delivered:**
+- `packages/core/src/repulse/core.cljs` — new `restart-join` and `reset-join` (Strudel
+  `resetJoin`) and the TL4b pick block: `pick pick-mod pick-out pick-mod-out pick-restart
+  pick-mod-restart pick-reset pick-mod-reset inhabit inhabit-mod pick-f pick-mod-f`
+  (vector clamped or wrapped, map by name; each variant differs only in its join)
+- `packages/core/src/repulse/params.cljs` — `fix` and `controls-match?`: numeric `==`, exact
+  keywords/strings, any-of vectors, derived `:s` from `:bank` or a non-note `:note`
+- Lisp — new `builtins/pick.cljs` (13 built-ins, curried forms for `->>`, string entries as
+  mini-notation, rational-literal vs any-of handling for `fix`, errors E1–E3)
+- Rule 3/5 artefacts: grammar + `parser.js`, `completions.js`, `hover.js`,
+  `builtin_meta.edn`, `docs/ai/builtins.json`; USAGE "Pick" and "`fix`" subsections,
+  STRUDEL-PARITY rows and summary
+- Tests: every spec vector in `core_test`/`params_test`/`integration_test`,
+  `tl4b-documented-examples-evaluate`, four Playwright onset-count tests
 
 See full spec: [PROMPTS/PHASE-TL4b.md](PROMPTS/PHASE-TL4b.md)
 

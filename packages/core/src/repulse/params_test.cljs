@@ -255,3 +255,99 @@
     (is (= [[:bd 1] [:hh 0.5]] (amps 0.25)))
     (is (= [[:bd 0.5] [:hh 1]] (amps 0.75)))
     (is (= [[:bd 1] [:hh 1]] (amps 0.5)))))
+
+;;; ── Phase TL4b: fix ──────────────────────────────────────────────────
+
+(defn- tl4b-evs
+  "[value whole-start whole-end] of cycle 0, sorted by whole start then value."
+  [pat]
+  (->> (core/query pat one-cycle)
+       (map (fn [e] [(:value e) (:start (:whole e)) (:end (:whole e))]))
+       (sort-by (fn [[v s _]] [(core/rat->float s) (pr-str v)]))
+       vec))
+
+(defn- t [n d] (core/rat n d))
+(def ^:private a02 (params/amp 0.2))
+
+(deftest tl4b-controls-match-rules
+  (let [m params/controls-match?]
+    (testing "numbers compare with =="
+      (is (m {:amp 1} {:amp 1.0}))
+      (is (m {:amp 0.5} {:amp [1 2]}))
+      (is (not (m {:amp [1 2]} {:amp 0.5})) "vector condition = any-of 1 or 2")
+      (is (m {:note 60} {:note 60.0}))
+      (is (not (m {:amp 1} {:amp 2}))))
+    (testing "keywords and strings compare exactly"
+      (is (m {:s :bd} :bd))
+      (is (not (m {:s :bd} :AkaiLinn_bd)))
+      (is (not (m {:s "bd"} :bd)))
+      (is (m {:s "bd"} {:s "bd"})))
+    (testing "missing key is no match; AND over keys"
+      (is (not (m {:pan 0} :bd)))
+      (is (m {:s :bd :n 2} {:bank :bd :n 2}))
+      (is (not (m {:s :bd :n 2} {:bank :bd :n 0}))))
+    (testing "any-of vectors"
+      (is (m {:s [:bd :sd]} :sd))
+      (is (not (m {:s [:bd :sd]} :hh)))
+      (is (m {:amp [1 2]} {:amp 2})))
+    (testing "derived :s"
+      (is (m {:s :bd} {:note :bd :amp 0.5}))
+      (is (m {:s :bd} {:bank :bd :n 1}))
+      (is (m {:note :c4} :c4))
+      (is (not (m {:s :c4} :c4)))
+      (is (not (m {:s :c4} :bd)))
+      (is (m {:s :kick} {:s :kick :note :bd}) "a real :s wins")
+      (is (not (m {:s :bd} {:s :kick :note :bd}))))
+    (testing "bare numbers and rationals become {:note v}"
+      (is (m {:note 3} 3))
+      (is (m {:note 0.5} [1 2])))
+    (testing "rests and other values never match, not even {}"
+      (is (not (m {} :_)))
+      (is (not (m {} nil)))
+      (is (not (m {} {:note :_})))
+      (is (not (m {} "bd")))
+      (is (not (m {} true)))
+      (is (not (m {} [1 2 3])))
+      (is (m {} :bd)))))
+
+(deftest tl4b-fix-numeric
+  (is (= [[{:note :bd :amp 0.2} (t 0 1) (t 1 2)] [{:note :sd :amp 0.5} (t 1 2) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:amp 1}
+                               (params/amp (core/seq* [1.0 0.5]) (core/seq* [:bd :sd]))))))
+  (is (= [[{:note :bd :amp 0.9} (t 0 1) (t 1 1)]]
+         (tl4b-evs (params/fix (params/amp 0.9) {:amp 0.5} (params/amp [1 2] (core/pure :bd))))))
+  (is (= [[{:note 60 :amp 0.2} (t 0 1) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:note 60} (core/seq* [60.0]))))))
+
+(deftest tl4b-fix-any-of
+  (is (= [[{:note :bd :amp 0.2} (t 0 1) (t 1 4)] [:hh (t 1 4) (t 1 2)]
+          [{:note :sd :amp 0.2} (t 1 2) (t 3 4)] [:cp (t 3 4) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:s [:bd :sd]} (core/seq* [:bd :hh :sd :cp]))))))
+
+(deftest tl4b-fix-bank-prefix
+  (is (= [[:AkaiLinn_bd (t 0 1) (t 1 2)] [{:note :bd :amp 0.2} (t 1 2) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:s :bd} (core/seq* [:AkaiLinn_bd :bd]))))))
+
+(deftest tl4b-fix-missing-key
+  (is (= [[:bd (t 0 1) (t 1 2)] [{:note :hh :pan 0 :amp 0.2} (t 0 1) (t 1 2)]
+          [:sd (t 1 2) (t 1 1)] [{:note :hh :pan 0 :amp 0.2} (t 1 2) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:pan 0}
+                               (core/stack* [(core/seq* [:bd :sd])
+                                             (params/pan 0 (core/seq* [:hh :hh]))]))))))
+
+(deftest tl4b-fix-and-derived-s
+  (is (= [[{:bank :bd :n 2 :amp 0.2} (t 0 1) (t 1 2)] [{:bank :bd :n 0} (t 1 2) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:s :bd :n 2}
+                               (core/seq* [{:bank :bd :n 2} {:bank :bd :n 0}])))))
+  (is (= [[{:note :bd :amp 0.2} (t 0 1) (t 1 3)] [:_ (t 1 3) (t 2 3)] [{:note 3 :amp 0.2} (t 2 3) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {} (core/seq* [:bd :_ 3])))))
+  (is (= [[:c4 (t 0 1) (t 1 2)] [:bd (t 1 2) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:s :c4} (core/seq* [:c4 :bd])))))
+  (is (= [[{:note :c4 :amp 0.2} (t 0 1) (t 1 2)] [:bd (t 1 2) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:note :c4} (core/seq* [:c4 :bd])))))
+  (is (= [[:bd (t 0 1) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:s "bd"} (core/seq* [:bd]))))))
+
+(deftest tl4b-fix-structure-changing-f
+  (is (= [[:hh (t 0 1) (t 1 2)] [:bd (t 1 4) (t 1 2)] [:bd (t 3 4) (t 1 1)]]
+         (tl4b-evs (params/fix #(core/fast 2 %) {:s :bd} (core/seq* [:hh :bd]))))))

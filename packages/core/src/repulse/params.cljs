@@ -1,5 +1,6 @@
 (ns repulse.params
-  (:require [repulse.core :as core]))
+  (:require [repulse.core :as core]
+            [repulse.theory :as theory]))
 
 ;;; ── Value map helpers ────────────────────────────────────────────────
 
@@ -191,3 +192,51 @@
                 (fn [v p] (amp* (fade-gain (g (core/rat->float (core/->rat p)))) v))
                 (->p pat) pos))]
     (core/stack* [(side a identity) (side b #(- 1 %))])))
+
+;;; ── Phase TL4b: fix ──────────────────────────────────────────────────
+
+(defn- num-of [x]
+  (cond (number? x) x
+        (and (vector? x) (= 2 (count x)) (every? number? x) (not (zero? (second x))))
+        (/ (first x) (second x))
+        :else nil))
+
+(defn- rest-val? [v] (or (nil? v) (= v :_) (and (map? v) (= :_ (:note v)))))
+
+(defn- control-view
+  "K9: the control map fix matches against, or nil (never matches)."
+  [v]
+  (when-not (rest-val? v)
+    (let [m (cond (map? v) v
+                  (or (keyword? v) (number? v) (num-of v)) (to-map v)
+                  :else nil)]
+      (when m
+        (if (contains? m :s)
+          m
+          (let [n (:note m)
+                s (or (:bank m)
+                      (when (and (keyword? n) (not (theory/note-keyword? n))) n))]
+            (cond-> m s (assoc :s s))))))))
+
+(defn- val-match? [cv ev]
+  (let [a (num-of cv) b (num-of ev)]
+    (if (and a b) (== a b) (= cv ev))))
+
+(defn controls-match?
+  "K10: every [k cv] of cond matches the event value's control view."
+  [cond v]
+  (if-let [m (control-view v)]
+    (every? (fn [[k cv]]
+              (let [ev (get m k)]
+                (and (some? ev)
+                     (if (vector? cv)
+                       (boolean (some #(val-match? % ev) cv))
+                       (val-match? cv ev)))))
+            cond)
+    false))
+
+(defn fix
+  "Tidal fix: apply f to the events whose controls match cond, keep the rest."
+  [f cond pat]
+  (core/stack* [(f (core/filter-events #(controls-match? cond %) pat))
+                (core/filter-events #(not (controls-match? cond %)) pat)]))

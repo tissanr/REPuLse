@@ -43,14 +43,14 @@ Method-chaining (`s("bd").fast(2)`) maps to Lisp application or threading:
 | Core & pattern arithmetic | TL1 | 16 | 2 | 17 | 7 | 4 | 8 | 54 |
 | Continuous signals | TL2/TL4 | 30 | 0 | 0 | 3 | 1 | 2 | 36 |
 | Time & structure | TL3/TL3b | 44 | 0 | 0 | 9 | 2 | 6 | 61 |
-| Randomness & conditionals | TL4/TL4b | 27 | 0 | 6 | 8 | 1 | 2 | 44 |
+| Randomness & conditionals | TL4/TL4b | 33 | 0 | 0 | 8 | 1 | 2 | 44 |
 | Layering, pitch & harmony | TL5 | 18 | 1 | 0 | 5 | 0 | 2 | 26 |
 | Sample manipulation | TL6 | 3 | 1 | 11 | 2 | 1 | 2 | 20 |
 | Control parameters & effects | TL7 | 4 | 14 | 20 | 4 | 7 | 9 | 58 |
 | Mini-notation | TL1/TL3/TL4 | 15 | 0 | 2 | 0 | 0 | 0 | 17 |
-| Tidal-only functions | TL3–TL5 | 7 | 0 | 1 | 3 | 0 | 2 | 13 |
+| Tidal-only functions | TL3–TL5 | 8 | 0 | 0 | 3 | 0 | 2 | 13 |
 | Visuals, I/O & JS-specific | — | 4 | 2 | 1 | 1 | 13 | 3 | 24 |
-| **Total** | | **168** | **20** | **58** | **42** | **29** | **36** | **353** |
+| **Total** | | **175** | **20** | **51** | **42** | **29** | **36** | **353** |
 
 Rows grouped in one line (e.g. `sine2 / cosine2 / …`) count once.
 
@@ -245,7 +245,7 @@ signals (the voice shortcuts `(saw :c4)` / `(square :c4)` give way to `(synth :s
 `timeToRand` (TL2) instead of the old linear 0–99 hash (deleted). `choose` / `wchoose`
 are continuous signals (Strudel) and keep REPuLse's **vector** argument with **weight
 first**; the old one-pick-per-cycle behaviour is `choose-cycles` / `wchoose-cycles`.
-The `pick` family, `inhabit` and Tidal `fix` are deferred to **TL4b**.
+The `pick` family, `inhabit` and Tidal `fix` followed in **TL4b**.
 
 | Strudel | REPuLse | Status | Phase | Notes |
 |---|---|---|---|---|
@@ -279,15 +279,15 @@ The `pick` family, `inhabit` and Tidal `fix` are deferred to **TL4b**.
 | `firstOf` | `every` | 🔁 | — | |
 | `lastOf` | `last-of` | ✅ | TL3 | Exact Tidal `_lastOf` (moved from TL4); delivered in TL3 |
 | `applyN` | `apply-n` | ✅ | TL4 | |
-| `pick` | `pick` | 📋 | TL4b | Select patterns by index/name pattern |
-| `pickmod` | `pick-mod` | 📋 | TL4b | |
-| `pickF` / `pickmodF` | `pick-f` | 📋 | TL4b | Pick a function |
-| `pickmodF` | `pick-f` | 🔁 | — | Modulo variant as option |
-| `pickOut` / `pickmodOut` | `pick-out` | 📋 | TL4b | |
-| `pickRestart` / `pickReset` (+ `mod` variants) | `pick-restart`, `pick-reset` | 📋 | TL4b | |
-| `inhabit` / `pickSqueeze` | `inhabit` | 📋 | TL4b | |
-| `pickSqueeze`, `pickmodSqueeze` | `inhabit` | 🔁 | — | |
-| `inhabitmod` | `inhabit` | 🔁 | — | Option |
+| `pick` | `pick` | ✅ | TL4b | Vector clamped, map by name; inner join |
+| `pickmod` | `pick-mod` | ✅ | TL4b | Floored mod |
+| `pickF` / `pickmodF` | `pick-f`, `pick-mod-f` | ✅ | TL4b | Pick a function |
+| `pickmodF` | `pick-mod-f` | 🔁 | — | Separate name, not an option |
+| `pickOut` / `pickmodOut` | `pick-out`, `pick-mod-out` | ✅ | TL4b | Outer join: structure from the index pattern |
+| `pickRestart` / `pickReset` (+ `mod` variants) | `pick-restart`, `pick-mod-restart`, `pick-reset`, `pick-mod-reset` | ✅ | TL4b | New `restart-join` / `reset-join` in core |
+| `inhabit` / `pickSqueeze` | `inhabit` | ✅ | TL4b | Squeeze join |
+| `pickSqueeze`, `pickmodSqueeze` | `inhabit`, `inhabit-mod` | 🔁 | — | |
+| `inhabitmod` | `inhabit-mod` | 🔁 | — | Separate name |
 | `whenKey` / `keyDown` | — | ⛔ | — | Computer-keyboard triggers; REPuLse's editor owns the keyboard |
 | `cyclesPer` / `per` / `perx` | — | ❓ | — | Recent Strudel addition |
 | `open` / `close` | — | ❓ | — | Recent Strudel addition |
@@ -468,7 +468,7 @@ Not in Strudel, but common in Tidal tutorials.
 | `stutter` | `stutter` | ✅ | TL5 | |
 | `sew` | `sew` | ✅ | TL3b | |
 | `stitch` | `stitch` | ✅ | TL3b | |
-| `fix` | `fix` | 📋 | TL4b | Apply a function to events matching control values |
+| `fix` | `fix` | ✅ | TL4b | Condition map; any-of vectors; derived `:s` |
 | `trunc` | `trunc` | ✅ | TL3b | |
 | `rolled` / `rolledBy` | `rolled` / `rolled-by` | ✅ | TL5 | Strum chords |
 | `toScale` | `scale` | 🔁 | — | `scale` with a semitone vector |
