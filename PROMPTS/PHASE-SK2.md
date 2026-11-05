@@ -47,9 +47,29 @@ you can scroll back through, preview and restore; and you can save named **snaps
 ## Open design questions
 
 1. Storage size: full copies vs. deltas; localStorage quota vs. IndexedDB.
+   **Decided (2026-11-05): full copies, content-addressed, in IndexedDB.** Each distinct
+   project state (the sanitized v3 map from `session/build-session-snapshot`) is stored
+   once under its content hash; history entries and named snapshots reference blobs by
+   hash, so repeated identical states cost almost nothing. No deltas — a corrupt delta
+   breaks every later entry. Storage is IndexedDB via a small hand-written wrapper (no
+   external library), separate from the D2 `"repulse-session"` localStorage slot, which
+   stays unchanged. History is bounded by count (500) **and** total size (~20 MB),
+   evicting oldest entries first and garbage-collecting unreferenced blobs; named
+   snapshots are never evicted automatically. All history/snapshot logic (append,
+   collapse, evict, GC, restore) is pure over a storage-adapter protocol: unit tests use
+   an in-memory adapter, the app uses the IndexedDB adapter.
 2. Should previewing a history entry play it (audition, like AI5's planned audition) or only show code?
+   **Decided (2026-11-05): code only.** Preview shows the entry's code read-only with a
+   line diff against the current buffer, plus Restore. No audio audition — extending the
+   S4 snippet sandbox to whole multi-buffer projects is out of scope; audition belongs to AI5.
 3. Cloud sync now or later?
+   **Decided (2026-11-05): later.** Local-only in SK2. Supabase sync needs a table, RLS,
+   a migration and auth flow (human-in-loop) and is a separate follow-up phase.
 4. Should snapshots be shareable as links (reuse `share!`)?
+   **Decided (2026-11-05): yes, minimal.** A "Copy link" action per named snapshot calls
+   the existing `session/share-link` with the snapshot's stored project state (it already
+   takes the snapshot as an argument). If the link is too long or invalid, surface
+   `share-link`'s existing `:error` result; no new backend or URL format.
 
 ## Definition of done
 
