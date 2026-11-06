@@ -3606,6 +3606,7 @@
       "(->> (seq :hh) (rate 0.5))"
     ],
     "see-also": [
+      "speed",
       "begin",
       "end",
       "loop-sample"
@@ -3660,6 +3661,226 @@
       "end"
     ],
     "detail": "(loop-sample true pat) — loop sample playback; (loop-sample bool) returns transformer",
+    "description": ""
+  },
+  "chop": {
+    "category": "transform",
+    "signature": "(chop n pat) — cut each event into n parts playing consecutive pieces of its sample",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(chop 8 (sound :breaks152 0))",
+      "(->> (sound :breaks152 0) (chop \"<4 8>\"))"
+    ],
+    "see-also": [
+      "striate",
+      "slice",
+      "loop-at"
+    ],
+    "detail": "(chop n pat) — cut each event into n parts playing consecutive pieces of its sample",
+    "description": ""
+  },
+  "striate": {
+    "category": "transform",
+    "signature": "(striate n pat) — play pat n times per cycle; repetition i plays piece i of each sample",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(striate 4 (sound :breaks152 0))"
+    ],
+    "see-also": [
+      "chop",
+      "slice"
+    ],
+    "detail": "(striate n pat) — play pat n times per cycle; repetition i plays piece i of each sample",
+    "description": ""
+  },
+  "slice": {
+    "category": "transform",
+    "signature": "(slice n ipat pat) — cut the sample into n slices, play the slices chosen by ipat",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(slice 8 (seq 0 3 2 7) (sound :breaks152 0))",
+      "(->> (sound :breaks152 0) (slice 4 \"0 2\"))"
+    ],
+    "see-also": [
+      "splice",
+      "chop",
+      "begin"
+    ],
+    "detail": "(slice n ipat pat) — cut the sample into n slices, play the slices chosen by ipat",
+    "description": ""
+  },
+  "splice": {
+    "category": "transform",
+    "signature": "(splice n ipat pat) — slice, with speed fitted so each slice fills its slot",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(splice 8 (seq 0 1 6 7) (sound :breaks152 0))"
+    ],
+    "see-also": [
+      "slice",
+      "fit",
+      "unit"
+    ],
+    "detail": "(splice n ipat pat) — slice, with speed fitted so each slice fills its slot",
+    "description": ""
+  },
+  "fit": {
+    "category": "transform",
+    "signature": "(fit pat) — set each event's speed so its sample (begin–end) fills the event",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(fit (seq (sound :breaks152 0) :_))"
+    ],
+    "see-also": [
+      "loop-at",
+      "splice",
+      "unit"
+    ],
+    "detail": "(fit pat) — set each event's speed so its sample (begin–end) fills the event",
+    "description": ""
+  },
+  "loop-at": {
+    "category": "transform",
+    "signature": "(loop-at n pat) — slow pat by n and fit its samples to n cycles",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(loop-at 2 (chop 16 (sound :breaks152 0)))"
+    ],
+    "see-also": [
+      "fit",
+      "chop",
+      "unit"
+    ],
+    "detail": "(loop-at n pat) — slow pat by n and fit its samples to n cycles",
+    "description": ""
+  },
+  "speed": {
+    "category": "transform",
+    "signature": "(speed n pat) — playback rate (alias of rate); negative plays backwards",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (sound :breaks152 0) (speed -1))",
+      "(->> (seq :bd :sd) (speed \"1 2\"))"
+    ],
+    "see-also": [
+      "rate",
+      "unit",
+      "accelerate"
+    ],
+    "detail": "(speed n pat) — playback rate (alias of rate); negative plays backwards",
+    "description": ""
+  },
+  "unit": {
+    "category": "transform",
+    "signature": "(unit :c pat) — speed in cycles: speed 1 plays the whole sample in one cycle; :r = plain rate",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (sound :breaks152 0) (speed 1) (unit :c))"
+    ],
+    "see-also": [
+      "speed",
+      "loop-at",
+      "fit"
+    ],
+    "detail": "(unit :c pat) — speed in cycles: speed 1 plays the whole sample in one cycle; :r = plain rate",
+    "description": ""
+  },
+  "accelerate": {
+    "category": "transform",
+    "signature": "(accelerate n pat) — glide playback rate from rate to rate + n while the sample plays",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (sound :breaks152 0) (accelerate -0.5))"
+    ],
+    "see-also": [
+      "speed",
+      "rate"
+    ],
+    "detail": "(accelerate n pat) — glide playback rate from rate to rate + n while the sample plays",
+    "description": ""
+  },
+  "legato": {
+    "category": "transform",
+    "signature": "(legato n pat) — sample length relative to the event: 1 = stop at event end",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :bd :sd) (legato 0.5))"
+    ],
+    "see-also": [
+      "sustain",
+      "end"
+    ],
+    "detail": "(legato n pat) — sample length relative to the event: 1 = stop at event end",
+    "description": ""
+  },
+  "sustain": {
+    "category": "transform",
+    "signature": "(sustain secs pat) — maximum sample length in seconds",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (sound :breaks152 0) (sustain 0.1))"
+    ],
+    "see-also": [
+      "legato",
+      "end"
+    ],
+    "detail": "(sustain secs pat) — maximum sample length in seconds",
+    "description": ""
+  },
+  "cut": {
+    "category": "transform",
+    "signature": "(cut group pat) — choke group: a new sample stops the group's samples still playing",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (fast 2 (seq :ho :hc :ho :hc)) (cut 1))"
+    ],
+    "see-also": [
+      "legato",
+      "sustain"
+    ],
+    "detail": "(cut group pat) — choke group: a new sample stops the group's samples still playing",
+    "description": ""
+  },
+  "loop-begin": {
+    "category": "transform",
+    "signature": "(loop-begin frac pat) — loop region start 0.0–1.0 (with loop-sample)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (sound :pad 0) (loop-sample true) (loop-begin 0.25) (loop-end 0.5))"
+    ],
+    "see-also": [
+      "loop-end",
+      "loop-sample"
+    ],
+    "detail": "(loop-begin frac pat) — loop region start 0.0–1.0 (with loop-sample)",
+    "description": ""
+  },
+  "loop-end": {
+    "category": "transform",
+    "signature": "(loop-end frac pat) — loop region end 0.0–1.0 (with loop-sample)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (sound :pad 0) (loop-sample true) (loop-end 0.5))"
+    ],
+    "see-also": [
+      "loop-begin",
+      "loop-sample"
+    ],
+    "detail": "(loop-end frac pat) — loop region end 0.0–1.0 (with loop-sample)",
     "description": ""
   },
   "signal": {

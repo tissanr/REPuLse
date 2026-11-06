@@ -690,7 +690,7 @@
               :side-effects []
               :examples ["(->> (seq :bd) (rate 2.0))"
                          "(->> (seq :hh) (rate 0.5))"]
-              :see-also ["begin" "end" "loop-sample"]}
+              :see-also ["speed" "begin" "end" "loop-sample"]}
 
  :begin      {:category "transform"
               :returns "Pattern"
@@ -712,6 +712,94 @@
                :examples ["(->> (seq :bd) (loop-sample true))"
                           "(->> (pure :bd) (loop-sample true) (decay 2.0))"]
                :see-also ["rate" "begin" "end"]}
+
+ ;; ── Sample slicing (TL6) ────────────────────────────────────────────────────
+ :chop {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(chop 8 (sound :breaks152 0))"
+                         "(->> (sound :breaks152 0) (chop \"<4 8>\"))"]
+              :see-also ["striate" "slice" "loop-at"]}
+
+ :striate {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(striate 4 (sound :breaks152 0))"]
+              :see-also ["chop" "slice"]}
+
+ :slice {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(slice 8 (seq 0 3 2 7) (sound :breaks152 0))"
+                         "(->> (sound :breaks152 0) (slice 4 \"0 2\"))"]
+              :see-also ["splice" "chop" "begin"]}
+
+ :splice {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(splice 8 (seq 0 1 6 7) (sound :breaks152 0))"]
+              :see-also ["slice" "fit" "unit"]}
+
+ :fit {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(fit (seq (sound :breaks152 0) :_))"]
+              :see-also ["loop-at" "splice" "unit"]}
+
+ :loop-at {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(loop-at 2 (chop 16 (sound :breaks152 0)))"]
+              :see-also ["fit" "chop" "unit"]}
+
+ :speed {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (sound :breaks152 0) (speed -1))"
+                         "(->> (seq :bd :sd) (speed \"1 2\"))"]
+              :see-also ["rate" "unit" "accelerate"]}
+
+ :unit {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (sound :breaks152 0) (speed 1) (unit :c))"]
+              :see-also ["speed" "loop-at" "fit"]}
+
+ :accelerate {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (sound :breaks152 0) (accelerate -0.5))"]
+              :see-also ["speed" "rate"]}
+
+ :legato {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :bd :sd) (legato 0.5))"]
+              :see-also ["sustain" "end"]}
+
+ :sustain {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (sound :breaks152 0) (sustain 0.1))"]
+              :see-also ["legato" "end"]}
+
+ :cut {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (fast 2 (seq :ho :hc :ho :hc)) (cut 1))"]
+              :see-also ["legato" "sustain"]}
+
+ :loop-begin {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (sound :pad 0) (loop-sample true) (loop-begin 0.25) (loop-end 0.5))"]
+              :see-also ["loop-end" "loop-sample"]}
+
+ :loop-end {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (sound :pad 0) (loop-sample true) (loop-end 0.5))"]
+              :see-also ["loop-begin" "loop-sample"]}
 
  ;; ── Synth voices ────────────────────────────────────────────────────────────
  :synth      {:category "transform"
