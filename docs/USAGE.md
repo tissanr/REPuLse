@@ -3943,7 +3943,7 @@ Model:     qwen3-coder-30b
 **How requests travel.** Hosted providers go through REPuLse's server proxy. `custom` requests go **straight from your browser** to the base URL — including your key and any code you share — so only use endpoints you trust. Allowed URLs:
 
 - `https://…` — any host.
-- `http://localhost`, `http://127.0.0.1`, `http://[::1]` (any port).
+- `http://localhost`, `http://127.0.0.1` (any port). Plain-HTTP IPv6 `http://[::1]` is rejected because the page's security policy can't list IPv6 addresses; use `localhost` instead.
 - Plain-HTTP LAN or remote addresses (`http://192.168.…`) are rejected in the settings: browsers block them as mixed content on an HTTPS page. Use HTTPS (e.g. a tunnel), or run the server on the same machine and use `localhost`.
 
 **Enable CORS on your server** so it accepts requests from the REPuLse origin:
