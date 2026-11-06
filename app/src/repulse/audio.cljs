@@ -457,9 +457,21 @@
      :oh (make-hihat ac t amp pan dest 1.0 0.4 8000)
      (make-sine ac t 440 1.5 amp 0.001 pan dest))))
 
+(def ^:private sample-param-keys
+  [:rate :begin :end :loop :loop-begin :loop-end :unit :accelerate :legato :sustain :cut])
+
+(defn- sample-extra
+  "Sample playback params of an event value plus the event timing (TL6, S12)."
+  [value timing]
+  (merge (select-keys value sample-param-keys)
+         (select-keys timing [:dur :cycle-dur])))
+
 (defn play-event
-  ([ac t value] (play-event ac t value nil))
-  ([ac t value track-name]
+  "Play one event value at audio time t. timing — optional {:dur :cycle-dur} in
+   seconds (TL6): needed by legato, looped samples and unit :c."
+  ([ac t value] (play-event ac t value nil nil))
+  ([ac t value track-name] (play-event ac t value track-name nil))
+  ([ac t value track-name timing]
    ;; An OfflineAudioContext without a registered graph has no worklet — skip
    ;; to JS fallbacks (TEST1 harness). A registered offline graph (EXP1 export)
    ;; takes exactly the real-time branches.
@@ -544,10 +556,7 @@
                  (or (worklet-trigger-v2! wt (str hz) t amp-v attack-v decay-v pan-v dest)
                      (make-sine ac t hz decay-v amp-v attack-v pan-v dest))))
              (let [resolved (samples/resolve-keyword note)
-                   extra    {:rate  (:rate value)
-                             :begin (:begin value)
-                             :end   (:end value)
-                             :loop  (:loop value)}]
+                   extra    (sample-extra value timing)]
                (cond
                  (samples/has-bank? resolved)
                  (samples/play! ac t resolved 0 amp-v pan-v extra dest)
@@ -568,8 +577,7 @@
        (let [{:keys [bank n]} value
              amp-v  (float (:amp  value 1.0))
              pan-v  (float (:pan  value 0.0))
-             extra {:rate  (:rate value) :begin (:begin value)
-                    :end   (:end value)  :loop  (:loop value)}]
+             extra  (sample-extra value timing)]
          (if (samples/has-bank? bank)
            (samples/play! ac t bank n amp-v pan-v extra dest)
            (if offline?
@@ -847,7 +855,7 @@
     (when (> t (.-currentTime ac))
       (let [tween-st (get-in state [:tween-state track-name] {})
             value    (resolve-tweens (:value ev) tween-st t cycle-dur)]
-        (play-event ac t value track-name)
+        (play-event ac t value track-name {:dur dur :cycle-dur cycle-dur})
         ;; MIDI note output — triggered by :midi-ch key added via (midi-out ch pat)
         (when-let [midi-ch (:midi-ch (:value ev))]
           (let [value    (:value ev)

@@ -126,6 +126,19 @@
       :else
       (str (pr-str head-form) " is not a function"))))
 
+(defn- with-call-source
+  "Tag a plain value map returned by a call — (sound :bd 0), (fm :c4) — with the
+   call's editor range as {:source …} metadata, so that wherever it becomes a
+   pattern (core/pure) its events highlight. Patterns and tagged maps pass through."
+  [result form]
+  (if (and (map? result)
+           (not (core/pattern? result))
+           (not (:source (meta result))))
+    (if-let [src (source-of form)]
+      (vary-meta result assoc :source (select-keys src [:from :to]))
+      result)
+    result))
+
 (defn eval-form [form env]
   (cond
     ;; SourcedVal from reader — treat as literal, pass through as-is
@@ -369,7 +382,7 @@
                 (cond
                   (fn? f)
                   (try
-                    (apply f (map #(eval-form % env) tail))
+                    (with-call-source (apply f (map #(eval-form % env) tail)) form)
                     (catch :default e
                       ;; Re-throw with the source position of the call head,
                       ;; unless the error already carries a more specific range.

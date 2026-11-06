@@ -45,12 +45,12 @@ Method-chaining (`s("bd").fast(2)`) maps to Lisp application or threading:
 | Time & structure | TL3/TL3b | 44 | 0 | 0 | 9 | 2 | 6 | 61 |
 | Randomness & conditionals | TL4/TL4b | 33 | 0 | 0 | 8 | 1 | 2 | 44 |
 | Layering, pitch & harmony | TL5 | 18 | 1 | 0 | 5 | 0 | 2 | 26 |
-| Sample manipulation | TL6 | 3 | 1 | 11 | 2 | 1 | 2 | 20 |
+| Sample manipulation | TL6 | 15 | 0 | 0 | 2 | 1 | 2 | 20 |
 | Control parameters & effects | TL7 | 4 | 14 | 20 | 4 | 7 | 9 | 58 |
 | Mini-notation | TL1/TL3/TL4 | 15 | 0 | 2 | 0 | 0 | 0 | 17 |
 | Tidal-only functions | TL3–TL5 | 8 | 0 | 0 | 3 | 0 | 2 | 13 |
 | Visuals, I/O & JS-specific | — | 4 | 2 | 1 | 1 | 13 | 3 | 24 |
-| **Total** | | **175** | **20** | **51** | **42** | **29** | **36** | **353** |
+| **Total** | | **187** | **19** | **40** | **42** | **29** | **36** | **353** |
 
 Rows grouped in one line (e.g. `sine2 / cosine2 / …`) count once.
 
@@ -218,7 +218,7 @@ signals (the voice shortcuts `(saw :c4)` / `(square :c4)` give way to `(synth :s
 | `chunkBackInto` | `chunk-back-into` | ✅ | TL3b | |
 | `ribbon` / `rib` | `ribbon` | ✅ | TL3b | Loop a section of the timeline |
 | `rib` | `ribbon` | 🔁 | — | |
-| `hurry` | `hurry` | ✅ | TL3b | `fast` + multiplies `rate` (no `speed` alias) |
+| `hurry` | `hurry` | ✅ | TL3b | `fast` + multiplies `rate` (`speed` is an alias since TL6) |
 | `within` | `within` | ✅ | TL3 |  |
 | `filter` | `filter-events` | ✅ | TL3b | Lisp `filter` already exists for sequences; needs a distinct name |
 | `filterWhen` | `filter-when` | ✅ | TL3b | |
@@ -337,23 +337,23 @@ The `pick` family, `inhabit` and Tidal `fix` followed in **TL4b**.
 
 | Strudel | REPuLse | Status | Phase | Notes |
 |---|---|---|---|---|
-| `chop` | `chop` | 📋 | TL6 | |
-| `striate` | `striate` | 📋 | TL6 | |
-| `slice` | `slice` | 📋 | TL6 | |
-| `splice` | `splice` | 📋 | TL6 | |
-| `loopAt` | `loop-at` | 📋 | TL6 | |
+| `chop` | `chop` | ✅ | TL6 | Splits the event's existing begin–end range |
+| `striate` | `striate` | ✅ | TL6 | |
+| `slice` | `slice` | ✅ | TL6 | Indices wrap |
+| `splice` | `splice` | ✅ | TL6 | |
+| `loopAt` | `loop-at` | ✅ | TL6 | |
 | `loopAtCps` | `loop-at` | ⛔ | — | REPuLse has one global tempo |
-| `fit` | `fit` | 📋 | TL6 | |
-| `cut` | `cut` | 📋 | TL6 | Cut groups (choke) — audio-engine work |
-| `clip` / `legato` | `legato` | 📋 | TL6 | Note length relative to event |
+| `fit` | `fit` | ✅ | TL6 | Strudel semantics (not Tidal's list `fit`) |
+| `cut` | `cut` | ✅ | TL6 | Choke groups for samples, global (no orbits); 5 ms fade |
+| `clip` / `legato` | `legato` | ✅ | TL6 | Sample length relative to event; samples only. Also `sustain` (seconds) |
 | `clip` | `legato` | 🔁 | — | |
-| `speed` | `rate` | 🟡 | TL6 | `rate` exists; negative speed (reverse playback) unverified. Add `speed` alias |
-| `unit` | `unit` | 📋 | TL6 | `"c"` = speed in cycles |
-| `accelerate` | `accelerate` | 📋 | TL6 | |
+| `speed` | `speed`, `rate` | ✅ | TL6 | `speed` is an alias of `rate`; negative = reverse (reversed buffer copy) |
+| `unit` | `unit` | ✅ | TL6 | `:c` = speed in cycles |
+| `accelerate` | `accelerate` | ✅ | TL6 | Linear rate glide over the sample's playing time |
 | `begin` | `begin` | ✅ | — | |
 | `end` | `end` | ✅ | — | |
 | `loop` | `loop-sample` | ✅ | — | |
-| `loopBegin` / `loopEnd` | `loop-begin`, `loop-end` | 📋 | TL6 | |
+| `loopBegin` / `loopEnd` | `loop-begin`, `loop-end` | ✅ | TL6 | |
 | `stretch` | — | ❓ | — | Time-stretch; needs a granular/phase-vocoder engine |
 | `scrub` | — | ❓ | — | |
 | `n` (sample index) | `(sound :bd 2)`, `"bd:2"` | 🔁 | — | Exists via `sound` and mini-notation `:` |

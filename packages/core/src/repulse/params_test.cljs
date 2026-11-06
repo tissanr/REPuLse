@@ -357,3 +357,89 @@
 (deftest tl4b-fix-structure-changing-f
   (is (= [[:hh (t 0 1) (t 1 2)] [:bd (t 1 4) (t 1 2)] [:bd (t 3 4) (t 1 1)]]
          (tl4b-evs (params/fix #(core/fast 2 %) {:s :bd} (core/seq* [:hh :bd]))))))
+
+;;; ── Phase TL6: sample slicing ───────────────────────────────────────
+
+(def ^:private brk {:bank :break :n 0})
+
+(defn- onsets [pat]
+  (->> (core/query pat one-cycle)
+       (filter core/onset?)
+       (sort-by #(core/rat->float (:start (:whole %))))))
+
+(defn- whole [ev] [(:start (:whole ev)) (:end (:whole ev))])
+
+(deftest chop-four-equal-pieces
+  (let [evs (onsets (params/chop 4 (core/pure brk)))]
+    (is (= [0.0 0.25 0.5 0.75] (mapv #(get-in % [:value :begin]) evs)))
+    (is (= [0.25 0.5 0.75 1.0] (mapv #(get-in % [:value :end]) evs)))
+    (is (= [[[0 1] [1 4]] [[1 4] [1 2]] [[1 2] [3 4]] [[3 4] [1 1]]] (mapv whole evs)))
+    (is (every? #(= :break (get-in % [:value :bank])) evs))))
+
+(deftest chop-is-relative-to-existing-range
+  (let [evs (onsets (params/chop 2 (params/end* 0.5 (params/begin 0.25 (core/pure brk)))))]
+    (is (= [[0.25 0.375] [0.375 0.5]]
+           (mapv #(vector (get-in % [:value :begin]) (get-in % [:value :end])) evs)))))
+
+(deftest chop-subdivides-each-event-and-keeps-rests
+  (let [evs (onsets (params/chop 2 (core/seq* [:bd :_])))]
+    (is (= [{:note :bd :begin 0.0 :end 0.5} {:note :bd :begin 0.5 :end 1.0} :_ :_]
+           (mapv :value evs)))))
+
+(deftest chop-curried-and-patterned
+  (is (= 3 (count (onsets ((params/chop 3) (core/pure brk))))))
+  ;; inner join: n = 1 in the first half (one whole-cycle piece), 4 in the
+  ;; second half (pieces 2 and 3 fall inside it) → 3 onsets
+  (let [evs (onsets (params/chop (core/seq* [1 4]) (core/pure brk)))]
+    (is (= [0.0 0.5 0.75] (mapv #(get-in % [:value :begin]) evs)))))
+
+(deftest striate-interleaves
+  (let [evs (onsets (params/striate 2 (core/seq* [:a :b])))]
+    (is (= [[:a 0.0] [:b 0.0] [:a 0.5] [:b 0.5]]
+           (mapv #(vector (get-in % [:value :note]) (get-in % [:value :begin])) evs)))
+    (is (= [1 4] (second (whole (first evs)))))))
+
+(deftest slice-picks-slices-by-index
+  (let [evs (onsets (params/slice 8 (core/seq* [0 3]) (core/pure brk)))]
+    (is (= [[0.0 0.125] [0.375 0.5]]
+           (mapv #(vector (get-in % [:value :begin]) (get-in % [:value :end])) evs)))
+    (is (= [[[0 1] [1 2]] [[1 2] [1 1]]] (mapv whole evs)))))
+
+(deftest slice-wraps-and-rests
+  (let [evs (onsets (params/slice 4 (core/seq* [5 :_ -1]) (core/pure brk)))]
+    (is (= [0.25 nil 0.75] (mapv #(when (map? (:value %)) (get-in % [:value :begin])) evs)))
+    (is (= :_ (:value (second evs))))))
+
+(deftest splice-fits-rate-to-slot
+  ;; slot 1/4 cycle, slice 1/4 of the sample → speed 1 in :c units;
+  ;; slot 1/2 → speed 1/2
+  (let [evs (onsets (params/splice 4 (core/seq* [0 1 2 3]) (core/pure brk)))]
+    (is (every? #(= 1.0 (get-in % [:value :rate])) evs))
+    (is (every? #(= :c (get-in % [:value :unit])) evs)))
+  (let [evs (onsets (params/splice 4 (core/seq* [0 1]) (params/rate 2 (core/pure brk))))]
+    (is (= [1.0 1.0] (mapv #(get-in % [:value :rate]) evs)))))
+
+(deftest fit-sets-rate-from-range-and-whole
+  (let [evs (onsets (params/fit (core/seq* [brk :_])))]
+    (is (= {:bank :break :n 0 :rate 2.0 :unit :c} (:value (first evs))))
+    (is (= :_ (:value (second evs))))))
+
+(deftest loop-at-slows-and-sets-speed
+  (let [evs (core/query (params/loop-at 2 (params/chop 4 (core/pure brk)))
+                        {:start [0 1] :end [2 1]})]
+    (is (= 4 (count evs)))
+    (is (= [[0 1] [1 2]] (whole (first evs))))
+    (is (every? #(= 0.5 (get-in % [:value :rate])) evs))
+    (is (every? #(= :c (get-in % [:value :unit])) evs))))
+
+(deftest tl6-params-set-keys
+  (let [v #(:value (first (core/query % one-cycle)))]
+    (is (= {:note :bd :rate -1} (v (params/speed -1 (core/pure :bd)))))
+    (is (= {:note :bd :unit :c} (v (params/unit "c" (core/pure :bd)))))
+    (is (= {:note :bd :accelerate -0.5} (v (params/accelerate -0.5 (core/pure :bd)))))
+    (is (= {:note :bd :legato 0.5} (v (params/legato 0.5 (core/pure :bd)))))
+    (is (= {:note :bd :sustain 0.1} (v (params/sustain 0.1 (core/pure :bd)))))
+    (is (= {:note :bd :cut 1} (v ((params/cut 1) (core/pure :bd)))))
+    (is (= {:note :bd :loop-begin 0.25 :loop-end 0.5}
+           (v (params/loop-end 0.5 (params/loop-begin 0.25 (core/pure :bd))))))
+    (is (thrown? js/Error (params/unit :x (core/pure :bd))))))
