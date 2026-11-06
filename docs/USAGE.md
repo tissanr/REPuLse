@@ -2304,7 +2304,9 @@ one-argument form for `->>` (`(slice 4 "0 2")` for `slice`/`splice`).
 (loop-at 2 (chop 16 (sound :breaks152 0)))      ; the break fills 2 cycles at any BPM
 (fit (seq (sound :breaks152 0) :_))             ; the whole sample squeezed into half a cycle
 (->> (sound :breaks152 0) (speed -1))           ; backwards
-(->> (fast 2 (seq :ho :hc :ho :hc)) (cut 1))         ; the next hat chokes the open hat
+(->> (fast 4 (seq :RolandTR909_oh :RolandTR909_hh)) (cut 1)) ; the closed hat chokes the open hat
+;; cut is only audible when a sample is longer than the gap to the next hit:
+;; Dirt-Samples :ho is 0.25 s, so (fast 2 (seq :ho :hc :ho :hc)) sounds the same either way
 (->> (seq :bd :sd) (legato 0.5))            ; each hit plays half its slot
 (->> (sound :breaks152 0) (sustain 0.1) (accelerate -0.5))
 ```

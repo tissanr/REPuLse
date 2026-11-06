@@ -27,7 +27,7 @@ sample-based live coding.
 (splice 8 (seq 0 1 6 7) (sound :breaks152 0))     ; slices + speed fitted to slot length
 (loop-at 2 (chop 16 (sound :breaks152 0)))        ; fit the sample to 2 cycles
 (fit (seq (sound :breaks152 0) :_))               ; sample stretched to its event
-(->> (fast 2 (seq :ho :hc :ho :hc)) (cut 1))           ; choke group: next hit cuts the open hat
+(->> (fast 4 (seq :RolandTR909_oh :RolandTR909_hh)) (cut 1)) ; choke group: the closed hat cuts the open hat
 (->> (sound :breaks152 0) (speed -1))             ; reverse playback
 (->> (seq :bd :sd) (legato 0.5))              ; play half of each event's length
 ```

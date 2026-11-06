@@ -786,7 +786,7 @@
  :cut {:category "transform"
               :returns "Pattern"
               :side-effects []
-              :examples ["(->> (fast 2 (seq :ho :hc :ho :hc)) (cut 1))"]
+              :examples ["(->> (fast 4 (seq :RolandTR909_oh :RolandTR909_hh)) (cut 1))"]
               :see-also ["legato" "sustain"]}
 
  :loop-begin {:category "transform"

@@ -1567,7 +1567,7 @@
                 "(splice 8 (seq 0 1 6 7) (sound :breaks152 0))"
                 "(loop-at 2 (chop 16 (sound :breaks152 0)))"
                 "(fit (seq (sound :breaks152 0) :_))"
-                "(->> (fast 2 (seq :ho :hc :ho :hc)) (cut 1))"
+                "(->> (fast 4 (seq :RolandTR909_oh :RolandTR909_hh)) (cut 1))"
                 "(->> (sound :breaks152 0) (speed -1))"
                 "(->> (seq :bd :sd) (legato 0.5))"
                 "(->> (sound :breaks152 0) (sustain 0.1))"
