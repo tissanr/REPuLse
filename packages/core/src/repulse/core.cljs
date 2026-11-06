@@ -140,7 +140,10 @@
 ;;; Core combinators
 
 (defn pure
-  ([value] (pure value nil))
+  "A pattern with one event per cycle carrying value. Without an explicit
+   source, a {:from :to} :source in value's metadata is used, so a value map
+   returned by a call such as (sound :bd 0) still highlights in the editor."
+  ([value] (pure value (:source (meta value))))
   ([value source]
    (pattern
     (fn [{:keys [start end]}]

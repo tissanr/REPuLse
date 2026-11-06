@@ -1584,3 +1584,17 @@
       (is (core/pattern? (:result r)) code)
       (when (core/pattern? (:result r))
         (is (seq (core/query (:result r) (core/cycle-span 0))) code)))))
+
+(deftest tl6-sound-calls-highlight
+  (testing "a value map returned by (sound …) carries the call's range"
+    (let [r (lisp/eval-string "(sound :breaks152 0)" (make-test-env))]
+      (is (= {:from 0 :to 20} (:source (meta (:result r)))))
+      (is (= {:from 0 :to 20} (:source (first (cycle-evs (core/pure (:result r)) 0)))))))
+  (testing "sliced, re-parameterised and sequenced sound calls keep that range"
+    (doseq [[code src] [["(chop 4 (sound :breaks152 0))" {:from 8 :to 28}]
+                        ["(->> (sound :breaks152 0) (speed -1))" {:from 5 :to 25}]
+                        ["(fit (seq (sound :breaks152 0) :_))" {:from 10 :to 30}]]]
+      (is (= src (:source (first (onsets (eval-pat code) 0)))) code)))
+  (testing "slice/splice take the highlight from the index pattern"
+    (is (= [{:from 14 :to 15} {:from 16 :to 17}]
+           (mapv :source (onsets (eval-pat "(slice 8 (seq 0 3) (sound :breaks152 0))") 0))))))
