@@ -1407,3 +1407,12 @@
          (t4b-cycles (c/inhabit-mod [(c/seq* [:x :y]) (c/pure :z)] (c/seq* [0 1 2])) 0 1)))
   (is (= (exp (on :bd "0" "1/4") (on :sd "1/4" "1/2"))
          (t4b-cycles (c/inhabit {:a (c/seq* [:bd :sd])} (c/seq* [:a :z])) 0 1))))
+
+(deftest pure-source-from-metadata
+  (testing "pure without an explicit source reads {:source …} from the value's metadata"
+    (let [v (with-meta {:bank :bd :n 0} {:source {:from 3 :to 9}})]
+      (is (= {:from 3 :to 9} (:source (first (c/query (c/pure v) (c/cycle-span 0))))))))
+  (testing "an explicit source wins; values without metadata get none"
+    (let [v (with-meta {:bank :bd} {:source {:from 3 :to 9}})]
+      (is (= {:from 0 :to 1} (:source (first (c/query (c/pure v {:from 0 :to 1}) (c/cycle-span 0))))))
+      (is (nil? (:source (first (c/query (c/pure :bd) (c/cycle-span 0)))))))))

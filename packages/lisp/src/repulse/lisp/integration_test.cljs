@@ -1529,3 +1529,72 @@
       (is (core/pattern? (:result r)) code)
       (when (core/pattern? (:result r))
         (core/query (:result r) (core/cycle-span 0))))))
+
+;;; ── Phase TL6: sample slicing ───────────────────────────────────────
+
+(defn- onset-values [evs]
+  (->> evs
+       (filter core/onset?)
+       (sort-by #(core/rat->float (:start (:whole %))))
+       event-values))
+
+(deftest tl6-chop-sound
+  (is (= [0.0 0.25 0.5 0.75]
+         (mapv :begin (onset-values (eval-pattern "(chop 4 (sound :breaks152 0))"))))))
+
+(deftest tl6-slice-mini-notation-index
+  (is (= [[0.0 0.125] [0.375 0.5]]
+         (mapv (juxt :begin :end)
+               (onset-values (eval-pattern "(slice 8 \"0 3\" (sound :breaks152 0))"))))))
+
+(deftest tl6-threading-forms
+  (is (= {:note :hh :cut 1}
+         (first (onset-values (eval-pattern "(->> (seq :hh :oh) (cut 1))")))))
+  (is (= {:note :bd :rate -1}
+         (first (onset-values (eval-pattern "(->> (seq :bd) (speed -1))")))))
+  (is (= {:note :bd :unit :c}
+         (first (onset-values (eval-pattern "(->> (seq :bd) (unit :c))"))))))
+
+(deftest tl6-unit-error
+  (let [r (lisp/eval-string "(unit :x (seq :bd))" (make-test-env))]
+    (is (lisp/eval-error? r))
+    (is (includes? (:message r) "unit expects :c (cycles) or :r (rate)"))))
+
+(deftest tl6-documented-examples-evaluate
+  (doseq [code ["(chop 8 (sound :breaks152 0))"
+                "(striate 4 (sound :breaks152 0))"
+                "(slice 8 (seq 0 3 2 7) (sound :breaks152 0))"
+                "(splice 8 (seq 0 1 6 7) (sound :breaks152 0))"
+                "(loop-at 2 (chop 16 (sound :breaks152 0)))"
+                "(fit (seq (sound :breaks152 0) :_))"
+                "(->> (fast 4 (seq :RolandTR909_oh :RolandTR909_hh)) (cut 1))"
+                "(->> (sound :breaks152 0) (speed -1))"
+                "(->> (seq :bd :sd) (legato 0.5))"
+                "(->> (sound :breaks152 0) (sustain 0.1))"
+                "(->> (sound :breaks152 0) (accelerate -0.5))"
+                "(->> (sound :pad 0) (loop-sample true) (loop-begin 0.25) (loop-end 0.5))"
+                "(->> (sound :breaks152 0) (speed 1) (unit :c))"
+                "(->> (sound :breaks152 0) (chop \"<4 8>\"))"
+                "(->> (sound :breaks152 0) (splice 4 \"0 2 1 3\"))"
+                "(->> (sound :breaks152 0) (slice 4 \"0 2\"))"
+                "(->> (chop 16 (sound :breaks152 0)) (loop-at 2))"
+                "(->> (seq :bd :sd) (speed \"1 -1\"))"]]
+    (let [r (lisp/eval-string code (make-test-env))]
+      (is (not (lisp/eval-error? r)) (str code " → " (:message r)))
+      (is (core/pattern? (:result r)) code)
+      (when (core/pattern? (:result r))
+        (is (seq (core/query (:result r) (core/cycle-span 0))) code)))))
+
+(deftest tl6-sound-calls-highlight
+  (testing "a value map returned by (sound …) carries the call's range"
+    (let [r (lisp/eval-string "(sound :breaks152 0)" (make-test-env))]
+      (is (= {:from 0 :to 20} (:source (meta (:result r)))))
+      (is (= {:from 0 :to 20} (:source (first (cycle-evs (core/pure (:result r)) 0)))))))
+  (testing "sliced, re-parameterised and sequenced sound calls keep that range"
+    (doseq [[code src] [["(chop 4 (sound :breaks152 0))" {:from 8 :to 28}]
+                        ["(->> (sound :breaks152 0) (speed -1))" {:from 5 :to 25}]
+                        ["(fit (seq (sound :breaks152 0) :_))" {:from 10 :to 30}]]]
+      (is (= src (:source (first (onsets (eval-pat code) 0)))) code)))
+  (testing "slice/splice take the highlight from the index pattern"
+    (is (= [{:from 14 :to 15} {:from 16 :to 17}]
+           (mapv :source (onsets (eval-pat "(slice 8 (seq 0 3) (sound :breaks152 0))") 0))))))

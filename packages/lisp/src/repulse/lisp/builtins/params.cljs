@@ -1,11 +1,41 @@
 (ns repulse.lisp.builtins.params
   "Per-event parameter builtins: amp, attack, decay, release, pan, rate, begin, end,
-   loop-sample, comp, tween, env."
+   loop-sample, comp, tween, env — and TL6 sample slicing: chop, striate, slice,
+   splice, fit, loop-at, speed, unit, accelerate, legato, sustain, cut,
+   loop-begin, loop-end."
   (:require [repulse.params :as params]
             [repulse.lisp.util :as u]))
 
+(defn- param
+  "Builtin (f v pat) with curried form (f v); v patternable (mini-notation ok)."
+  [f]
+  (fn
+    ([v]   (f (u/pat-arg v)))
+    ([v p] (f (u/pat-arg v) (u/unwrap p)))))
+
+(defn- n+i+p
+  "Builtin (f n ipat pat) with curried form (f n ipat)."
+  [f]
+  (fn
+    ([n i]   (f (u/pat-arg n) (u/pat-arg i)))
+    ([n i p] (f (u/pat-arg n) (u/pat-arg i) (u/unwrap p)))))
+
 (defn make-builtins []
-  {"amp"     (fn
+  {"chop"       (param params/chop)
+   "striate"    (param params/striate)
+   "slice"      (n+i+p params/slice)
+   "splice"     (n+i+p params/splice)
+   "fit"        (fn [p] (params/fit (u/unwrap p)))
+   "loop-at"    (param params/loop-at)
+   "speed"      (param params/speed)
+   "unit"       (param params/unit)
+   "accelerate" (param params/accelerate)
+   "legato"     (param params/legato)
+   "sustain"    (param params/sustain)
+   "cut"        (param params/cut)
+   "loop-begin" (param params/loop-begin)
+   "loop-end"   (param params/loop-end)
+"amp"     (fn
                ([v]   (params/amp (u/unwrap v)))
                ([v p] (params/amp (u/unwrap v) (u/unwrap p))))
    "attack"  (fn

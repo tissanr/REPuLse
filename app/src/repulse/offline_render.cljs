@@ -284,11 +284,15 @@
                        pending  (into []
                                       (keep (fn [{:keys [track event t]}]
                                               (let [t'    (+ pre-roll-secs t)
+                                                    w     (:whole event)
+                                                    dur   (* (core/rat->float (core/rat- (:end w) (:start w)))
+                                                             cycle-dur)
                                                     value (audio/resolve-tweens
                                                            (:value event) (get tween-st track)
                                                            t' cycle-dur)
                                                     ret   (when (or (nil? stem) (= track stem))
-                                                            (audio/play-event offline t' value track))]
+                                                            (audio/play-event offline t' value track
+                                                                                {:dur dur :cycle-dur cycle-dur}))]
                                                 (fx/notify-plugins! plugins value t')
                                                 (when (thenable? ret)
                                                   (.catch ret (fn [_] nil))))))

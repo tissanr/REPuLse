@@ -36,6 +36,7 @@ them loop in real time.
 17. [Sound and samples](#sound-and-samples)
 18. [Available sample banks](#available-sample-banks)
 19. [Per-event parameters](#per-event-parameters)
+    - [Sample slicing](#sample-slicing)
 20. [Transitions](#transitions)
 
 **Performing**
@@ -1379,7 +1380,8 @@ things with the same input `(seq :a :b :c :d)`:
 
 **`hurry` multiplies `rate`.** `(hurry 2 (seq :bd :sd))` is `(fast 2 …)` and sets
 `:rate 2` on every event, so samples also play an octave up; an existing rate is
-multiplied (`(hurry 2 (rate 1.5 pat))` → rate 3). There is no `speed` alias.
+multiplied (`(hurry 2 (rate 1.5 pat))` → rate 3). `speed` is an alias of `rate`
+(see [Sample slicing](#sample-slicing)).
 
 **Switching between patterns.** `sew` and `stitch` choose between two patterns with a
 boolean pattern; rests in the boolean pattern select neither side:
@@ -2241,7 +2243,8 @@ and `comp`:
 
 ### `rate` — sample playback rate
 
-Scale the playback speed of a sample. `1.0` = normal, `2.0` = double speed (one octave up):
+Scale the playback speed of a sample. `1.0` = normal, `2.0` = double speed (one octave up),
+negative = backwards. `speed` is the same parameter under its Tidal name:
 
 ```lisp
 (->> (sound :tabla 0) (rate 1.5))    ; 50% faster (higher pitch)
@@ -2259,11 +2262,68 @@ Play only a portion of the sample buffer. Values are fractions of buffer duratio
 
 ### `loop-sample` — loop sample
 
-Loop the sample buffer continuously:
+Loop the sample buffer for the length of the event (or `legato`/`sustain`, see below).
+`loop-begin` / `loop-end` set the loop region as fractions of the buffer; by default it
+is `begin`–`end`:
 
 ```lisp
-(->> (sound :pad 0) (loop-sample true) (decay 4.0))
+(->> (sound :pad 0) (loop-sample true))
+(->> (sound :pad 0) (loop-sample true) (loop-begin 0.25) (loop-end 0.5))
 ```
+
+### Sample slicing
+
+Cut, rearrange and time-fit samples the Tidal way. These work on **samples only**
+(`(sound :bank n)`, sample keywords such as `:bd` when a bank is loaded); synth voices
+ignore them.
+
+| Function | What it does | Event keys |
+|---|---|---|
+| `(chop n pat)` | Each event becomes `n` parts that play consecutive pieces of its sample (within its existing `begin`–`end`) | `:begin :end` |
+| `(striate n pat)` | Plays `pat` `n` times per cycle; repetition `i` plays piece `i` of every sample (interleaved) | `:begin :end` |
+| `(slice n ipat pat)` | Cuts the sample into `n` equal slices and plays the slices picked by the index pattern `ipat` (rhythm from `ipat`; indices wrap) | `:begin :end` |
+| `(splice n ipat pat)` | `slice`, plus the speed that makes each slice exactly fill its slot | `:begin :end :rate :unit` |
+| `(fit pat)` | Sets each event's speed so its `begin`–`end` range fills the event | `:rate :unit` |
+| `(loop-at n pat)` | `slow n`, with the sample fitted to `n` cycles — tempo-locked breaks | `:rate :unit` |
+| `(speed r pat)` | Alias of `rate`. **Negative plays backwards** | `:rate` |
+| `(unit :c pat)` | Speed in cycles: speed 1 plays the whole sample in one cycle, whatever the tempo. `:r` (default) = plain rate | `:unit` |
+| `(accelerate a pat)` | Playback rate glides from `rate` to `rate + a` while the sample plays | `:accelerate` |
+| `(legato x pat)` | Stop the sample after `x` × the event's length (1 = at the event end) | `:legato` |
+| `(sustain secs pat)` | Stop the sample after at most `secs` seconds | `:sustain` |
+| `(cut g pat)` | Choke group: a sample in group `g` stops every earlier sample of `g` still playing (5 ms fade) | `:cut` |
+| `(loop-begin x pat)` / `(loop-end x pat)` | Loop region (fractions) for `loop-sample` | `:loop-begin :loop-end` |
+
+All take patterned arguments (`(chop "<4 8>" …)`, `(speed "1 -1" …)`) and have a curried
+one-argument form for `->>` (`(slice 4 "0 2")` for `slice`/`splice`).
+
+```lisp
+(chop 8 (sound :breaks152 0))                   ; 8 slices played in order
+(striate 4 (sound :breaks152 0))                ; 4 interleaved slices
+(slice 8 (seq 0 3 2 7) (sound :breaks152 0))    ; slices 0, 3, 2, 7
+(splice 8 "0 1 6 7" (sound :breaks152 0))       ; same idea, each slice stretched to its slot
+(loop-at 2 (chop 16 (sound :breaks152 0)))      ; the break fills 2 cycles at any BPM
+(fit (seq (sound :breaks152 0) :_))             ; the whole sample squeezed into half a cycle
+(->> (sound :breaks152 0) (speed -1))           ; backwards
+(->> (fast 4 (seq :RolandTR909_oh :RolandTR909_hh)) (cut 1)) ; the closed hat chokes the open hat
+;; cut is only audible when a sample is longer than the gap to the next hit:
+;; Dirt-Samples :ho is 0.25 s, so (fast 2 (seq :ho :hc :ho :hc)) sounds the same either way
+(->> (seq :bd :sd) (legato 0.5))            ; each hit plays half its slot
+(->> (sound :breaks152 0) (sustain 0.1) (accelerate -0.5))
+```
+
+How the speed is worked out: with `unit :c` the playback rate is
+`speed × sample seconds ÷ cycle seconds`. `splice` sets speed = (1/n) ÷ slot length in
+cycles, `fit` sets speed = (end − begin) ÷ event length in cycles, `loop-at n`
+multiplies speed by 1/n. Changing BPM keeps everything in sync. Pitch follows speed
+(no time-stretch).
+
+Notes:
+
+- `chop` and `striate` split the event's existing `begin`–`end` range:
+  `(chop 2 (->> (sound :breaks152 0) (begin 0.25) (end 0.5)))` plays 0.25–0.375 and 0.375–0.5.
+- Cut groups are global (all tracks share group numbers).
+- A looped sample (`loop-sample true`) stops at the end of its event; before TL6 it
+  looped forever.
 
 ### Patterned parameters
 
