@@ -240,3 +240,180 @@
   [f cond pat]
   (core/stack* [(f (core/filter-events #(controls-match? cond %) pat))
                 (core/filter-events #(not (controls-match? cond %)) pat)]))
+
+;;; ── Phase TL6: sample slicing & playback control ─────────────────────
+
+(defn speed
+  "Alias of rate (Tidal/Strudel name). Writes :rate; negative = reverse.
+   (speed -1 pat) — play backwards
+   (speed 2)      — return transformer"
+  ([r]     (fn [pat] (speed r pat)))
+  ([r pat] (apply-param :rate r pat)))
+
+(defn- ->unit [u]
+  (let [u (if (string? u) (keyword u) u)]
+    (if (#{:c :r} u)
+      u
+      (throw (ex-info (str "unit expects :c (cycles) or :r (rate), got " (pr-str u))
+                      {:type :bad-unit})))))
+
+(defn unit
+  "Speed unit: :r (default, plain rate) or :c (rate × sample length / cycle length,
+   so speed 1 plays the whole sample in one cycle).
+   (unit :c pat)"
+  ([u]     (fn [pat] (unit u pat)))
+  ([u pat] (apply-param :unit (if (pat? u) (core/fmap ->unit u) (->unit u)) pat)))
+
+(defn accelerate
+  "Glide the playback rate from rate to rate + v over the sample's playing time.
+   (accelerate -1 pat)"
+  ([v]     (fn [pat] (accelerate v pat)))
+  ([v pat] (apply-param :accelerate v pat)))
+
+(defn legato
+  "Sample length relative to the event: 1 = stop at the event end, 0.5 = half.
+   (legato 0.5 pat)"
+  ([v]     (fn [pat] (legato v pat)))
+  ([v pat] (apply-param :legato v pat)))
+
+(defn sustain
+  "Maximum sample length in seconds.
+   (sustain 0.1 pat)"
+  ([v]     (fn [pat] (sustain v pat)))
+  ([v pat] (apply-param :sustain v pat)))
+
+(defn cut
+  "Choke group: a new sample in group g stops the samples of g still playing.
+   (cut 1 pat)"
+  ([g]     (fn [pat] (cut g pat)))
+  ([g pat] (apply-param :cut g pat)))
+
+(defn loop-begin
+  "Loop region start as a fraction of the sample (with loop-sample).
+   (loop-begin 0.25 pat)"
+  ([v]     (fn [pat] (loop-begin v pat)))
+  ([v pat] (apply-param :loop-begin v pat)))
+
+(defn loop-end
+  "Loop region end as a fraction of the sample (with loop-sample).
+   (loop-end 0.5 pat)"
+  ([v]     (fn [pat] (loop-end v pat)))
+  ([v pat] (apply-param :loop-end v pat)))
+
+(defn- ->pat [x] (if (pat? x) x (core/pure x)))
+
+(defn- ->num [x] (if (vector? x) (core/rat->float (core/->rat x)) x))
+
+(defn- range-of
+  "[begin end] of an event value map (defaults 0, 1) as doubles."
+  [m]
+  [(double (or (->num (:begin m)) 0)) (double (or (->num (:end m)) 1))])
+
+(defn- sub-range
+  "Value v with its begin–end range narrowed to piece i of n (S1: relative)."
+  [v i n]
+  (if (rest-val? v)
+    v
+    (let [m      (to-map v)
+          [b e]  (range-of m)
+          d      (- e b)]
+      (assoc m :begin (+ b (* d (/ i n))) :end (+ b (* d (/ (inc i) n)))))))
+
+(defn- ->count [n] (max 1 (int (core/rat->float (core/->rat n)))))
+
+(defn- event-map
+  "Pattern whose event values are (f event) — sees whole/part as well as value."
+  [f pat]
+  (core/pattern (fn [sp] (map #(assoc % :value (f %)) (core/query pat sp)))))
+
+(defn- chop* [n pat]
+  (let [k (->count n)]
+    (core/squeeze-join
+     (event-map (fn [ev]
+                  (core/timecat (mapv (fn [i] [1 (core/pure (sub-range (:value ev) i k)
+                                                            (:source ev))])
+                                      (range k))))
+                pat))))
+
+(defn chop
+  "Cut each event into n parts that play consecutive pieces of its sample.
+   (chop 4 (sound :break 0)) — begin 0, 1/4, 1/2, 3/4"
+  ([n]     (fn [pat] (chop n pat)))
+  ([n pat] ((core/patternify chop*) n (->pat pat))))
+
+(defn- striate* [n pat]
+  (let [k (->count n)]
+    (core/timecat (mapv (fn [i] [1 (core/fmap #(sub-range % i k) pat)]) (range k)))))
+
+(defn striate
+  "Play the pattern n times per cycle; repetition i plays piece i of each sample.
+   (striate 4 (sound :break 0))"
+  ([n]     (fn [pat] (striate n pat)))
+  ([n pat] ((core/patternify striate*) n (->pat pat))))
+
+(defn- slice-range [i n]
+  (let [i (->num i) n (->num n)]
+    (when (and (number? i) (number? n) (pos? n))
+      (let [k (max 1 (int n))
+            j (mod (int (Math/floor i)) k)]
+        [(double (/ j k)) (double (/ (inc j) k))]))))
+
+(defn slice
+  "Cut the sample into n equal slices and play the slices chosen by ipat.
+   Structure comes from ipat. (slice 8 (seq 0 3 2 7) (sound :break 0))"
+  ([n ipat]     (fn [pat] (slice n ipat pat)))
+  ([n ipat pat]
+   (let [idx (core/app-left vector (->pat ipat) (->pat n))]
+     (core/filter-events
+      some?
+      (core/app-left (fn [[i k] v]
+                       (cond (rest-val? i) :_
+                             (rest-val? v) v
+                             :else (when-let [[b e] (slice-range i k)]
+                                     (assoc (to-map v) :begin b :end e))))
+                     idx (->pat pat))))))
+
+(defn- whole-cycles [ev]
+  (let [w (or (:whole ev) (:part ev))]
+    (core/rat->float (core/rat- (:end w) (:start w)))))
+
+(defn- fit-rate
+  "Event value with :rate = frac / whole-cycles × (rate or 1) and :unit :c."
+  [ev frac-fn]
+  (let [v (:value ev)]
+    (if (rest-val? v)
+      v
+      (let [m (to-map v)]
+        (assoc m
+               :rate (* (/ (frac-fn m) (whole-cycles ev)) (double (or (->num (:rate m)) 1)))
+               :unit :c)))))
+
+(defn splice
+  "slice, then set each slice's speed so it fills its event (unit :c).
+   (splice 4 (seq 0 1 2 3) (sound :break 0))"
+  ([n ipat]     (fn [pat] (splice n ipat pat)))
+  ([n ipat pat]
+   (event-map #(fit-rate % (fn [m] (let [[b e] (range-of m)] (- e b))))
+              (slice n ipat pat))))
+
+(defn fit
+  "Set each event's speed so its begin–end range fills the event (unit :c).
+   (fit (seq (sound :break 0) :_))"
+  [pat]
+  (event-map #(fit-rate % (fn [m] (let [[b e] (range-of m)] (- e b))))
+             (->pat pat)))
+
+(defn- loop-at* [n pat]
+  (let [f (/ 1 (core/rat->float (core/->rat n)))]
+    (core/fmap (fn [v]
+                 (if (rest-val? v)
+                   v
+                   (let [m (to-map v)]
+                     (assoc m :rate (* (double (or (->num (:rate m)) 1)) f) :unit :c))))
+               (core/slow n pat))))
+
+(defn loop-at
+  "Slow pat by n and fit its samples to n cycles (speed × 1/n, unit :c).
+   (loop-at 2 (chop 16 (sound :break 0)))"
+  ([n]     (fn [pat] (loop-at n pat)))
+  ([n pat] ((core/patternify loop-at*) n (->pat pat))))

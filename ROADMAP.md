@@ -40,7 +40,7 @@ without a human:
 | 5 | TL4 | Randomness & conditionals | 🤖 | full | sonnet |
 | 6 | TL5 | Layering, pitch & harmony | 🤖 | full | sonnet |
 | 6a | TL4b | Pick & fix | 🤖 | full | sonnet |
-| 7 | TL6 | Sample slicing & playback control | 🤖👂 | outline | opus |
+| 7 | TL6 | Sample slicing & playback control | 🤖👂 | full | opus |
 | 8 | TL7 | Per-event effects & control parameters | 🤖👂 | outline | opus |
 | 9 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
 | **M2** | | **Full songs** | | | |
@@ -2016,15 +2016,31 @@ See full spec: [PROMPTS/PHASE-TL5.md](PROMPTS/PHASE-TL5.md)
 
 ---
 
-## Phase TL6 — Sample Slicing & Playback Control 📋 *planned*
+## Phase TL6 — Sample Slicing & Playback Control ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
 Cut, rearrange and fit samples, the core of breakbeat live coding.
 
 **Key additions:**
-- `chop striate slice splice fit loop-at legato clip n speed unit`
+- `chop striate slice splice fit loop-at legato sustain speed unit accelerate loop-begin loop-end`
 - `cut` choke groups in the playback path (identical in offline render)
+
+**Delivered:**
+- 14 built-ins in `repulse.params`: `chop`, `striate`, `slice`, `splice`, `fit`, `loop-at`
+  (pattern level, patterned `n`/indices) and the params `speed` (alias of `rate`), `unit`,
+  `accelerate`, `legato`, `sustain`, `cut`, `loop-begin`, `loop-end`
+- Pure `samples/playback-plan` (unit `:c` = rate × sample ÷ cycle length, reverse via a
+  cached reversed buffer, legato/sustain stop with 5 ms fade, loop region, accelerate glide)
+  and `samples/cut-plan`; choke groups per audio context, order-independent
+- `audio/play-event` takes `{:dur :cycle-dur}`; scheduler, EXP1 export and TEST1 harness pass
+  it, so live playback and offline render behave the same. Looped samples now stop at the
+  event end instead of looping forever
+- Tests: params/integration/samples unit tests and `e2e/sample-slicing.spec.ts` (onsets ±1 ms,
+  slice order, splice/loop-at speed, reverse, legato, cut truncation) on synthetic buffers
+- `(sound …)` calls now carry their source position, so the editor highlights the sample
+  while it plays, also through `chop`, `slice`, `speed` and other wrappers
+- Human listen check passed (PR #167 protocol items 13–14: chopped break and rearranged break)
 
 See full spec: [PROMPTS/PHASE-TL6.md](PROMPTS/PHASE-TL6.md)
 
