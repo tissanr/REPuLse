@@ -61,5 +61,5 @@ sample-based live coding.
 ## What NOT to do
 
 - No granular synthesis (backlog).
-- No per-event filters/effects: **TL7**.
+- No per-event filters/effects: **TL7a–c**.
 - No new sample sources or kits: **KIT1**.

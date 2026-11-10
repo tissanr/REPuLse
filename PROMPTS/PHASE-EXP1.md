@@ -4,7 +4,7 @@
 > **Automation:** 🤖 auto — parity is measurable: render the same pattern offline and through a real-time capture, then compare spectra/RMS in Playwright.
 
 **Milestone:** M4 — Sketchpad
-**Depends on:** SONG1 (song length, real-time capture as the reference). TL7 recommended (per-event effects).
+**Depends on:** SONG1 (song length, real-time capture as the reference). TL7a–b recommended (per-event effects and sends).
 
 ## Goal
 
