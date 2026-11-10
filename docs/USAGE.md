@@ -321,6 +321,7 @@ open while something in the outline is selected), the **editor** (your program) 
 | **Escape** | Close the inspector (clear the outline selection); with nothing selected, jump to the command bar |
 | **F12** | With an outline selection: move the cursor to it; otherwise go to the definition under the cursor |
 | **Cmd+K S** / **Ctrl+K S** | Wrap the number under the cursor in (slider …), or unwrap the slider under the cursor |
+| **Cmd+/** / **Ctrl+/** (German layout: **Cmd+Shift+7** / **Ctrl+Shift+7**) | Comment / uncomment the selected lines with `;` |
 | **Ctrl+A** / **Cmd+A** | Select all |
 | **Ctrl+Z** / **Cmd+Z** | Undo |
 | **Ctrl+Shift+Z** / **Cmd+Shift+Z** | Redo |
