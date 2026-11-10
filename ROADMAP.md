@@ -2016,7 +2016,7 @@ See full spec: [PROMPTS/PHASE-TL5.md](PROMPTS/PHASE-TL5.md)
 
 ---
 
-## Phase TL6 — Sample Slicing & Playback Control 📋 *planned*
+## Phase TL6 — Sample Slicing & Playback Control ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
@@ -2026,8 +2026,7 @@ Cut, rearrange and fit samples, the core of breakbeat live coding.
 - `chop striate slice splice fit loop-at legato sustain speed unit accelerate loop-begin loop-end`
 - `cut` choke groups in the playback path (identical in offline render)
 
-**Implemented — awaiting the human listen check** (🤖👂; flip to ✅ *delivered* once the
-two listen items in the PR's test protocol are ticked):
+**Delivered:**
 - 14 built-ins in `repulse.params`: `chop`, `striate`, `slice`, `splice`, `fit`, `loop-at`
   (pattern level, patterned `n`/indices) and the params `speed` (alias of `rate`), `unit`,
   `accelerate`, `legato`, `sustain`, `cut`, `loop-begin`, `loop-end`
@@ -2039,6 +2038,9 @@ two listen items in the PR's test protocol are ticked):
   event end instead of looping forever
 - Tests: params/integration/samples unit tests and `e2e/sample-slicing.spec.ts` (onsets ±1 ms,
   slice order, splice/loop-at speed, reverse, legato, cut truncation) on synthetic buffers
+- `(sound …)` calls now carry their source position, so the editor highlights the sample
+  while it plays, also through `chop`, `slice`, `speed` and other wrappers
+- Human listen check passed (PR #167 protocol items 13–14: chopped break and rearranged break)
 
 See full spec: [PROMPTS/PHASE-TL6.md](PROMPTS/PHASE-TL6.md)
 
