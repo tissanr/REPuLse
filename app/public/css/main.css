@@ -2464,6 +2464,8 @@ footer {
   padding: 16px;
   overflow-y: auto;
 }
+/* Per-key forms are layout-transparent: fields stay direct flex items. */
+.ai-key-form { display: contents; }
 .ai-settings-title {
   font-size: 0.85rem;
   color: #e2a;
