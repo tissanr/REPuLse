@@ -7,7 +7,7 @@
   (:require [repulse.session :as session]
             ["@codemirror/view" :refer [EditorView Decoration keymap lineNumbers]]
             ["@codemirror/state" :refer [EditorState StateEffect StateField]]
-            ["@codemirror/commands" :refer [defaultKeymap historyKeymap history selectAll]]
+            ["@codemirror/commands" :refer [defaultKeymap historyKeymap history selectAll toggleComment]]
             ["@codemirror/language" :refer [bracketMatching syntaxHighlighting]]
             ["@codemirror/lint" :refer [setDiagnostics lintGutter]]
             ["@codemirror/theme-one-dark" :refer [oneDarkTheme]]
@@ -141,6 +141,9 @@
         upd-fn          (fn [_] (on-upd) true)
         upd-binding     #js {:key "Ctrl-." :run upd-fn}
         upd-f9-binding  #js {:key "F9"     :run upd-fn}
+        ;; Mod-/ (in defaultKeymap) is unreachable on layouts where / needs Shift,
+        ;; e.g. German: Cmd+Shift+7 — bind that too.
+        comment-binding #js {:key "Shift-Mod-7" :run toggleComment}
         escape-binding  #js {:key "Escape"
                              :run (fn [_]
                                     (when-let [cv @cmd-view] (.focus cv))
@@ -157,7 +160,7 @@
          clear-diag-listener
          (.-lineWrapping EditorView)
          (.of keymap (.concat
-                      #js [escape-binding eval-binding upd-binding upd-f9-binding]
+                      #js [escape-binding eval-binding upd-binding upd-f9-binding comment-binding]
                       (clj->js defaultKeymap)
                       (clj->js historyKeymap)))]))
 
