@@ -4,7 +4,7 @@
 > **Automation:** 🤖 auto — offline rendering, WAV/MIDI file structure, durations and per-stem content are all assertable in the TEST1 offline harness and unit tests.
 
 **Milestone:** M4 — Sketchpad
-**Depends on:** SONG1 (song length and section form), EXP1 (offline render with WASM voices and FX — stems can't be captured in real time one by one). TL7 recommended (per-event effects to render into stems).
+**Depends on:** SONG1 (song length and section form), EXP1 (offline render with WASM voices and FX — stems can't be captured in real time one by one). TL7a–b recommended (per-event effects to render into stems).
 
 ## Goal
 
@@ -55,7 +55,7 @@ melodic tracks, with velocity — as one multi-track MIDI file.
 ## Open design questions
 
 1. Multiple downloads vs. a zip (needs a zip writer — no external CLJS libs in core, but app may allow one?).
-2. Render FX into stems now, or after TL7 per-event effects land?
+2. Render FX into stems now, or after TL7a–b per-event effects land?
 3. Velocity mapping: `amp` 0–1 → velocity 1–127 linear, or a curve?
 
 ## Definition of done

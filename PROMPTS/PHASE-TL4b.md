@@ -7,7 +7,7 @@
 > testable in `cljs.test`.
 
 **Milestone:** 1 — Tidal-Lisp core
-**Depends on:** TL4 (randomness & conditionals); TL1 joins; `fix` is best scheduled after TL7
+**Depends on:** TL4 (randomness & conditionals); TL1 joins; `fix` is best scheduled after TL7a
 
 ## Goal
 
@@ -31,7 +31,7 @@ that match given control values.
   `core` yet and must be added.
 - `inhabit` (Strudel `pickSqueeze` / `inhabitmod`) — squeeze-join variant.
 - Tidal `fix` — apply a function to events whose control map matches the given values;
-  needs control-value matching, better after TL7.
+  needs control-value matching, better after TL7a.
 
 ## Open design questions
 
