@@ -11,9 +11,14 @@ Arguments: `$ARGUMENTS`
 - `<ref>` → range `<ref>..origin/dev` (e.g. a release tag, or the SHA of the last tested state).
 - `#123 #130` → only these PRs.
 - `--no-verify` → skip step 5 (say so in the protocol header).
-- `major` (or "Major-Version") → bump the major version in step 1b; `minor` → bump
-  the minor version. **Default: bump the patch version** (the smallest step).
+- `major` / `minor` / `patch` → force that version step in step 1b. Without it the step
+  comes from the roadmap (step 1b.1): **patch** by default, **minor** when a milestone
+  was completed, **major** when all milestones are.
 - `--no-tag` → skip step 1b (no version bump, no tag; say so in the header).
+- `--check` → only run step 0 and report whether a round is due and why. Change nothing.
+- `--auto` → unattended run (from `auto-phase` or the Friday task): run step 0 first and
+  stop with "no test round due" unless it says a round is due; never ask questions.
+  Without `--auto` the user asked for a round, so step 0 is skipped.
 
 The result is the **`dev` → `main` release PR** (opened or updated by this skill) whose
 description holds the protocol as a GitHub task list. The user works through it in the
@@ -26,7 +31,7 @@ snippets library, AI settings, CSP, export, embed, …) belong in it too, as cli
 Nothing that changed behaviour may be missing just because it has no snippet.
 
 Write the protocol in the user's language (German unless they invoked the skill in
-English). Snippets, message texts and built-in names stay verbatim.
+English; German in `--auto` runs). Snippets, message texts and built-in names stay verbatim.
 
 ## Context
 
@@ -34,6 +39,52 @@ English). Snippets, message texts and built-in names stay verbatim.
 - dev head: !`git log -1 --format='%h %s (%cr)' origin/dev`
 - Commits on dev not on main: !`git log --oneline --no-merges origin/main..origin/dev | wc -l`
 - Merge commits in range: !`git log --merges --format='%h %s' origin/main..origin/dev`
+
+## 0. Is a round due? (`--auto` and `--check` only)
+
+A round costs the user an evening of testing, so it starts when there is a coherent
+amount to test, not on a clock and not by line count.
+
+**Since when.** *Covered* is the newest of: the newest `v*` tag reachable from
+`origin/dev` (`git describe --tags --abbrev=0 --match 'v*' origin/dev`), and the SHA in
+the `<!-- test-protocol: covered=<sha> … -->` marker of the open `dev` → `main` PR
+(`gh pr list --repo tissanr/REPuLse --base main --head dev --state open --json number,body`).
+Everything below looks at `<covered>..origin/dev`.
+
+**Behaviour PRs.** PRs merged into `dev` in that range (from the merge commits) whose
+files are not *only* docs/specs/tooling (`docs/`, `PROMPTS/`, `ROADMAP.md`, `*.md`,
+`.claude/`, `.github/`) or dependencies (`package.json` + `package-lock.json`,
+`app/package.json`, Dependabot). Sync merges (`Merge branch 'dev' into …`, `Merge main
+into dev`) don't count.
+
+**Roadmap blocks.** In the *Implementation order* table of `ROADMAP.md` on `origin/dev`,
+rows whose `#` share the same integer part form a block (`8`, `8b`, `8c` = TL7a–c;
+`9`, `9a`, `9b` = KIT1, SYN6, FX1; `13`–`13d` = SONG4 + WS1–WS4). A single-number row is
+a block of its own. A block is *complete* when every phase in it that is not ⏸ deferred
+has a `✅ *delivered*` section.
+
+A round is **due** when at least one of these holds (report which):
+
+1. **Block completed.** A block is complete on `origin/dev` but was not at `<covered>`
+   (`git show <covered>:ROADMAP.md`).
+2. **Listen or hardware check waiting.** A phase PR (`Phase <id> — …`) for a 🤖👂 or 🧑
+   phase was merged in the range and its section is still `📋 *planned*`: it is waiting
+   for the human check, which belongs in a round.
+3. **Loose changes piled up.** ≥ 3 behaviour PRs in the range that are not phase PRs of a
+   still-incomplete block (fixes, small features, completed blocks).
+4. **Hard cap.** ≥ 8 behaviour PRs in the range in total, even if blocks are still open,
+   so a round never grows past an evening.
+5. **Friday net** (only when the run comes from the Friday task, `--auto --friday`): ≥ 1
+   behaviour PR in the range.
+
+**Round in progress.** If the open release PR still has unticked boxes (`- [ ]`) from
+the previous round, a due round does **not** bump the version: it adds the new PRs as
+new sections to the same protocol (step 6, keeping ticks) and moves the `covered=`
+marker. The next version is cut once the user has worked through the open protocol,
+or when they run `/test-protocol` by hand.
+
+Not due → stop with one line: "no test round due — <n> behaviour PRs since <covered>,
+open blocks: …". `--check` stops here either way.
 
 ## 1. Collect what changed
 
@@ -75,8 +126,15 @@ v0.1.2"). Do this before verifying, so the protocol tests exactly the tagged com
 
 1. **Next version.** Take the higher of `package.json` on `origin/dev` and the newest
    `v*` tag (`git tag --list 'v*' --sort=-v:refname | head -1`), ignoring a suffix such as
-   `-alpha`. Bump the **patch** digit (`0.1.0` → `0.1.1`) unless the arguments say
-   `major` (`0.1.0` → `1.0.0`) or `minor` (`0.1.0` → `0.2.0`). Never pick a version
+   `-alpha`. The step comes from the roadmap (milestones M1–M4 in the *Implementation
+   order* table; a milestone is complete when all its non-deferred phases are
+   `✅ *delivered*`), comparing `ROADMAP.md` at the newest tag with `origin/dev`:
+   - all four milestones complete now, not at the tag → **major** (`0.4.2` → `1.0.0`);
+   - one or more milestones newly complete → **minor** (`0.1.3` → `0.2.0`), and tell
+     the user this is a good moment for `/create-release`;
+   - otherwise → **patch** (`0.1.0` → `0.1.1`).
+
+   `major` / `minor` / `patch` in the arguments override this. Never pick a version
    whose tag already exists. If nothing changed since the newest tag
    (`git rev-list --count <tag>..origin/dev` is 0), don't bump: reuse that tag and say so.
 2. **Bump on `dev` via PR** (`dev` requires a PR and green checks; never push to it):
@@ -209,7 +267,9 @@ attribution line):
 
 ````markdown
 ## Summary
+<!-- test-protocol: covered=<full dev sha> tag=v<version> -->
 - v<version> (tag `v<version>` on dev @ <short-sha>) — <n> PRs since main: #148, #150, …
+- Why now: <step 0 trigger, or "requested by hand">
 - Preview: <deployment URL> (Vercel login required)
 - Verified: harness ✅ / app build ✅ / deployment ✅ (or why not)
 
@@ -247,6 +307,9 @@ description, and post the PR sections as PR comments (`gh pr comment <n> --body-
 one comment per ≤ 60 000 characters, each starting with
 `## Test protocol (Teil k/n)`. Their checkboxes are tickable too. Link the comments
 from the description.
+
+The `covered=` marker is how step 0 knows what is already in a protocol: set it to the
+dev SHA the protocol was verified against, on every create or update.
 
 ## 7. Report
 
