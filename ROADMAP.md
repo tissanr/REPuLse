@@ -98,8 +98,7 @@ organ, choir, sound-effect generators) and **FX2** (filter models, tape and viny
 colour, pitch and time effects, vocoder) are deferred with SYN3–SYN5: samples cover
 those roles, and each one costs a human listen. All four are 🤖👂, so the unattended
 pipeline skips them. SYN6 parts A, B and D and all of FX1 have no dependencies; SYN6
-part C (synth instruments) needs TL7. The specs name TL7a–c, the three phases TL7 is
-split into on `main` (PR #171, not yet merged into `dev`).
+part C (synth instruments) needs TL7a and TL7c.
 
 ---
 
@@ -1145,7 +1144,7 @@ Everything a song needs from the built-in synthesizer, in one phase.
 **Key additions:**
 - Oscillator core: band-limited (PolyBLEP) saw, pulse and triangle in the WASM engine (the current ones alias on high notes, and a filter cannot remove that); voices `:tri` `:sine` `:pulse` `:supersaw`; `unison`, `detune`, `spread`, `sub`, PWM, hard sync; `(synth :noise :color :pink|:brown|:dust|:lfsr)`
 - Synth drum kit as its own bank: `(bank :synth)` selects it even when sample banks are loaded; voices `:bd :sd :hh :oh :cp :rim :lt :mt :ht :cb :cl :cr :rd :sh :tb :cg`, tunable with `tune`, `tone`, `decay`; hat choke
-- Synth instruments (after TL7): `:acid` `:reese` `:sub-bass` `:fm-bass` `:wobble` `:lead` `:sync-lead` `:pluck` `:theremin` `:reed` `:pad` `:strings` `:sweep-pad` `:brass-pad`; `(glide secs pat)`; explicit parameters override preset values
+- Synth instruments (after TL7a and TL7c): `:acid` `:reese` `:sub-bass` `:fm-bass` `:wobble` `:lead` `:sync-lead` `:pluck` `:theremin` `:reed` `:pad` `:strings` `:sweep-pad` `:brass-pad`; `(glide secs pat)`; explicit parameters override preset values
 - Housekeeping: warning for unknown `(synth :name)` voices (today they play a plain sine without a message), `:trumpet-cup` (documented, not implemented), one shared voice list
 
 See full spec: [PROMPTS/PHASE-SYN6.md](PROMPTS/PHASE-SYN6.md)

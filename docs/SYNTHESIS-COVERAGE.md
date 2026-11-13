@@ -32,8 +32,7 @@ and **FX1**. The rest (more acoustic instruments, mallets, organ, choir, sound-e
 generators, filter models, tape colour, pitch and time effects) is specified in **SYN7**
 and **FX2** and deferred: samples cover those roles until then.
 
-TL7a–c are the three phases TL7 was split into (PR #171 on `main`; `dev` still lists the
-single outline `TL7` until that is merged back).
+TL7a–c are the three phases TL7 was split into.
 
 ## Summary
 

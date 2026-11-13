@@ -15,8 +15,8 @@
 
 **Milestone:** none (deferred)
 **Depends on:** SYN6 (coloured noise, band-limited pulse, unison, the shared voice list).
-Parts C and D: TL7 (event length and parameter slots in the trigger; the vowel table of
-TL7c). Part A needs nothing beyond SYN1 and SYN2.
+Parts C and D: TL7a (event length and parameter slots in the trigger) and TL7c (the
+vowel table). Part A needs nothing beyond SYN1 and SYN2.
 
 ## Goal
 

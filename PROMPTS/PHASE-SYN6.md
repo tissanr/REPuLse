@@ -9,8 +9,8 @@
 > instruments sound good needs a human listen.
 
 **Milestone:** 1 — Tidal-Lisp core (sound side track)
-**Depends on:** parts A, B and D: none. Part C: TL7 (on `main`: TL7a per-voice filter,
-TL7c filter envelope and vibrato). Coordinates with KIT1 (recorded kits) and with TL7a's
+**Depends on:** parts A, B and D: none. Part C: TL7a (per-voice filter) and TL7c (filter
+envelope, vibrato). Coordinates with KIT1 (recorded kits) and with TL7a's
 `trigger_v3` parameter slots.
 
 ## Goal
@@ -138,7 +138,7 @@ selected once samples have loaded, and a bass or pad has to be built by hand.
 - **Fallback:** while samples have not loaded, bare names fall back to the synthesized
   voices, now for the whole kit.
 
-### Part C — Synth instruments (needs TL7)
+### Part C — Synth instruments (needs TL7a and TL7c)
 
 Named voices that bundle oscillator, filter and envelope settings, the same way `:sax`
 or `:harp` are named voices today.
@@ -195,7 +195,8 @@ or `:harp` are named voices today.
   do chords and overlapping notes pick "the previous note"?
 - Tempo-synced LFO for `:wobble`: a per-voice LFO in the engine (`pw-rate` shows the
   mechanism) or the planned generic modulators (❓ `lfo` parity row)?
-- If TL7 is late: ship parts A, B and D first and Part C when TL7 has landed, or wait?
+- If TL7a or TL7c is late: ship parts A, B and D first and Part C when both have landed,
+  or wait?
 
 ## Definition of done
 
@@ -253,7 +254,7 @@ or `:harp` are named voices today.
 - No recorded or multisampled kits, velocity layers or round-robin: **KIT1**.
 - No circuit-level emulation of a specific drum machine or synthesizer, and no brand
   names as voice names.
-- No new filter models (ladder, comb): deferred **FX2**. Presets use the TL7 filter.
+- No new filter models (ladder, comb): deferred **FX2**. Presets use the TL7a filter.
 - No effects baked into presets (chorus, reverb): those stay track-level `fx`.
 - No wavetable oscillator (out of Milestone 1, see STRUDEL-PARITY.md).
 - No preset browser, step sequencer or drum-pad UI.
