@@ -93,7 +93,10 @@
              (let [val (:result result)]
                (cond
                  (core/pattern? val)
-                 (do (audio/play-track! :_ val on-beat editor/highlight-range!)
+                 (do (audio/play-track! :_ val on-beat
+                                        ;; keep a running project highlighter
+                                        (or (:on-event @audio/scheduler-state)
+                                            editor/highlight-range!))
                      (fx/apply-track-effects! :_ (:track-fx val))
                      (set-playing! true)
                      (set-output! "updated" :success))
