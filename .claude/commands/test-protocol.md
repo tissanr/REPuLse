@@ -140,8 +140,9 @@ v0.1.2"). Do this before verifying, so the protocol tests exactly the tagged com
 2. **Bump on `dev` via PR** (`dev` requires a PR and green checks; never push to it):
    ```bash
    git switch -c chore/version-<version> origin/dev
-   npm version <version> --no-git-tag-version   # package.json + package-lock.json
-   git add package.json package-lock.json
+   npm version <version> --no-git-tag-version --ignore-scripts          # root
+   npm version <version> -w app --no-git-tag-version --ignore-scripts   # app workspace
+   git add package.json package-lock.json app/package.json
    git commit -m "chore: bump version to <version>"
    git push -u origin chore/version-<version>
    gh pr create --base dev --title "chore: bump version to <version>" \
