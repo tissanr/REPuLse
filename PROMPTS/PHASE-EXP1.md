@@ -5,7 +5,7 @@
 > **Automation:** 🤖 auto — parity is measurable: render the same pattern offline and through a real-time capture, then compare spectra/RMS in Playwright.
 
 **Milestone:** M4 — Sketchpad
-**Depends on:** SONG1 (song length, real-time capture as the reference). TL7 recommended (per-event effects).
+**Depends on:** SONG1 (song length, real-time capture as the reference). TL7a–b recommended (per-event effects and sends).
 **Unblocks:** SK1 (stems rendered through the offline path).
 
 ## Goal
@@ -190,7 +190,7 @@ like playback", "don't change the real-time audio graph").
   The new spec loads `/`, evaluates via `__REPULSE_APP__` and reads the WAV from the
   Playwright `download` event. That exercises the real `(export …)` built-in, the real
   plugins and the real worklet, and leaves the harness alone.
-- **E17 — Not-yet-delivered neighbours.** SONG2 (automation) and TL7 (per-event effects)
+- **E17 — Not-yet-delivered neighbours.** SONG2 (automation) and TL7a–c (per-event effects)
   are not delivered at the time of writing. If either lands first, its values must reach
   the offline renderer through the same helpers the scheduler uses (`resolve-tweens` /
   `play-event` graph lookup), never through a copy of the scheduler code.
@@ -763,5 +763,5 @@ path produced.
   (`test_api.cljs`, `test-harness.html` stay as they are).
 - Don't render buses offline (E10) or make offline renders cancellable (E14).
 - Don't copy scheduler code into the renderer: tweens, routing and dispatch go through the
-  shared helpers in `audio.cljs`, so SONG2/TL7 and a later real-time routing fix carry
+  shared helpers in `audio.cljs`, so SONG2/TL7a–c and a later real-time routing fix carry
   over.

@@ -365,12 +365,22 @@
                    (set! (.-innerHTML h) (model-hint-html "custom"))))))))
 
 
+(defn- key-form-open
+  "Opening tag of the per-key <form>. Each password field sits in its own form
+   with a hidden username field, so Chrome's password heuristics see one
+   credential per form (no [DOM] warnings). Submit is blocked by the panel's
+   delegated submit listener — no inline onsubmit, which the CSP forbids."
+  [user]
+  (str "<form class=\"ai-key-form\" autocomplete=\"off\">"
+       "<input type=\"text\" name=\"username\" autocomplete=\"username\""
+       " value=\"" (escape-html user) "\" hidden>"))
+
 (defn- render-settings! []
   (when-let [panel (el "ai-panel")]
     (let [p       (or @draft-provider @settings/provider)
           custom? (= p "custom")]
     (set! (.-innerHTML panel)
-          (str "<form class=\"ai-settings\" onsubmit=\"return false\" autocomplete=\"off\">"
+          (str "<div class=\"ai-settings\">"
                "<h3 class=\"ai-settings-title\">AI Settings</h3>"
                ;; Each field uses explicit for= on <label> + matching id on control.
                ;; Hint text is a <span> OUTSIDE the <label> to avoid association issues.
@@ -386,6 +396,7 @@
                "  </select>"
                "</div>"
                (when custom? (custom-fields-html))
+               (key-form-open (str "ai-" p))
                "<div class=\"ai-field\">"
                "  <label for=\"ai-key-input\" class=\"ai-label\">API key"
                (when custom? " <em class=\"ai-opt\">(optional)</em>")
@@ -399,6 +410,7 @@
                "   autocomplete=\"new-password\""
                "   value=\"" (escape-html (settings/key-for p)) "\">"
                "</div>"
+               "</form>"
                "<div class=\"ai-field\">"
                "  <label for=\"ai-model-input\" class=\"ai-label\">Model override</label>"
                "  <span id=\"ai-model-hint\" class=\"ai-key-hint\">" (model-hint-html p) "</span>"
@@ -448,6 +460,7 @@
                    "   min=\"1\" step=\"1\" value=\"" (:calls lims) "\">"
                    "</div>"))
                "<h3 class=\"ai-settings-title ai-settings-subtitle\">Sample &amp; Search</h3>"
+               (key-form-open "freesound")
                "<div class=\"ai-field\">"
                "  <label for=\"ai-freesound-key-input\" class=\"ai-label\">Freesound API key</label>"
                "  <span class=\"ai-key-hint\">Get a key at freesound.org/apiv2/ &mdash; stored in localStorage only</span>"
@@ -459,6 +472,8 @@
                "  <button id=\"ai-freesound-key-clear\" class=\"ai-btn ai-btn--secondary ai-btn--sm\" type=\"button\">clear</button>"
                "  </div>"
                "</div>"
+               "</form>"
+               (key-form-open "search")
                "<div class=\"ai-field\">"
                "  <label for=\"ai-search-key-input\" class=\"ai-label\">Web Search API key <em class=\"ai-opt\">(optional)</em></label>"
                "  <span class=\"ai-key-hint\">Brave Search &mdash; brave.com/search/api/ &mdash; omit to disable web_search tool</span>"
@@ -470,11 +485,12 @@
                "  <button id=\"ai-search-key-clear\" class=\"ai-btn ai-btn--secondary ai-btn--sm\" type=\"button\">clear</button>"
                "  </div>"
                "</div>"
+               "</form>"
                "<div class=\"ai-settings-btns\">"
                "<button id=\"ai-settings-save-btn\" class=\"ai-btn\" type=\"button\">Save</button>"
                "<button id=\"ai-settings-back-btn\" class=\"ai-btn ai-btn--secondary\" type=\"button\">Back</button>"
                "</div>"
-               "</form>")))))
+               "</div>")))))
 
 ;; ── Main panel render ─────────────────────────────────────────────────────────
 
@@ -769,6 +785,9 @@
           (reset! draft-provider (.. e -target -value))
           (render-settings!)))
       false)
+
+    ;; Enter in a settings key field must not submit (and reload) the page.
+    (.addEventListener panel "submit" (fn [^js e] (.preventDefault e)) false)
 
     ;; Cmd/Ctrl+Enter in the textarea sends the message
     (.addEventListener panel "keydown"

@@ -17,6 +17,10 @@ M1  Tidal-Lisp core    the pattern language: Strudel/Tidal parity, effects, drum
 Strudel parity is tracked function by function in
 [docs/STRUDEL-PARITY.md](docs/STRUDEL-PARITY.md) and is the yardstick for M1.
 
+The sound palette (which synthetic sounds and effects exist, are planned or are missing)
+is tracked in [docs/SYNTHESIS-COVERAGE.md](docs/SYNTHESIS-COVERAGE.md). SYN6 and FX1
+close the gaps a song needs; SYN7 and FX2 hold the rest and are deferred.
+
 ### Automation markers
 
 Every planned phase carries one marker saying how far it can be implemented and verified
@@ -41,8 +45,12 @@ without a human:
 | 6 | TL5 | Layering, pitch & harmony | 🤖 | full | sonnet |
 | 6a | TL4b | Pick & fix | 🤖 | full | sonnet |
 | 7 | TL6 | Sample slicing & playback control | 🤖👂 | full | opus |
-| 8 | TL7 | Per-event effects & control parameters | 🤖👂 | outline | opus |
+| 8 | TL7a | Per-event filters, shape & crush | 🤖👂 | full | opus |
+| 8b | TL7b | Reverb & delay sends per orbit | 🤖👂 | full | opus |
+| 8c | TL7c | Vowel, envelopes & modulators | 🤖👂 | outline | opus |
 | 9 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
+| 9a | SYN6 | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | outline | opus |
+| 9b | FX1 | Mixing, space & modulation effects | 🤖👂 | outline | sonnet |
 | **M2** | | **Full songs** | | | |
 | 10 | SONG1 | Sections, song form & full-song render | 🤖 | full | opus |
 | 11 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
@@ -76,10 +84,21 @@ outline into a full spec (exact code paths, step-by-step implementation, files t
 before implementing it. Dependencies are listed at the top of each spec.
 
 **Side track** (not on the critical path, can run any time): DOC1, TEST2, UI1, R3,
-PLUG1, O2.
+PLUG1, O2, PL1 (🧑, development tooling; the auto-phase pipeline never picks it).
 
 **Deferred** (⏸, outside the four milestones; revisit after M2): AI4b, AI5,
-SYN3, SYN4, SYN5, P2, O3, O4.
+SYN3, SYN4, SYN5, SYN7, FX2, P2, O3, O4.
+
+**Sound palette** (added 2026-11-13): four large phases instead of many small ones. The
+dividing line is the one that deferred SYN3–SYN5: *does a song need it?* **SYN6** (clean
+oscillators, a synth drum kit, the standard synth instruments) and **FX1** (EQ, limiter,
+controllable reverb and delay, modulation and stereo effects) are the sound side track
+of M1, like KIT1; they don't block M2–M4. **SYN7** (more acoustic instruments, mallets,
+organ, choir, sound-effect generators) and **FX2** (filter models, tape and vinyl
+colour, pitch and time effects, vocoder) are deferred with SYN3–SYN5: samples cover
+those roles, and each one costs a human listen. All four are 🤖👂, so the unattended
+pipeline skips them. SYN6 parts A, B and D and all of FX1 have no dependencies; SYN6
+part C (synth instruments) needs TL7a and TL7c.
 
 ---
 
@@ -959,6 +978,40 @@ See full spec: [PROMPTS/PHASE-DST6.md](PROMPTS/PHASE-DST6.md)
 
 ---
 
+## Phase FX1 — Mixing, Space & Modulation Effects 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+
+Every effect a finished song needs, in one phase: mixing tools, a controllable reverb and
+delay, and the missing modulation and stereo effects. All are track-level plugins.
+
+**Key additions:**
+- Mixing: `eq` (shelves + two peaking bands), `limiter` (true output ceiling; the engine hard-clips at ±1 today), `gate`; shelving, peaking and all-pass types plus `gain` on `filter`
+- Space: `(fx :reverb :type :room|:hall|:plate|:spring|:gated|:reverse :decay … :size … :damp … :predelay …)` via impulse-response generators (today `reverb` has only `wet`); `(fx :delay :sync 3/16 :mode :ping-pong …)`, multi-tap, filters in the feedback path
+- Modulation & stereo: `flanger`, `vibrato`, `auto-pan`, `ring-mod`, `width`
+- All effects work per track and in offline export; acceptance by offline-render measurements plus a human listen
+
+See full spec: [PROMPTS/PHASE-FX1.md](PROMPTS/PHASE-FX1.md)
+
+---
+
+## Phase FX2 — Character, Filter Models & Pitch/Time Effects ⏸ *deferred*
+
+> **Deferred (2026-11-13):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
+
+Effects that add colour or change audio that is already playing. A song can be written
+and mixed without them; most need hand-written worklets and a human listen.
+
+**Key additions:**
+- Filter models: `ladder` (24 dB/oct, self-oscillating), `comb`, `resonator`, `auto-wah`
+- Colour & dynamics: `fold` (wavefolder), `exciter`, `tape`, `vinyl`, tape mode on `delay`, `rotary`, `transient`, `multiband`
+- Pitch: `pitch-shift`, `octaver`, `harmonizer`, `freq-shift`, `shimmer`
+- Buffer & time: `freeze`, `stutter`, `reverse`, `grain`; `vocoder` (may need P2 routing)
+
+See full spec: [PROMPTS/PHASE-FX2.md](PROMPTS/PHASE-FX2.md)
+
+---
+
 ## Phase SYN1 — Karplus-Strong Plucked String ✅ *delivered*
 
 Add a Karplus-Strong delay-line voice to the WASM engine, giving REPuLse its first
@@ -1079,6 +1132,39 @@ transient, warm sustain — without attempting full physical accuracy. Depends o
   deferred to `docs/FUTURE-FEATURES.md`
 
 See full spec: [PROMPTS/PHASE-SYN5.md](PROMPTS/PHASE-SYN5.md)
+
+---
+
+## Phase SYN6 — Synth Essentials: Oscillators, Drum Kit & Synth Instruments 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+
+Everything a song needs from the built-in synthesizer, in one phase.
+
+**Key additions:**
+- Oscillator core: band-limited (PolyBLEP) saw, pulse and triangle in the WASM engine (the current ones alias on high notes, and a filter cannot remove that); voices `:tri` `:sine` `:pulse` `:supersaw`; `unison`, `detune`, `spread`, `sub`, PWM, hard sync; `(synth :noise :color :pink|:brown|:dust|:lfsr)`
+- Synth drum kit as its own bank: `(bank :synth)` selects it even when sample banks are loaded; voices `:bd :sd :hh :oh :cp :rim :lt :mt :ht :cb :cl :cr :rd :sh :tb :cg`, tunable with `tune`, `tone`, `decay`; hat choke
+- Synth instruments (after TL7a and TL7c): `:acid` `:reese` `:sub-bass` `:fm-bass` `:wobble` `:lead` `:sync-lead` `:pluck` `:theremin` `:reed` `:pad` `:strings` `:sweep-pad` `:brass-pad`; `(glide secs pat)`; explicit parameters override preset values
+- Housekeeping: warning for unknown `(synth :name)` voices (today they play a plain sine without a message), `:trumpet-cup` (documented, not implemented), one shared voice list
+
+See full spec: [PROMPTS/PHASE-SYN6.md](PROMPTS/PHASE-SYN6.md)
+
+---
+
+## Phase SYN7 — Instrument Library: Presets, Mallets, Organ, Voices & Sound Effects ⏸ *deferred*
+
+> **Deferred (2026-11-13):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2, together with SYN3–SYN5.
+
+The wider instrument palette. Samples and the SYN6 instruments cover these roles until
+then; every instrument here costs a human listen loop.
+
+**Key additions:**
+- FM and Karplus-Strong presets: `:clarinet` `:oboe` `:bassoon` `:horn` `:tuba` `:pan-flute` `:recorder` `:whistle` `:celesta` `:music-box`; `:bass-guitar` `:upright` `:banjo` `:ukulele` `:harpsichord` `:clav` `:shamisen` `:oud` `:dulcimer`
+- `Voice::Modal`: `:vibes` `:glock` `:xylophone` `:kalimba` `:steel-drum` `:tubular` `:glass` `:gong` `:timpani` `:tabla`; `Voice::Additive`: `(synth :organ :drawbars "888000000")`, `:pipe-organ`
+- Formant voice: `:vox`, `:choir` with a patternable `vowel`
+- Sound-effect generators: `:riser` `:downer` `:sweep` `:siren` (they last as long as their event), `:impact` `:blip` `:dial`, textures `:wind` `:rain` `:surf` `:crackle`
+
+See full spec: [PROMPTS/PHASE-SYN7.md](PROMPTS/PHASE-SYN7.md)
 
 ---
 
@@ -1382,6 +1468,30 @@ specs were kept out of HRD3 and should receive a separate follow-up hardening pa
   validation. AI tool-call specs remain out of HRD3 scope per the phase prompt.
 
 See full spec: [PROMPTS/PHASE-HRD3.md](PROMPTS/PHASE-HRD3.md)
+
+---
+
+## Phase PL1 — Pipeline Run Journal & Manual Retro 📋 *planned*
+
+> **Side track** (development tooling, no milestone) · **Automation:** 🧑 human-in-loop.
+> It rewrites the pipeline's own instructions, and acceptance needs the owner to run `/retro`.
+
+Stage 1 of a learning pipeline. Every auto-phase run records what happened, and a manual
+retro turns the records plus post-merge fixes into evidence-backed learning candidates.
+Nothing is applied automatically.
+
+**Key additions:**
+- Run journal `.pipeline/runs/<PHASE>.json` (schema v1: entry, outcome, attempts with
+  failure category, models, usage deltas), appended via `scripts/pipeline/journal.mjs`
+  in a new `auto-phase.md` step 8b. Idle exits are logged to `.git/auto-phase-runs.jsonl`.
+- `scripts/pipeline/metrics.mjs`: first-pass rate, attempts, recoveries, lead time, usage
+  per phase, review coverage, and post-merge fix attribution (fix PR → phase via shared
+  source files + `git blame` confidence)
+- One-off backfill of the 17 merged auto-phase PRs (#127–#164)
+- `/retro` command (`.claude/commands/retro.md`): writes `.pipeline/retros/<date>.md` with
+  metrics, fix candidates and ≤ 5 learning candidates for the owner to confirm
+
+See full spec: [PROMPTS/PHASE-PL1.md](PROMPTS/PHASE-PL1.md)
 
 ---
 
@@ -2046,19 +2156,50 @@ See full spec: [PROMPTS/PHASE-TL6.md](PROMPTS/PHASE-TL6.md)
 
 ---
 
-## Phase TL7 — Per-Event Effects & Control Parameters 📋 *planned*
+## Phase TL7a — Per-Event Filters, Shape & Crush 📋 *planned*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
-Effects become part of the pattern: per-event filter and distortion, and send-based
-reverb/delay per orbit, all patternable.
+Every event can carry its own filter, waveshaper and bit-crusher, patterned or driven
+by signals. First of three phases split from TL7 (2026-11-10).
 
 **Key additions:**
-- Per-voice inserts in WASM (allocation-free): `lpf hpf bpf resonance shape crush coarse vowel`
-- Send effects per `orbit`: `room size delay delay-time delay-feedback`
-- Same behaviour for samples and synth voices, and in offline render
+- Controls `lpf`/`cutoff` `resonance` `hpf` `hpq` `bpf` `bpq` `shape` `crush` `gain` `velocity`
+- WASM: `Inserts` per `ActiveVoice` (allocation-free), `Biquad::lowpass`, `trigger_v3` with a fixed parameter-slot layout
+- JS path (samples, `defsynth`, offline): the same inserts as native `BiquadFilterNode`/`WaveShaperNode` chains, no hand-written DSP; JS↔WASM parity test
 
-See full spec: [PROMPTS/PHASE-TL7.md](PROMPTS/PHASE-TL7.md)
+See full spec: [PROMPTS/PHASE-TL7a.md](PROMPTS/PHASE-TL7a.md)
+
+---
+
+## Phase TL7b — Reverb & Delay Sends per Orbit 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+
+Per-event send levels into a shared reverb and delay, grouped in 4 orbits.
+
+**Key additions:**
+- Controls `room` `size` `delay` `delay-time` `delay-feedback` `orbit`
+- `app/src/repulse/orbits.cljs`: one `ConvolverNode` reverb + one feedback `DelayNode` per orbit, returning into `master-gain`
+- Worklet gets 9 stereo outputs (dry + room/delay send per orbit) that feed the same orbit nodes, so the send effects exist once
+
+See full spec: [PROMPTS/PHASE-TL7b.md](PROMPTS/PHASE-TL7b.md)
+
+---
+
+## Phase TL7c — Vowel, Envelopes & Modulators 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+
+The rest of the per-event control set: movement within a note and the effects native
+nodes can't express.
+
+**Key additions:**
+- `coarse`, `vowel`, per-event `distort`, `postgain`, `nudge`
+- Filter envelopes (`lp-env` …), pitch envelope (`penv` …), `vib`, `adsr` shorthands
+- `delay-sync`; decide `duck`, per-event `tremolo`/`phaser`, FM controls
+
+See full spec: [PROMPTS/PHASE-TL7c.md](PROMPTS/PHASE-TL7c.md)
 
 ---
 

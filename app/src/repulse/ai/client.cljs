@@ -148,7 +148,9 @@
 
 ;; ── Custom (user-supplied) OpenAI-compatible endpoint ─────────────────────────
 
-(def ^:private loopback-hosts #{"localhost" "127.0.0.1" "[::1]"})
+;; No "[::1]": CSP host-sources cannot express IPv6 literals, so vercel.json's
+;; connect-src cannot allow it — browsers drop such a source with a console error.
+(def ^:private loopback-hosts #{"localhost" "127.0.0.1"})
 
 (defn normalise-base-url
   "Validate and normalise a user-supplied OpenAI-compatible base URL.
@@ -161,6 +163,10 @@
     (cond
       (not (seq s)) {:error "Enter the server's base URL, e.g. http://localhost:1234/v1"}
       (nil? u)      {:error (str "Not a valid URL: " s)}
+
+      (and (= "http:" (.-protocol u)) (= "[::1]" (.-hostname u)))
+      {:error (str "http://[::1] (IPv6) can't be allowed by the page's security "
+                   "policy. Use http://localhost or http://127.0.0.1 with the same port.")}
 
       (and (= "http:" (.-protocol u)) (not (loopback-hosts (.-hostname u))))
       {:error (str "Plain-HTTP addresses other than localhost are blocked by the browser "

@@ -7,7 +7,7 @@
 > testable automatically; choosing kits and judging sound quality needs a human listen.
 
 **Milestone:** 1 — Tidal-Lisp core (sound side track)
-**Depends on:** TL1 (patterned params). Coordinates with TL7 (`velocity` param) and SK3
+**Depends on:** TL1 (patterned params). Coordinates with TL7a (adds the `velocity` param) and SK3
 (captured velocity writes this param).
 
 ## Goal
