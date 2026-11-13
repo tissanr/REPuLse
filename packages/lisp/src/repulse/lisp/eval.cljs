@@ -5,6 +5,7 @@
             [repulse.lisp.builtins.signals :as b-signals]
             [repulse.lisp.builtins.structure :as b-structure]
             [repulse.lisp.builtins.random :as b-random]
+            [repulse.lisp.builtins.pick :as b-pick]
             [repulse.lisp.builtins.arith :as b-arith]
             [repulse.lisp.builtins.math :as b-math]
             [repulse.lisp.builtins.music :as b-music]
@@ -12,7 +13,8 @@
             [repulse.lisp.builtins.collection :as b-collection]
             [repulse.lisp.builtins.types :as b-types]
             [repulse.lisp.builtins.synth :as b-synth]
-            [repulse.lisp.builtins.arrangement :as b-arrangement]))
+            [repulse.lisp.builtins.arrangement :as b-arrangement]
+            [repulse.lisp.builtins.slider :as b-slider]))
 
 ;;; Re-export helpers used by app-layer code (e.g. env/builtins.cljs)
 
@@ -47,6 +49,16 @@
         best))))
 
 (declare eval-form)
+
+(defn- form-str
+  "Short printed form for error messages: deep-unwrapped pr-str, max 40 chars."
+  [form]
+  (let [s (pr-str (deep-unwrap form))]
+    (if (> (count s) 40) (str (subs s 0 39) "…") s)))
+
+(defn- fx-form? [child]
+  (and (seq? child) (symbol? (first child)) (= "fx" (str (first child)))))
+
 
 (defn make-closure [params body env]
   (fn [& args]
@@ -113,6 +125,19 @@
            "e.g. (segment 8 " nm ") or (pan " nm " pat)")
       :else
       (str (pr-str head-form) " is not a function"))))
+
+(defn- with-call-source
+  "Tag a plain value map returned by a call — (sound :bd 0), (fm :c4) — with the
+   call's editor range as {:source …} metadata, so that wherever it becomes a
+   pattern (core/pure) its events highlight. Patterns and tagged maps pass through."
+  [result form]
+  (if (and (map? result)
+           (not (core/pattern? result))
+           (not (:source (meta result))))
+    (if-let [src (source-of form)]
+      (vary-meta result assoc :source (select-keys src [:from :to]))
+      result)
+    result))
 
 (defn eval-form [form env]
   (cond
@@ -269,6 +294,29 @@
             (swap! macros assoc (str name-sym) macro-fn))
           nil)
 
+        "master"
+        ;; (master (fx …) …) — Phase WS2. Only (fx …) children; they run in order.
+        ;; The app hook :*master-fn* (repulse.env.builtins.fx/run-master!) enforces one
+        ;; master per evaluation and returns the result string; without it → nil.
+        (let [msrc (source-of form)]
+          (doseq [child tail]
+            (when-not (fx-form? child)
+              (throw (ex-info (str "master only takes (fx …) forms — got " (form-str child))
+                              (merge {:type :eval-error}
+                                     (select-keys (or (source-of child) msrc) [:from :to]))))))
+          (let [run (fn []
+                      (doseq [child tail]
+                        (let [r (eval-form child env)]
+                          (when (core/pattern? (unwrap r))
+                            (throw (ex-info (str "master only takes global (fx …) forms — "
+                                                 (form-str child)
+                                                 " is a per-track effect; put it in the track's ->> chain")
+                                            (merge {:type :eval-error}
+                                                   (select-keys (source-of child) [:from :to]))))))))]
+            (if-let [mf (:*master-fn* env)]
+              (mf msrc (count tail) run)
+              (do (run) nil))))
+
         "defsynth"
         ;; (defsynth name [params] body...)
         ;; Registers a synth definition. The body (unevaluated AST) and the
@@ -334,7 +382,7 @@
                 (cond
                   (fn? f)
                   (try
-                    (apply f (map #(eval-form % env) tail))
+                    (with-call-source (apply f (map #(eval-form % env) tail)) form)
                     (catch :default e
                       ;; Re-throw with the source position of the call head,
                       ;; unless the error already carries a more specific range.
@@ -366,6 +414,7 @@
       (b-signals/make-builtins)
       (b-structure/make-builtins)
       (b-random/make-builtins)
+      (b-pick/make-builtins)
       (b-arith/make-builtins)
       (b-math/make-builtins)
       (b-music/make-builtins)
@@ -374,6 +423,7 @@
       (b-types/make-builtins)
       (b-synth/make-builtins)
       (b-arrangement/make-builtins)
+      (b-slider/make-builtins)
       {"bpm"     (fn [b] (bpm-fn (->num b)) nil)
        "stop"    stop-fn
        :*defs*   defs

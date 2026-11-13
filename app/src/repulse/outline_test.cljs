@@ -114,3 +114,83 @@
     (is (nil? (at -1)))
     (testing "name mismatch (text edited since eval) → nil"
       (is (nil? (outline/playing-section s 0 [{:name ":other"}]))))))
+
+(deftest project-definition-o1
+  (let [drums  "(def kick 1)\n(track :kick (seq :bd))"
+        others [["drums" (:entries (ex drums))] ["bass" (:entries (ex "(def kick 2)"))]]
+        d      (outline/project-definition others :symbol "kick")
+        k      (outline/project-definition others :keyword ":kick")]
+    (is (= "drums" (:buffer d)))
+    (is (= [:def "kick" 0] ((juxt :kind :name :from) (:entry d))))
+    (is (= "drums" (:buffer k)))
+    (is (= :track (:kind (:entry k))))
+    (is (= 13 (:from (:entry k))))
+    (is (nil? (outline/project-definition others :symbol "nope")))))
+
+;;; Phase WS1 — :fx entries, :refs, used-by
+
+(def W
+  (str/join "\n"
+    ["(def kick (seq :bd :_ :bd :_))"
+     "(track :drums (->> kick (amp 0.8) (fx :filter :freq 2400)))"
+     "(track :bass (->> (seq :c2 :eb2) (synth :saw) (amp 0.6) (decay 0.25)))"
+     "(fx :reverb 0.3)"
+     "(song"
+     "  (section :intro 4 [:drums])"
+     "  (section :verse 8 [:drums :bass])"
+     "  (section :chorus 8 :all))"]))
+
+(deftest fx-entries-and-refs
+  (let [es (:entries (ex W))]
+    (is (= [[:def "kick"] [:track ":drums"] [:track ":bass"] [:fx ":reverb"] [:song nil]]
+           (mapv (juxt :kind :name) es)))
+    (is (= {:from 162 :to 178} (select-keys (nth es 3) [:from :to])))
+    (is (= "0.6" (subs W 142 145)))
+    (is (contains? (:refs (nth es 1)) "kick"))
+    (is (not (contains? (:refs (nth es 1)) "track")))
+    (is (not (contains? (:refs (first es)) "kick")))
+    (is (= [":drums"] (outline/used-by es "kick")))
+    (is (= [] (outline/used-by es "nope")))))
+
+(deftest fx-entry-rules
+  (is (= [] (mapv :kind (:entries (ex "(fx)")))))
+  (is (= [:track] (mapv :kind (:entries (ex "(track :x (->> y (fx :delay 0.2)))")))))
+  (is (= [:def] (mapv :kind (:entries (ex "(def x (->> y (fx :delay 0.2)))"))))))
+
+(deftest used-by-in-defs
+  (let [t  "(def kick (seq :bd))\n(defn hum [p] (amp 0.9 p))\n(track :drums (stack kick (hum kick)))\n(def k2 (fast 2 kick))"
+        es (:entries (ex t))]
+    (is (= [":drums" "k2"] (outline/used-by es "kick")))
+    (is (= [":drums"] (outline/used-by es "hum")))))
+
+
+;;; ── Phase WS2: (master …) ────────────────────────────────────────────
+
+(def MS
+  (str/join "\n"
+    ["(track :drums (->> (seq :bd :_ :bd :_) (fx :reverb 0.5)))"
+     "(master"
+     "  (fx :delay :time 0.375 :feedback 0.4)"
+     "  (fx :reverb 0.3))"]))
+
+(def MS-DUP
+  "(master (seq :bd) (fx :reverb 0.3))\n(master (fx :delay 0.25))")
+
+(deftest master-entry-test
+  (testing "O1"
+    (let [es (:entries (ex MS))]
+      (is (= 125 (count MS)))
+      (is (= #{"->>" "seq" "fx"} (:refs (first es))))
+      (is (= {:kind :master :name nil :from 58 :to 125 :name-from nil :name-to nil
+              :children [{:kind :fx :name ":delay" :from 68 :to 105
+                          :name-from 72 :name-to 78 :refs #{} :children []}
+                         {:kind :fx :name ":reverb" :from 108 :to 124
+                          :name-from 112 :name-to 119 :refs #{} :children []}]}
+             (second es)))))
+  (testing "O2"
+    (is (= [[:master [":reverb"]] [:master [":delay"]]]
+           (mapv (juxt :kind #(mapv :name (:children %))) (:entries (ex MS-DUP))))))
+  (testing "O3"
+    (let [e (outline/entry-at (:entries (ex MS)) 115)]
+      (is (= :fx (:kind e)))
+      (is (= 108 (:from e))))))

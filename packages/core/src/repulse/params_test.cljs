@@ -255,3 +255,191 @@
     (is (= [[:bd 1] [:hh 0.5]] (amps 0.25)))
     (is (= [[:bd 0.5] [:hh 1]] (amps 0.75)))
     (is (= [[:bd 1] [:hh 1]] (amps 0.5)))))
+
+;;; ── Phase TL4b: fix ──────────────────────────────────────────────────
+
+(defn- tl4b-evs
+  "[value whole-start whole-end] of cycle 0, sorted by whole start then value."
+  [pat]
+  (->> (core/query pat one-cycle)
+       (map (fn [e] [(:value e) (:start (:whole e)) (:end (:whole e))]))
+       (sort-by (fn [[v s _]] [(core/rat->float s) (pr-str v)]))
+       vec))
+
+(defn- t [n d] (core/rat n d))
+(def ^:private a02 (params/amp 0.2))
+
+(deftest tl4b-controls-match-rules
+  (let [m params/controls-match?]
+    (testing "numbers compare with =="
+      (is (m {:amp 1} {:amp 1.0}))
+      (is (m {:amp 0.5} {:amp [1 2]}))
+      (is (not (m {:amp [1 2]} {:amp 0.5})) "vector condition = any-of 1 or 2")
+      (is (m {:note 60} {:note 60.0}))
+      (is (not (m {:amp 1} {:amp 2}))))
+    (testing "keywords and strings compare exactly"
+      (is (m {:s :bd} :bd))
+      (is (not (m {:s :bd} :AkaiLinn_bd)))
+      (is (not (m {:s "bd"} :bd)))
+      (is (m {:s "bd"} {:s "bd"})))
+    (testing "missing key is no match; AND over keys"
+      (is (not (m {:pan 0} :bd)))
+      (is (m {:s :bd :n 2} {:bank :bd :n 2}))
+      (is (not (m {:s :bd :n 2} {:bank :bd :n 0}))))
+    (testing "any-of vectors"
+      (is (m {:s [:bd :sd]} :sd))
+      (is (not (m {:s [:bd :sd]} :hh)))
+      (is (m {:amp [1 2]} {:amp 2})))
+    (testing "derived :s"
+      (is (m {:s :bd} {:note :bd :amp 0.5}))
+      (is (m {:s :bd} {:bank :bd :n 1}))
+      (is (m {:note :c4} :c4))
+      (is (m {:s :c4} :c4) "any keyword :note derives :s, no note-name guessing")
+      (is (not (m {:s :c4} :bd)))
+      (is (m {:s :cb} :cb) "cowbell :cb looks like C-flat but still matches")
+      (is (m {:s :a} {:note :a :amp 0.5}) "single-letter sample names match")
+      (is (not (m {:s :bd} 60)) "numeric :note derives no :s")
+      (is (m {:s :kick} {:s :kick :note :bd}) "a real :s wins")
+      (is (not (m {:s :bd} {:s :kick :note :bd}))))
+    (testing "bare numbers and rationals become {:note v}"
+      (is (m {:note 3} 3))
+      (is (m {:note 0.5} [1 2])))
+    (testing "rests and other values never match, not even {}"
+      (is (not (m {} :_)))
+      (is (not (m {} nil)))
+      (is (not (m {} {:note :_})))
+      (is (not (m {} "bd")))
+      (is (not (m {} true)))
+      (is (not (m {} [1 2 3])))
+      (is (m {} :bd)))))
+
+(deftest tl4b-fix-numeric
+  (is (= [[{:note :bd :amp 0.2} (t 0 1) (t 1 2)] [{:note :sd :amp 0.5} (t 1 2) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:amp 1}
+                               (params/amp (core/seq* [1.0 0.5]) (core/seq* [:bd :sd]))))))
+  (is (= [[{:note :bd :amp 0.9} (t 0 1) (t 1 1)]]
+         (tl4b-evs (params/fix (params/amp 0.9) {:amp 0.5} (params/amp [1 2] (core/pure :bd))))))
+  (is (= [[{:note 60 :amp 0.2} (t 0 1) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:note 60} (core/seq* [60.0]))))))
+
+(deftest tl4b-fix-any-of
+  (is (= [[{:note :bd :amp 0.2} (t 0 1) (t 1 4)] [:hh (t 1 4) (t 1 2)]
+          [{:note :sd :amp 0.2} (t 1 2) (t 3 4)] [:cp (t 3 4) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:s [:bd :sd]} (core/seq* [:bd :hh :sd :cp]))))))
+
+(deftest tl4b-fix-bank-prefix
+  (is (= [[:AkaiLinn_bd (t 0 1) (t 1 2)] [{:note :bd :amp 0.2} (t 1 2) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:s :bd} (core/seq* [:AkaiLinn_bd :bd]))))))
+
+(deftest tl4b-fix-missing-key
+  (is (= [[:bd (t 0 1) (t 1 2)] [{:note :hh :pan 0 :amp 0.2} (t 0 1) (t 1 2)]
+          [:sd (t 1 2) (t 1 1)] [{:note :hh :pan 0 :amp 0.2} (t 1 2) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:pan 0}
+                               (core/stack* [(core/seq* [:bd :sd])
+                                             (params/pan 0 (core/seq* [:hh :hh]))]))))))
+
+(deftest tl4b-fix-and-derived-s
+  (is (= [[{:bank :bd :n 2 :amp 0.2} (t 0 1) (t 1 2)] [{:bank :bd :n 0} (t 1 2) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:s :bd :n 2}
+                               (core/seq* [{:bank :bd :n 2} {:bank :bd :n 0}])))))
+  (is (= [[{:note :bd :amp 0.2} (t 0 1) (t 1 3)] [:_ (t 1 3) (t 2 3)] [{:note 3 :amp 0.2} (t 2 3) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {} (core/seq* [:bd :_ 3])))))
+  (is (= [[{:note :c4 :amp 0.2} (t 0 1) (t 1 2)] [:bd (t 1 2) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:s :c4} (core/seq* [:c4 :bd])))))
+  (is (= [[{:note :cb :amp 0.2} (t 0 1) (t 1 2)] [:bd (t 1 2) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:s :cb} (core/seq* [:cb :bd]))))
+      "cowbell :cb is not mistaken for C-flat")
+  (is (= [[{:note :c4 :amp 0.2} (t 0 1) (t 1 2)] [:bd (t 1 2) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:note :c4} (core/seq* [:c4 :bd])))))
+  (is (= [[:bd (t 0 1) (t 1 1)]]
+         (tl4b-evs (params/fix a02 {:s "bd"} (core/seq* [:bd]))))))
+
+(deftest tl4b-fix-structure-changing-f
+  (is (= [[:hh (t 0 1) (t 1 2)] [:bd (t 1 4) (t 1 2)] [:bd (t 3 4) (t 1 1)]]
+         (tl4b-evs (params/fix #(core/fast 2 %) {:s :bd} (core/seq* [:hh :bd]))))))
+
+;;; ── Phase TL6: sample slicing ───────────────────────────────────────
+
+(def ^:private brk {:bank :break :n 0})
+
+(defn- onsets [pat]
+  (->> (core/query pat one-cycle)
+       (filter core/onset?)
+       (sort-by #(core/rat->float (:start (:whole %))))))
+
+(defn- whole [ev] [(:start (:whole ev)) (:end (:whole ev))])
+
+(deftest chop-four-equal-pieces
+  (let [evs (onsets (params/chop 4 (core/pure brk)))]
+    (is (= [0.0 0.25 0.5 0.75] (mapv #(get-in % [:value :begin]) evs)))
+    (is (= [0.25 0.5 0.75 1.0] (mapv #(get-in % [:value :end]) evs)))
+    (is (= [[[0 1] [1 4]] [[1 4] [1 2]] [[1 2] [3 4]] [[3 4] [1 1]]] (mapv whole evs)))
+    (is (every? #(= :break (get-in % [:value :bank])) evs))))
+
+(deftest chop-is-relative-to-existing-range
+  (let [evs (onsets (params/chop 2 (params/end* 0.5 (params/begin 0.25 (core/pure brk)))))]
+    (is (= [[0.25 0.375] [0.375 0.5]]
+           (mapv #(vector (get-in % [:value :begin]) (get-in % [:value :end])) evs)))))
+
+(deftest chop-subdivides-each-event-and-keeps-rests
+  (let [evs (onsets (params/chop 2 (core/seq* [:bd :_])))]
+    (is (= [{:note :bd :begin 0.0 :end 0.5} {:note :bd :begin 0.5 :end 1.0} :_ :_]
+           (mapv :value evs)))))
+
+(deftest chop-curried-and-patterned
+  (is (= 3 (count (onsets ((params/chop 3) (core/pure brk))))))
+  ;; inner join: n = 1 in the first half (one whole-cycle piece), 4 in the
+  ;; second half (pieces 2 and 3 fall inside it) → 3 onsets
+  (let [evs (onsets (params/chop (core/seq* [1 4]) (core/pure brk)))]
+    (is (= [0.0 0.5 0.75] (mapv #(get-in % [:value :begin]) evs)))))
+
+(deftest striate-interleaves
+  (let [evs (onsets (params/striate 2 (core/seq* [:a :b])))]
+    (is (= [[:a 0.0] [:b 0.0] [:a 0.5] [:b 0.5]]
+           (mapv #(vector (get-in % [:value :note]) (get-in % [:value :begin])) evs)))
+    (is (= [1 4] (second (whole (first evs)))))))
+
+(deftest slice-picks-slices-by-index
+  (let [evs (onsets (params/slice 8 (core/seq* [0 3]) (core/pure brk)))]
+    (is (= [[0.0 0.125] [0.375 0.5]]
+           (mapv #(vector (get-in % [:value :begin]) (get-in % [:value :end])) evs)))
+    (is (= [[[0 1] [1 2]] [[1 2] [1 1]]] (mapv whole evs)))))
+
+(deftest slice-wraps-and-rests
+  (let [evs (onsets (params/slice 4 (core/seq* [5 :_ -1]) (core/pure brk)))]
+    (is (= [0.25 nil 0.75] (mapv #(when (map? (:value %)) (get-in % [:value :begin])) evs)))
+    (is (= :_ (:value (second evs))))))
+
+(deftest splice-fits-rate-to-slot
+  ;; slot 1/4 cycle, slice 1/4 of the sample → speed 1 in :c units;
+  ;; slot 1/2 → speed 1/2
+  (let [evs (onsets (params/splice 4 (core/seq* [0 1 2 3]) (core/pure brk)))]
+    (is (every? #(= 1.0 (get-in % [:value :rate])) evs))
+    (is (every? #(= :c (get-in % [:value :unit])) evs)))
+  (let [evs (onsets (params/splice 4 (core/seq* [0 1]) (params/rate 2 (core/pure brk))))]
+    (is (= [1.0 1.0] (mapv #(get-in % [:value :rate]) evs)))))
+
+(deftest fit-sets-rate-from-range-and-whole
+  (let [evs (onsets (params/fit (core/seq* [brk :_])))]
+    (is (= {:bank :break :n 0 :rate 2.0 :unit :c} (:value (first evs))))
+    (is (= :_ (:value (second evs))))))
+
+(deftest loop-at-slows-and-sets-speed
+  (let [evs (core/query (params/loop-at 2 (params/chop 4 (core/pure brk)))
+                        {:start [0 1] :end [2 1]})]
+    (is (= 4 (count evs)))
+    (is (= [[0 1] [1 2]] (whole (first evs))))
+    (is (every? #(= 0.5 (get-in % [:value :rate])) evs))
+    (is (every? #(= :c (get-in % [:value :unit])) evs))))
+
+(deftest tl6-params-set-keys
+  (let [v #(:value (first (core/query % one-cycle)))]
+    (is (= {:note :bd :rate -1} (v (params/speed -1 (core/pure :bd)))))
+    (is (= {:note :bd :unit :c} (v (params/unit "c" (core/pure :bd)))))
+    (is (= {:note :bd :accelerate -0.5} (v (params/accelerate -0.5 (core/pure :bd)))))
+    (is (= {:note :bd :legato 0.5} (v (params/legato 0.5 (core/pure :bd)))))
+    (is (= {:note :bd :sustain 0.1} (v (params/sustain 0.1 (core/pure :bd)))))
+    (is (= {:note :bd :cut 1} (v ((params/cut 1) (core/pure :bd)))))
+    (is (= {:note :bd :loop-begin 0.25 :loop-end 0.5}
+           (v (params/loop-end 0.5 (params/loop-begin 0.25 (core/pure :bd))))))
+    (is (thrown? js/Error (params/unit :x (core/pure :bd))))))
