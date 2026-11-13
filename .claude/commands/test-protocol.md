@@ -1,0 +1,186 @@
+---
+allowed-tools: Read, Write, Glob, Grep, Bash(git *), Bash(gh *), Bash(npm *), Bash(npx *), Bash(node *), Bash(mkdir *), Bash(rm *)
+description: Build a copy-paste test protocol for everything on dev that is not yet on main, to work through in the Vercel dev preview
+---
+
+# Test protocol for the dev branch
+
+Arguments: `$ARGUMENTS`
+
+- *(empty)* → range `origin/main..origin/dev` (everything the next release would ship).
+- `<ref>` → range `<ref>..origin/dev` (e.g. a release tag, or the SHA of the last tested state).
+- `#123 #130` → only these PRs.
+- `--no-verify` → skip step 5 (say so in the protocol header).
+
+The result is **one Markdown file** the user works through in the Vercel preview of
+`dev`: every test is a checkbox with a snippet they can paste straight into the editor
+and a concrete expected outcome. Tests that are not REPuLse-Lisp (UI, keyboard, login,
+snippets library, AI settings, CSP, export, embed, …) belong in it too, as click steps.
+Nothing that changed behaviour may be missing just because it has no snippet.
+
+Write the protocol in the user's language (German unless they invoked the skill in
+English). Snippets, message texts and built-in names stay verbatim.
+
+## Context
+
+- Fetch: !`git fetch origin --prune --quiet && echo ok`
+- dev head: !`git log -1 --format='%h %s (%cr)' origin/dev`
+- Commits on dev not on main: !`git log --oneline --no-merges origin/main..origin/dev | wc -l`
+- Merge commits in range: !`git log --merges --format='%h %s' origin/main..origin/dev`
+
+## 1. Collect what changed
+
+1. **PRs in range.** Take every PR number from the merge commits above
+   (`Merge pull request #N`) and from squash commits (`… (#N)`) in
+   `git log --format='%h %s' origin/main..origin/dev`. Ignore `Merge branch 'dev' into …`
+   sync merges. For each PR:
+   ```bash
+   gh pr view N --repo tissanr/REPuLse --json number,title,body,files,mergedAt,headRefName
+   ```
+2. **Commits without a PR** (pushed straight to dev): list them with
+   `git log --no-merges --format='%h %s' origin/main..origin/dev` and keep those not
+   covered by a PR's commits (`gh pr view N --json commits`).
+3. **Already on main?** Some fixes land on both branches through separate PRs (e.g. a
+   security fix as #175 → main and #176 → dev; `git cherry` usually misses these because
+   the patches differ). If a PR title says “(dev)” or a merged main PR has the same title
+   or touches the same lines (`gh pr list --base main --state merged`), still
+   test it (the preview runs dev), but tag the section “auch auf main”.
+4. **Classify each change** by the files it touches:
+
+   | Files | Kind of test |
+   |---|---|
+   | `packages/core`, `packages/lisp`, `app/src/repulse/env/builtins/`, `params`, `content/builtin_meta.edn` | Lisp snippet |
+   | `packages/audio`, `app/public/worklet*.js`, `audio.cljs`, `fx/` | Snippet + listen check |
+   | `app/src/repulse/ui/`, `editor.cljs`, `lisp-lang/` (grammar, completions, highlighting), `app/public/css`, `index.html` | Click/keyboard steps (+ snippet to trigger it) |
+   | `api/`, `auth`, `snippets`, `ai` | Click steps in the deployed app (needs login / AI key — say so) |
+   | `vercel.json` (CSP, headers), `embed.js`, `plugins/` | Steps + "DevTools console shows no CSP violation" |
+   | `package.json` / lockfile only (dependabot) | No own tests; covered by the smoke regressions below — list the PR under *Nicht separat getestet* |
+   | `docs/`, `PROMPTS/`, `ROADMAP.md`, `.claude/`, `.github/` only | No runtime change — list under *Nicht separat getestet* |
+
+   Read the diff (`git diff origin/main...origin/dev -- <paths>`), not just the PR
+   title: a "fix" PR often changes a message text, a keybinding or a default that needs
+   its own check.
+
+## 2. Reuse the PR test protocols
+
+Most PRs end with `## Test protocol` (CLAUDE.md Rule 5). Extract that section from each
+body and take its items over — but **check each against the current dev code**: a later
+PR in the range may have renamed a built-in, changed a message or a default, or replaced
+a demo sample. Fix or drop items that no longer hold, and note why under the item.
+Drop setup lines that refer to localhost.
+
+## 3. Fill the gaps
+
+For every change that its PR protocol does not cover (or a PR without one, or a direct
+commit), write new tests following Rule 5 in `CLAUDE.md`:
+
+- Every new or changed built-in, parameter and effect → snippet test.
+- Every new or changed error/warning message → a snippet that triggers it, with the exact
+  text taken from the code (`grep` for it), as it appears in the output line.
+- Every removed or renamed behaviour → a test showing the replacement (and the error
+  for the old form, if there is one).
+- UI/editor/API/CSP changes → numbered click steps: where to click or which keys (give
+  both Linux/Windows and macOS keys), what appears where, exact labels from the code.
+- A security fix → a concrete check that the hole is closed (e.g. a snippet tag with
+  `<img src=x onerror=alert(1)>` shows as text, no alert), never "is secure".
+
+Use only built-ins, samples, synth voices and demos that exist on `origin/dev`
+(`docs/ai/builtins.json`, `app/src/repulse/content/`).
+
+### Snippet rules (so they paste and run)
+
+- Each snippet is **self-contained**: it evaluates on its own in a fresh editor. If it
+  needs state (BPM, a track, a definition), put that in the same snippet.
+- One-liners inline in backticks; anything longer in an indented ```` ```lisp ```` block
+  under the checkbox (Markdown viewers give it a copy button).
+- Say before each test whether to **replace** the editor content (default) or append.
+- "Expected" is concrete: notes, hits per cycle, direction, seconds (default BPM 120 = 2 s
+  per cycle), exact output text, what lights up. Never "works".
+
+## 4. Always add the smoke regressions
+
+Under *Regressionen*, besides at least two regressions near each touched area:
+
+- Page load of the preview: no red errors, no CSP violations in the DevTools console.
+- `(seq :bd :sd :bd :sd)` → kick/snare alternate, 4 hits per cycle (2 s).
+- `(stop)` → playback stops cleanly.
+- `(every 4 (fast 2) (seq :bd :sd :hh :oh))` → every 4th cycle twice as fast.
+- A synth voice: `(->> (seq :c3 :e3 :g3) (synth :saw))` → 3-note arpeggio.
+- If `api/` or deps changed: login works, a snippet from the library loads into the
+  editor.
+
+## 5. Verify the snippets (skip only with `--no-verify`)
+
+Values must be real (Rule 5). Check them against **origin/dev**, not your branch:
+
+1. **Event values (TEST1 harness).** In a scratch worktree of dev:
+   ```bash
+   git worktree add --detach "$SCRATCH/dev-check" origin/dev
+   cd "$SCRATCH/dev-check" && npm install
+   ```
+   Write a throwaway Playwright spec there (never commit it) that opens
+   `test-harness.html`, waits for `window.__REPULSE_TEST_READY__`, and for each snippet
+   calls `window.__REPULSE_TEST__.evalToEvents(code, cycles)`; run it with
+   `npx playwright test <spec>` (the config builds the harness). Copy note names, hit
+   counts and parameter values from its output into "Expected". Remove the worktree
+   afterwards (`git worktree remove --force`).
+2. **Eval check on the real deployment.** Find the preview of the dev head:
+   ```bash
+   SHA=$(git rev-parse origin/dev)
+   ID=$(gh api "repos/tissanr/REPuLse/deployments?sha=$SHA" -q '.[0].id')
+   gh api "repos/tissanr/REPuLse/deployments/$ID/statuses" -q '.[0] | .state, .environment_url'
+   ```
+   If the state is not `success` yet, say so in the header and use the newest successful
+   deployment of an older dev SHA, naming which commits it lacks. Open the URL in the
+   browser pane (the user may need to sign in to Vercel there), then for each snippet set
+   the editor content via `window.__REPULSE_EDITOR__` (a CodeMirror `EditorView`:
+   `view.dispatch({changes:{from:0,to:view.state.doc.length,insert:code}})`), press
+   Alt+Enter, read `#output` (class `output error` = failure), and evaluate `(stop)`
+   after it. A snippet that is meant to error must show exactly the expected text; any
+   other snippet must not error.
+
+If a check fails, the snippet or expectation is wrong (fix it) **or dev has a bug**: keep
+the test, mark it `⚠️ schlägt auf dev fehl:` with what you saw, and list it in the
+summary. Do not silently drop it.
+
+## 6. Write the file
+
+Path: `.claude/test-protocols/dev-<YYYY-MM-DD>-<short-sha>.md` (gitignored). Structure:
+
+````markdown
+# Testprotokoll dev @ <short-sha> — <date>
+
+Preview: <deployment URL> (dev @ <sha>, Deployment <state>)
+Umfang: `origin/main..origin/dev` — <n> PRs, <m> Commits. Verifiziert: Harness ✅ / Deployment ✅ (or why not)
+
+Setup: Preview öffnen, Kopfhörer auf, warten bis die Samples geladen sind.
+Jedes Snippet in den Editor kopieren (Inhalt ersetzen) und mit Alt+Enter
+(macOS Option+Enter) auswerten; zwischen den Tests `(stop)`.
+
+## <PR #N — title> (link)
+### Neue Features
+- [ ] **1. chop.** `(chop 8 (sound :breaks152 0))`
+  Erwartet: …
+### Warnungen und Fehler
+### Ohne Code (UI, Tastatur, Login, …)
+- [ ] **7. Kommentar umschalten.** Zeile markieren, Ctrl+Shift+7 (macOS Cmd+Shift+7).
+  Erwartet: Zeile beginnt mit `;; `, zweites Drücken entfernt es.
+
+## Regressionen
+## Nicht separat getestet
+- #173 chore(deps): … — nur Abhängigkeiten, durch Regressionen abgedeckt
+- #177 docs: … — keine Laufzeitänderung
+## Bekannte Probleme / ⚠️ auf dev fehlgeschlagen
+````
+
+Number the tests continuously through the whole file so the user can report "17 fails".
+Group by PR (newest last) so a failure points at its PR; put shared regressions at the
+end.
+
+## 7. Report
+
+Tell the user, briefly: the file path (as a link), the preview URL, how many tests (with
+snippet / without code), which PRs had no own protocol, and any ⚠️ failures found during
+verification. If there is an open `dev` → `main` PR
+(`gh pr list --base main --head dev --state open`), offer to put the protocol into its
+description as the `## Test protocol` section — do not edit it without a yes.

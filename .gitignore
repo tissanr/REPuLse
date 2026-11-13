@@ -50,3 +50,6 @@ gha-creds-*.json
 
 # Design 
 REPuLse-handoff-*
+
+# Generated test protocols (/test-protocol)
+.claude/test-protocols/
