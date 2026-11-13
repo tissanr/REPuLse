@@ -14,39 +14,35 @@ TL7c (filter envelope, vibrato). **Part C is blocked until both have landed.** T
 still an outline; Part C names exactly what it needs from it (see "Part C — what it
 needs from TL7a and TL7c"). Coordinates with KIT1 (recorded kits) and SYN4 (`tone`).
 
-## Questions for the owner
+## Owner decisions (confirmed 2026-11-14)
 
-The spec is complete without these answers: each has a default that the implementer
-follows unless the owner says otherwise before implementation starts. They are listed
-because they change existing behaviour or a name the outline used.
+These five points change existing behaviour or a name the outline used. The owner
+confirmed them on 2026-11-14; they are not open.
 
-1. **`:synth_bd` naming (unconfirmed in the outline).** Default: a single synthesized
-   hit inside a sampled kit is written `:synth_bd`, `:synth_cp`, … — the name
-   `(bank :synth)` would produce through the existing prefix mechanism. Alternative:
-   no single-hit syntax at all (only `(bank :synth)`).
-2. **`sub` is already taken.** `sub` is the TL1 arithmetic function
-   (`(sub [mode] amt pat)`, grammar line 43, `completions.js` line 101). The outline's
-   `(sub 0.5)` for the sub-oscillator level cannot be registered. Default: the parameter
-   is **`sub-osc`**. `ROADMAP.md` still says `sub` in the SYN6 bullets; the delivery
-   commit corrects it.
-3. **Two kicks for one name.** The outline forbids changing what bare `:bd :sd :hh :oh`
-   play when no synth bank is selected. Default: the four legacy engine voices stay
-   bit-identical as the no-sample fallback, and the new kit is reached through
+1. **`:synth_bd` naming.** A single synthesized hit inside a sampled kit is written
+   `:synth_bd`, `:synth_cp`, … — the name `(bank :synth)` would produce through the
+   existing prefix mechanism.
+2. **The sub-oscillator parameter is `sub-osc`.** `sub` is the TL1 arithmetic function
+   (`(sub [mode] amt pat)`, grammar line 43, `completions.js` line 101), so the
+   outline's `(sub 0.5)` cannot be registered. `ROADMAP.md` still says `sub` in the
+   SYN6 bullets; the delivery commit corrects it.
+3. **Two kicks for one name.** The four legacy engine voices stay bit-identical as the
+   no-sample fallback for bare `:bd :sd :hh :oh`, and the new kit is reached through
    `(bank :synth)` / `:synth_*`. Consequence: without samples, `(seq :bd)` and
-   `(bank :synth) (seq :bd)` sound different. Alternative: retire the legacy voices and
-   let the fallback use the new kit (changes the fallback sound and the EXP1 e2e
-   baselines in `e2e/export-parity.spec.ts`).
+   `(bank :synth) (seq :bd)` sound different. Retiring the legacy voices was the
+   alternative; it would change the fallback sound and the EXP1 e2e baselines in
+   `e2e/export-parity.spec.ts`.
 4. **`(synth :noise pat)` is fixed.** Today it never plays noise: a note event plays a
    sine at that pitch and a rest stays silent (the `:noise` branch of `play-event` is
    only reached by the map `(noise)` returns). USAGE.md's example
-   `(->> (seq :_ :_ :_ :_) (synth :noise))` is therefore silent. Default: every non-rest
-   event plays noise, rests stay rests, and the USAGE example is rewritten.
-5. **Editor highlighting of common names.** Rule 3 registration puts `pad`, `lead`,
-   `strings`, `reed`, `pluck`, `acid` into the grammar's `BuiltinName`, so a user symbol
-   of the same name (`(def pad …)`) is highlighted as a built-in, as `bell`, `harp` and
-   `flute` are today. Evaluation is unaffected. Default: follow Rule 3 unchanged.
+   `(->> (seq :_ :_ :_ :_) (synth :noise))` is therefore silent. After the phase every
+   non-rest event plays noise, rests stay rests, and the USAGE example is rewritten.
+5. **Editor highlighting of common names.** Rule 3 is followed unchanged: `pad`,
+   `lead`, `strings`, `reed`, `pluck`, `acid` go into the grammar's `BuiltinName`, so a
+   user symbol of the same name (`(def pad …)`) is highlighted as a built-in, as
+   `bell`, `harp` and `flute` are today. Evaluation is unaffected.
 
-Not a question, but the owner should know: on a track with its own `(fx …)` chain every
+A known limit, not a decision: on a track with its own `(fx …)` chain every
 WASM voice plays through its JS fallback (EXP1 decision E1, USAGE.md "WASM synths on a
 track with its own `(fx …)`"). That holds for the SYN6 voices too. The JS fallbacks
 below are therefore real approximations, not placeholders, but hard sync, PWM movement,
@@ -586,7 +582,7 @@ JS fallback, native nodes only:
 - `make-saw` and `make-square` become thin callers of `make-osc` or are removed.
 - Noise: `(= synth :noise)` becomes a case of the parameter-map branch, **before** the
   note dispatch, so `(synth :noise pat)` plays noise for every non-rest event
-  (question 4). `make-noise` takes the colour and fills its buffer with the formula
+  (owner decision 4). `make-noise` takes the colour and fills its buffer with the formula
   from A7 (it already fills a buffer in a loop; `Math.random` stays). The existing
   branch for `{:synth :noise}` without `:note` (605) calls the same code. `(noise)`
   accepts the options too: `(noise :color :pink)`.
@@ -616,7 +612,7 @@ Rules, in this order:
 3. Otherwise as today: `resolved = (samples/resolve-keyword kw)`; if
    `(has-bank? resolved)` → `:sample resolved`.
 4. No sample: the name is `bd`, `sd`, `hh` or `oh` → `:legacy-drum` (strings `"bd"` …,
-   unchanged sound, question 3). Another of the 18 names → `:synth-drum`. Anything
+   unchanged sound, owner decision 3). Another of the 18 names → `:synth-drum`. Anything
    else → `:unknown`.
 
 `play-event` uses `drum-route` in both keyword paths (551–567 and 589–602).
@@ -942,7 +938,7 @@ tests" rule the automatic test is "non-silent" only; the character is a listen i
   "Built-in synthesis fallback": the 18 voices, `(bank :synth)`, `:synth_bd`, `tune`,
   `tone`, `decay`, choke, the legacy fallback) and "Synth instruments" (one example
   per voice, the preset table, the override rule, `glide`, `accent`, `lp-rate`). The
-  noise example on line 2140 is rewritten (question 4). The E1 note (1558) says which
+  noise example on line 2140 is rewritten (owner decision 4). The E1 note (1558) says which
   SYN6 features are WASM-only.
 - `docs/STRUDEL-PARITY.md`: row 414 → ✅ SYN6 with the REPuLse names; row 478
   (`fastspread` / `spread`) notes that the name `spread` is taken by the stereo width.
@@ -1354,7 +1350,7 @@ snippet with Alt+Enter (macOS Option+Enter); stop playback between tests.
 - Don't touch the `defsynth` UGens; they already use band-limited native oscillators.
 - Don't make the pattern engine stateful for glide; the state lives in the scheduler.
 - Don't change what bare `:bd :sd :hh :oh` play when no synth bank is selected
-  (question 3 may lift this).
+  (owner decision 3).
 - Don't port the drum models or hard sync to JavaScript, and don't route the worklet
   through per-track FX here (EXP1 decision E1 has its own follow-up phase).
 - Don't add `trigger_v3` slots in parts A, B or D.
