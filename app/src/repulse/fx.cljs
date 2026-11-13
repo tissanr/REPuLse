@@ -5,6 +5,13 @@
 ;; Ordered vector of {:name "reverb" :plugin js-obj :input node :output node}
 (defonce chain (atom []))
 
+;; Phase EXP1 (decision E6): effect-name → [[param value] …], the set-param!
+;; calls of the current evaluation in order. Replayed by the offline export after
+;; getParams, because some plugins (bitcrusher, dattorro-reverb) only report
+;; {wet}. Kept beside the chain entries (not in them) so chain entries keep
+;; their documented shape.
+(defonce param-log (atom {}))
+
 (defn validate-effect-nodes!
   [effect-name nodes]
   (when-not (specs/effect-nodes? nodes)
@@ -53,11 +60,13 @@
   (when-let [entry (some #(when (= effect-name (:name %)) %) @chain)]
     (.destroy ^js (:plugin entry))
     (swap! chain #(filterv (fn [e] (not= effect-name (:name e))) %))
+    (swap! param-log dissoc effect-name)
     (rewire!)))
 
 (defn set-param! [effect-name param-name value]
   (when (some #(= effect-name (:name %)) @chain)
     (swap! chain (fn [c] (mapv #(if (= effect-name (:name %)) (assoc % :active? true) %) c)))
+    (swap! param-log update effect-name (fnil conj []) [param-name value])
     (when-let [entry (some #(when (= effect-name (:name %)) %) @chain)]
       (.setParam ^js (:plugin entry) param-name value))))
 
@@ -69,6 +78,7 @@
   (doseq [{:keys [plugin]} @chain]
     (when (and plugin (fn? (.-resetParams ^js plugin)))
       (.resetParams ^js plugin)))
+  (reset! param-log {})
   (swap! chain (fn [c] (mapv #(assoc % :active? false :bypassed? false) c))))
 
 (defn bypass! [effect-name enabled]
@@ -96,20 +106,26 @@
             (.connect (:output a) (:input b)))
           (.connect (:output (last effects)) master))))))
 
+(defn instantiate-plugin
+  "Fresh instance of a registered effect plugin (EXP1 decision 2, shared by
+   per-track FX and the offline export): clone() when present, else
+   Object.create + Object.assign."
+  [^js p]
+  ;; Prefer a plugin-provided clone() factory (needed for CLJS plugins
+  ;; whose state lives in a closure atom rather than on `this`).
+  ;; Fall back to Object.create/assign for plain JS object plugins.
+  (if (fn? (.-clone p))
+    (.clone p)
+    (let [o (js/Object.create (js/Object.getPrototypeOf p))]
+      (js/Object.assign o p)
+      o)))
+
 (defn add-track-effect!
   "Instantiate an effect plugin on a specific track by re-using a registered plugin."
   [track-name effect-name]
   (when-let [entry (some #(when (= effect-name (:name %)) %) @chain)]
     (let [ac     (audio/get-ctx)
-          ^js p  (:plugin entry)
-          ;; Prefer a plugin-provided clone() factory (needed for CLJS plugins
-          ;; whose state lives in a closure atom rather than on `this`).
-          ;; Fall back to Object.create/assign for plain JS object plugins.
-          ^js fresh (if (fn? (.-clone p))
-                      (.clone p)
-                      (let [o (js/Object.create (js/Object.getPrototypeOf p))]
-                        (js/Object.assign o p)
-                        o))
+          ^js fresh (instantiate-plugin (:plugin entry))
           nodes  (validate-effect-nodes! effect-name (.createNodes fresh ac))]
       (swap! audio/track-nodes update-in [track-name :fx-chain]
              conj (dissoc (make-effect-entry effect-name fresh nodes) :active?))
@@ -155,17 +171,20 @@
     (and (map? value) (:synth value)) (cljs.core/name (:synth value))
     :else nil))
 
+(defn notify-plugins!
+  "Call onEvent(name, t) on every plugin in plugins that implements it."
+  [plugins value t]
+  (when-let [evt (event-name value)]
+    (doseq [^js plugin plugins]
+      (when (and plugin (.-onEvent plugin))
+        (try (.onEvent plugin evt t) (catch :default _))))))
+
 (defn notify-fx-event!
   "Notify all plugins (global and per-track) that implement onEvent of a fired event.
    Called via :on-fx-event in the scheduler — fx → audio dependency is one-way."
   [value t]
-  (when-let [evt (event-name value)]
-    ;; Global effects
-    (doseq [{:keys [plugin]} @chain]
-      (when (.-onEvent ^js plugin)
-        (try (.onEvent ^js plugin evt t) (catch :default _))))
-    ;; Per-track effects
-    (doseq [[_ {:keys [fx-chain]}] @audio/track-nodes]
-      (doseq [{:keys [plugin]} fx-chain]
-        (when (.-onEvent ^js plugin)
-          (try (.onEvent ^js plugin evt t) (catch :default _)))))))
+  (notify-plugins! (concat (map :plugin @chain)
+                           (for [[_ {:keys [fx-chain]}] @audio/track-nodes
+                                 {:keys [plugin]} fx-chain]
+                             plugin))
+                   value t))

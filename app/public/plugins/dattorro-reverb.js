@@ -30,7 +30,9 @@ export default {
     this._wet.connect(this._out);
 
     // Wire the worklet when its module has finished loading
-    this._ready
+    // _wired resolves once the worklet node is connected (rejects when the
+    // module failed to load); ready() exposes it to the offline export (EXP1).
+    this._wired = this._ready
       .then(() => {
         this._worklet = new AudioWorkletNode(ctx, "dattorro-reverb", {
           numberOfInputs:    1,
@@ -44,11 +46,17 @@ export default {
           this._worklet.port.postMessage({ type: "setParam", name, value });
         }
         this._pending = null;
-      })
-      .catch(e => console.warn("[REPuLse] dattorro-reverb worklet failed to load:", e));
+      });
+    this._wired.catch(e => console.warn("[REPuLse] dattorro-reverb worklet failed to load:", e));
 
     this._pending = {};
     return { inputNode: this._input, outputNode: this._out };
+  },
+
+  // Optional protocol method: resolves when the nodes from the last
+  // createNodes() are fully wired, rejects when wiring failed.
+  ready() {
+    return this._wired ?? Promise.resolve();
   },
 
   setParam(name, value) {

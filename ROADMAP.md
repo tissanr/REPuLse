@@ -17,6 +17,10 @@ M1  Tidal-Lisp core    the pattern language: Strudel/Tidal parity, effects, drum
 Strudel parity is tracked function by function in
 [docs/STRUDEL-PARITY.md](docs/STRUDEL-PARITY.md) and is the yardstick for M1.
 
+The sound palette (which synthetic sounds and effects exist, are planned or are missing)
+is tracked in [docs/SYNTHESIS-COVERAGE.md](docs/SYNTHESIS-COVERAGE.md). SYN6 and FX1
+close the gaps a song needs; SYN7 and FX2 hold the rest and are deferred.
+
 ### Automation markers
 
 Every planned phase carries one marker saying how far it can be implemented and verified
@@ -39,19 +43,22 @@ without a human:
 | 4 | TL3b | Zoom, compress & structure extras | 🤖 | full | sonnet |
 | 5 | TL4 | Randomness & conditionals | 🤖 | full | sonnet |
 | 6 | TL5 | Layering, pitch & harmony | 🤖 | full | sonnet |
-| 7 | TL6 | Sample slicing & playback control | 🤖👂 | outline | opus |
+| 6a | TL4b | Pick & fix | 🤖 | full | sonnet |
+| 7 | TL6 | Sample slicing & playback control | 🤖👂 | full | opus |
 | 8 | TL7a | Per-event filters, shape & crush | 🤖👂 | full | opus |
 | 8b | TL7b | Reverb & delay sends per orbit | 🤖👂 | full | opus |
 | 8c | TL7c | Vowel, envelopes & modulators | 🤖👂 | outline | opus |
 | 9 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
+| 9a | SYN6 | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | outline | opus |
+| 9b | FX1 | Mixing, space & modulation effects | 🤖👂 | outline | sonnet |
 | **M2** | | **Full songs** | | | |
 | 10 | SONG1 | Sections, song form & full-song render | 🤖 | full | opus |
 | 11 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
 | 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | full | sonnet |
-| 13 | SONG4 | Multi-buffer projects | 🤖 | outline | opus |
-| 13a | WS1 | Inspector column & status head (retire context panel) | 🤖 | outline | opus |
-| 13b | WS2 | `(master …)` form & master fx outline group | 🤖 | outline | sonnet |
-| 13c | WS3 | Inline sliders in code: `(slider v min max)` | 🤖 | outline | opus |
+| 13 | SONG4 | Multi-buffer projects | 🤖 | full | opus |
+| 13a | WS1 | Inspector column & status head (retire context panel) | 🤖 | full | opus |
+| 13b | WS2 | `(master …)` form & master fx outline group | 🤖 | full | sonnet |
+| 13c | WS3 | Inline sliders in code: `(slider v min max)` | 🤖 | full | opus |
 | 13d | WS4 | AI assistant rail | 🤖 | outline | sonnet |
 | **M3** | | **Plays with others** | | | |
 | 14 | N1 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
@@ -59,8 +66,8 @@ without a human:
 | 16 | LIVE2 | Latency compensation, nudge & per-track outputs | 🧑 | outline | sonnet |
 | **M4** | | **Sketchpad** | | | |
 | 17 | EXP1 | Export parity: offline render with WASM voices & FX | 🤖 | outline | opus |
-| 18 | SK1 | Stem export & full-song MIDI export | 🤖 | outline | sonnet |
-| 19 | SK2 | Session snapshots & eval history | 🤖 | outline | sonnet |
+| 18 | SK1 | Stem export & full-song MIDI export | 🤖 | full | sonnet |
+| 19 | SK2 | Session snapshots & eval history | 🤖 | full | sonnet |
 | 20 | SK3 | MIDI capture 1: click, fixed grid, velocity → code | 🤖👂 | outline | sonnet |
 | 21 | SK4 | MIDI capture 2: always-on capture | 🤖👂 | outline | sonnet |
 | 22 | SK5 | MIDI capture 3: grid & feel detection | 🤖👂 | outline | opus |
@@ -77,10 +84,21 @@ outline into a full spec (exact code paths, step-by-step implementation, files t
 before implementing it. Dependencies are listed at the top of each spec.
 
 **Side track** (not on the critical path, can run any time): DOC1, TEST2, UI1, R3,
-PLUG1, O2.
+PLUG1, O2, PL1 (🧑, development tooling; the auto-phase pipeline never picks it).
 
 **Deferred** (⏸, outside the four milestones; revisit after M2): AI4b, AI5,
-SYN3, SYN4, SYN5, P2, O3, O4.
+SYN3, SYN4, SYN5, SYN7, FX2, P2, O3, O4.
+
+**Sound palette** (added 2026-11-13): four large phases instead of many small ones. The
+dividing line is the one that deferred SYN3–SYN5: *does a song need it?* **SYN6** (clean
+oscillators, a synth drum kit, the standard synth instruments) and **FX1** (EQ, limiter,
+controllable reverb and delay, modulation and stereo effects) are the sound side track
+of M1, like KIT1; they don't block M2–M4. **SYN7** (more acoustic instruments, mallets,
+organ, choir, sound-effect generators) and **FX2** (filter models, tape and vinyl
+colour, pitch and time effects, vocoder) are deferred with SYN3–SYN5: samples cover
+those roles, and each one costs a human listen. All four are 🤖👂, so the unattended
+pipeline skips them. SYN6 parts A, B and D and all of FX1 have no dependencies; SYN6
+part C (synth instruments) needs TL7a and TL7c.
 
 ---
 
@@ -960,6 +978,40 @@ See full spec: [PROMPTS/PHASE-DST6.md](PROMPTS/PHASE-DST6.md)
 
 ---
 
+## Phase FX1 — Mixing, Space & Modulation Effects 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+
+Every effect a finished song needs, in one phase: mixing tools, a controllable reverb and
+delay, and the missing modulation and stereo effects. All are track-level plugins.
+
+**Key additions:**
+- Mixing: `eq` (shelves + two peaking bands), `limiter` (true output ceiling; the engine hard-clips at ±1 today), `gate`; shelving, peaking and all-pass types plus `gain` on `filter`
+- Space: `(fx :reverb :type :room|:hall|:plate|:spring|:gated|:reverse :decay … :size … :damp … :predelay …)` via impulse-response generators (today `reverb` has only `wet`); `(fx :delay :sync 3/16 :mode :ping-pong …)`, multi-tap, filters in the feedback path
+- Modulation & stereo: `flanger`, `vibrato`, `auto-pan`, `ring-mod`, `width`
+- All effects work per track and in offline export; acceptance by offline-render measurements plus a human listen
+
+See full spec: [PROMPTS/PHASE-FX1.md](PROMPTS/PHASE-FX1.md)
+
+---
+
+## Phase FX2 — Character, Filter Models & Pitch/Time Effects ⏸ *deferred*
+
+> **Deferred (2026-11-13):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
+
+Effects that add colour or change audio that is already playing. A song can be written
+and mixed without them; most need hand-written worklets and a human listen.
+
+**Key additions:**
+- Filter models: `ladder` (24 dB/oct, self-oscillating), `comb`, `resonator`, `auto-wah`
+- Colour & dynamics: `fold` (wavefolder), `exciter`, `tape`, `vinyl`, tape mode on `delay`, `rotary`, `transient`, `multiband`
+- Pitch: `pitch-shift`, `octaver`, `harmonizer`, `freq-shift`, `shimmer`
+- Buffer & time: `freeze`, `stutter`, `reverse`, `grain`; `vocoder` (may need P2 routing)
+
+See full spec: [PROMPTS/PHASE-FX2.md](PROMPTS/PHASE-FX2.md)
+
+---
+
 ## Phase SYN1 — Karplus-Strong Plucked String ✅ *delivered*
 
 Add a Karplus-Strong delay-line voice to the WASM engine, giving REPuLse its first
@@ -1080,6 +1132,39 @@ transient, warm sustain — without attempting full physical accuracy. Depends o
   deferred to `docs/FUTURE-FEATURES.md`
 
 See full spec: [PROMPTS/PHASE-SYN5.md](PROMPTS/PHASE-SYN5.md)
+
+---
+
+## Phase SYN6 — Synth Essentials: Oscillators, Drum Kit & Synth Instruments 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+
+Everything a song needs from the built-in synthesizer, in one phase.
+
+**Key additions:**
+- Oscillator core: band-limited (PolyBLEP) saw, pulse and triangle in the WASM engine (the current ones alias on high notes, and a filter cannot remove that); voices `:tri` `:sine` `:pulse` `:supersaw`; `unison`, `detune`, `spread`, `sub`, PWM, hard sync; `(synth :noise :color :pink|:brown|:dust|:lfsr)`
+- Synth drum kit as its own bank: `(bank :synth)` selects it even when sample banks are loaded; voices `:bd :sd :hh :oh :cp :rim :lt :mt :ht :cb :cl :cr :rd :sh :tb :cg`, tunable with `tune`, `tone`, `decay`; hat choke
+- Synth instruments (after TL7a and TL7c): `:acid` `:reese` `:sub-bass` `:fm-bass` `:wobble` `:lead` `:sync-lead` `:pluck` `:theremin` `:reed` `:pad` `:strings` `:sweep-pad` `:brass-pad`; `(glide secs pat)`; explicit parameters override preset values
+- Housekeeping: warning for unknown `(synth :name)` voices (today they play a plain sine without a message), `:trumpet-cup` (documented, not implemented), one shared voice list
+
+See full spec: [PROMPTS/PHASE-SYN6.md](PROMPTS/PHASE-SYN6.md)
+
+---
+
+## Phase SYN7 — Instrument Library: Presets, Mallets, Organ, Voices & Sound Effects ⏸ *deferred*
+
+> **Deferred (2026-11-13):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2, together with SYN3–SYN5.
+
+The wider instrument palette. Samples and the SYN6 instruments cover these roles until
+then; every instrument here costs a human listen loop.
+
+**Key additions:**
+- FM and Karplus-Strong presets: `:clarinet` `:oboe` `:bassoon` `:horn` `:tuba` `:pan-flute` `:recorder` `:whistle` `:celesta` `:music-box`; `:bass-guitar` `:upright` `:banjo` `:ukulele` `:harpsichord` `:clav` `:shamisen` `:oud` `:dulcimer`
+- `Voice::Modal`: `:vibes` `:glock` `:xylophone` `:kalimba` `:steel-drum` `:tubular` `:glass` `:gong` `:timpani` `:tabla`; `Voice::Additive`: `(synth :organ :drawbars "888000000")`, `:pipe-organ`
+- Formant voice: `:vox`, `:choir` with a patternable `vowel`
+- Sound-effect generators: `:riser` `:downer` `:sweep` `:siren` (they last as long as their event), `:impact` `:blip` `:dial`, textures `:wind` `:rain` `:surf` `:crackle`
+
+See full spec: [PROMPTS/PHASE-SYN7.md](PROMPTS/PHASE-SYN7.md)
 
 ---
 
@@ -1383,6 +1468,30 @@ specs were kept out of HRD3 and should receive a separate follow-up hardening pa
   validation. AI tool-call specs remain out of HRD3 scope per the phase prompt.
 
 See full spec: [PROMPTS/PHASE-HRD3.md](PROMPTS/PHASE-HRD3.md)
+
+---
+
+## Phase PL1 — Pipeline Run Journal & Manual Retro 📋 *planned*
+
+> **Side track** (development tooling, no milestone) · **Automation:** 🧑 human-in-loop.
+> It rewrites the pipeline's own instructions, and acceptance needs the owner to run `/retro`.
+
+Stage 1 of a learning pipeline. Every auto-phase run records what happened, and a manual
+retro turns the records plus post-merge fixes into evidence-backed learning candidates.
+Nothing is applied automatically.
+
+**Key additions:**
+- Run journal `.pipeline/runs/<PHASE>.json` (schema v1: entry, outcome, attempts with
+  failure category, models, usage deltas), appended via `scripts/pipeline/journal.mjs`
+  in a new `auto-phase.md` step 8b. Idle exits are logged to `.git/auto-phase-runs.jsonl`.
+- `scripts/pipeline/metrics.mjs`: first-pass rate, attempts, recoveries, lead time, usage
+  per phase, review coverage, and post-merge fix attribution (fix PR → phase via shared
+  source files + `git blame` confidence)
+- One-off backfill of the 17 merged auto-phase PRs (#127–#164)
+- `/retro` command (`.claude/commands/retro.md`): writes `.pipeline/retros/<date>.md` with
+  metrics, fix candidates and ≤ 5 learning candidates for the owner to confirm
+
+See full spec: [PROMPTS/PHASE-PL1.md](PROMPTS/PHASE-PL1.md)
 
 ---
 
@@ -1953,16 +2062,32 @@ See full spec: [PROMPTS/PHASE-TL4.md](PROMPTS/PHASE-TL4.md)
 
 ---
 
-## Phase TL4b — Pick & Fix 📋 *planned*
+## Phase TL4b — Pick & Fix ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖 auto
 
 The selection and matching functions deferred from TL4.
 
 **Key additions:**
-- `pick pick-mod pick-f pick-out pick-restart pick-reset inhabit` — choose patterns or
-  functions from a lookup by an index/name pattern
-- Tidal `fix` — apply a function to events matching control values
+- `pick pick-mod pick-f pick-mod-f pick-out pick-mod-out pick-restart pick-mod-restart
+  pick-reset pick-mod-reset inhabit inhabit-mod` — choose patterns or functions from a vector
+  (by index) or map (by name) under an index pattern
+- `fix` — Tidal `fix`: apply a function to events matching a control map (AND, any-of, derived `:s`)
+
+**Delivered:**
+- `packages/core/src/repulse/core.cljs` — new `restart-join` and `reset-join` (Strudel
+  `resetJoin`) and the TL4b pick block: `pick pick-mod pick-out pick-mod-out pick-restart
+  pick-mod-restart pick-reset pick-mod-reset inhabit inhabit-mod pick-f pick-mod-f`
+  (vector clamped or wrapped, map by name; each variant differs only in its join)
+- `packages/core/src/repulse/params.cljs` — `fix` and `controls-match?`: numeric `==`, exact
+  keywords/strings, any-of vectors, derived `:s` from `:bank` or a non-note `:note`
+- Lisp — new `builtins/pick.cljs` (13 built-ins, curried forms for `->>`, string entries as
+  mini-notation, rational-literal vs any-of handling for `fix`, errors E1–E3)
+- Rule 3/5 artefacts: grammar + `parser.js`, `completions.js`, `hover.js`,
+  `builtin_meta.edn`, `docs/ai/builtins.json`; USAGE "Pick" and "`fix`" subsections,
+  STRUDEL-PARITY rows and summary
+- Tests: every spec vector in `core_test`/`params_test`/`integration_test`,
+  `tl4b-documented-examples-evaluate`, four Playwright onset-count tests
 
 See full spec: [PROMPTS/PHASE-TL4b.md](PROMPTS/PHASE-TL4b.md)
 
@@ -2001,15 +2126,31 @@ See full spec: [PROMPTS/PHASE-TL5.md](PROMPTS/PHASE-TL5.md)
 
 ---
 
-## Phase TL6 — Sample Slicing & Playback Control 📋 *planned*
+## Phase TL6 — Sample Slicing & Playback Control ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
 Cut, rearrange and fit samples, the core of breakbeat live coding.
 
 **Key additions:**
-- `chop striate slice splice fit loop-at legato clip n speed unit`
+- `chop striate slice splice fit loop-at legato sustain speed unit accelerate loop-begin loop-end`
 - `cut` choke groups in the playback path (identical in offline render)
+
+**Delivered:**
+- 14 built-ins in `repulse.params`: `chop`, `striate`, `slice`, `splice`, `fit`, `loop-at`
+  (pattern level, patterned `n`/indices) and the params `speed` (alias of `rate`), `unit`,
+  `accelerate`, `legato`, `sustain`, `cut`, `loop-begin`, `loop-end`
+- Pure `samples/playback-plan` (unit `:c` = rate × sample ÷ cycle length, reverse via a
+  cached reversed buffer, legato/sustain stop with 5 ms fade, loop region, accelerate glide)
+  and `samples/cut-plan`; choke groups per audio context, order-independent
+- `audio/play-event` takes `{:dur :cycle-dur}`; scheduler, EXP1 export and TEST1 harness pass
+  it, so live playback and offline render behave the same. Looped samples now stop at the
+  event end instead of looping forever
+- Tests: params/integration/samples unit tests and `e2e/sample-slicing.spec.ts` (onsets ±1 ms,
+  slice order, splice/loop-at speed, reverse, legato, cut truncation) on synthetic buffers
+- `(sound …)` calls now carry their source position, so the editor highlights the sample
+  while it plays, also through `chop`, `slice`, `speed` and other wrappers
+- Human listen check passed (PR #167 protocol items 13–14: chopped break and rearranged break)
 
 See full spec: [PROMPTS/PHASE-TL6.md](PROMPTS/PHASE-TL6.md)
 
@@ -2164,7 +2305,7 @@ See full spec: [PROMPTS/PHASE-SONG3.md](PROMPTS/PHASE-SONG3.md)
 
 ---
 
-## Phase SONG4 — Multi-Buffer Projects 📋 *planned*
+## Phase SONG4 — Multi-Buffer Projects ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2175,11 +2316,30 @@ Projects with several named buffers; a one-file song is a project with only `mai
 - Project-wide duplicate-track check and buffer-aware error locations
 - Session schema v3 with migration from v2; outline/go-to-definition across buffers
 
+**Delivered:**
+- `(use :buffer …)`: depth-first, argument-order evaluation of other buffers in one shared
+  environment, each buffer at most once per evaluation; cycle, unknown-buffer (with typo hint)
+  and argument errors; only active inside a project evaluation (`repulse.project-eval`)
+- Global source offsets: `eval-string` takes `{:offset n}` (reader `shift-sources`); each buffer
+  gets an offset base so errors, event highlights and the project-wide duplicate-track check
+  (`already defined in buffer :drums`) map back to the right buffer; an error in a used buffer
+  switches to its tab and shows `Error in :drums: …`
+- `repulse.project` (pure model: add/rename/remove/switch, offset bases, `.repulse` EDN
+  export/import with exact validation errors) and `repulse.ui.buffers` (one `EditorView`, one
+  `EditorState` per buffer, tab bar with `+`, rename on double-click, `×`, export/import);
+  Alt+Enter, the play button and slider re-evaluation evaluate the project from `main`
+- Session v3 (`:main :active :buffers`) with v2/legacy migration; `#v3:` share links (`#v2:`/`#v1:`
+  still load) with a 64 000-character limit and a clear error instead of a broken link
+- Cross-buffer go-to-definition (`outline/project-definition`); the jump stack stores
+  `{:buffer :pos}` so Shift+F12 switches back
+- Tests: lisp L1–L3, `project_test` P1–P7, `project_eval_test` E1–E8, session S1–S5, outline
+  O1, Playwright `e2e/buffers.spec.ts` W1–W8; docs: USAGE "Projects & buffers"
+
 See full spec: [PROMPTS/PHASE-SONG4.md](PROMPTS/PHASE-SONG4.md)
 
 ---
 
-## Phase WS1 — Inspector Column & Status Head 📋 *planned*
+## Phase WS1 — Inspector Column & Status Head ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2190,11 +2350,34 @@ The workspace from Claude Design's *Outline Panel v2*: the right context panel g
 - Inspector column (only open while something is selected): track params + fx chain, section, def preview
 - Click selects + highlights instead of moving the cursor; ⇧-click multi-selects tracks; Esc closes
 
+**Delivered:**
+- The right context panel is gone (`repulse.ui.context-panel` deleted): status → status head,
+  TRACKS → track inspector, FX → the outline's `fx` group, MIDI / buses / sources → a collapsible
+  `session` block above the outline footer (`repulse:outline-session-open`), BINDINGS dropped
+- `repulse.ui.status-head`: editable BPM (Enter/blur commit, Esc cancel, 40–300 integers only,
+  ↑↓ ±1 / ⇧↑↓ ±10 via `audio/set-bpm!`), bank + `wasm`/`js` badges, a song progress bar with one
+  segment per section (click = `song-transport/cue-bar!`, next-bar cue), `latency x.x ms` or the
+  REC text; no cpu figure
+- `repulse.ui.inspector` (220 px, resizable 180–380 px, `repulse:inspector-width`): track (M/S,
+  `live`/`muted`/`solo`/`rests in :x`, param sliders, fx chain), multi-track, section (bar strip,
+  `▶ cue`, tracks with M/S + amp), def/defn/synth (`highlightCode` preview + `Used by …`) and fx
+  blocks; custom pointer/keyboard sliders (⇧ = 10× finer / ten steps) through the existing
+  `*-patch-and-eval!` write-back
+- Selection model: `data-id` rows (`track::bass`, `section:1`, `fx`, `fx:0`, …), click / ⇧-click /
+  Esc / F12 via a `Prec.highest` keymap that falls through when nothing is selected; the cursor
+  never moves on click; `repulse.ui.selection-highlight` tints the selected lines and adds a gutter
+  bar; `repulse.outline` gains the `:fx` kind, `:refs` and `used-by`
+- One undo step per drag: `eval-orchestrator/begin-slider-drag!` / `end-slider-drag!` keep
+  intermediate patches out of history and replay the net change as one isolated event
+- Pure, unit-tested namespaces `slider-model`, `status-model`, `selection`, `inspector-model`
+  (+ outline and `cue-bar!` tests); Playwright `e2e/workspace.spec.ts` (13 tests) and the SONG3
+  row-click test rewritten to the selection behaviour; docs: USAGE "Status head and inspector"
+
 See full spec: [PROMPTS/PHASE-WS1.md](PROMPTS/PHASE-WS1.md)
 
 ---
 
-## Phase WS2 — `(master …)` Form & Master FX Group 📋 *planned*
+## Phase WS2 — `(master …)` Form & Master FX Group ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2204,11 +2387,31 @@ Global effects get a home in the code and in the outline.
 - New built-in `master` grouping the global `(fx …)` chain; top-level `(fx …)` keeps working
 - Outline `master` group and an inspector block with write-back sliders
 
+**Delivered:**
+- `master` is a special form in `repulse.lisp.eval` (checks only the `fx` head symbol; children
+  run in source order). The app hook `:*master-fn*` (`repulse.env.builtins.fx/run-master!`)
+  allows one `master` per evaluation / project, returns `"=> master: <n> fx"` and counts loose
+  top-level `(fx …)` for a once-per-page-load console hint. Errors: non-`(fx …)` child,
+  per-track `(fx … pat)` child, second master (per buffer / per project)
+- `(song …)` followed by `(master …)` still prints the song summary
+  (`eval-orchestrator/evaluate*` reports the song registered in the run)
+- `repulse.outline` gains the `:master` kind with `:fx` children; selection ids `master` /
+  `master:<i>`; the outline lists a `master fx N` group last behind a divider; the inspector
+  shows all global effects (group) or one (child) with kind colour `#6f9bd8`
+- Slider write-back is scoped to the selected `(fx …)` form: new pure
+  `lisp-patcher/fx-form-range`, `fx-param-edit`, `fx-keyword-param-edit`; the inspector passes the
+  form offset as `data-at` (stale offsets write nothing). This also fixes WS1's loose `fx` group
+  patching a same-named per-track effect
+- Language surface: grammar `BuiltinName`, completion, hover doc, `builtin_meta.edn`,
+  `docs/ai/builtins.json`; test handle `__REPULSE_APP__.fxParam`
+- Tests: E1–E4, F1–F7, P1–P8, O1–O3, S1–S5 (CLJS, 531 total) and `e2e/master.spec.ts`;
+  docs: USAGE "master — the global chain in one block", README Effects bullet
+
 See full spec: [PROMPTS/PHASE-WS2.md](PROMPTS/PHASE-WS2.md)
 
 ---
 
-## Phase WS3 — Inline Sliders in Code 📋 *planned*
+## Phase WS3 — Inline Sliders in Code ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2218,11 +2421,36 @@ See full spec: [PROMPTS/PHASE-WS2.md](PROMPTS/PHASE-WS2.md)
 - Drag writes the value back into the code (⇧ = fine); the cursor inside shows raw text
 - ⌘K S wraps or unwraps a number, with the range guessed from the param name (log for freq)
 
+**Delivered:**
+- New built-in `slider` (`repulse.lisp.builtins.slider/make-slider-fn`): evaluates to its value
+  (a JS number, rationals accepted), clamped to `[min, max]`; optional `:log` / `:lin`; seven
+  exact eval-error texts (arity, value/min/max not a number, min ≥ max, bad scale, `:log` with
+  min ≤ 0). The app env installs a variant that records clamp warnings
+  (`repulse.env.builtins/eval-warnings`); `evaluate*` appends `Warning: …` to the output line and
+  sets warning diagnostics (kept when the unknown-sound report adds its own)
+- Editor widget `repulse.ui.inline-slider` (main app only): a `StateField` replaces each
+  well-formed single-line `(slider …)` with a 70×15 `WidgetType` bar (shadow `defclass`) unless a
+  selection touches it; drag = 140 px full range, ⇧ = 10× finer with a `×0.1` tag, log scale when
+  min > 0 and max/min ≥ 100; each move patches the value literal and re-evaluates through
+  `eval-orchestrator/inline-slider-patch-and-eval!` (150 ms debounce), one undo step per drag;
+  double-click selects the value
+- **⌘K S / Ctrl-K S** (`"Mod-k s"`) wraps the number under the cursor with a range from the param
+  name (amp 0–1, pan −1–1, decay 0–2, freq 20–20000, bpm 40–300, else 0–1, widened to include the
+  literal) or unwraps the slider under the cursor; inspector track param rows get a `≋` toggle
+  (cyan when the param is an inline slider)
+- `lisp-patcher` learns `find-slider-forms`, `slider-form-at`, `visible-sliders`,
+  `slider-toggle-edit`, and its track/fx numeric finders look through `(slider NUMBER …)`
+  (inspector and fx write-backs land in the slider's value, clamped to its range);
+  `slider-model` gains the pure inline mapping/formatting helpers
+- Language surface: grammar, completion, hover doc, `builtin_meta.edn`, `docs/ai/builtins.json`.
+  Tests: E1–E16, M1–M9, P1–P12 (CLJS) and `e2e/inline-slider.spec.ts` (11 Playwright tests);
+  docs: USAGE "Inline sliders — slider" + key row + inspector `≋`, README bullet
+
 See full spec: [PROMPTS/PHASE-WS3.md](PROMPTS/PHASE-WS3.md)
 
 ---
 
-## Phase WS4 — AI Assistant Rail 📋 *planned*
+## Phase WS4 — AI Assistant Rail ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2231,6 +2459,24 @@ The assistant moves from the editor column to a 28 px right rail with a 300 px p
 **Key additions:**
 - Rail toggle (⌘I) replaces the `ai` nav button; the open state persists
 - Working-state animation (pulsing dots, sweep on the input); the selection is sent as context
+
+**Delivered:**
+- `#ai-panel` is now a 300 px column and `#ai-rail` a 28 px button, both direct children of
+  `.app-shell` (after `.workbench`); the `ai` nav button and its CSS are gone. Open/closed is
+  stored in `localStorage["repulse:ai:panel-open"]` (`"1"`/`"0"`, default closed).
+- ⌘I / Ctrl+I: a `Prec.high` `Mod-i` keymap (`assistant-panel/extension`, added to the main editor
+  in `app.cljs`) plus a document `keydown` listener for everywhere else, toggling exactly once;
+  opening focuses `#ai-input`, closing from the panel refocuses the editor.
+- Working state: `#ai-working` (three `ai-dot-pulse` dots + "thinking"), `.ai-sweep` on the busy
+  input row, `working…` placeholder, rail `busy` dot only while the panel is closed;
+  reduced-motion disables the animations.
+- Context: new pure `repulse.ai.context` (`resolve-context`, `chip-text`, `prompt-block`) — the WS1
+  selection, else the outline entry under the cursor — shown as the `ctx …` chip (updated in
+  place via `add-watch`) and appended to the system prompt through the additive
+  `system-prompt/focus-fn` hook; source text only with "Share editor code with AI" on.
+- Tests: K1–K12 (+ master/fx) in `repulse.ai.context-test`; `e2e/ai-rail.spec.ts` (T1–T10) with a
+  mocked `/api/ai-stream` and `/api/ai-models`. Docs: USAGE "The AI rail". No providers, tool
+  calling, budgets or guard changes.
 
 See full spec: [PROMPTS/PHASE-WS4.md](PROMPTS/PHASE-WS4.md)
 
@@ -2265,7 +2511,7 @@ See full spec: [PROMPTS/PHASE-LIVE2.md](PROMPTS/PHASE-LIVE2.md)
 
 ---
 
-## Phase EXP1 — Export Parity: Offline Render with WASM Voices & FX 📋 *planned*
+## Phase EXP1 — Export Parity: Offline Render with WASM Voices & FX ✅ *delivered*
 
 > **Milestone 4** · **Automation:** 🤖 auto
 
@@ -2276,11 +2522,37 @@ Offline export that sounds exactly like playback, faster than real time.
 - Per-track and global FX chains rebuilt offline from cloned plugins and their current params, incl. plugin worklets
 - `(export n)`, `(export :track)` and `(export :song)` use it; fallback to SONG1 real-time capture, never to sines
 
+**Delivered:**
+- New `repulse.offline-render` (`fx-plan`, `render!`): an `OfflineAudioContext` at the live
+  device sample rate with a 0.25 s trimmed pre-roll, master gain → global FX chain →
+  destination, per-track FX chains → master, and the WASM worklet (`init-offline-worklet!`,
+  `sync`/`synced` message) — so FM, Karplus-Strong, saw and drum voices and every effect render
+  offline. Sample voices are awaited before rendering starts.
+- `audio/play-event` looks up a graph registered per `OfflineAudioContext` (`WeakMap`) and then
+  takes exactly the real-time branches, including the "WASM only into master gain" rule
+  (decision E1); unregistered offline contexts (TEST1 `"offline-js"` harness) are unchanged.
+  Shared helpers `export-frames`, `tween-state-for`, `rearm-tweens`, `resolve-tweens`.
+- Plugins are rebuilt like per-track FX (`fx/instantiate-plugin`), re-`init`ed with an offline
+  host, then `getParams` → `setParam` plus the `(fx …)` parameter log (`fx/param-log`); visual
+  plugins are skipped. Optional `ready()` protocol method on `bitcrusher`, `dattorro-reverb` and
+  `cab`.
+- `(export n)`, `(export :track)` and `(export :song [:tail s])` start after evaluation and
+  render offline (`… (offline)`); `(export :song … :realtime)` keeps the SONG1 capture. If the
+  offline path can't start (worklet/WASM load, buses, plugin without `getParams`), the output
+  says `offline render unavailable (<reason>) — capturing in real time instead…` and the
+  capture runs instead (a synthetic one-section song for `(export n)`).
+- Tweens are re-armed to the export's bar 0 in both paths, so exports are reproducible;
+  `export-running?` guards one export at a time.
+- Tests: `offline-render-test` + fx/song-transport unit tests; `e2e/export-parity.spec.ts`
+  (length, FM sidebands, KS harmonics, track reverb tail, master delay echo, bitcrusher /
+  dattorro worklets, offline vs real-time song within 1 dB, fallback, `:realtime`, visualisers,
+  tween reproducibility within 0.1 dB).
+
 See full spec: [PROMPTS/PHASE-EXP1.md](PROMPTS/PHASE-EXP1.md)
 
 ---
 
-## Phase SK1 — Stem Export & Full-Song MIDI Export 📋 *planned*
+## Phase SK1 — Stem Export & Full-Song MIDI Export ✅ *delivered*
 
 > **Milestone 4** · **Automation:** 🤖 auto
 
@@ -2291,11 +2563,33 @@ Hand a song to a DAW: one WAV per track and one multi-track MIDI file.
 - Stems for the full song length with identical frame counts, rendered through the EXP1 offline path (WASM voices + FX)
 - Format-1 MIDI with one track per REPuLse track, velocity, tempo and section markers; drums on channel 10
 
+**Delivered:**
+- `(export :stems [n | :tail secs])` renders every track of the song (or `n` cycles of every track)
+  to its own WAV of identical length through the EXP1 offline path and downloads
+  `repulse-stems.zip` (hand-written STORE-only zip writer `repulse.zip`, fixed timestamp,
+  4 GB guard; `repulse.download/download-parts!` replaces the inline `<a>` code). Stems carry the
+  track's own FX chain but not the master chain (`offline-render/render!` job keys `:stem` and
+  `:master? false`); event-driven plugins (sidechain) still see every track's events. No
+  real-time fallback: `Error: stems need the offline renderer — <reason>`.
+- `(export :track n)` takes a cycle count; other argument shapes are a usage error.
+- `(midi-export :song)` writes a format-1 MIDI file with one track per REPuLse track, a conductor
+  track (tempo, 4/4, section markers) and velocity from `amp`; drums map to the GM drum notes on
+  channel 10 (`:drum-map` extends/overrides; unmapped names are reported). `(midi-export :track n)`
+  uses the same encoder (`repulse.midi/midi-file`, `repulse.midi-export`).
+- Fixed `midi-export`: absolute event times (every cycle used to land on cycle 0), overlapping
+  notes/chords (negative delta times corrupted the file), exact rational-to-tick rounding, tempo
+  rounding, tracks defined in the same buffer.
+- Docs: USAGE (stems, MIDI export, GM table, DAW import walkthrough), hover/completions/AI docs.
+- Tests: `zip-test`, `midi-export-test` (song S byte vectors), export/stems/midi-export grammar in
+  `song-transport-test`, `offline-render-test` additions; `e2e/stems-midi.spec.ts` (identical
+  length, isolation by section, Σ stems = dry mix within 2.5e-4, per-track FX in / master FX out,
+  sidechain ducking, no real-time fallback, `(export :track n)`, MIDI file bytes).
+
 See full spec: [PROMPTS/PHASE-SK1.md](PROMPTS/PHASE-SK1.md)
 
 ---
 
-## Phase SK2 — Session Snapshots & Eval History 📋 *planned*
+## Phase SK2 — Session Snapshots & Eval History ✅ *delivered*
 
 > **Milestone 4** · **Automation:** 🤖 auto
 
@@ -2304,6 +2598,22 @@ Never lose an idea: every evaluation is kept, and named takes can be restored.
 **Key additions:**
 - Append-only eval history (deduplicated, bounded) with preview, restore and diff
 - Named project snapshots ("take A / take B"); restore auto-snapshots the current state
+
+**Delivered:**
+- Pure `repulse.history` store: content-addressed blobs (canonical text of the sanitized v3
+  session map, 64-bit FNV-1a hash), bounded eval history (500 entries / 20 000 000 characters,
+  identical consecutive states collapsed, oldest evicted, unreferenced blobs collected), named
+  snapshots (max 100), restore points and a line/project diff, all over a `HistoryStorage`
+  protocol (`memory-storage` for tests and as fallback)
+- Hand-written IndexedDB adapter (`repulse.history-idb`) and write-behind in-memory mirror
+  (`repulse.history-store`); history and snapshots survive reloads, `(reset!)` leaves them alone
+- `evaluate-project!` (Alt+Enter, play) records every evaluation, success or error; slider
+  re-evaluations and single-string evaluations are not recorded
+- Built-ins `snapshot!`, `snapshots`, `restore!`, `rename-snapshot!`, `delete-snapshot!`, `history`
+  and the `hist` panel: preview diff, restore, copy `#v3:` link, rename, delete, clear history,
+  show older
+- Tests: `history-test` (H1-H12 vectors) and `e2e/history.spec.ts` (recording, panel, restore,
+  snapshots, link, reload persistence)
 
 See full spec: [PROMPTS/PHASE-SK2.md](PROMPTS/PHASE-SK2.md)
 

@@ -84,6 +84,12 @@
               :examples ["(play-from :chorus)" "(play-from 12)"]
               :see-also ["song" "section" "export"]}
 
+ :use        {:category "special"
+              :returns "String"
+              :side-effects []
+              :examples ["(use :drums)" "(use :drums :bass)"]
+              :see-also ["def" "track" "song"]}
+
  ;; ── Pattern transformers ─────────────────────────────────────────────────────
  :fast       {:category "transform"
               :returns "Pattern"
@@ -353,6 +359,84 @@
   :examples ["(apply-n 2 (fast 2) (seq :a :b))" "(apply-n \"<1 2>\" (fast 2) (seq :a :b))"]
   :see-also ["every" "fast"]}
 
+ :pick {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick {:a (seq :bd :sd) :b (seq :hh :hh :hh)} \"<a b>\")" "(pick [\"bd sd\" \"hh*3\"] \"<0 1>\")"]
+  :see-also ["pick-mod" "pick-out" "inhabit" "choose-in-with"]}
+
+ :pick-mod {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-mod [(seq :bd :sd) (seq :hh :hh)] \"0 1 2\")"]
+  :see-also ["pick" "pick-mod-out" "inhabit-mod"]}
+
+ :pick-f {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-f \"<0 1>\" [(fast 2) rev] (seq :a :b))" "(pick-f \"<fast rev>\" {:fast (fast 2) :rev rev} (seq :a :b))"]
+  :see-also ["pick-mod-f" "pick" "every"]}
+
+ :pick-mod-f {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-mod-f \"<2 -1>\" [(fast 2) rev] (seq :a :b))"]
+  :see-also ["pick-f" "pick-mod"]}
+
+ :pick-out {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-out [:bd :sd :hh] \"0 1 2 1\")"]
+  :see-also ["pick" "pick-mod-out" "inhabit"]}
+
+ :pick-mod-out {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-mod-out [:bd :sd] \"0 1 2 3\")"]
+  :see-also ["pick-out" "pick-mod"]}
+
+ :pick-restart {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-restart [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")"]
+  :see-also ["pick-reset" "pick-mod-restart" "pick"]}
+
+ :pick-mod-restart {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-mod-restart [(slow 2 (seq :a :b :c :d)) :x] \"3 2\")"]
+  :see-also ["pick-restart" "pick-mod"]}
+
+ :pick-reset {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-reset [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")"]
+  :see-also ["pick-restart" "pick-mod-reset" "pick"]}
+
+ :pick-mod-reset {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(pick-mod-reset [(slow 2 (seq :a :b :c :d)) :x] \"3 2\")"]
+  :see-also ["pick-reset" "pick-mod"]}
+
+ :inhabit {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(inhabit {:a (seq :bd :sd) :b :hh} \"a b\")"]
+  :see-also ["inhabit-mod" "pick-out" "choose-in-with"]}
+
+ :inhabit-mod {:category "source"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(inhabit-mod [(seq :bd :sd) :hh] \"0 1 2\")"]
+  :see-also ["inhabit" "pick-mod"]}
+
+ :fix {:category "transform"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(fix (fast 2) {:s :bd} (seq :hh :bd))" "(fix (amp 0.3) {:s [:sd :hh]} (seq :bd :hh :sd :hh))"]
+  :see-also ["when-pat" "sometimes-by" "amp"]}
+
  :jux        {:category "transform"
               :returns "Pattern"
               :side-effects []
@@ -419,6 +503,13 @@
               :examples ["(def pluck (comp (amp 0.8) (attack 0.003) (decay 0.15)))"
                          "(def bright (comp (amp 1.0) (release 0.05)))"]
               :see-also ["->>" "amp" "decay"]}
+
+ :slider     {:category "util"
+              :returns "number"
+              :side-effects []
+              :examples ["(->> (seq :e1 :g1) (synth :saw) (amp (slider 0.7 0 1)))"
+                         "(fx :filter :freq (slider 800 20 20000))"]
+              :see-also ["amp" "tween" "range"]}
 
  :tween      {:category "transform"
               :returns "number"
@@ -599,7 +690,7 @@
               :side-effects []
               :examples ["(->> (seq :bd) (rate 2.0))"
                          "(->> (seq :hh) (rate 0.5))"]
-              :see-also ["begin" "end" "loop-sample"]}
+              :see-also ["speed" "begin" "end" "loop-sample"]}
 
  :begin      {:category "transform"
               :returns "Pattern"
@@ -621,6 +712,94 @@
                :examples ["(->> (seq :bd) (loop-sample true))"
                           "(->> (pure :bd) (loop-sample true) (decay 2.0))"]
                :see-also ["rate" "begin" "end"]}
+
+ ;; ── Sample slicing (TL6) ────────────────────────────────────────────────────
+ :chop {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(chop 8 (sound :breaks152 0))"
+                         "(->> (sound :breaks152 0) (chop \"<4 8>\"))"]
+              :see-also ["striate" "slice" "loop-at"]}
+
+ :striate {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(striate 4 (sound :breaks152 0))"]
+              :see-also ["chop" "slice"]}
+
+ :slice {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(slice 8 (seq 0 3 2 7) (sound :breaks152 0))"
+                         "(->> (sound :breaks152 0) (slice 4 \"0 2\"))"]
+              :see-also ["splice" "chop" "begin"]}
+
+ :splice {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(splice 8 (seq 0 1 6 7) (sound :breaks152 0))"]
+              :see-also ["slice" "fit" "unit"]}
+
+ :fit {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(fit (seq (sound :breaks152 0) :_))"]
+              :see-also ["loop-at" "splice" "unit"]}
+
+ :loop-at {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(loop-at 2 (chop 16 (sound :breaks152 0)))"]
+              :see-also ["fit" "chop" "unit"]}
+
+ :speed {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (sound :breaks152 0) (speed -1))"
+                         "(->> (seq :bd :sd) (speed \"1 2\"))"]
+              :see-also ["rate" "unit" "accelerate"]}
+
+ :unit {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (sound :breaks152 0) (speed 1) (unit :c))"]
+              :see-also ["speed" "loop-at" "fit"]}
+
+ :accelerate {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (sound :breaks152 0) (accelerate -0.5))"]
+              :see-also ["speed" "rate"]}
+
+ :legato {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :bd :sd) (legato 0.5))"]
+              :see-also ["sustain" "end"]}
+
+ :sustain {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (sound :breaks152 0) (sustain 0.1))"]
+              :see-also ["legato" "end"]}
+
+ :cut {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (fast 4 (seq :RolandTR909_oh :RolandTR909_hh)) (cut 1))"]
+              :see-also ["legato" "sustain"]}
+
+ :loop-begin {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (sound :pad 0) (loop-sample true) (loop-begin 0.25) (loop-end 0.5))"]
+              :see-also ["loop-end" "loop-sample"]}
+
+ :loop-end {:category "transform"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (sound :pad 0) (loop-sample true) (loop-end 0.5))"]
+              :see-also ["loop-begin" "loop-sample"]}
 
  ;; ── Synth voices ────────────────────────────────────────────────────────────
  :synth      {:category "transform"
@@ -1075,6 +1254,13 @@
                          "(->> (seq :bd :_ :bd :_) (fx :filter 1000))"]
               :see-also ["track" "distort" "amp-sim" "cab"]}
 
+ :master     {:category "effect"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(master (fx :reverb 0.3))"
+                         "(master (fx :delay :time 0.375 :feedback 0.4) (fx :reverb 0.3))"]
+              :see-also ["fx" "track" "song"]}
+
  :distort    {:category "effect"
               :returns "nil"
               :side-effects ["audio"]
@@ -1257,7 +1443,8 @@
  :midi-export {:category "midi"
                :returns "nil"
                :side-effects ["dom"]
-               :examples ["(midi-export :bass 4)" "(midi-export :kick 8)"]
+               :examples ["(midi-export :bass 4)" "(midi-export :song)"
+                          "(midi-export :drums 4 :drum-map {:perc 60})"]
                :see-also ["midi-out" "export"]}
 
  ;; ── Freesound ────────────────────────────────────────────────────────────────
@@ -1291,8 +1478,9 @@
  :export     {:category "io"
               :returns "nil"
               :side-effects ["audio" "dom"]
-              :examples ["(export)" "(export 4)" "(export :kick)" "(export :song)"
-                         "(export :song :tail 4)"]
+              :examples ["(export)" "(export 4)" "(export :kick)" "(export :kick 8)"
+                         "(export :stems)" "(export :song)"
+                         "(export :song :tail 4)" "(export :song :realtime)"]
               :see-also ["midi-export" "share!" "song"]}
 
  ;; ── Content ──────────────────────────────────────────────────────────────────
@@ -1329,6 +1517,37 @@
                           "(:kick (:tracks (help-export)))"
                           "(:fx (:kick (:tracks (help-export))))"]
                :see-also ["tracks" "bpm" "fx"]}
+
+ :snapshot!        {:category "session"
+                    :returns "String"
+                    :side-effects ["storage"]
+                    :examples ["(snapshot! \"take A\")"]
+                    :see-also ["snapshots" "restore!" "history"]}
+ :snapshots        {:category "session"
+                    :returns "Vector"
+                    :side-effects []
+                    :examples ["(snapshots)"]
+                    :see-also ["snapshot!" "restore!"]}
+ :restore!         {:category "session"
+                    :returns "String"
+                    :side-effects ["storage" "dom" "audio"]
+                    :examples ["(restore! \"take A\")" "(restore! 12)"]
+                    :see-also ["snapshot!" "history" "snapshots"]}
+ :rename-snapshot! {:category "session"
+                    :returns "String"
+                    :side-effects ["storage"]
+                    :examples ["(rename-snapshot! \"take A\" \"verse\")"]
+                    :see-also ["snapshot!" "delete-snapshot!" "snapshots"]}
+ :delete-snapshot! {:category "session"
+                    :returns "String"
+                    :side-effects ["storage"]
+                    :examples ["(delete-snapshot! \"take A\")"]
+                    :see-also ["snapshot!" "rename-snapshot!" "snapshots"]}
+ :history          {:category "session"
+                    :returns "String"
+                    :side-effects ["dom"]
+                    :examples ["(history)"]
+                    :see-also ["snapshot!" "restore!" "snapshots"]}
 
  ;; ── Special forms ────────────────────────────────────────────────────────────
  :def        {:category "special"

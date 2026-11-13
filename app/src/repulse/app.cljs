@@ -5,20 +5,31 @@
             [repulse.samples :as samples]
             [repulse.plugins :as plugins]
             [repulse.session :as session]
-            [repulse.specs :as specs]
             [repulse.plugins.compressor :as compressor-plugin]
             [repulse.ui.editor :as editor]
             [repulse.ui.timeline :as timeline]
-            [repulse.ui.context-panel :as ctx-panel]
             [repulse.ui.outline-panel :as outline-panel]
+            [repulse.ui.status-head :as status-head]
+            [repulse.ui.inspector :as inspector]
+            [repulse.ui.inline-slider :as inline-slider]
+            [repulse.ui.selection-highlight :as selection-highlight]
             [repulse.ui.goto :as goto]
+            [repulse.ui.buffers :as buffers]
+            [repulse.project :as project]
+            [repulse.outline :as outline]
             [repulse.ui.snippet-panel :as snippet-panel]
+            [repulse.ui.history-panel :as history-panel]
+            [repulse.history :as history]
+            [repulse.history-store :as history-store]
+            [repulse.history-idb :as history-idb]
             [repulse.ui.snippet-submit-modal :as snippet-submit-modal]
             [repulse.snippets.preview :as snippet-preview]
             [repulse.ui.auth-button :as auth-button]
             [repulse.auth :as auth]
             [repulse.env.builtins :as builtins]
             [repulse.eval-orchestrator :as eo]
+            [repulse.offline-render :as offline-render]
+            [repulse.song-transport :as song-transport]
             [repulse.plugin-loading :as plugin-loading]
             [repulse.content.first-visit :as first-visit]
             [repulse.snippets :as snippets]
@@ -26,7 +37,7 @@
             [clojure.string :as str]
             ["./lisp-lang/providers.js" :refer [setBankNamesProvider setFxNamesProvider]]
             ["@codemirror/commands" :refer [selectAll]]
-            ["@codemirror/state" :refer [StateEffect]]
+            ["./lisp-lang/parser.js" :refer [parser]]
             ["@vercel/speed-insights" :refer [injectSpeedInsights]]))
 
 ;;; DOM helpers
@@ -123,51 +134,19 @@
 
 ;;; Session persistence
 
-(defn- b64-encode [s]
-  (js/btoa (js/unescape (js/encodeURIComponent s))))
-
-(defn- b64-decode [s]
-  (js/decodeURIComponent (js/escape (js/atob s))))
-
-(defn- encode-session []
-  (let [snap (session/build-session-snapshot)
-        obj  (clj->js snap)]
-    (str "#v2:" (b64-encode (js/JSON.stringify obj)))))
-
-(defn- decode-session
-  "Decode a URL hash into a session map. Handles #v1: and #v2: formats."
-  [hash]
-  (try
-    (cond
-      (and hash (str/starts-with? hash "#v2:"))
-      (let [b64  (subs hash 4)
-            data (js->clj (js/JSON.parse (b64-decode b64)) :keywordize-keys true)]
-        (specs/sanitize-session-v2 (update data :bpm audio/coerce-bpm)))
-
-      (and hash (str/starts-with? hash "#v1:"))
-      (let [b64  (subs hash 4)
-            data (js->clj (js/JSON.parse (js/atob b64)) :keywordize-keys true)]
-        (when data
-          (specs/sanitize-session-v2
-           {:v       2
-            :bpm     (audio/coerce-bpm (:bpm data))
-            :editor  (:editor data)
-            :fx      []
-            :bank    nil
-            :sources []
-            :muted   []
-            :midi    {}})))
-
-      :else nil)
-    (catch :default _ nil)))
-
 (defn share! []
-  (let [session (encode-session)
-        url     (str (.-origin js/location) (.-pathname js/location) session)]
-    (if (.-clipboard js/navigator)
+  (let [base (str (.-origin js/location) (.-pathname js/location))
+        {:keys [url error]} (session/share-link base (session/build-session-snapshot))]
+    (cond
+      error
+      (set-output! error :error)
+
+      (.-clipboard js/navigator)
       (-> (.writeText (.-clipboard js/navigator) url)
           (.then (fn [] (set-output! (str "URL copied to clipboard") :success)))
           (.catch (fn [_] (js/prompt "Copy this URL:" url))))
+
+      :else
       (js/prompt "Copy this URL:" url))))
 
 ;;; App bootstrap
@@ -181,8 +160,8 @@
         (editor/clear-highlights!)
         (set-playing! false)
         (set-output! "stopped" :idle))
-    (when-let [view @editor/editor-view]
-      (eo/evaluate! (.. view -state -doc (toString))))))
+    (when @editor/editor-view
+      (eo/evaluate-project!))))
 
 
 (defn build-dom! []
@@ -196,7 +175,7 @@
                "  <div class=\"header-controls nav-actions\">"
                "    <button id=\"tap-btn\" class=\"tap-btn\">tap</button>"
                "    <button id=\"snippet-toggle-btn\" class=\"snippet-toggle-btn\">lib</button>"
-               "    <button id=\"ai-toggle-btn\" class=\"ai-toggle-btn\">ai</button>"
+               "    <button id=\"history-toggle-btn\" class=\"history-toggle-btn\">hist</button>"
                "    <button id=\"share-btn\" class=\"share-btn\">share</button>"
                "  </div>"
                "  <div class=\"nav-spacer\"></div>"
@@ -207,11 +186,16 @@
                "  </div>"
                "</header>"
                "<div class=\"main-area app-shell\">"
-               "  <div id=\"outline-panel\" class=\"outline-panel\"></div>"
+               "  <div id=\"outline-panel\" class=\"outline-panel\">"
+               "    <div id=\"status-head\" class=\"status-head\"></div>"
+               "    <div id=\"outline-main\" class=\"outline-main\"></div>"
+               "  </div>"
+               "  <div id=\"inspector\" class=\"inspector hidden\"></div>"
                "  <div class=\"workbench\">"
+               "    <div id=\"buffer-tabs\" class=\"buffer-tabs\"></div>"
                "    <div id=\"editor-container\" class=\"editor-container\"></div>"
                "    <div id=\"snippet-panel\" class=\"snippet-panel hidden\"></div>"
-               "    <div id=\"ai-panel\" class=\"ai-panel hidden\"></div>"
+               "    <div id=\"history-panel\" class=\"history-panel hidden\"></div>"
                "    <div id=\"cmd-bar\" class=\"cmd-bar console-panel\">"
                "      <div class=\"console-history\">"
                "        <div class=\"console-line console-line-out\">"
@@ -231,70 +215,15 @@
                "      <span class=\"hint\">Alt+Enter to eval</span>"
                "    </footer>"
                "  </div>"
-               "  <div id=\"context-panel\" class=\"context-panel\"></div>"
+               "  <div id=\"ai-panel\" class=\"ai-panel hidden\"></div>"
+               "  <button id=\"ai-rail\" class=\"ai-rail\" type=\"button\" aria-label=\"Toggle AI assistant\" aria-expanded=\"false\" aria-controls=\"ai-panel\"><span class=\"ai-rail-arrow\">‹</span><span class=\"ai-rail-label\">ai</span><span class=\"ai-rail-dot\"></span></button>"
                "</div>"
                )))
   (.addEventListener (el "play-btn")           "click" on-play-btn-click)
   (.addEventListener (el "tap-btn")            "click" (fn [] (eo/evaluate! "(tap!)")))
   (.addEventListener (el "share-btn")          "click" share!)
-  (.addEventListener (el "snippet-toggle-btn") "click" snippet-panel/toggle-panel!))
-
-(defn- attach-slider-listener! []
-  (when-let [panel (el "context-panel")]
-    ;; Pause context panel re-renders while a slider is held down
-    (.addEventListener panel "pointerdown"
-      (fn [^js e]
-        (when (.contains (.-classList (.-target e)) "ctx-slider")
-          (reset! ctx-panel/slider-active? true))))
-    (.addEventListener js/document "pointerup"
-      (fn [_]
-        (when @ctx-panel/slider-active?
-          (reset! ctx-panel/slider-active? false)
-          (js/requestAnimationFrame ctx-panel/render-context-panel!))))
-    (.addEventListener panel "input"
-      (fn [^js e]
-        (let [target (.-target e)]
-          (when (and (= "range" (.-type target))
-                     (.contains (.-classList target) "ctx-slider"))
-            (let [fx-name    (.. target -dataset -fx)
-                  track-name (.. target -dataset -track)
-                  param-name (.. target -dataset -param)
-                  raw-val    (js/parseFloat (.-value target))
-                  values     (some-> (.. target -dataset -values) (.split ","))
-                  new-val    (if values
-                               (js/parseFloat (aget values (int raw-val)))
-                               raw-val)
-                  row        (.-parentNode target)
-                  val-el     (when row (.querySelector row ".ctx-param-val"))
-                  fmtd       (if (== new-val (Math/round new-val))
-                               (str (int new-val))
-                               (.toFixed new-val 2))]
-              (when val-el (set! (.-textContent val-el) fmtd))
-              (cond
-                ;; Per-track FX slider: has both data-track and data-fx
-                (and (seq fx-name) (seq track-name))
-                (eo/per-track-fx-slider-patch-and-eval! track-name fx-name param-name new-val)
-                ;; Global FX slider: has data-fx only
-                (seq fx-name)
-                (eo/fx-slider-patch-and-eval! fx-name param-name new-val)
-                ;; Track param slider: has data-track only
-                :else
-                (eo/slider-patch-and-eval! track-name param-name new-val)))))))
-    (.addEventListener panel "change"
-      (fn [^js e]
-        (let [target (.-target e)]
-          (when (and (= "SELECT" (.-tagName target))
-                     (.contains (.-classList target) "ctx-select"))
-            (let [fx-name    (.. target -dataset -fx)
-                  track-name (.. target -dataset -track)
-                  param-name (.. target -dataset -param)
-                  new-val    (.-value target)]
-              (cond
-                (and (seq fx-name) (seq track-name))
-                (eo/per-track-fx-select-patch-and-eval! track-name fx-name param-name new-val)
-
-                (seq fx-name)
-                (eo/fx-select-patch-and-eval! fx-name param-name new-val)))))))))
+  (.addEventListener (el "snippet-toggle-btn") "click" snippet-panel/toggle-panel!)
+  (.addEventListener (el "history-toggle-btn") "click" history-panel/toggle!))
 
 (defn init []
   (injectSpeedInsights)
@@ -327,9 +256,6 @@
   (snippet-panel/init!)
   (snippet-submit-modal/init!)
   (assistant-panel/init!)
-  (when-let [btn (el "ai-toggle-btn")]
-    (.addEventListener btn "click" assistant-panel/toggle-panel!))
-  (attach-slider-listener!)
   (builtins/ensure-env!)
   (setBankNamesProvider (fn [] (clj->js (samples/bank-names))))
   (setFxNamesProvider   (fn [] (clj->js (mapv :name @fx/chain))))
@@ -345,32 +271,94 @@
   (reset! editor/cmd-view (editor/make-cmd-editor (el "cmd-container") eo/evaluate!))
 
   ;; ── Session restore ───────────────────────────────────────────────────────
-  ;; Precedence: URL hash (#v2:/#v1:) > localStorage v2 > legacy keys > first visit
+  ;; Precedence: URL hash (#v3:/#v2:/#v1:) > localStorage (v3, v2 migrated)
+  ;; > legacy keys > first visit. Every restored session is a v3 project.
   (let [hash        (.-hash js/location)
-        url-session (decode-session hash)
+        url-session (session/decode-share-hash hash)
         stored      (or (session/load-session) (session/migrate-legacy!))
         active-sess (or url-session stored)
-        init-text   (or (:editor active-sess) "")]
+        proj        (if active-sess
+                      (select-keys active-sess [:main :active :buffers])
+                      (project/empty-project))]
 
     ;; Remove hash from URL (avoid re-consuming on F5)
     (when url-session
       (.replaceState js/history nil nil (.-pathname js/location)))
 
-    ;; Create editor with the session content (or empty for first-visit)
+    ;; One EditorView, one EditorState per buffer (Phase SONG4). Outline panel
+    ;; + go-to-definition are main-app only (never the embed).
     (let [container (el "editor-container")
-          view      (editor/make-editor container init-text eo/evaluate!)]
+          exts      (.concat (editor/editor-extensions
+                              (fn [_] (eo/evaluate-project!))
+                              #(eo/evaluate! "(upd)"))
+                             #js [outline-panel/extension goto/extension
+                                  selection-highlight/extension
+                                  inline-slider/extension
+                                  assistant-panel/extension])
+          view      (editor/make-view container (editor/make-state "" exts))]
       (reset! editor/editor-view view)
-      ;; Outline panel + go-to-definition: main app only (never the embed).
-      (.dispatch view #js {:effects (.of StateEffect.appendConfig
-                                         #js [outline-panel/extension goto/extension])})
+      (buffers/init! view proj exts {:set-output! set-output!})
       (outline-panel/init! view)
-      ;; Test/debug handle (used by e2e/outline.spec.ts).
+      (status-head/init!)
+      (inspector/init!)
+      ;; refresh! also clears the selection (WS1)
+      (buffers/add-switch-hook! #(outline-panel/refresh! view))
+      (reset! goto/cross-buffer
+              {:active  buffers/active-name
+               :exists? (fn [n] (some #(= n (:name %)) (:buffers (buffers/current-project))))
+               :switch! buffers/switch-to!
+               :find    (fn [kind text]
+                          (let [p      (buffers/current-project)
+                                others (for [{:keys [name code]} (:buffers p)
+                                             :when (not= name (:active p))]
+                                         [name (:entries (outline/extract (.parse parser code) code))])]
+                            (outline/project-definition others kind text)))})
+      ;; Test/debug handles (used by e2e/outline.spec.ts, e2e/workspace.spec.ts).
       (set! (.-__REPULSE_EDITOR__ js/window) view)
+      (set! (.-__REPULSE_APP__ js/window)
+            #js {:cycleDur   (fn [] (:cycle-dur @audio/scheduler-state))
+                 :muted      (fn [] (clj->js (sort (map name (:muted @audio/scheduler-state)))))
+                 :selection  (fn [] (clj->js @outline-panel/selection))
+                 :trackParam (fn [track param]
+                               (inspector/track-param (keyword track) (keyword param)))
+                 :fxParam    (fn [effect param]
+                               (when-let [e (some #(when (and (:active? %) (= effect (:name %))) %)
+                                                  @fx/chain)]
+                                 (get (js->clj (.getParams ^js (:plugin e))) param)))
+                 ;; Phase EXP1 (e2e/export-parity.spec.ts): evaluate like the
+                 ;; command bar, and report whether the live WASM backend is up.
+                 :evaluate     (fn [code] (eo/evaluate! code))
+                 :audioBackend (fn [] (if (and @audio/worklet-ready? @audio/recorder-node)
+                                        "audioworklet+wasm" "js"))
+                 ;; Phase SK1 (e2e/stems-midi.spec.ts): the last song buffer's
+                 ;; stem tracks in ONE pass with no master — the reference the
+                 ;; sum of the stems must equal (K5).
+                 :renderDryMix (fn [tail]
+                                 (let [{:keys [tracks] s :song} @song-transport/song-buffer
+                                       kws (song-transport/stem-tracks s)
+                                       all (into {} tracks)]
+                                   (-> (offline-render/render!
+                                        {:kind :song :tracks (select-keys all kws) :song s
+                                         :tail tail :master? false
+                                         :cycle-dur (:cycle-dur @audio/scheduler-state)})
+                                       (.then (fn [{:keys [left right sample-rate frames]}]
+                                                #js {:sampleRate sample-rate
+                                                     :frames     frames
+                                                     :left       (js/Array.from left)
+                                                     :right      (js/Array.from right)})))))})
       (.focus view))
 
-    ;; Register the editor-text getter for session snapshots
-    (reset! session/editor-text-fn
-      (fn [] (when-let [v @editor/editor-view] (.. v -state -doc (toString)))))
+    ;; Register the project getter for session snapshots
+    (reset! session/project-fn buffers/current-project)
+
+    ;; Phase SK2: eval history + snapshots (IndexedDB, in-memory fallback)
+    (history-panel/init! {:set-output!        set-output!
+                          :set-pending-mutes! #(reset! eo/pending-mutes %)})
+    (history-idb/open!
+      (fn [idb]
+        (when-not idb
+          (js/console.warn "[REPuLse] IndexedDB unavailable — history and snapshots last only until reload"))
+        (history-store/init! (or idb (history/memory-storage)) (some? idb))))
 
     (if active-sess
       ;; ── Restore existing session ──────────────────────────────────────────
@@ -410,10 +398,10 @@
               in-editor? (.contains editor-dom target)
               in-cmd?    (and cmd-dom (.contains cmd-dom target))]
           (cond
-            ;; Alt/Option+Enter — evaluate main buffer from anywhere.
+            ;; Alt/Option+Enter — evaluate the project (from main) from anywhere.
             (and (.-altKey e) (= "Enter" (.-key e)))
             (do (.preventDefault e)
-                (eo/evaluate! (.. view -state -doc (toString))))
+                (eo/evaluate-project!))
 
             ;; Ctrl+. or F9 — run (upd) from anywhere
             (or (and (.-ctrlKey e) (= "." (.-key e)))
@@ -472,18 +460,18 @@
           (.catch (fn [e]
                     (js/console.warn "[REPuLse] Effect load failed:" url e))))))
 
-  ;; Reactive context panel + track panel
-  (add-watch builtins/env-atom               ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))
-  (add-watch fx/chain                        ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))
-  (add-watch audio/scheduler-state           ::ctx (fn [_ _ _ _]
-                                                     (ctx-panel/schedule-render!)
-                                                     (outline-panel/schedule-render!)
-                                                     (timeline/render-track-panel!)))
-  (add-watch samples/active-bank-prefix      ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))
-  (add-watch samples/loaded-sources          ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))
-  (add-watch midi/cc-mappings                ::ctx (fn [_ _ _ _] (ctx-panel/schedule-render!)))
+  ;; Reactive workspace (outline + status head + inspector, WS1) + track panel
+  (add-watch audio/scheduler-state      ::workspace (fn [_ _ _ _]
+                                                      (outline-panel/schedule-render!)
+                                                      (status-head/schedule-render!)
+                                                      (inspector/schedule-render!)
+                                                      (timeline/render-track-panel!)))
+  (add-watch fx/chain                   ::workspace (fn [_ _ _ _] (inspector/schedule-render!)))
+  (add-watch samples/active-bank-prefix ::workspace (fn [_ _ _ _] (status-head/schedule-render!)))
+  (add-watch audio/worklet-ready?       ::workspace (fn [_ _ _ _] (status-head/schedule-render!)))
+  (add-watch samples/loaded-sources     ::workspace (fn [_ _ _ _] (outline-panel/schedule-render!)))
+  (add-watch midi/cc-mappings           ::workspace (fn [_ _ _ _] (outline-panel/schedule-render!)))
 
-  (ctx-panel/render-context-panel!)
   (timeline/render-track-panel!)
   (timeline/start-playhead-raf!))
 

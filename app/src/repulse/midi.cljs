@@ -152,45 +152,87 @@
    (bit-and (unsigned-bit-shift-right n 8) 0xFF)
    (bit-and n 0xFF)])
 
-(defn export-midi
-  "Export a list of note events to a Standard MIDI File (Type 0).
-   Each event: {:time-sec f :duration-sec f :midi-note n :channel n}
-   Returns a Uint8Array."
-  [events bpm]
-  (let [ppqn        480
-        us-per-beat (int (/ 60000000.0 bpm))
-        sorted      (sort-by :time-sec (filter specs/midi-export-event? events))
-        sec->tick   (fn [s] (int (* s (/ bpm 60.0) ppqn)))
-        ;; Tempo meta event: FF 51 03 tt tt tt
-        tempo-evt   (concat [0x00 0xFF 0x51 0x03]
-                            [(bit-and (unsigned-bit-shift-right us-per-beat 16) 0xFF)
-                             (bit-and (unsigned-bit-shift-right us-per-beat 8) 0xFF)
-                             (bit-and us-per-beat 0xFF)])
-        ;; Build note on/off pairs, sorted by onset tick
-        track-bytes (:bytes
-                      (reduce
-                        (fn [{:keys [bytes last-tick]}
-                             {:keys [time-sec duration-sec midi-note channel]}]
-                          (let [ch       (dec (or channel 1))
-                                on-tick  (sec->tick time-sec)
-                                off-tick (sec->tick (+ time-sec duration-sec))
-                                delta-on (- on-tick last-tick)
-                                on-bytes (concat (write-vlq delta-on)
-                                                 [(+ 0x90 ch) midi-note 100])
-                                delta-off (- off-tick on-tick)
-                                off-bytes (concat (write-vlq delta-off)
-                                                  [(+ 0x80 ch) midi-note 0])]
-                            {:bytes (into bytes (concat on-bytes off-bytes))
-                             :last-tick off-tick}))
-                        {:bytes [] :last-tick 0}
-                        sorted))
-        eot         [0x00 0xFF 0x2F 0x00]
-        mtk-data    (vec (concat tempo-evt track-bytes eot))
-        header      (concat [0x4D 0x54 0x68 0x64]   ; MThd
-                            (write-u32 6)             ; header length
-                            (write-u16 0)             ; format 0
-                            (write-u16 1)             ; 1 track
-                            (write-u16 ppqn))
-        trk-header  (concat [0x4D 0x54 0x72 0x6B]   ; MTrk
-                            (write-u32 (count mtk-data)))]
-    (js/Uint8Array. (clj->js (concat header trk-header mtk-data)))))
+(def ppqn 480)
+(def ticks-per-bar (* 4 ppqn))   ; 1 cycle = 1 bar = 4 quarter notes (K9)
+
+(defn amp->velocity
+  "Decision 3 / K15: amp 0–1 → velocity 1–127, linear.
+   A missing, non-numeric or NaN amp counts as 1.0 → 127."
+  [amp]
+  (if (and (number? amp) (not (js/isNaN amp)))
+    (-> (Math/round (* amp 127)) (Math/min 127) (Math/max 1))
+    127))
+
+(defn tempo-us
+  "K11: microseconds per quarter note for a cycle of cycle-dur seconds
+   (60 000 000 / bpm with bpm = 240 / cycle-dur), rounded."
+  [cycle-dur]
+  (Math/round (* cycle-dur 250000)))
+
+(defn- write-u24 [n]
+  [(bit-and (unsigned-bit-shift-right n 16) 0xFF)
+   (bit-and (unsigned-bit-shift-right n 8) 0xFF)
+   (bit-and n 0xFF)])
+
+(defn- utf8-bytes [s]
+  (vec (array-seq (.encode (js/TextEncoder.) s))))
+
+(defn- meta-text [type text]
+  (let [bs (utf8-bytes text)]
+    (into [0xFF type] (concat (write-vlq (count bs)) bs))))
+
+(defn- smf-chunk [tag data]
+  (vec (concat tag (write-u32 (count data)) data)))
+
+(def ^:private mtrk [0x4D 0x54 0x72 0x6B])
+
+(defn- with-deltas
+  "events [[tick bytes] …] sorted by tick, then an end-of-track at end-tick →
+   flat byte vector of delta-time + event pairs."
+  [events end-tick]
+  (let [end (reduce max end-tick (map first events))
+        all (conj (vec events) [end [0xFF 0x2F 0x00]])]
+    (:bytes
+     (reduce (fn [{:keys [bytes last]} [tick evt]]
+               {:bytes (into (into bytes (write-vlq (- tick last))) evt)
+                :last  tick})
+             {:bytes [] :last 0}
+             all))))
+
+(defn- conductor-track [cycle-dur markers end-tick]
+  (let [us (tempo-us cycle-dur)
+        head (vec (concat [0x00 0xFF 0x58 0x04 0x04 0x02 0x18 0x08]
+                          [0x00 0xFF 0x51 0x03] (write-u24 us)))
+        evts (mapv (fn [{:keys [tick text]}] [tick (meta-text 0x06 text)])
+                   (sort-by :tick markers))]
+    (smf-chunk mtrk (into head (with-deltas evts end-tick)))))
+
+(defn- note-track [name' notes end-tick]
+  (let [evts (->> notes
+                  (filter specs/midi-export-event?)
+                  (mapcat (fn [{:keys [tick dur note velocity channel]}]
+                            (let [ch (dec channel)]
+                              [[[tick 1 channel note] [tick [(+ 0x90 ch) note velocity]]]
+                               [[(+ tick dur) 0 channel note]
+                                [(+ tick dur) [(+ 0x80 ch) note 0]]]])))
+                  (sort-by first)
+                  (mapv second))
+        head (into [0x00] (meta-text 0x03 name'))]
+    (smf-chunk mtrk (into head (with-deltas evts end-tick)))))
+
+(defn midi-file
+  "Pure. → Uint8Array of a format-1 Standard MIDI File (K9, K16).
+   {:cycle-dur cd :end-tick t :markers [{:tick t :text str}]
+    :tracks [{:name str :notes [{:tick t :dur d :note n :velocity v :channel ch}]}]}
+   Track 0 is the conductor (time signature, tempo, section markers)."
+  [{:keys [cycle-dur end-tick markers tracks]}]
+  (let [end-tick (or end-tick 0)
+        header   (vec (concat [0x4D 0x54 0x68 0x64]
+                              (write-u32 6)
+                              (write-u16 1)
+                              (write-u16 (inc (count tracks)))
+                              (write-u16 ppqn)))
+        body     (into (conductor-track cycle-dur markers end-tick)
+                       (mapcat #(note-track (:name %) (:notes %) end-tick))
+                       tracks)]
+    (js/Uint8Array. (clj->js (into header body)))))
