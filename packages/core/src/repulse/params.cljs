@@ -417,3 +417,67 @@
    (loop-at 2 (chop 16 (sound :break 0)))"
   ([n]     (fn [pat] (loop-at n pat)))
   ([n pat] ((core/patternify loop-at*) n (->pat pat))))
+
+;;; ── Phase TL7a: per-event filters, shape, crush & gain ───────────────
+;;; Core only writes the key. Clamping and defaults belong to the audio
+;;; layer, so the event map shows what the user wrote.
+
+(defn lpf
+  "Per-event low-pass cutoff in Hz (20–20000). Patternable, accepts signals.
+   (lpf 800 pat) · (lpf (range 400 6000 sine) pat) · (lpf 800) → transformer"
+  ([f]     (fn [pat] (lpf f pat)))
+  ([f pat] (apply-param :lpf f pat)))
+
+(defn resonance
+  "Q of the per-event low-pass (0.1–30, default 0.707). No effect without lpf.
+   (resonance 4 pat) · (resonance 4) → transformer"
+  ([q]     (fn [pat] (resonance q pat)))
+  ([q pat] (apply-param :resonance q pat)))
+
+(defn hpf
+  "Per-event high-pass cutoff in Hz (20–20000).
+   (hpf 300 pat) · (hpf 300) → transformer"
+  ([f]     (fn [pat] (hpf f pat)))
+  ([f pat] (apply-param :hpf f pat)))
+
+(defn hpq
+  "Q of the per-event high-pass (0.1–30, default 0.707). No effect without hpf.
+   (hpq 4 pat) · (hpq 4) → transformer"
+  ([q]     (fn [pat] (hpq q pat)))
+  ([q pat] (apply-param :hpq q pat)))
+
+(defn bpf
+  "Per-event band-pass centre frequency in Hz (20–20000), 0 dB peak gain.
+   (bpf 1000 pat) · (bpf 1000) → transformer"
+  ([f]     (fn [pat] (bpf f pat)))
+  ([f pat] (apply-param :bpf f pat)))
+
+(defn bpq
+  "Q of the per-event band-pass (0.1–30, default 1). No effect without bpf.
+   (bpq 5 pat) · (bpq 5) → transformer"
+  ([q]     (fn [pat] (bpq q pat)))
+  ([q pat] (apply-param :bpq q pat)))
+
+(defn shape
+  "Per-event soft waveshaper amount (0–0.99, 0 = off).
+   (shape 0.4 pat) · (shape 0.4) → transformer"
+  ([a]     (fn [pat] (shape a pat)))
+  ([a pat] (apply-param :shape a pat)))
+
+(defn crush
+  "Per-event bit-depth quantiser (1–16 bits, 16 = off).
+   (crush 4 pat) · (crush 4) → transformer"
+  ([b]     (fn [pat] (crush b pat)))
+  ([b pat] (apply-param :crush b pat)))
+
+(defn gain
+  "Per-event linear gain (0–2, default 1); multiplies amp.
+   (gain 0.5 pat) · (gain 0.5) → transformer"
+  ([g]     (fn [pat] (gain g pat)))
+  ([g pat] (apply-param :gain g pat)))
+
+(defn velocity
+  "Per-event velocity (0–1, default 1); multiplies amp.
+   (velocity 0.6 pat) · (velocity 0.6) → transformer"
+  ([v]     (fn [pat] (velocity v pat)))
+  ([v pat] (apply-param :velocity v pat)))

@@ -2,7 +2,8 @@
   "Per-event parameter builtins: amp, attack, decay, release, pan, rate, begin, end,
    loop-sample, comp, tween, env — and TL6 sample slicing: chop, striate, slice,
    splice, fit, loop-at, speed, unit, accelerate, legato, sustain, cut,
-   loop-begin, loop-end."
+   loop-begin, loop-end — and TL7a per-event inserts: lpf/cutoff, resonance, hpf,
+   hpq, bpf, bpq, shape, crush, gain, velocity."
   (:require [repulse.params :as params]
             [repulse.lisp.util :as u]))
 
@@ -35,6 +36,19 @@
    "cut"        (param params/cut)
    "loop-begin" (param params/loop-begin)
    "loop-end"   (param params/loop-end)
+   ;; Phase TL7a — per-event inserts. Inside a defsynth body the UGen env is
+   ;; merged last, so lpf/hpf/bpf/gain keep their UGen meaning there.
+   "lpf"        (param params/lpf)
+   "cutoff"     (param params/lpf)
+   "resonance"  (param params/resonance)
+   "hpf"        (param params/hpf)
+   "hpq"        (param params/hpq)
+   "bpf"        (param params/bpf)
+   "bpq"        (param params/bpq)
+   "shape"      (param params/shape)
+   "crush"      (param params/crush)
+   "gain"       (param params/gain)
+   "velocity"   (param params/velocity)
 "amp"     (fn
                ([v]   (params/amp (u/unwrap v)))
                ([v p] (params/amp (u/unwrap v) (u/unwrap p))))

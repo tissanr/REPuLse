@@ -1147,6 +1147,50 @@
                          "(->> (pure :g5) (synth :flute) (slow 2) (amp 0.6))"]
               :see-also ["sax" "fm" "synth"]}
 
+ ;; ── Per-event inserts (Phase TL7a) ─────────────────────────────────────────
+ :cutoff     {:category "param"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(cutoff 800 (seq :c3 :eb3 :g3))"]
+              :see-also ["lpf" "resonance"]}
+
+ :resonance  {:category "param"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :c2 :c2 :eb2 :g1) (synth :saw) (lpf 600) (resonance 8))"]
+              :see-also ["lpf" "cutoff" "hpq" "bpq"]}
+
+ :hpq        {:category "param"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :c3 :g3) (synth :saw) (hpf 800) (hpq 5))"]
+              :see-also ["hpf" "resonance"]}
+
+ :bpq        {:category "param"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :sd) (bpf 1500) (bpq 8))"]
+              :see-also ["bpf" "resonance"]}
+
+ :shape      {:category "param"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :bd :_ :bd :_) (shape 0.6))"
+                         "(->> (seq :c3 :eb3 :g3) (synth :saw) (hpf 300) (shape 0.4))"]
+              :see-also ["crush" "lpf" "gain"]}
+
+ :crush      {:category "param"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :bd :sd :bd :sd) (crush (seq 16 4)))"]
+              :see-also ["shape" "bitcrush"]}
+
+ :velocity   {:category "param"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :bd :sd :bd :sd) (velocity (seq 1 0.6)))"]
+              :see-also ["gain" "amp"]}
+
  ;; ── UGens (inside defsynth) ─────────────────────────────────────────────────
  :sin        {:category "ugen"
               :returns "UGen"
@@ -1154,23 +1198,27 @@
               :examples ["(sin freq)" "(->> (sin (* 2 freq)) (gain 0.5))"]
               :see-also ["tri" "lpf" "env-perc" "defsynth"]}
 
- :lpf        {:category "ugen"
-              :returns "UGen"
+ :lpf        {:category "param"
+              :returns "Pattern (outside defsynth) · UGen (inside defsynth)"
               :side-effects []
-              :examples ["(lpf 2000 (saw freq))" "(lpf cutoff (mix a b))"]
-              :see-also ["hpf" "bpf" "sin" "defsynth"]}
+              :examples ["(->> (fast 8 (seq :hh)) (lpf (range 400 6000 (slow 4 sine))) (resonance 4))"
+                         "(lpf 800 (seq :c3 :eb3 :g3))"
+                         "(defsynth dark [freq] (lpf 2000 (saw freq)))"]
+              :see-also ["cutoff" "resonance" "hpf" "bpf" "defsynth"]}
 
- :hpf        {:category "ugen"
-              :returns "UGen"
+ :hpf        {:category "param"
+              :returns "Pattern (outside defsynth) · UGen (inside defsynth)"
               :side-effects []
-              :examples ["(hpf 300 (saw freq))" "(hpf 200 (tri freq))"]
-              :see-also ["lpf" "bpf" "defsynth"]}
+              :examples ["(->> (seq :c3 :eb3 :g3) (synth :saw) (hpf 300))"
+                         "(defsynth thin [freq] (hpf 300 (saw freq)))"]
+              :see-also ["hpq" "lpf" "bpf" "defsynth"]}
 
- :bpf        {:category "ugen"
-              :returns "UGen"
+ :bpf        {:category "param"
+              :returns "Pattern (outside defsynth) · UGen (inside defsynth)"
               :side-effects []
-              :examples ["(bpf freq (saw freq))" "(bpf 1000 (noise))"]
-              :see-also ["lpf" "hpf" "defsynth"]}
+              :examples ["(->> (fast 4 (seq :hh)) (bpf (seq 1000 3000)) (bpq 5))"
+                         "(defsynth nasal [freq] (bpf freq (saw freq)))"]
+              :see-also ["bpq" "lpf" "hpf" "defsynth"]}
 
  :mix        {:category "ugen"
               :returns "UGen"
@@ -1179,11 +1227,12 @@
                          "(mix (lpf 2000 a) (hpf 500 b))"]
               :see-also ["gain" "sin" "defsynth"]}
 
- :gain       {:category "ugen"
-              :returns "UGen"
+ :gain       {:category "param"
+              :returns "Pattern (outside defsynth) · UGen (inside defsynth)"
               :side-effects []
-              :examples ["(gain 0.5 (sin freq))" "(gain level (mix a b))"]
-              :see-also ["mix" "env-perc" "defsynth"]}
+              :examples ["(gain 0.5 (seq :bd :sd))"
+                         "(defsynth soft [freq] (gain 0.5 (sin freq)))"]
+              :see-also ["amp" "velocity" "mix" "defsynth"]}
 
  :delay-node {:category "ugen"
               :returns "UGen"
