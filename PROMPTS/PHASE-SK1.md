@@ -5,7 +5,7 @@
 > **Automation:** 🤖 auto — offline rendering, WAV/MIDI file structure, durations and per-stem content are all assertable in the TEST1 offline harness and unit tests.
 
 **Milestone:** M4 — Sketchpad
-**Depends on:** SONG1 (song length and section form), EXP1 (offline render with WASM voices and FX — stems can't be captured in real time one by one). TL7 recommended (per-event effects to render into stems).
+**Depends on:** SONG1 (song length and section form), EXP1 (offline render with WASM voices and FX — stems can't be captured in real time one by one). TL7a–b recommended (per-event effects to render into stems).
 
 ## Goal
 
@@ -51,7 +51,7 @@ Decided by the project owner on 2026-11-04.
    **Decided (2026-11-04):** a single `<project>-stems.zip` download, produced by a small
    hand-written STORE-only (uncompressed) zip writer in `app/` (local file headers, central
    directory, CRC32). No new npm dependency.
-2. Render FX into stems now, or after TL7 per-event effects land?
+2. Render FX into stems now, or after TL7a–b per-event effects land?
    **Decided (2026-11-04):** now. EXP1's offline path renders WASM voices and FX, so each stem
    includes its per-track FX chain. Global/master FX are applied to the mix export only, not
    to stems; document this as a limitation.

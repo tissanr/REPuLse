@@ -198,3 +198,61 @@ $$;
 -- PostgREST RPC and inflate usage counts. Only the service role (used by
 -- /api/snippets/[id]/use) may call it.
 revoke execute on function public.increment_snippet_usage(uuid) from public, anon, authenticated;
+
+-- ── Hardening: the database must not trust the client ────────────────────────
+--
+-- The anon key is public (served by /api/env), so any signed-in user can talk
+-- to PostgREST directly and skip the validation in api/*. RLS above decides
+-- which ROWS a user may write; this section decides which COLUMNS and VALUES.
+--
+-- Every statement here is idempotent. On a project created from an older
+-- version of this file, run this section on its own in the SQL editor.
+
+-- Column-level write access. Table-level INSERT/UPDATE would let an author set
+-- star_count, avg_rating, weighted_rating, usage_count and created_at on their
+-- own snippets and so rig every sort order. Those columns are written only by
+-- the security-definer functions above (update_star_count,
+-- increment_snippet_usage), which run as the table owner and are unaffected.
+revoke insert, update on public.snippets from anon, authenticated;
+grant insert (author_id, title, description, code, tags, bpm)
+  on public.snippets to authenticated;
+grant update (title, description, code, tags, bpm)
+  on public.snippets to authenticated;
+
+-- Size limits, mirroring MAX_* in api/snippets.ts and api/snippets/[id]/report.ts.
+-- char_length counts code points and JS .length counts UTF-16 units, so anything
+-- the API accepts also passes here.
+create or replace function public.snippet_tags_valid(p_tags text[])
+returns boolean language sql immutable set search_path = '' as $$
+  select coalesce(cardinality(p_tags), 0) <= 20
+     and not exists (
+       select 1 from unnest(p_tags) as t
+       where t is null or char_length(t) not between 1 and 40
+     );
+$$;
+
+alter table public.snippets
+  drop constraint if exists snippets_title_len,
+  drop constraint if exists snippets_description_len,
+  drop constraint if exists snippets_code_len,
+  drop constraint if exists snippets_tags_valid,
+  drop constraint if exists snippets_bpm_range;
+
+alter table public.snippets
+  add constraint snippets_title_len
+    check (char_length(title) between 1 and 120),
+  add constraint snippets_description_len
+    check (description is null or char_length(description) <= 500),
+  add constraint snippets_code_len
+    check (char_length(code) between 1 and 32000),
+  add constraint snippets_tags_valid
+    check (public.snippet_tags_valid(tags)),
+  add constraint snippets_bpm_range
+    check (bpm is null or bpm between 1 and 999);
+
+alter table public.reports
+  drop constraint if exists reports_reason_len;
+
+alter table public.reports
+  add constraint reports_reason_len
+    check (reason is null or char_length(reason) <= 500);

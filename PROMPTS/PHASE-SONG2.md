@@ -4,7 +4,7 @@
 > **Automation:** 🤖 auto — automation curves are pure functions of song time and transitions are pattern transforms, both unit-testable; offline render tests can assert parameter values over time. A final listen is nice-to-have, not required for acceptance.
 
 **Milestone:** M2 — Full songs in code
-**Depends on:** SONG1 (song form and song position), TL2 (continuous signals), TL7 (per-event effect parameters, for automating `lpf`, `room`, …).
+**Depends on:** SONG1 (song form and song position), TL2 (continuous signals), TL7a–b (per-event effect parameters, for automating `lpf`, `room`, …).
 
 ## Goal
 
@@ -37,7 +37,7 @@ Give songs movement across sections: parameters that change over the song timeli
 - `interp-tween` / `:tween-state` in `audio/scheduler-state` — per-track tween state.
 - Song form and song position come from SONG1.
 - Continuous signals (`sine`, `saw`, `range`, …) come from TL2; per-event parameters
-  such as `lpf`/`room` come from TL7.
+  such as `lpf`/`room` come from TL7a (`lpf`) and TL7b (`room`).
 
 ## Scope
 
