@@ -53,7 +53,7 @@ without a human:
 | 9b | FX1 | Mixing, space & modulation effects | 🤖👂 | outline | sonnet |
 | **M2** | | **Full songs** | | | |
 | 10 | SONG1 | Sections, song form & full-song render | 🤖 | full | opus |
-| 11 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
+| 11 | SONG2 | Song-time automation & transitions | 🤖 | full | sonnet |
 | 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | full | sonnet |
 | 13 | SONG4 | Multi-buffer projects | 🤖 | full | opus |
 | 13a | WS1 | Inspector column & status head (retire context panel) | 🤖 | full | opus |
@@ -2262,12 +2262,12 @@ See full spec: [PROMPTS/PHASE-SONG1.md](PROMPTS/PHASE-SONG1.md)
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
-Parameters that follow curves over the song timeline, plus fills, risers and drops.
+Parameters that follow curves over the song timeline, plus fills and drops at section ends.
 
 **Key additions:**
-- Automation lanes scoped to sections or bar ranges; linear/exp/hold curves or TL2 signals
-- Deterministic in song time (seeking gives the same values as playing through)
-- Fill/riser/drop helpers built from ordinary patterns; works in full-song render
+- `(automate :track :param curve [:bars [a b]] [:op :set|:mul|:add])` inside `section`: a constant, `(ramp :linear|:exp|:sine from to)` or a TL2 signal in section-local time
+- `(fill :track bars pattern|:_)`: replaces, adds or silences a track in the last bars of a section; risers and drops are recipes, not built-ins
+- Evaluated per event inside `song-onsets`, so seeking, loops, re-evaluation, every export and the MIDI file give the same values; `tween` is unchanged
 
 See full spec: [PROMPTS/PHASE-SONG2.md](PROMPTS/PHASE-SONG2.md)
 
