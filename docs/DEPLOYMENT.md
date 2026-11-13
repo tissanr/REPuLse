@@ -29,6 +29,13 @@ Paste `supabase/schema.sql` into the Supabase SQL editor and run it. This create
 - `profiles`, `snippets`, `stars` tables
 - Row-level security policies
 - Triggers for star counts and profile creation
+- Column-level write grants and size constraints (the "Hardening" section at the end)
+
+**Existing projects:** the file as a whole is not re-runnable (`create policy` fails on
+a policy that already exists). To pick up the hardening on a project created from an
+older version, paste only the `Hardening` section at the end of `supabase/schema.sql`
+into the SQL editor. It is idempotent. `add constraint` fails if an existing row
+violates a limit — shorten or delete that row, then run the section again.
 
 ### Seed the curated snippets
 
