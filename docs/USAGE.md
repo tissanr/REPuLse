@@ -2808,7 +2808,7 @@ Control them with the `fx` built-in.
 (fx :delay 0.5)            ; delay wet = 0.5
 
 ; Set named parameters
-(fx :reverb :wet 0.4 :room 0.8)
+(fx :reverb :wet 0.4 :dry 0.9)
 (fx :delay  :wet 0.5 :time 0.25 :feedback 0.4)
 (fx :filter :freq 800 :q 2)
 

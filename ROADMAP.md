@@ -18,8 +18,8 @@ Strudel parity is tracked function by function in
 [docs/STRUDEL-PARITY.md](docs/STRUDEL-PARITY.md) and is the yardstick for M1.
 
 The sound palette (which synthetic sounds and effects exist, are planned or are missing)
-is tracked in [docs/SYNTHESIS-COVERAGE.md](docs/SYNTHESIS-COVERAGE.md). The phases
-SYN6–SYN11 and FX1–FX5 close the gaps listed there.
+is tracked in [docs/SYNTHESIS-COVERAGE.md](docs/SYNTHESIS-COVERAGE.md). SYN6 and FX1
+close the gaps a song needs; SYN7 and FX2 hold the rest and are deferred.
 
 ### Automation markers
 
@@ -47,17 +47,8 @@ without a human:
 | 7 | TL6 | Sample slicing & playback control | 🤖👂 | full | opus |
 | 8 | TL7 | Per-event effects & control parameters | 🤖👂 | outline | opus |
 | 9 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
-| 9a | SYN6 | FM & plucked-string preset expansion | 🤖👂 | outline | sonnet |
-| 9b | SYN7 | Synthesized drum voices | 🤖👂 | outline | opus |
-| 9c | SYN8 | Band-limited oscillators, unison & noise colours | 🤖👂 | outline | opus |
-| 9d | SYN9 | Modal & additive voices: mallets, bells, organ | 🤖👂 | outline | opus |
-| 9e | SYN10 | Subtractive instrument presets: bass, lead, pad, strings | 🤖👂 | outline | opus |
-| 9f | SYN11 | Formant voice & sound-effect generators | 🤖👂 | outline | opus |
-| 9g | FX1 | Modulation & stereo effects | 🤖👂 | outline | sonnet |
-| 9h | FX2 | EQ & dynamics | 🤖👂 | outline | sonnet |
-| 9i | FX3 | Filters & resonators | 🤖👂 | outline | opus |
-| 9j | FX4 | Reverb, delay & tape colour | 🤖👂 | outline | sonnet |
-| 9k | FX5 | Pitch, time & spectral effects | 🤖👂 | outline | opus |
+| 9a | SYN6 | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | outline | opus |
+| 9b | FX1 | Mixing, space & modulation effects | 🤖👂 | outline | sonnet |
 | **M2** | | **Full songs** | | | |
 | 10 | SONG1 | Sections, song form & full-song render | 🤖 | full | opus |
 | 11 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
@@ -94,13 +85,19 @@ before implementing it. Dependencies are listed at the top of each spec.
 PLUG1, O2.
 
 **Deferred** (⏸, outside the four milestones; revisit after M2): AI4b, AI5,
-SYN3, SYN4, SYN5, P2, O3, O4.
+SYN3, SYN4, SYN5, SYN7, FX2, P2, O3, O4.
 
-**Sound palette** (added 2026-11-13): SYN6–SYN11 and FX1–FX5 are the sound side track of
-M1, like KIT1. They don't block M2–M4. All are 🤖👂, so the unattended pipeline skips
-them. Within the group: SYN6, SYN7, SYN8, SYN9 and FX1–FX4 have no dependencies on each
-other; SYN10 needs SYN8 and TL7; SYN11 needs SYN8 and TL7; FX5 needs FX4. The specs name
-TL7a–c, the three phases TL7 is split into on `main` (PR #171, not yet merged into `dev`).
+**Sound palette** (added 2026-11-13): four large phases instead of many small ones. The
+dividing line is the one that deferred SYN3–SYN5: *does a song need it?* **SYN6** (clean
+oscillators, a synth drum kit, the standard synth instruments) and **FX1** (EQ, limiter,
+controllable reverb and delay, modulation and stereo effects) are the sound side track
+of M1, like KIT1; they don't block M2–M4. **SYN7** (more acoustic instruments, mallets,
+organ, choir, sound-effect generators) and **FX2** (filter models, tape and vinyl
+colour, pitch and time effects, vocoder) are deferred with SYN3–SYN5: samples cover
+those roles, and each one costs a human listen. All four are 🤖👂, so the unattended
+pipeline skips them. SYN6 parts A, B and D and all of FX1 have no dependencies; SYN6
+part C (synth instruments) needs TL7. The specs name TL7a–c, the three phases TL7 is
+split into on `main` (PR #171, not yet merged into `dev`).
 
 ---
 
@@ -980,80 +977,37 @@ See full spec: [PROMPTS/PHASE-DST6.md](PROMPTS/PHASE-DST6.md)
 
 ---
 
-## Phase FX1 — Modulation & Stereo Effects 📋 *planned*
+## Phase FX1 — Mixing, Space & Modulation Effects 📋 *planned*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
-The missing members of the modulation family and the first stereo-image tools, as
-track-level effect plugins.
+Every effect a finished song needs, in one phase: mixing tools, a controllable reverb and
+delay, and the missing modulation and stereo effects. All are track-level plugins.
 
 **Key additions:**
-- `app/public/plugins/`: `flanger`, `vibrato`, `auto-pan`, `ring-mod`, `rotary`, `width`
-- Native Web Audio nodes; a worklet only where feedback loops shorter than one render quantum are needed
-- Auto-load list in `app.cljs`, slider ranges, completions, USAGE.md sections; all effects work per track and in offline export
+- Mixing: `eq` (shelves + two peaking bands), `limiter` (true output ceiling; the engine hard-clips at ±1 today), `gate`; shelving, peaking and all-pass types plus `gain` on `filter`
+- Space: `(fx :reverb :type :room|:hall|:plate|:spring|:gated|:reverse :decay … :size … :damp … :predelay …)` via impulse-response generators (today `reverb` has only `wet`); `(fx :delay :sync 3/16 :mode :ping-pong …)`, multi-tap, filters in the feedback path
+- Modulation & stereo: `flanger`, `vibrato`, `auto-pan`, `ring-mod`, `width`
+- All effects work per track and in offline export; acceptance by offline-render measurements plus a human listen
 
 See full spec: [PROMPTS/PHASE-FX1.md](PROMPTS/PHASE-FX1.md)
 
 ---
 
-## Phase FX2 — EQ & Dynamics 📋 *planned*
+## Phase FX2 — Character, Filter Models & Pitch/Time Effects ⏸ *deferred*
 
-> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+> **Deferred (2026-11-13):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2.
 
-Mixing tools: equalise a track, keep the output from clipping, shape drum attacks.
+Effects that add colour or change audio that is already playing. A song can be written
+and mixed without them; most need hand-written worklets and a human listen.
 
 **Key additions:**
-- `(fx :eq …)` (shelves + two peaking bands), `(fx :limiter :ceiling …)`, `(fx :gate …)`, `(fx :transient …)`, `(fx :multiband …)`
-- Envelope-follower worklet shared by gate, transient shaper and limiter look-ahead
-- Decision on the engine's hard `.clamp(-1.0, 1.0)` and on a default master limiter
+- Filter models: `ladder` (24 dB/oct, self-oscillating), `comb`, `resonator`, `auto-wah`
+- Colour & dynamics: `fold` (wavefolder), `exciter`, `tape`, `vinyl`, tape mode on `delay`, `rotary`, `transient`, `multiband`
+- Pitch: `pitch-shift`, `octaver`, `harmonizer`, `freq-shift`, `shimmer`
+- Buffer & time: `freeze`, `stutter`, `reverse`, `grain`; `vocoder` (may need P2 routing)
 
 See full spec: [PROMPTS/PHASE-FX2.md](PROMPTS/PHASE-FX2.md)
-
----
-
-## Phase FX3 — Filters & Resonators 📋 *planned*
-
-> **Milestone 1** · **Automation:** 🤖👂 auto + human check
-
-Filter models beyond the 12 dB/oct biquad, and filters that add pitch or react to level.
-
-**Key additions:**
-- `(fx :ladder …)` 24 dB/oct with self-oscillation and drive
-- `(fx :comb …)`, `(fx :resonator …)` tuned by frequency, note or chord (worklet, because native feedback loops can't go above ≈ 344 Hz)
-- `(fx :auto-wah …)`, `(fx :fold …)`; shelving, peaking and all-pass types on `(fx :filter …)`
-
-See full spec: [PROMPTS/PHASE-FX3.md](PROMPTS/PHASE-FX3.md)
-
----
-
-## Phase FX4 — Reverb, Delay & Tape Colour 📋 *planned*
-
-> **Milestone 1** · **Automation:** 🤖👂 auto + human check
-
-Make reverb and delay controllable, and add tape and vinyl character.
-
-**Key additions:**
-- `(fx :reverb :type :room|:hall|:plate|:spring|:gated|:reverse :decay … :damp … :predelay …)` via impulse-response generators (today `reverb` has only `wet`)
-- `(fx :delay :sync 3/16 :mode :ping-pong|:tape :taps […])`
-- `(fx :tape …)`, `(fx :vinyl …)`, `(fx :exciter …)`
-
-See full spec: [PROMPTS/PHASE-FX4.md](PROMPTS/PHASE-FX4.md)
-
----
-
-## Phase FX5 — Pitch, Time & Spectral Effects 📋 *planned*
-
-> **Milestone 1** · **Automation:** 🤖👂 auto + human check
-
-Effects that change pitch or time of audio that is already playing. Largest FX phase;
-the full spec may split it.
-
-**Key additions:**
-- `(fx :pitch-shift …)`, `(fx :octaver …)`, `(fx :harmonizer …)`, `(fx :freq-shift …)`, `(fx :shimmer …)`
-- Buffer worklet for `(fx :freeze …)`, `(fx :stutter …)`, `(fx :reverse …)`, `(fx :grain …)`
-- `(fx :vocoder :mod :bus …)` with a modulator from an audio bus (may need P2)
-
-See full spec: [PROMPTS/PHASE-FX5.md](PROMPTS/PHASE-FX5.md)
 
 ---
 
@@ -1180,95 +1134,36 @@ See full spec: [PROMPTS/PHASE-SYN5.md](PROMPTS/PHASE-SYN5.md)
 
 ---
 
-## Phase SYN6 — FM & Plucked-String Preset Expansion 📋 *planned*
+## Phase SYN6 — Synth Essentials: Oscillators, Drum Kit & Synth Instruments 📋 *planned*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
-More instruments from the two existing engines, no new DSP.
+Everything a song needs from the built-in synthesizer, in one phase.
 
 **Key additions:**
-- `fm_preset` / `fm_body_filters`: `:clarinet` `:oboe` `:bassoon` `:horn` `:tuba` `:pan-flute` `:recorder` `:whistle` `:celesta` `:music-box` `:trumpet-cup` (documented today, not implemented)
-- `ks_preset` / `ks_body_filters`: `:bass-guitar` `:upright` `:banjo` `:ukulele` `:harpsichord` `:clav` `:shamisen` `:oud` `:dulcimer`
-- Warning for unknown `(synth :name)` voices (today they play a plain sine without a message); one shared preset list
+- Oscillator core: band-limited (PolyBLEP) saw, pulse and triangle in the WASM engine (the current ones alias on high notes, and a filter cannot remove that); voices `:tri` `:sine` `:pulse` `:supersaw`; `unison`, `detune`, `spread`, `sub`, PWM, hard sync; `(synth :noise :color :pink|:brown|:dust|:lfsr)`
+- Synth drum kit as its own bank: `(bank :synth)` selects it even when sample banks are loaded; voices `:bd :sd :hh :oh :cp :rim :lt :mt :ht :cb :cl :cr :rd :sh :tb :cg`, tunable with `tune`, `tone`, `decay`; hat choke
+- Synth instruments (after TL7): `:acid` `:reese` `:sub-bass` `:fm-bass` `:wobble` `:lead` `:sync-lead` `:pluck` `:theremin` `:reed` `:pad` `:strings` `:sweep-pad` `:brass-pad`; `(glide secs pat)`; explicit parameters override preset values
+- Housekeeping: warning for unknown `(synth :name)` voices (today they play a plain sine without a message), `:trumpet-cup` (documented, not implemented), one shared voice list
 
 See full spec: [PROMPTS/PHASE-SYN6.md](PROMPTS/PHASE-SYN6.md)
 
 ---
 
-## Phase SYN7 — Synthesized Drum Voices 📋 *planned*
+## Phase SYN7 — Instrument Library: Presets, Mallets, Organ, Voices & Sound Effects ⏸ *deferred*
 
-> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+> **Deferred (2026-11-13):** outside the four-milestone plan (see *Direction & milestones* at the top); revisit after M2, together with SYN3–SYN5.
 
-A complete, tunable drum kit made by synthesis, selectable even when sample banks are loaded.
+The wider instrument palette. Samples and the SYN6 instruments cover these roles until
+then; every instrument here costs a human listen loop.
 
 **Key additions:**
-- Engine voices for clap, rimshot, toms, cowbell, claves, cymbals, shaker, tambourine, conga; metallic hat source; closed hat chokes open hat
-- Per-event `tune`, `tone`; `decay` honoured by drum voices
-- Explicit selection (proposal `(bank :synth)`): today `:bd :sd :hh :oh` are only a fallback while samples load
+- FM and Karplus-Strong presets: `:clarinet` `:oboe` `:bassoon` `:horn` `:tuba` `:pan-flute` `:recorder` `:whistle` `:celesta` `:music-box`; `:bass-guitar` `:upright` `:banjo` `:ukulele` `:harpsichord` `:clav` `:shamisen` `:oud` `:dulcimer`
+- `Voice::Modal`: `:vibes` `:glock` `:xylophone` `:kalimba` `:steel-drum` `:tubular` `:glass` `:gong` `:timpani` `:tabla`; `Voice::Additive`: `(synth :organ :drawbars "888000000")`, `:pipe-organ`
+- Formant voice: `:vox`, `:choir` with a patternable `vowel`
+- Sound-effect generators: `:riser` `:downer` `:sweep` `:siren` (they last as long as their event), `:impact` `:blip` `:dial`, textures `:wind` `:rain` `:surf` `:crackle`
 
 See full spec: [PROMPTS/PHASE-SYN7.md](PROMPTS/PHASE-SYN7.md)
-
----
-
-## Phase SYN8 — Band-Limited Oscillators, Unison & Noise Colours 📋 *planned*
-
-> **Milestone 1** · **Automation:** 🤖👂 auto + human check
-
-Fix the aliasing of the WASM saw and square voices and extend the oscillator core.
-
-**Key additions:**
-- PolyBLEP saw, pulse and triangle in `packages/audio/src/lib.rs`
-- Voices `:tri` `:sine` `:pulse` `:supersaw`; parameters `unison` `detune` `spread` `sub` `pw` (settles the ❓ parity row)
-- `(synth :noise :color :pink|:brown|:dust|:lfsr)`
-
-See full spec: [PROMPTS/PHASE-SYN8.md](PROMPTS/PHASE-SYN8.md)
-
----
-
-## Phase SYN9 — Modal & Additive Voices: Mallets, Bells, Organ 📋 *planned*
-
-> **Milestone 1** · **Automation:** 🤖👂 auto + human check
-
-Two new synthesis methods: struck objects as sets of decaying partials, and organs as
-sums of harmonics.
-
-**Key additions:**
-- `Voice::Modal`: `:vibes` `:glock` `:xylophone` `:kalimba` `:steel-drum` `:tubular` `:glass` `:gong` `:timpani` `:tabla`; `hardness`
-- `Voice::Additive`: `(synth :organ :drawbars "888000000")`, `:pipe-organ`
-- Fixed-size partial arrays, allocation-free render
-
-See full spec: [PROMPTS/PHASE-SYN9.md](PROMPTS/PHASE-SYN9.md)
-
----
-
-## Phase SYN10 — Subtractive Instrument Presets: Bass, Lead, Pad, Strings 📋 *planned*
-
-> **Milestone 1** · **Automation:** 🤖👂 auto + human check
-
-The classic synthesizer instruments as named voices. Depends on SYN8 and TL7.
-
-**Key additions:**
-- Presets `:acid` `:reese` `:sub-bass` `:fm-bass` `:wobble` `:lead` `:sync-lead` `:pluck` `:theremin` `:reed` `:pad` `:strings` `:sweep-pad` `:brass-pad`
-- `(glide secs pat)`: previous pitch per track kept in the scheduler, pattern engine stays pure
-- Hard sync oscillator; explicit per-event parameters override preset values
-
-See full spec: [PROMPTS/PHASE-SYN10.md](PROMPTS/PHASE-SYN10.md)
-
----
-
-## Phase SYN11 — Formant Voice & Sound-Effect Generators 📋 *planned*
-
-> **Milestone 1** · **Automation:** 🤖👂 auto + human check
-
-Choir and vowel voices, and the risers, sweeps, impacts and noise textures of electronic
-music. Depends on SYN8 and TL7.
-
-**Key additions:**
-- `:vox`, `:choir` with a patternable `vowel` (same formant table as TL7's `vowel` filter)
-- Event-length voices `:riser` `:downer` `:sweep` `:siren`; one-shots `:zap` `:impact` `:blip`; textures `:wind` `:rain` `:surf` `:crackle`
-- Event duration passed to the engine; allocation-free filter sweeps
-
-See full spec: [PROMPTS/PHASE-SYN11.md](PROMPTS/PHASE-SYN11.md)
 
 ---
 
