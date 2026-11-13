@@ -93,11 +93,17 @@
   "Synthetic 1 s, 44.1 kHz mono buffers for TL6 tests:
    \"steps\" — 4 slices of 0.25 s; slice k = 0.1 s of 440 Hz at amplitude
              0.2·(k+1), then 0.15 s of silence.
-   \"tone\"  — 1 s of 440 Hz at amplitude 0.5."
+   \"tone\"  — 1 s of 440 Hz at amplitude 0.5.
+   \"noise\" — 1 s of deterministic white noise at amplitude 0.5 (TL7a filters)."
   [kind]
   (let [sr  44100
         buf (js/AudioBuffer. #js {:length sr :sampleRate sr :numberOfChannels 1})
         d   (.getChannelData buf 0)]
+    (if (= kind "noise")
+      (let [state (atom 12345)]
+        (dotimes [i sr]
+          (swap! state #(mod (* % 16807) 2147483647))   ; Park–Miller, exact in doubles
+          (aset d i (* 0.5 (- (/ (* 2 @state) 2147483647) 1)))))
     (dotimes [i sr]
       (let [tt  (/ i sr)
             sig (Math/sin (* 2 Math/PI 440 tt))
@@ -106,7 +112,7 @@
                                 in-slice (- tt (* k 0.25))]
                             (if (< in-slice 0.1) (* 0.2 (inc k)) 0))
                   "tone"  0.5)]
-        (aset d i (* amp sig))))
+        (aset d i (* amp sig)))))
     buf))
 
 (defn- register-test-sample!

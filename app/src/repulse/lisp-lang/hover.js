@@ -899,6 +899,61 @@ const DOCS = {
     description: "Set stereo panning. -1.0 = hard left, 0.0 = centre, 1.0 = hard right.",
     example: "(pan -0.5 (seq :c4 :e4))",
   },
+  "lpf": {
+    signature: "(lpf hz pat) or (lpf hz)",
+    description: "Per-event 12 dB/oct low-pass, cutoff 20\u201320000 Hz. Patternable and signal-driven; the value is sampled once at each event's onset. Alias: cutoff. Pair with resonance. Inside a defsynth body, lpf is the (lpf cutoff signal) UGen instead.",
+    example: "(->> (fast 8 (seq :hh)) (lpf (range 400 6000 (slow 4 sine))) (resonance 4))",
+  },
+  "cutoff": {
+    signature: "(cutoff hz pat) or (cutoff hz)",
+    description: "Alias of lpf: per-event low-pass cutoff in Hz (20\u201320000).",
+    example: "(cutoff 800 (seq :c3 :eb3 :g3))",
+  },
+  "resonance": {
+    signature: "(resonance q pat) or (resonance q)",
+    description: "Q of the per-event low-pass, 0.1\u201330 (default 0.707). No effect without lpf.",
+    example: "(->> (seq :c2 :c2 :eb2 :g1) (synth :saw) (lpf 600) (resonance 8))",
+  },
+  "hpf": {
+    signature: "(hpf hz pat) or (hpf hz)",
+    description: "Per-event 12 dB/oct high-pass, cutoff 20\u201320000 Hz. Pair with hpq. Inside a defsynth body, hpf is the (hpf cutoff signal) UGen instead.",
+    example: "(->> (seq :c3 :eb3 :g3) (synth :saw) (hpf 300))",
+  },
+  "hpq": {
+    signature: "(hpq q pat) or (hpq q)",
+    description: "Q of the per-event high-pass, 0.1\u201330 (default 0.707). No effect without hpf.",
+    example: "(->> (seq :c3 :g3) (synth :saw) (hpf 800) (hpq 5))",
+  },
+  "bpf": {
+    signature: "(bpf hz pat) or (bpf hz)",
+    description: "Per-event band-pass (constant 0 dB peak gain) at 20\u201320000 Hz. Pair with bpq. Inside a defsynth body, bpf is the (bpf freq signal) UGen instead.",
+    example: "(->> (fast 4 (seq :hh)) (bpf (seq 1000 3000)) (bpq 5))",
+  },
+  "bpq": {
+    signature: "(bpq q pat) or (bpq q)",
+    description: "Q of the per-event band-pass, 0.1\u201330 (default 1). No effect without bpf.",
+    example: "(->> (seq :sd) (bpf 1500) (bpq 8))",
+  },
+  "shape": {
+    signature: "(shape amount pat) or (shape amount)",
+    description: "Per-event soft waveshaper, amount 0\u20130.99 (0 = off): y = (1+k)\u00b7x / (1+k\u00b7|x|), k = 2a/(1\u2212a). Runs after the filters and crush.",
+    example: "(->> (seq :bd :_ :bd :_) (shape 0.6))",
+  },
+  "crush": {
+    signature: "(crush bits pat) or (crush bits)",
+    description: "Per-event bit-depth quantiser, 1\u201316 bits (16 = off). Runs after the filters, before shape. For a whole track use (fx :bitcrusher \u2026).",
+    example: "(->> (seq :bd :sd :bd :sd) (crush (seq 16 4)))",
+  },
+  "gain": {
+    signature: "(gain g pat) or (gain g)",
+    description: "Per-event linear gain 0\u20132 (default 1). Final voice level = amp \u00d7 gain \u00d7 velocity. Inside a defsynth body, gain is the (gain level signal) UGen instead.",
+    example: "(gain 0.5 (seq :bd :sd))",
+  },
+  "velocity": {
+    signature: "(velocity v pat) or (velocity v)",
+    description: "Per-event velocity 0\u20131 (default 1). Final voice level = amp \u00d7 gain \u00d7 velocity.",
+    example: "(->> (seq :bd :sd :bd :sd) (velocity (seq 1 0.6)))",
+  },
   "comp": {
     signature: "(comp f g ...)",
     description: "Compose transformers right-to-left. Useful for building named presets.",

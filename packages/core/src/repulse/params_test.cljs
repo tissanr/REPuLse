@@ -443,3 +443,44 @@
     (is (= {:note :bd :loop-begin 0.25 :loop-end 0.5}
            (v (params/loop-end 0.5 (params/loop-begin 0.25 (core/pure :bd))))))
     (is (thrown? js/Error (params/unit :x (core/pure :bd))))))
+
+;;; ── Phase TL7a: per-event insert controls ────────────────────────────
+
+(def ^:private tl7a-controls
+  [[params/lpf :lpf] [params/resonance :resonance] [params/hpf :hpf]
+   [params/hpq :hpq] [params/bpf :bpf] [params/bpq :bpq]
+   [params/shape :shape] [params/crush :crush]
+   [params/gain :gain] [params/velocity :velocity]])
+
+(deftest tl7a-controls-set-their-key
+  (doseq [[f kw] tl7a-controls]
+    (testing (name kw)
+      (is (= {:note :c4 kw 3} (:value (first (core/query (f 3 (core/pure :c4)) one-cycle)))))
+      (is (= {:bank :bd :n 0 kw 3}
+             (:value (first (core/query (f 3 (core/pure {:bank :bd :n 0})) one-cycle))))
+          "keeps an existing map (sample event)"))))
+
+(deftest tl7a-controls-transformer-arity
+  (doseq [[f kw] tl7a-controls]
+    (is (= {:note :hh kw 0.5}
+           (:value (first (core/query ((f 0.5) (core/pure :hh)) one-cycle)))))))
+
+(deftest tl7a-controls-no-clamping-in-core
+  (is (= 99999 (:lpf (:value (first (core/query (params/lpf 99999 (core/pure :c4)) one-cycle))))))
+  (is (= 5 (:gain (:value (first (core/query (params/gain 5 (core/pure :c4)) one-cycle)))))))
+
+(deftest tl7a-lpf-patterned
+  (let [evs (core/query (params/lpf (core/seq* [400 4000]) (core/seq* [:hh :hh :hh :hh]))
+                        one-cycle)]
+    (is (= [400 400 4000 4000] (mapv (comp :lpf :value) evs)))
+    (is (= 4 (count evs)) "structure comes from the note pattern")))
+
+(deftest tl7a-lpf-signal-sampled-at-onset
+  (let [evs (core/query (params/lpf core/saw (core/seq* [:hh :hh :hh :hh])) one-cycle)]
+    (is (= [0 0.25 0.5 0.75] (mapv (comp :lpf :value) evs)))))
+
+(deftest tl7a-chain-builds-one-map
+  (let [p   (->> (core/pure :c3) (params/lpf 800) (params/resonance 4)
+                 (params/shape 0.4) (params/crush 8) (params/gain 0.5) (params/velocity 0.6))
+        v   (:value (first (core/query p one-cycle)))]
+    (is (= {:note :c3 :lpf 800 :resonance 4 :shape 0.4 :crush 8 :gain 0.5 :velocity 0.6} v))))

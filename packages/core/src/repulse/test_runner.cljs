@@ -35,7 +35,8 @@
             [repulse.ui.slider-model-test]
             [repulse.ui.status-model-test]
             [repulse.ui.selection-test]
-            [repulse.ui.inspector-model-test]))
+            [repulse.ui.inspector-model-test]
+            [repulse.inserts-test]))
 
 ;; Without this the process exits 0 even when tests fail, so `npm test` (and CI)
 ;; would pass regardless of the result.
@@ -70,4 +71,5 @@
                   'repulse.ui.slider-model-test
                   'repulse.ui.status-model-test
                   'repulse.ui.selection-test
-                  'repulse.ui.inspector-model-test))
+                  'repulse.ui.inspector-model-test
+                  'repulse.inserts-test))
