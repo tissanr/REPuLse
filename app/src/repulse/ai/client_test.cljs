@@ -137,8 +137,11 @@
     (is (= {:ok "https://10.0.0.5/v1"} (client/normalise-base-url "https://10.0.0.5/v1"))))
   (testing "http: loopback only, any port"
     (is (= {:ok "http://localhost:1234/v1"} (client/normalise-base-url "http://localhost:1234/v1")))
-    (is (= {:ok "http://127.0.0.1:11434/v1"} (client/normalise-base-url " http://127.0.0.1:11434/v1 ")))
-    (is (= {:ok "http://[::1]:8080/v1"} (client/normalise-base-url "http://[::1]:8080/v1"))))
+    (is (= {:ok "http://127.0.0.1:11434/v1"} (client/normalise-base-url " http://127.0.0.1:11434/v1 "))))
+  (testing "IPv6 loopback is rejected (CSP cannot allow it) with a localhost hint"
+    (let [{:keys [ok error]} (client/normalise-base-url "http://[::1]:8080/v1")]
+      (is (nil? ok))
+      (is (str/includes? error "http://localhost"))))
   (testing "http LAN / remote hosts are rejected with an explanation"
     (doseq [u ["http://192.168.1.20:1234/v1" "http://my-box.local:8080/v1" "http://example.com/v1"]]
       (let [{:keys [ok error]} (client/normalise-base-url u)]

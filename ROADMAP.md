@@ -82,7 +82,7 @@ outline into a full spec (exact code paths, step-by-step implementation, files t
 before implementing it. Dependencies are listed at the top of each spec.
 
 **Side track** (not on the critical path, can run any time): DOC1, TEST2, UI1, R3,
-PLUG1, O2.
+PLUG1, O2, PL1 (🧑, development tooling; the auto-phase pipeline never picks it).
 
 **Deferred** (⏸, outside the four milestones; revisit after M2): AI4b, AI5,
 SYN3, SYN4, SYN5, SYN7, FX2, P2, O3, O4.
@@ -1467,6 +1467,30 @@ specs were kept out of HRD3 and should receive a separate follow-up hardening pa
   validation. AI tool-call specs remain out of HRD3 scope per the phase prompt.
 
 See full spec: [PROMPTS/PHASE-HRD3.md](PROMPTS/PHASE-HRD3.md)
+
+---
+
+## Phase PL1 — Pipeline Run Journal & Manual Retro 📋 *planned*
+
+> **Side track** (development tooling, no milestone) · **Automation:** 🧑 human-in-loop.
+> It rewrites the pipeline's own instructions, and acceptance needs the owner to run `/retro`.
+
+Stage 1 of a learning pipeline. Every auto-phase run records what happened, and a manual
+retro turns the records plus post-merge fixes into evidence-backed learning candidates.
+Nothing is applied automatically.
+
+**Key additions:**
+- Run journal `.pipeline/runs/<PHASE>.json` (schema v1: entry, outcome, attempts with
+  failure category, models, usage deltas), appended via `scripts/pipeline/journal.mjs`
+  in a new `auto-phase.md` step 8b. Idle exits are logged to `.git/auto-phase-runs.jsonl`.
+- `scripts/pipeline/metrics.mjs`: first-pass rate, attempts, recoveries, lead time, usage
+  per phase, review coverage, and post-merge fix attribution (fix PR → phase via shared
+  source files + `git blame` confidence)
+- One-off backfill of the 17 merged auto-phase PRs (#127–#164)
+- `/retro` command (`.claude/commands/retro.md`): writes `.pipeline/retros/<date>.md` with
+  metrics, fix candidates and ≤ 5 learning candidates for the owner to confirm
+
+See full spec: [PROMPTS/PHASE-PL1.md](PROMPTS/PHASE-PL1.md)
 
 ---
 
