@@ -4,6 +4,7 @@
   (:require [repulse.api :as api]
             [repulse.snippets :as snippets]
             [repulse.ui.editor :as editor]
+            [repulse.ui.html :refer [escape-html]]
             [clojure.string :as cstr]))
 
 ;;; State
@@ -43,6 +44,8 @@
 
 (defn- render-tag-section! []
   (when-let [container (el "ssm-tag-section")]
+    ;; Tags come from community snippets (other users' input) — escape every one
+    ;; before it reaches innerHTML, in attribute and text position alike.
     (let [all-tags   (snippets/all-tags)
           selected   @selected-tags
           ;; custom tags = selected tags not in the global list
@@ -55,8 +58,8 @@
                 (map (fn [t]
                        (str "<button type=\"button\" class=\"ssm-tag-chip"
                             (when (contains? selected t) " ssm-tag-chip--on")
-                            "\" data-tag=\"" t "\">"
-                            t "</button>"))
+                            "\" data-tag=\"" (escape-html t) "\">"
+                            (escape-html t) "</button>"))
                      all-tags))
               "</div>"
               ;; Custom (user-typed) tags shown as removable chips
@@ -65,8 +68,8 @@
                      (apply str
                        (map (fn [t]
                               (str "<span class=\"ssm-tag-chip ssm-tag-chip--on ssm-tag-chip--custom\">"
-                                   t
-                                   "<button type=\"button\" class=\"ssm-tag-remove\" data-tag=\"" t "\">&times;</button>"
+                                   (escape-html t)
+                                   "<button type=\"button\" class=\"ssm-tag-remove\" data-tag=\"" (escape-html t) "\">&times;</button>"
                                    "</span>"))
                             custom))
                      "</div>"))
