@@ -208,7 +208,7 @@
       (set! (.-innerHTML toolbar)
             (str "<span class=\"snippet-panel-title\">Snippets</span>"
                  "<input id=\"snippet-search\" class=\"snippet-search\" type=\"text\""
-                 " placeholder=\"search\u2026\" value=\"" (or @search-query "") "\" />"
+                 " placeholder=\"search\u2026\" value=\"" (escape-html (or @search-query "")) "\" />"
                  "<select id=\"snippet-tag-filter\" class=\"snippet-tag-filter\">"
                  "<option value=\"\">all tags</option>"
                  (cstr/join ""
