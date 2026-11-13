@@ -2580,6 +2580,24 @@ footer {
   color: #e94560;
 }
 
+.buf-close.confirm {
+  color: #e94560;
+  font-weight: bold;
+}
+
+.buf-name-input {
+  align-self: center;
+  width: 12ch;
+  margin: 0 6px;
+  padding: 1px 6px;
+  font: inherit;
+  color: #c8d0e0;
+  background: #0b1020;
+  border: 1px solid #e94560;
+  border-radius: 2px;
+  outline: none;
+}
+
 .buf-add {
   padding: 0 10px;
   color: #5a6a8a;
