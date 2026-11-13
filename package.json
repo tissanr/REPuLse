@@ -32,5 +32,8 @@
   "dependencies": {
     "@codemirror/lint": "^6.9.7",
     "@vercel/speed-insights": "^2.1.0"
+  },
+  "allowScripts": {
+    "esbuild@0.27.0": true
   }
 }
