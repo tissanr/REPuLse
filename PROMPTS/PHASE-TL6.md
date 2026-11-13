@@ -156,6 +156,6 @@ and index pattern (structure from the index pattern).
 ## What NOT to do
 
 - No granular synthesis / time-stretch without pitch change (backlog: `stretch`).
-- No per-event filters/effects: **TL7**.
+- No per-event filters/effects: **TL7a–c**.
 - No new sample sources or kits: **KIT1**.
 - No `cut`/`legato` for WASM synth voices.

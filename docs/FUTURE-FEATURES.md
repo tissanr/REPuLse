@@ -6,6 +6,10 @@ Unplanned feature backlog. See `ROADMAP.md` for planned phases.
 > OSC and Ableton Link → LIVE1, multi-buffer editor → SONG4, stem and MIDI export →
 > SK1, project snapshots and session journal/eval history → SK2. The entries below are
 > kept for context; the phase specs are authoritative.
+>
+> **Now scheduled (2026-11-13 sound palette):** ring modulator and parametric EQ →
+> FX1; wavefolder and granular processor → FX2 (deferred). The full list of synthetic sounds and
+> effects, with status, is in [SYNTHESIS-COVERAGE.md](SYNTHESIS-COVERAGE.md).
 
 ---
 
@@ -36,6 +40,9 @@ there's energy for side quests.
 |---|---|
 | SC-style UGen aliases | Alias existing UGen names to SuperCollider conventions: `sin` → `sin-osc`, `saw` → `saw-osc`, `square` → `pulse`, `tri` → `tri-osc`. Both names coexist — no breaking changes. Trivial: one `assoc` per alias in `make-build-fn`. Valuable for users coming from SC/Overtone. |
 | Granular synthesis | AudioWorklet-based grain engine: pitch, density, spread, position |
+| Wavetable synthesis | Oscillator that scans and morphs through a table of single-cycle waves (`wt*`/`warp*` in Strudel). Out of scope for Milestone 1; needs table loading and band-limited mip-maps. |
+| Wind waveguides | Physically modelled flute, clarinet and brass (bore delay line + reed or jet nonlinearity), as SYN3 does for bowed strings. The FM presets (SYN2, SYN7) cover winds until then. |
+| Multi-operator FM | 4–6 operators with algorithms and feedback (DX-style). The 2-operator voice and its presets cover the common cases. |
 | High-fidelity piano | Full physical piano model: per-string inharmonicity (dispersion all-pass filter chain), 2–3 detuned strings per note with beating, soundboard resonance (body IIR from measured impulse responses), sympathetic string resonance, sustain-pedal parameter. Requires significantly more Rust DSP than the SYN5 lo-fi piano. |
 | Multi-buffer editor | Multiple named code buffers switchable per track |
 
