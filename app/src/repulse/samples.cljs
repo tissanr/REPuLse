@@ -16,7 +16,7 @@
 ;; When set, keyword :kw is looked up as "<prefix>_<kw>" first.
 (defonce active-bank-prefix (atom nil))
 
-;; External sources loaded via (samples! ...) — tracked for the context panel.
+;; External sources loaded via (samples! ...) — listed in the outline session block.
 ;; [{:type :github :id "owner/repo" :banks N}
 ;;  {:type :freesound :query "kick 808" :count N}]
 (defonce loaded-sources (atom []))
@@ -153,20 +153,151 @@
         (swap! in-flight assoc url p)
         p))))
 
+;;; ── Phase TL6: playback planning (pure) ──────────────────────────────
+
+(def ^:private fade-secs
+  "Linear fade applied when legato/sustain or a cut group stops a voice."
+  0.005)
+
+(defn- ->num
+  "Number from a number or an [n d] rational; nil otherwise."
+  [x]
+  (cond (number? x) x
+        (and (vector? x) (= 2 (count x)) (every? number? x) (not (zero? (second x))))
+        (/ (first x) (second x))
+        :else nil))
+
+(defn- clamp01 [x] (min 1.0 (max 0.0 x)))
+
+(defn playback-plan
+  "Pure. How to play a buffer of buf-dur seconds for the event params in extra:
+     :rate :begin :end :loop :loop-begin :loop-end :unit :accelerate
+     :legato :sustain — event params (TL6, decisions S5–S10)
+     :dur :cycle-dur  — event and cycle length in seconds (S12), may be nil.
+   → nil (nothing to play) or
+     {:reverse? bool :rate r>0 :offset secs :content secs-or-nil
+      :loop? bool :loop-start secs :loop-end secs
+      :stop secs-after-start-or-nil :accel-to rate-or-nil :length secs}
+   :content bounds a one-shot in buffer time (unaffected by rate); :stop is real
+   time; :length estimates how long the voice sounds (##Inf for an endless loop)."
+  [extra buf-dur]
+  (let [n        #(->num (get extra %))
+        r        (double (or (n :rate) 1))
+        cd       (n :cycle-dur)
+        c-unit?  (and (#{:c "c"} (:unit extra)) cd (pos? cd))
+        eff      (if c-unit? (/ (* r buf-dur) cd) r)
+        b        (clamp01 (double (or (n :begin) 0)))
+        e        (clamp01 (double (or (n :end) 1)))
+        loop?    (boolean (:loop extra))]
+    (when (and (not (zero? eff)) (< b e) (pos? buf-dur))
+      (let [reverse? (neg? eff)
+            rate     (Math/abs eff)
+            ;; forward fraction → position in the (possibly reversed) buffer
+            pos      (fn [f] (* buf-dur (if reverse? (- 1 f) f)))
+            offset   (if reverse? (pos e) (pos b))
+            content  (* (- e b) buf-dur)
+            lb       (clamp01 (double (or (n :loop-begin) b)))
+            le       (clamp01 (double (or (n :loop-end) e)))
+            [ls lend] (if reverse? [(pos le) (pos lb)] [(pos lb) (pos le)])
+            dur      (n :dur)
+            legato   (n :legato)
+            sustain  (n :sustain)
+            stops    (cond-> []
+                       (and sustain (pos? sustain))           (conj sustain)
+                       (and legato (pos? legato) dur (pos? dur)) (conj (* legato dur))
+                       (and loop? dur (pos? dur) (nil? legato) (nil? sustain)) (conj dur))
+            stop     (when (seq stops) (apply min stops))
+            natural  (if loop? ##Inf (/ content rate))
+            accel    (n :accelerate)
+            accel-to (when (and accel (not (zero? accel)))
+                       (max 0.01 (if reverse? (- (+ eff accel)) (+ eff accel))))]
+        {:reverse?   reverse?
+         :rate       rate
+         :offset     offset
+         :content    (when-not loop? content)
+         :loop?      loop?
+         :loop-start ls
+         :loop-end   (if (> lend ls) lend (+ ls (/ 1 44100)))
+         :stop       stop
+         :accel-to   accel-to
+         :length     (if stop (min stop natural) natural)}))))
+
+(defn cut-plan
+  "Pure. A new voice starting at t joins a cut group whose voices are
+   [{:id :start :end} …] (end = when the voice stops sounding, absolute secs).
+   → {:choke [id …] — earlier voices still sounding at t (stop them at t)
+      :self-stop t2|nil — earliest later-starting voice, which cuts the new one}
+   Voices starting exactly at t neither cut nor are cut (decision S11)."
+  [voices t]
+  {:choke     (vec (keep (fn [{:keys [id start end]}]
+                           (when (and (< start t) (> end t)) id))
+                         voices))
+   :self-stop (some->> voices (map :start) (filter #(> % t)) seq (apply min))})
+
+;;; ── Phase TL6: reversed buffers & cut groups (side effects) ──────────
+
+(defonce ^:private reversed-cache (js/WeakMap.))
+
+(defn- reversed-buffer
+  "A reversed copy of buf (cached per buffer, decision S7)."
+  [ac buf]
+  (or (.get reversed-cache buf)
+      (let [nch (.-numberOfChannels buf)
+            out (.createBuffer ac nch (.-length buf) (.-sampleRate buf))]
+        (dotimes [ch nch]
+          (.set (.getChannelData out ch)
+                (.reverse (js/Float32Array.from (.getChannelData buf ch)))))
+        (.set reversed-cache buf out)
+        out)))
+
+;; AudioContext → atom {group [{:id :start :end :src :gain :amp} …]}
+(defonce ^:private cut-groups (js/WeakMap.))
+(defonce ^:private voice-ids (atom 0))
+(def ^:private max-voices-per-group 64)
+
+(defn- fade-out!
+  "Stop a voice at time tc with a short linear fade."
+  [{:keys [src gain amp]} tc]
+  (let [g (.-gain gain)]
+    (.cancelScheduledValues g tc)
+    (.setValueAtTime g amp tc)
+    (.linearRampToValueAtTime g 0 (+ tc fade-secs))
+    (try (.stop src (+ tc fade-secs)) (catch :default _ nil))))
+
+(defn- join-cut-group!
+  "Register voice in group on ac; fade out the voices it cuts and, if a later
+   voice of the group is already scheduled, fade itself out at that time."
+  [ac group voice]
+  (let [groups (or (.get cut-groups ac)
+                   (let [a (atom {})] (.set cut-groups ac a) a))
+        now    (.-currentTime ac)
+        live   (filterv #(> (:end %) now) (get @groups group []))
+        t      (:start voice)
+        {:keys [choke self-stop]} (cut-plan live t)
+        choked (set choke)
+        live'  (mapv (fn [v] (if (choked (:id v))
+                               (do (fade-out! v t) (assoc v :end (+ t fade-secs)))
+                               v))
+                     live)
+        voice' (if self-stop
+                 (do (fade-out! voice self-stop)
+                     (update voice :end min (+ self-stop fade-secs)))
+                 voice)]
+    (swap! groups assoc group
+           (vec (take-last max-voices-per-group (conj live' voice'))))))
+
 (defn play!
   "Schedule playback of the nth sample from bank at audio time t.
    amp        — 0.0–1.0 gain (default 1.0)
    pan        — -1.0–1.0 stereo position (default 0.0)
-   extra      — map with optional keys:
-                  :rate  — playback rate multiplier (default 1.0)
-                  :begin — start offset as fraction 0.0–1.0 (default 0.0)
-                  :end   — end offset as fraction 0.0–1.0 (default 1.0)
-                  :loop  — boolean, loop the sample (default false)
+   extra      — map of event params (see playback-plan): :rate :begin :end :loop
+                :loop-begin :loop-end :unit :accelerate :legato :sustain :cut,
+                plus timing :dur / :cycle-dur in seconds when known.
    dest       — AudioNode to connect to (default: ac.destination)
+   Returns the Promise of the buffer fetch (offline export waits for it).
 
-   NOTE: envelope parameters (attack, decay, release) from per-event transformers
-   are NOT applied to samples — they only affect synthesised sounds (note keywords,
-   saw, square, sine, noise). To shorten a sample use the :end key in extra."
+   NOTE: envelope parameters (attack, decay, release) are NOT applied to samples.
+   Shorten a sample with :end, :legato or :sustain."
   ([ac t bank n] (play! ac t bank n 1.0 0.0 {} nil))
   ([ac t bank n amp] (play! ac t bank n amp 0.0 {} nil))
   ([ac t bank n amp pan] (play! ac t bank n amp pan {} nil))
@@ -175,32 +306,46 @@
    (when-let [url (get-url bank n)]
      (-> (get-buffer! url ac)
          (.then (fn [buf]
-                  (let [src     (.createBufferSource ac)
-                        gain    (.createGain ac)
-                        panner  (.createStereoPanner ac)
-                        t'      (max t (.-currentTime ac))
-                        rate-v  (or (:rate extra) 1.0)
-                        begin-v (or (:begin extra) 0.0)
-                        end-v   (or (:end extra) 1.0)
-                        loop?   (boolean (:loop extra))
-                        buf-dur (.-duration buf)
-                        offset  (* begin-v buf-dur)
-                        dur     (* (- end-v begin-v) buf-dur)
-                        out     (or dest (.-destination ac))]
-                    (set! (.-buffer src) buf)
-                    (set! (.. src -playbackRate -value) (float rate-v))
-                    (when loop?
-                      (set! (.-loop src) true)
-                      (set! (.-loopStart src) offset)
-                      (set! (.-loopEnd src) (* end-v buf-dur)))
-                    (.setValueAtTime (.-gain gain) (float amp) t')
-                    (.setValueAtTime (.-pan panner) (float pan) t')
-                    (.connect src gain)
-                    (.connect gain panner)
-                    (.connect panner out)
-                    (if loop?
-                      (.start src t' offset)
-                      (.start src t' offset dur)))))
+                  (when-let [plan (playback-plan extra (.-duration buf))]
+                    (let [{:keys [reverse? rate offset content loop? loop-start loop-end
+                                  stop accel-to length]} plan
+                          src    (.createBufferSource ac)
+                          gain   (.createGain ac)
+                          panner (.createStereoPanner ac)
+                          t'     (max t (.-currentTime ac))
+                          amp    (float amp)
+                          out    (or dest (.-destination ac))
+                          pr     (.-playbackRate src)]
+                      (set! (.-buffer src) (if reverse? (reversed-buffer ac buf) buf))
+                      (.setValueAtTime pr rate t')
+                      (when accel-to
+                        (.linearRampToValueAtTime pr accel-to
+                                                  (+ t' (if (js/isFinite length) length
+                                                            (/ (or content 1) rate)))))
+                      (when loop?
+                        (set! (.-loop src) true)
+                        (set! (.-loopStart src) loop-start)
+                        (set! (.-loopEnd src) loop-end))
+                      (.setValueAtTime (.-gain gain) amp t')
+                      (.setValueAtTime (.-pan panner) (float pan) t')
+                      (.connect src gain)
+                      (.connect gain panner)
+                      (.connect panner out)
+                      (if content
+                        (.start src t' offset content)
+                        (.start src t' offset))
+                      (when stop
+                        (let [g      (.-gain gain)
+                              t-stop (+ t' stop)]
+                          (.setValueAtTime g amp (max t' (- t-stop fade-secs)))
+                          (.linearRampToValueAtTime g 0 t-stop)
+                          (.stop src t-stop)))
+                      (when-some [group (:cut extra)]
+                        (join-cut-group! ac group
+                                         {:id    (swap! voice-ids inc)
+                                          :start t'
+                                          :end   (+ t' length)
+                                          :src   src :gain gain :amp amp}))))))
          (.catch (fn [e]
                    (js/console.debug "[REPuLse] sample play failed:" (name bank) e)))))))
 

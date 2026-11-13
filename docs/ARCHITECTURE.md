@@ -336,6 +336,9 @@ app/src/repulse/
 ├── app.cljs                      Orchestrator: DOM helpers, session, bootstrap, init
 ├── eval_orchestrator.cljs        evaluate!, set-diagnostics!, slider code-patching
 ├── plugin_loading.cljs           load-plugin consent dialog + load/unload builtins
+├── download.cljs                 download-parts!: one Blob → file download (WAV, zip, MIDI)
+├── zip.cljs                      Pure STORE-only zip writer (CRC-32, headers) for stems
+├── midi_export.cljs              Pure: events → MIDI file spec (GM drums, velocity, ticks, markers)
 ├── env/
 │   ├── builtins.cljs             Facade: owns atoms, init!, ensure-env! assembler
 │   └── builtins/
@@ -344,13 +347,20 @@ app/src/repulse/
 │       ├── samples.cljs          samples!, sample-banks, bank
 │       ├── midi.cljs             midi-sync!, midi-map, midi-out, midi-clock-out!, midi-export
 │       ├── content.cljs          snippet, demo, tutorial, load-gist
-│       ├── export.cljs           export (WAV rendering)
+│       ├── export.cljs           export (cycles, :stems, :song validation)
 │       ├── session.cljs          share!, reset!
 │       └── routing.cljs          bus, load-plugin, unload-plugin, freesound-key!, freesound!
 ├── ui/
 │   ├── editor.cljs               CodeMirror editor, highlighting (highlight-range!)
 │   ├── timeline.cljs             Canvas track visualizer + cached RAF energy curves
-│   └── context_panel.cljs        Context panel DOM, slider config, schedule-render!
+│   ├── outline_panel.cljs        Outline column: rows, selection, fx group, session block
+│   ├── status_head.cljs          Status head: BPM edit, backend/bank badges, song progress + cue, latency
+│   ├── inspector.cljs            Inspector column: track/section/def/fx blocks, sliders, M/S, resize
+│   ├── selection_highlight.cljs  CodeMirror line + gutter decoration for the outline selection
+│   ├── slider_model.cljs         Pure: slider/FX config, snap, drag, key-step, text-diff
+│   ├── status_model.cljs         Pure: song bar/status text, BPM parse/step, latency, progress segments
+│   ├── selection.cljs            Pure: selection ids, pick, prune, ranges, header
+│   └── inspector_model.cljs      Pure: track params, fx rows, mute/solo flags and actions
 └── content/
     ├── demos.cljs                Demo template data + demo builtin factory
     ├── tutorial.cljs             Tutorial chapters + tutorial builtin factory
@@ -359,8 +369,11 @@ app/src/repulse/
 
 **Module dependency rules:**
 - `content/*` depend only on audio/samples/core/lisp — not on app, ui, or eval
-- `ui/*` depend only on audio/fx/midi/samples/bus/core — not on app or eval
-- `eval_orchestrator` depends on ui/editor and ui/context_panel — not on app
+- `ui/*` depend only on audio/fx/midi/samples/bus/core — not on app or eval; the exception is
+  `ui/inspector`, which calls the eval-orchestrator's slider write-back (`*-patch-and-eval!`,
+  `begin-slider-drag!` / `end-slider-drag!`). The `ui/*_model` namespaces and `ui/selection`
+  are pure (no DOM, no atoms) and unit-tested.
+- `eval_orchestrator` depends on ui/editor and ui/slider_model — not on app
 - `env/builtins` and `env/builtins/*` depend on content/*, ui/editor, plugin_loading — not on eval-orchestrator
 - `app.cljs` is the only module that depends on everything
 - No circular dependencies

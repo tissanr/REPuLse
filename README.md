@@ -49,12 +49,17 @@ and **when** — not **how** synthesis works internally.
   patterns combine arithmetically (`(add 7 pat)`), and continuous signals (`sine`, `rand`,
   `perlin`) modulate parameters (`(pan sine pat)`)
 - **Expression:** `amp`, `attack`, `decay`, `pan`, … chained with `->>`
-- **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`, `(fx :cab :ir :4x12)`
-- **Performance:** named tracks you can mute, solo and replace live; MIDI in/out; WAV and
-  MIDI export
+- **Inline sliders:** `(amp (slider 0.7 0 1))` evaluates to `0.7` and is drawn as a draggable
+  bar in the editor; dragging rewrites the number in the code (`Cmd/Ctrl+K S` wraps/unwraps)
+- **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`, `(fx :cab :ir :4x12)`;
+  group the global chain with `(master (fx :delay 0.25) (fx :reverb 0.3))`
+- **Performance:** named tracks you can mute, solo and replace live; MIDI in/out; WAV, stem
+  and MIDI export
 - **Songs:** `song` and `section` turn the tracks of a buffer into a song with an end;
-  `(play-from :chorus)` rehearses from any section and `(export :song)` records the whole song
-  to WAV in real time:
+  `(play-from :chorus)` rehearses from any section and `(export :song)` renders the whole song
+  to WAV offline, with every voice and effect (`(export :song :realtime)` records it in real time);
+  `(export :stems)` renders one WAV per track into a zip and `(midi-export :song)` writes the
+  whole song as a multi-track MIDI file:
 
   ```clojure
   (song (section :intro  4 [:kick :hats])
@@ -64,6 +69,12 @@ and **when** — not **how** synthesis works internally.
         :end :stop)
   (play-from :chorus)   ; in the command bar
   ```
+- **Projects:** split a song over several editor tabs (buffers); the main buffer loads the
+  others with `(use :drums :bass)`. Projects persist locally, travel in `#v3:` share links and
+  export/import as one `.repulse` file
+- **Snapshots & history:** every Alt+Enter is kept in a local eval history with line diffs;
+  save named takes with `(snapshot! "take A")` and come back with `(restore! "take A")`
+  (the current state is always saved first)
 
 REPuLse is **not** a signal-flow language like SuperCollider, Overtone or Extempore. There is
 no oscillator routing in pattern code. The one exception is `defsynth`, which defines reusable

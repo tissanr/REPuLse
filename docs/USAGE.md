@@ -36,6 +36,7 @@ them loop in real time.
 17. [Sound and samples](#sound-and-samples)
 18. [Available sample banks](#available-sample-banks)
 19. [Per-event parameters](#per-event-parameters)
+    - [Sample slicing](#sample-slicing)
 20. [Transitions](#transitions)
 
 **Performing**
@@ -44,6 +45,7 @@ them loop in real time.
 22. [Named tracks](#named-tracks)
 23. [Song arrangement](#song-arrangement)
 24. [Writing a song](#writing-a-song)
+    - [Projects & buffers](#projects--buffers)
 25. [Effect plugins](#effect-plugins)
 26. [Visual plugins](#visual-plugins)
 
@@ -307,14 +309,19 @@ structure with `segment` or use it inside `pan`, `amp`, `range` and friends.
 
 ## The editor
 
-The screen has three parts: the **editor** (your program), the **command bar** below it
-(one-off commands), and a **context panel** on the right (live session state).
+The screen has four parts: the **outline column** on the left (a status head with BPM, song
+progress and latency above the list of your definitions), the **inspector** next to it (only
+open while something in the outline is selected), the **editor** (your program) and the
+**command bar** below it (one-off commands).
 
 | Key | Action |
 |---|---|
 | **Alt+Enter** / **Option+Enter** | Evaluate the entire buffer and start playback (works even when the editor is not focused) |
 | **Ctrl+.** or **F9** | Run `(upd)` — apply changes without restarting running patterns |
-| **Escape** | Jump to the command bar |
+| **Escape** | Close the inspector (clear the outline selection); with nothing selected, jump to the command bar |
+| **F12** | With an outline selection: move the cursor to it; otherwise go to the definition under the cursor |
+| **Cmd+K S** / **Ctrl+K S** | Wrap the number under the cursor in (slider …), or unwrap the slider under the cursor |
+| **Cmd+/** / **Ctrl+/** (German layout: **Cmd+Shift+7** / **Ctrl+Shift+7**) | Comment / uncomment the selected lines with `;` |
 | **Ctrl+A** / **Cmd+A** | Select all |
 | **Ctrl+Z** / **Cmd+Z** | Undo |
 | **Ctrl+Shift+Z** / **Cmd+Shift+Z** | Redo |
@@ -367,18 +374,41 @@ after you stop typing.
   (section :verse 8 [:drums]))      ;     :verse 8b •   L4
 ```
 
-- **Click a row** to move the cursor to the form's `(`, scroll it into view and flash it.
+- **Click a row** to select it: its lines are tinted in the editor (with a bar in the
+  gutter), the form scrolls into view, and the [inspector](#status-head-and-inspector) opens
+  next to the outline. The cursor does **not** move. Click the same row again to deselect.
+- **⇧-click** another track to add it to (or remove it from) the selection — the inspector then
+  shows every selected track. ⇧-click on anything else behaves like a plain click.
+- **Esc** clears the selection and closes the inspector (the editor keeps focus). **F12** with
+  a selection moves the cursor to the selected form's `(` (`Shift+F12` jumps back); the `↗ L3`
+  link in the inspector header does the same.
+- The song row is not selectable — clicking it folds / unfolds its sections. Selecting another
+  buffer tab or collapsing the outline clears the selection.
 - **Cursor inside** a form highlights its row (a section wins over its song).
 - **Playing section** — while a song plays, the sounding section is marked `▶` in cyan with a
   thin progress line. Tracks show `■` (muted, dimmed) or a cyan `•` when audible in the playing
   section, and are dimmed when they rest in it. `▾` / `▸` folds the song's sections.
+- **fx group** — top-level `(fx …)` forms are listed together in one `fx` group after all other
+  rows (`fx  fx  1`, then `:reverb  L4`). Select the group to inspect every top-level effect,
+  or one child to inspect just that effect. `fx` calls inside a `track` or `->>` are not listed
+  (they belong to the track and show up in its inspector).
+- **Session block** — when MIDI CC mappings, buses or external sample sources exist, a
+  collapsed `▸ session  midi 2 · buses 1 · sources 1` line appears above the footer (zero
+  counts are omitted). Click it to list them; the open/closed state is remembered.
 - **Collapse** with `‹` (or `Cmd/Ctrl-Shift-O`) to a 28 px rail that shows one bar per section;
   click the rail or press the shortcut to restore. The choice is remembered across reloads, and
   the outline starts collapsed on narrow windows.
 
+The footer lists the hints: `click inspect · ⇧ click add`, `F12 go to def · esc close`,
+`⌘⇧O hide`.
+
 | Action | Shortcut |
 |---|---|
-| Go to definition of the name under the cursor | `Cmd/Ctrl-click` on the name, or `F12` |
+| Select a row / inspect it | click (again to deselect) |
+| Add / remove a track from the selection | `⇧-click` |
+| Close the inspector | `Esc` |
+| Move the cursor to the selected form | `F12` (with a selection) or `↗ L<n>` in the inspector |
+| Go to definition of the name under the cursor | `Cmd/Ctrl-click` on the name, or `F12` (no selection) |
 | Jump back (up to 50 jumps) | `Shift+F12` |
 | Show / hide the outline | `Cmd/Ctrl-Shift-O` |
 
@@ -387,15 +417,106 @@ keyword such as `:drums` (also inside a `section` vector) finds `(track :drums �
 are not defined in the buffer (like `:bd` or built-ins) do nothing. The `<repulse-editor>` embed
 has no outline and no go-to-definition.
 
-### Context panel
+### Status head and inspector
 
-A sidebar to the right of the editor shows live session state:
+The **status head** sits at the top of the outline column:
 
-- **BPM** — current tempo, updates immediately when `(bpm N)` is evaluated
-- **Bindings** — all names you have defined with `def`, annotated with their inferred type (`pattern`, `fn`, `number`, etc.). Built-in names are not shown.
-- **Effects** — the active effect chain in order, with the key parameter value for each effect and an `off` indicator when an effect is bypassed
+- **BPM** — the current tempo (yellow, dashed underline). Click it to type a new tempo and press
+  **Enter** (or click elsewhere); **Esc** cancels. Only whole numbers from 40 to 300 are
+  accepted — anything else marks the field red and keeps it open. With the number focused,
+  **↑ / ↓** change it by 1 and **⇧↑ / ⇧↓** by 10. This sets the tempo directly (like `(bpm N)`)
+  without editing your code, so a `(bpm …)` in the buffer wins again on the next Alt+Enter.
+- **Badges** — the active drum-machine bank prefix (when one is set) and the audio backend:
+  `wasm` (AudioWorklet + Rust/WASM) or `js` (fallback).
+- **Song progress bar** — while the buffer has a `(song …)`, one segment per section, sized by
+  its bars; the playing section is bright cyan and fills up bar by bar. Hover it for
+  `▶ chorus · bar 13/20`. **Click a segment to cue that section**: while the song plays it starts
+  at the next bar; while stopped, the last evaluated song starts there.
+- **Latency** — `latency 5.3 ms` (the audio output latency) once audio has started. During a
+  real-time `(export :song :realtime)` capture it shows `● REC 12.0 / 50.0 s` instead.
 
-The panel is read-only and updates reactively — no interaction required.
+The **inspector** opens to the right of the outline whenever a row is selected and shows only
+that selection. Its header names the kind and the name, `↗ L3` (move the cursor there) and
+`esc` (close):
+
+| Selection | Inspector shows |
+|---|---|
+| **track** | `M` (mute) / `S` (solo) buttons and the state (`live`, `muted`, `solo`, `rests in :outro`); **params** sliders for `amp`, `pan`, `decay`, `attack`, `release`, `rate`, `begin`, `end` and text rows for `synth` / `bank`; a `≋` toggle on each param slider whose value is a literal number in the code (cyan when it is an inline `(slider …)`, click to wrap/unwrap — see [Inline sliders](#inline-sliders--slider)); the track's **fx chain** in signal order with a slider per parameter |
+| several tracks (⇧-click) | one block per track, each with its own `↗ L` link |
+| **section** | its length, a bar strip (current bar cyan), `▶ bar k/n` while it plays or a `▶ cue` button (cue it at the next bar), and its tracks with `M` / `S` and an `amp` slider |
+| **def / defn / synth** | a syntax-coloured preview of the form (first 12 lines) and `Used by :drums, :bass.` |
+| **fx** (group or one effect) | a slider per parameter of the top-level effect(s), "applies after all tracks" |
+| **master** (group, kind `master`, title `fx`) / **master fx** (one effect) | the same sliders for the effects inside `(master …)`; the sliders rewrite the literal inside that exact `(fx …)` form |
+
+The outline lists a `(master …)` block as a `master fx N` group after everything else, behind a
+divider; its children are the block's `(fx …)` forms. Selecting the group highlights all of them.
+
+Sliders **write into your code**: dragging the `amp` slider of `(track :bass (->> … (amp 0.6)))`
+to 0.75 turns the buffer into `(amp 0.75)` and re-evaluates it 150 ms later (effect sliders
+change the sound immediately). Hold **⇧** while dragging for 10× finer control. A focused
+slider also responds to **← / →** (one step) and **⇧← / ⇧→** (ten steps). A whole drag — or
+one key press — is **one undo step**: `Cmd/Ctrl+Z` restores the previous number. Drag the
+inspector's right edge to resize it (180–380 px; the width is remembered).
+
+A track that has not been evaluated yet shows `not evaluated — Alt+Enter`; its sliders appear
+after the first evaluation.
+
+### Inline sliders — `slider`
+
+`(slider value min max)` evaluates to `value` — a plain number, so it works wherever a number
+works. In the editor the whole form is drawn as a small draggable bar (cyan fill, the value on
+the right):
+
+```lisp
+;; before
+(track :bass (->> (seq :e1 :g1) (synth :saw) (amp 0.7)))
+
+;; after — drag the bar to change 0.7 in the code
+(track :bass (->> (seq :e1 :g1) (synth :saw) (amp (slider 0.7 0 1))))
+
+(fx :filter :freq (slider 800 20 20000))   ; log scale automatically
+(slider 5 1 10 :log)                        ; force log; :lin forces linear
+```
+
+- **Drag** left/right: 140 px is the full range. The new value is written into the code on every
+  move and the buffer re-evaluates 150 ms after the pointer stops (the same path as the inspector
+  sliders). Hold **⇧** for 10× finer steps (a `×0.1` tag shows). A whole drag is **one undo step**.
+- **Scale:** logarithmic when `min > 0` and `max / min ≥ 100` (e.g. `20 20000`), linear otherwise.
+  An optional 4th argument `:log` or `:lin` forces it; `:log` needs `min > 0`.
+- **Formatting:** whole numbers when `max ≥ 100` (`632`), otherwise two decimals (`0.70`). The
+  number written into the code uses the same text.
+- **Editing the text:** when the cursor (or a selection) touches the form — including right before
+  its `(` or after its `)` — the widget turns back into text so you can type. Double-click a widget
+  to select its value. Only single-line forms whose value, min and max are number literals become
+  widgets; `(slider x 0 1)` with a symbol evaluates but stays text.
+- **Cmd+K S / Ctrl+K S** on a number literal wraps it: `(decay 0.25)` → `(decay (slider 0.25 0 2))`.
+  On an existing slider it unwraps back to the number. The range comes from the parameter name
+  (the keyword before the number, the effect's main parameter in `(fx :filter 800)`, or the
+  function name):
+
+  | Param | Range |
+  |---|---|
+  | `amp` | 0 – 1 |
+  | `pan` | -1 – 1 |
+  | `decay` | 0 – 2 |
+  | `freq` | 20 – 20000 (log) |
+  | `bpm` | 40 – 300 |
+  | anything else | 0 – 1 |
+
+  If the number lies outside, the range is widened to include it (`(amp 1.5)` →
+  `(slider 1.5 0 1.5)`).
+- **Clamping:** a value outside `[min, max]` is clamped, and the evaluation shows a warning
+  (yellow underline + output line), e.g.
+  `Warning: slider value 2 is outside [0, 1] — clamped to 1`.
+- **Errors:** wrong argument count, non-numbers, `min ≥ max`, a 4th argument other than
+  `:log` / `:lin`, and `:log` with `min ≤ 0` are evaluation errors, e.g.
+  `slider min must be less than max — got min 1, max 0`.
+- **Inspector `≋`:** a track's param row shows `≋` when the param is a literal number in the code
+  (dim — click to wrap it in `(slider …)`) or an inline slider (cyan — click to unwrap). Inspector
+  sliders on a wrapped param write into the slider's value (clamped to its range).
+
+Inline sliders are drawn in the main editor only (not in the `<repulse-editor>` embed or the
+command bar); `slider` itself evaluates everywhere.
 
 ---
 
@@ -1068,6 +1189,71 @@ More random sources:
 `when-pat` is Strudel's `when` (named so to keep `when` free); Tidal's `while` is the same
 thing with a pattern condition, so it has no separate name.
 
+### Pick — `pick` `pick-out` `pick-restart` `pick-reset` `inhabit` `pick-f`
+
+Choose a pattern (or function) out of a **lookup** under the control of an **index
+pattern**. The lookup is a vector (indexed by number) or a map (looked up by name); the
+index pattern is a pattern or a mini-notation string. The lookup comes first and the index
+pattern last, so every name also works curried in `->>`.
+
+```lisp
+(pick {:a (seq :bd :sd) :b (seq :hh :hh :hh)} "<a b>")   ; choose a pattern by name
+(pick ["bd sd" "hh*3"] "<0 1>")                           ; or by index; strings are mini-notation
+(pick-mod [(seq :bd :sd) (seq :hh :hh)] "0 1 2")          ; index wraps around (2 -> 0)
+(pick-out [:bd :sd :hh] "0 1 2 1")                        ; structure from the index pattern
+(pick-f "<0 1>" [(fast 2) rev] (seq :a :b))               ; choose a function
+(pick-restart [(slow 2 (seq :a :b :c :d)) :x] "1 0")      ; chosen pattern restarts at each step
+(inhabit {:a (seq :bd :sd) :b :hh} "a b")                 ; squeeze one cycle into each step
+```
+
+| Function | Join | What it does |
+|---|---|---|
+| `pick` | inner | The chosen pattern keeps its own structure |
+| `pick-out` | outer | Structure comes from the index pattern: each step plays the chosen pattern's value at the step start |
+| `pick-restart` | restart | The chosen pattern starts again from its cycle 0 at every step |
+| `pick-reset` | reset | The chosen pattern's current cycle starts again at every step |
+| `inhabit` | squeeze | One cycle of the chosen pattern is squeezed into each step |
+| `pick-f` | inner | `ipat` selects a function that is applied to `pat` |
+
+- **Vector** lookups are indexed by number, rounded (`1.5` -> 2) and **clamped** to the
+  vector's range. The `-mod` variants (`pick-mod`, `pick-mod-out`, `pick-mod-restart`,
+  `pick-mod-reset`, `inhabit-mod`, `pick-mod-f`) **wrap** the index instead (floored mod, so
+  `-1` is the last element).
+- **Map** lookups are by name: `"a"` or `:a` match the key `:a`. A name that is not in the map
+  is **silent** for that step. The `-mod` variants treat maps like the plain ones.
+- Entries: a pattern stays a pattern, a string is mini-notation, any other value becomes
+  `(pure value)`. An empty lookup is silence.
+- **Plain values with `pick` give one onset per cycle.** `pick` keeps the *chosen* pattern's
+  structure, so `(pick [:bd :sd] "0 1")` plays `:bd` once and the `:sd` is only the second half
+  of that same event (a fragment, no onset). For one value per index step use `pick-out` or
+  `inhabit`.
+- Errors: a lookup that is not a vector or map, entries of `pick-f` that are not functions.
+
+### `fix` — transform only matching events
+
+```lisp
+(fix (fast 2) {:s :bd} (seq :hh :bd))                 ; only the kick is sped up
+(fix (amp 0.3) {:s [:sd :hh]} (seq :bd :hh :sd :hh))  ; any-of: snare or hat
+(->> (seq :bd :hh) (fix (fast 2) {:s :bd}))           ; curried
+```
+
+`(fix f cond pat)` applies `f` to the events whose controls match the condition map `cond`
+and leaves the others untouched (Tidal `fix`; `f` only sees the matching events).
+
+- **All keys must match** (AND); a **vector** value means *any of* (`{:s [:bd :sd]}`).
+- **Numbers** compare numerically (`{:amp 1}` matches `1.0`); **keywords and strings** compare
+  exactly: `{:s :bd}` does not match `:AkaiLinn_bd`, and `{:s "bd"}` does not match `:bd`.
+- A key that is missing from the event means **no match**. `{}` matches every non-rest event.
+- Rests (`:_`) never match.
+- **Derived `:s`**: events have no `:s` key yet, so `fix` derives one: from `:bank`
+  (`(sound :bd 2)`, `"bd:2"`), else from any keyword `:note`. So `:bd`,
+  `{:note :bd :amp 0.5}` and `(sound :bd 2)` all match `{:s :bd}`. There is no guessing
+  whether a name is a pitch: `{:s :cb}` matches a cowbell `:cb` even though `cb` looks like
+  C-flat (and `{:s :c4}` would match a `:c4` note). A real `:s` key will win over the
+  derived one.
+- **Rationals**: `{:amp 1/2}` matches amp 0.5, but `{:amp [1 2]}` is *any of 1 or 2* and
+  `{:amp [1/2 1]}` any of 0.5 or 1.
+
 ### `run` `signal` `steady` `time`
 
 ```lisp
@@ -1195,7 +1381,8 @@ things with the same input `(seq :a :b :c :d)`:
 
 **`hurry` multiplies `rate`.** `(hurry 2 (seq :bd :sd))` is `(fast 2 …)` and sets
 `:rate 2` on every event, so samples also play an octave up; an existing rate is
-multiplied (`(hurry 2 (rate 1.5 pat))` → rate 3). There is no `speed` alias.
+multiplied (`(hurry 2 (rate 1.5 pat))` → rate 3). `speed` is an alias of `rate`
+(see [Sample slicing](#sample-slicing)).
 
 **Switching between patterns.** `sew` and `stitch` choose between two patterns with a
 boolean pattern; rests in the boolean pattern select neither side:
@@ -1333,23 +1520,96 @@ Fetch a GitHub Gist into the editor and evaluate it:
 
 ### `export` — render to WAV
 
-Render `n` cycles of the current tracks to a downloadable WAV file via `OfflineAudioContext`:
+Render the current tracks to a downloadable WAV file. Exports render **offline, faster than real
+time**, through the same sound engine as playback: WASM voices (FM, plucked strings, saw, drums…),
+per-track `(fx …)` chains and the global / `(master …)` chain all sound exactly as you hear them.
 
 ```lisp
-(export 4)       ; 4 cycles → WAV download
-(export 1)       ; 1 cycle loop
-(export :kick)   ; 4 cycles of the :kick track only
-(export :song)   ; capture the whole song in real time — see "Writing a song"
+(export 4)                ; 4 cycles → WAV download
+(export 1)                ; 1 cycle loop
+(export :kick)            ; 4 cycles of the :kick track only
+(export :kick 8)          ; 8 cycles of the :kick track
+(export :stems)           ; one WAV per track, in repulse-stems.zip — see "Stems"
+(export :song)            ; the whole song, offline — see "Writing a song"
+(export :song :realtime)  ; the whole song, recorded in real time
 ```
 
 | Form | What it does |
 |---|---|
-| `(export)` / `(export n)` | Render `n` cycles (default 4) of all tracks offline, 44.1 kHz → `repulse-all-<n>cycles.wav` |
-| `(export :track)` | Render 4 cycles of one track offline → `repulse-<track>-4cycles.wav` |
-| `(export :song)` / `(export :song :tail secs)` | Play the song once from bar 0 and record the master output (with all FX) in real time, plus a release tail (default 2 s, 0–30) → `repulse-song-<bars>bars.wav`. `(stop)` cancels. |
+| `(export)` / `(export n)` | Render `n` cycles (default 4) of all tracks offline → `repulse-all-<n>cycles.wav` |
+| `(export :track)` / `(export :track n)` | Render `n` cycles (default 4) of one track offline → `repulse-<track>-<n>cycles.wav` |
+| `(export :stems)` | Render every track of the song to its own WAV (the whole song plus a 2 s tail); without a song, 4 cycles of every track → `repulse-stems.zip` |
+| `(export :stems n)` / `(export :stems :tail secs)` | `n` cycles of every track (with or without a song) / the song with a tail of `secs` (0–30, song only) |
+| `(export :song)` / `(export :song :tail secs)` | Render one pass of the song from bar 0 offline, plus a release tail (default 2 s, 0–30) → `repulse-song-<bars>bars.wav` |
+| `(export :song :realtime)` / `(export :song :tail secs :realtime)` | Play the song once and record the master output in real time (takes as long as the song; `(stop)` cancels). Same WAV as the offline render |
 
-The offline `(export n)` / `(export :track)` path uses JS fallbacks for WASM voices and skips
-FX; `(export :song)` sounds exactly like playback because it records it.
+- **When it runs.** The export starts after the whole buffer has evaluated, so `(fx …)` and
+  `(master …)` forms below `(export 4)` are included. The output shows
+  `rendering all tracks — 4 cycles offline…`, then `exported all tracks — 4 cycles (offline)`.
+- **Sample rate** = the sample rate of your audio device (e.g. 44.1 or 48 kHz); `n` cycles are
+  exactly `round(n × seconds-per-cycle × rate)` frames.
+- **Tweens start at bar 0 of the export**, in both paths: `(amp (tween :linear 0 1 4))` ramps
+  over the first 4 bars of the file, no matter how long the pattern was playing before.
+- **Mute is ignored** — exports always contain every exported track.
+- **Fallback.** If the offline engine can't start (no AudioWorklet in the offline context, the
+  WASM file can't be loaded, an active `(bus …)`, or an active third-party effect plugin without
+  `getParams`), the output says `offline render unavailable (<reason>) — capturing in real time
+  instead…` and the export is recorded in real time instead. It never falls back to sine tones.
+- **WASM synths on a track with its own `(fx …)`** play through the JS fallback voice — in
+  playback *and* in the export, so the two match. Example: in
+  `(->> (seq :c4) (synth :epiano) (fx :reverb 0.4))` the e-piano is a plain tone through the
+  reverb. To keep the FM e-piano and still add reverb, put the effect on the master:
+  `(master (fx :reverb 0.4))`. Built-in drums and `(synth :saw)` / `:square` also use their JS
+  voices on an FX track (samples are unaffected). Routing WASM voices through per-track FX is
+  planned for a later phase.
+- One export at a time: `Error: an export is already running — (stop) cancels it`.
+  `:realtime` only applies to the song: `(export 4 :realtime)` →
+  `Error: :realtime only applies to (export :song)`. `(export 0)` →
+  `Error: export needs at least 1 cycle`. The argument order is `(export :track n)`:
+  `(export 8 :drums)` and `(export :drums 8 2)` →
+  `Error: usage — (export [cycles]), (export :track [cycles]), (export :stems …) or (export :song …)`.
+- `:song`, `:stems` and `:realtime` are reserved: tracks with these names can't be exported by name.
+
+#### Stems
+
+`(export :stems)` renders **each track separately** and downloads them together as
+`repulse-stems.zip` — one `repulse-<track>.wav` per track, in the order the tracks appear in the
+buffer (sorted by name for `(export :stems n)`). Drop the files into a DAW at bar 1 and they line
+up.
+
+```lisp
+(bpm 120)
+(track :kick (seq :bd :sd :hh :oh))
+(track :bass (amp 0.5 (seq :c2 :_ :g2 :_)))
+(song (section :intro 2 [:kick]) (section :verse 4 :all) (section :outro 2 [:bass]))
+(export :stems)           ; repulse-kick.wav + repulse-bass.wav, both 18.0 s
+```
+
+- **Identical length.** Every stem has exactly the same number of frames: the whole song plus the
+  tail (default 2 s), or `n` cycles for `(export :stems n)`. A stem is silent where its track is
+  not in a section.
+- **Which tracks.** With a song, every track that is listed in at least one section (a track defined
+  above the song but used in no section would be silence and is left out). Without a song, every
+  active track. Mute is ignored. Characters outside `A–Z a–z 0–9 . _ -` in a track name become
+  `_`, and names that collide get `-2`, `-3`, … appended.
+- **Per-track FX are in, master FX are out.** A stem is "the track before the master": its own
+  `(fx …)` chain is rendered into it, but the global / `(master …)` chain and the master gain are
+  *not* — so the stems sum to the dry mix, not to `(export :song)`, which always runs through the
+  global chain (the always-on compressor, the default reverb entry, your `(master (fx …))`). Add
+  the master effects in your DAW. Event-driven plugins still see every track: a pad with
+  `(fx :sidechain :trigger :bd …)` is ducked in its stem by the kick, even though the kick is not
+  in that file.
+- **Offline only.** Recording N tracks in real time would take N × the song length, so there is no
+  real-time fallback: `Error: stems need the offline renderer — <reason>`.
+- **Progress.** Stems render one after another: `rendering stem 2/3 — :bass…`, then
+  `exported 3 stems — 24 bars, 50.0 s (offline)` (`exported 3 stems — 4 cycles (offline)` for a
+  cycle count).
+- **The zip** is uncompressed (STORE, WAV does not compress usefully), written by REPuLse itself
+  with a fixed timestamp, so the same song gives byte-identical archives. A zip over 4 GB is
+  refused up front: `Error: stems too large for one zip (over 4 GB) — export fewer bars or tracks`.
+- Errors: `(export :stems :realtime)` → `Error: :realtime only applies to (export :song)`;
+  `(export :stems :foo)` → `Error: (export :stems) takes a cycle count or :tail secs`;
+  `(export :stems :tail 1)` without a song → `Error: no song — evaluate a buffer that ends with (song …) first`.
 
 ---
 
@@ -1663,7 +1923,8 @@ Set a global prefix so bare keywords resolve to a named drum machine bank:
 ```
 
 If the prefixed bank doesn't exist (e.g. a machine has no hi-hat), the keyword resolves
-via the standard fallback with no error. The active bank is shown in the context panel.
+via the standard fallback with no error. The active bank is shown as a badge in the status head
+(top of the outline column).
 
 The prefix is a session setting, like `bpm`: it persists across evaluations and page
 reloads until you change it or call `(bank nil)`. Removing a `(bank …)` line from the
@@ -1983,7 +2244,8 @@ and `comp`:
 
 ### `rate` — sample playback rate
 
-Scale the playback speed of a sample. `1.0` = normal, `2.0` = double speed (one octave up):
+Scale the playback speed of a sample. `1.0` = normal, `2.0` = double speed (one octave up),
+negative = backwards. `speed` is the same parameter under its Tidal name:
 
 ```lisp
 (->> (sound :tabla 0) (rate 1.5))    ; 50% faster (higher pitch)
@@ -2001,11 +2263,68 @@ Play only a portion of the sample buffer. Values are fractions of buffer duratio
 
 ### `loop-sample` — loop sample
 
-Loop the sample buffer continuously:
+Loop the sample buffer for the length of the event (or `legato`/`sustain`, see below).
+`loop-begin` / `loop-end` set the loop region as fractions of the buffer; by default it
+is `begin`–`end`:
 
 ```lisp
-(->> (sound :pad 0) (loop-sample true) (decay 4.0))
+(->> (sound :pad 0) (loop-sample true))
+(->> (sound :pad 0) (loop-sample true) (loop-begin 0.25) (loop-end 0.5))
 ```
+
+### Sample slicing
+
+Cut, rearrange and time-fit samples the Tidal way. These work on **samples only**
+(`(sound :bank n)`, sample keywords such as `:bd` when a bank is loaded); synth voices
+ignore them.
+
+| Function | What it does | Event keys |
+|---|---|---|
+| `(chop n pat)` | Each event becomes `n` parts that play consecutive pieces of its sample (within its existing `begin`–`end`) | `:begin :end` |
+| `(striate n pat)` | Plays `pat` `n` times per cycle; repetition `i` plays piece `i` of every sample (interleaved) | `:begin :end` |
+| `(slice n ipat pat)` | Cuts the sample into `n` equal slices and plays the slices picked by the index pattern `ipat` (rhythm from `ipat`; indices wrap) | `:begin :end` |
+| `(splice n ipat pat)` | `slice`, plus the speed that makes each slice exactly fill its slot | `:begin :end :rate :unit` |
+| `(fit pat)` | Sets each event's speed so its `begin`–`end` range fills the event | `:rate :unit` |
+| `(loop-at n pat)` | `slow n`, with the sample fitted to `n` cycles — tempo-locked breaks | `:rate :unit` |
+| `(speed r pat)` | Alias of `rate`. **Negative plays backwards** | `:rate` |
+| `(unit :c pat)` | Speed in cycles: speed 1 plays the whole sample in one cycle, whatever the tempo. `:r` (default) = plain rate | `:unit` |
+| `(accelerate a pat)` | Playback rate glides from `rate` to `rate + a` while the sample plays | `:accelerate` |
+| `(legato x pat)` | Stop the sample after `x` × the event's length (1 = at the event end) | `:legato` |
+| `(sustain secs pat)` | Stop the sample after at most `secs` seconds | `:sustain` |
+| `(cut g pat)` | Choke group: a sample in group `g` stops every earlier sample of `g` still playing (5 ms fade) | `:cut` |
+| `(loop-begin x pat)` / `(loop-end x pat)` | Loop region (fractions) for `loop-sample` | `:loop-begin :loop-end` |
+
+All take patterned arguments (`(chop "<4 8>" …)`, `(speed "1 -1" …)`) and have a curried
+one-argument form for `->>` (`(slice 4 "0 2")` for `slice`/`splice`).
+
+```lisp
+(chop 8 (sound :breaks152 0))                   ; 8 slices played in order
+(striate 4 (sound :breaks152 0))                ; 4 interleaved slices
+(slice 8 (seq 0 3 2 7) (sound :breaks152 0))    ; slices 0, 3, 2, 7
+(splice 8 "0 1 6 7" (sound :breaks152 0))       ; same idea, each slice stretched to its slot
+(loop-at 2 (chop 16 (sound :breaks152 0)))      ; the break fills 2 cycles at any BPM
+(fit (seq (sound :breaks152 0) :_))             ; the whole sample squeezed into half a cycle
+(->> (sound :breaks152 0) (speed -1))           ; backwards
+(->> (fast 4 (seq :RolandTR909_oh :RolandTR909_hh)) (cut 1)) ; the closed hat chokes the open hat
+;; cut is only audible when a sample is longer than the gap to the next hit:
+;; Dirt-Samples :ho is 0.25 s, so (fast 2 (seq :ho :hc :ho :hc)) sounds the same either way
+(->> (seq :bd :sd) (legato 0.5))            ; each hit plays half its slot
+(->> (sound :breaks152 0) (sustain 0.1) (accelerate -0.5))
+```
+
+How the speed is worked out: with `unit :c` the playback rate is
+`speed × sample seconds ÷ cycle seconds`. `splice` sets speed = (1/n) ÷ slot length in
+cycles, `fit` sets speed = (end − begin) ÷ event length in cycles, `loop-at n`
+multiplies speed by 1/n. Changing BPM keeps everything in sync. Pitch follows speed
+(no time-stretch).
+
+Notes:
+
+- `chop` and `striate` split the event's existing `begin`–`end` range:
+  `(chop 2 (->> (sound :breaks152 0) (begin 0.25) (end 0.5)))` plays 0.25–0.375 and 0.375–0.5.
+- Cut groups are global (all tracks share group numbers).
+- A looped sample (`loop-sample true`) stops at the end of its event; before TL6 it
+  looped forever.
 
 ### Patterned parameters
 
@@ -2277,7 +2596,7 @@ track, the outro only the hats — then playback stops and the output shows `son
 | `(section name bars tracks)` | A section: a keyword name (unique in the song), a length in whole bars ≥ 1, and the tracks that play — a vector of track names or `:all` (every track defined above the song) |
 | `(song section… [:end :stop\|:loop])` | Play the tracks above as a song. `:end :stop` (default) stops 2 s after the last bar so tails ring out; `:end :loop` starts again at bar 0. Returns the song value |
 | `(play-from :section)` / `(play-from bar)` | Start — or, while playing, jump — the song at a section's first bar or at a 0-based bar number. After `(stop)` it restarts the last song |
-| `(export :song)` / `(export :song :tail secs)` | Capture one pass of the song to WAV in real time (see below) |
+| `(export :song)` / `(export :song :tail secs)` | Render one pass of the song to WAV offline; add `:realtime` to record it in real time (see below) |
 
 ### Rules
 
@@ -2313,27 +2632,38 @@ Re-evaluating the buffer while the song plays keeps the current bar: edit the ch
 Alt+Enter, and the new version takes over at the next bar. If you shortened the song so that the
 current bar no longer exists, playback continues at the first bar of the (new) last section.
 
-### Context panel
+### Song progress in the status head
 
-While a song plays, the status row shows the current section and bar, e.g. `▶ chorus · bar
-13/24` (`▶ song · starting` until bar 0 begins). Tracks that rest in the current section are
-listed as `(not in :outro)` and drawn like muted tracks in the timeline.
+The status head at the top of the outline column shows a progress bar with one segment per
+section; the playing segment is bright and fills bar by bar. Hover it for the current section
+and bar, e.g. `▶ chorus · bar 13/24` (`▶ song · starting` until bar 0 begins). **Click a
+segment** — or `▶ cue` in a section's inspector — to jump there at the next bar, exactly like
+`(play-from :chorus)`. Tracks that rest in the current section show `rests in :outro` in their
+inspector and are drawn like muted tracks in the timeline.
 
-### `(export :song)` — capture the whole song
+### `(export :song)` — render the whole song
 
 ```lisp
-(export :song)           ; one pass + 2 s release tail
-(export :song :tail 4)   ; with a 4 s tail (0–30 s)
+(export :song)                    ; one pass + 2 s release tail, offline
+(export :song :tail 4)            ; with a 4 s tail (0–30 s)
+(export :song :realtime)          ; recorded in real time instead
+(export :song :tail 4 :realtime)  ; both options, in any order
 ```
 
-The song restarts from bar 0 and the master output — after every global effect — is recorded
-in real time, so the WAV sounds exactly like playback (WASM voices, per-track and global FX).
-Export therefore takes as long as the song; the context panel shows `● REC 12.0 / 50.0 s`. A
-`:loop` song is captured as one pass. `(stop)` cancels (`export cancelled`); when it finishes,
-the WAV `repulse-song-24bars.wav` downloads (sample rate of your audio device) and the output
-shows `exported song — 24 bars, 50.0 s`.
+`(export :song)` renders one pass of the song from bar 0 **offline**, faster than real time,
+with WASM voices, per-track and global FX — the WAV sounds exactly like playback. Playback is
+not interrupted. The output shows `rendering song — 24 bars, 50.0 s offline…`, then
+`exported song — 24 bars, 50.0 s (offline)`, and `repulse-song-24bars.wav` downloads (sample rate
+of your audio device). A `:loop` song is exported as one pass.
 
-Inside `export`, `:song` is reserved: a track named `:song` can't be exported by name.
+`(export :song :realtime)` restarts the song from bar 0 and records the master output — after
+every global effect — in real time, so it takes as long as the song; the status head shows
+`● REC 12.0 / 50.0 s`. `(stop)` cancels (`export cancelled`); when it finishes the output shows
+`exported song — 24 bars, 50.0 s`. The offline render falls back to this path (and says so) when
+it can't start — see "`export` — render to WAV".
+
+Inside `export`, `:song`, `:stems` and `:realtime` are reserved: tracks with these names can't be
+exported by name. `(export :stems)` renders every track to its own WAV — see "`export` — render to WAV".
 
 ### `song` vs `arrange`
 
@@ -2343,7 +2673,7 @@ Inside `export`, `:song` is reserved: a track named `:song` can't be exported by
 | Length unit | cycles | bars (= cycles) |
 | End | loops forever | stops after the last bar (or `:end :loop`) |
 | Rehearsal | — | `(play-from :chorus)` |
-| Export | `(export n)` (offline) | `(export :song)` (real time, with FX) |
+| Export | `(export n)` (offline) | `(export :song)` (offline), `(export :song :realtime)` (real time) |
 
 ### Errors
 
@@ -2363,6 +2693,103 @@ play-from: no song — evaluate a buffer that ends with (song …) first
 Error: no song — evaluate a buffer that ends with (song …) first          ; (export :song)
 Error: :tail must be a number of seconds between 0 and 30
 Error: an export is already running — (stop) cancels it
+Error: :realtime only applies to (export :song)
+offline render unavailable (<reason>) — capturing in real time instead…   ; notice, not an error
+```
+
+---
+
+## Projects & buffers
+
+A song can grow beyond one file. A **project** has one **main buffer** — the song file with the
+arrangement at the bottom — and any number of named buffers (drums, bass, chords, …), shown as
+tabs above the editor. A single-file song is simply a project that only has `main`.
+
+The main buffer loads the others explicitly at the top with `use`, so "evaluate top to bottom,
+define before use" stays true across the whole project:
+
+```lisp
+;; buffer "drums"
+(track :kick  (seq :bd :_ :bd :_))
+(track :snare (seq :_ :sd :_ :sd))
+
+;; buffer "bass"
+(track :bass (->> (scale :minor :c2 (seq 0 :_ 4 :_)) (synth :saw)))
+
+;; buffer "main"
+(use :drums :bass)          ; evaluates buffers "drums" then "bass" first
+(song
+  (section :verse 8 [:kick :snare :bass])
+  (section :chorus 8 :all))
+```
+
+### Tabs
+
+| Action | How |
+|---|---|
+| New buffer | `+` — asks for a name (proposed: the first free `buffer-N`); the new buffer starts empty and becomes active |
+| Switch | click a tab |
+| Rename | double-click a tab. `(use :old)` references are **not** rewritten |
+| Delete | `×` on the tab (asks first). The main buffer (bold tab) can't be deleted |
+| Export | `export` — downloads the whole project as `<main>.repulse` |
+| Import | `import` — loads a `.repulse` file and replaces the current project (asks first; does not evaluate or stop playback) |
+
+Buffer names use `a-z`, `0-9` and `-`, start with a letter, are at most 32 characters long and
+unique; a project has at most 32 buffers. Each buffer keeps its own undo history.
+
+### `use`
+
+| Built-in | Description |
+|---|---|
+| `(use :buffer …)` | Evaluate the named buffers, in argument order, before continuing. Returns `=> used :drums :bass` |
+
+- **Alt+Enter in any tab evaluates the whole project, starting from `main`.** So do the play
+  button and the inspector sliders. There is no "evaluate only this buffer" key.
+- `use` is depth-first: a used buffer may itself `use` other buffers. Each buffer runs **at most
+  once per evaluation** — a second `(use :kit)` is skipped.
+- All buffers share **one environment**: defs and tracks from used buffers are visible
+  unqualified (`kick`, not `drums/kick`).
+- Track names must be unique across the whole project.
+- Only `main`'s last form decides what plays (a song, a pattern, …); the value of the last form
+  in a used buffer is ignored.
+- A cycle (`drums` uses `bass`, `bass` uses `drums`) is an error naming the cycle.
+- An error inside a used buffer switches to that buffer's tab and underlines the spot; the
+  output reads `Error in :drums: …`.
+
+### Navigation
+
+Outline and go-to-definition (F12 / Cmd/Ctrl-click) work in every buffer. A name is looked up in
+the active buffer first; otherwise the other buffers are searched in tab order. Cmd/Ctrl-click on
+`kick` in `main` jumps into `drums`, and **Shift+F12** switches back.
+
+### What stays single-buffer
+
+- The command bar, `(upd)` / Ctrl+. / F9, demos, `load-gist` and the AI assistant work on the
+  **active buffer only**, and `use` does not work there.
+- Snippets: inserting or submitting a snippet uses the active buffer's text.
+- Sliders patch the active buffer's text. A parameter of a track defined in another buffer is
+  applied live but not written back into that buffer.
+
+### Errors
+
+```
+Circular use: main → drums → bass → drums
+Unknown buffer :drumz — did you mean :drums?
+Unknown buffer :zzz
+use needs at least one buffer name, e.g. (use :drums)
+use expects buffer names as keywords, e.g. (use :drums) — got "drums"
+use only works when the project is evaluated (Alt+Enter in the editor)
+Duplicate track name :kick — already defined in buffer :drums; track names must be unique across the project
+Error in :drums: Undefined symbol: qqqqqqqq
+```
+
+Buffer tab errors:
+
+```
+Error: invalid buffer name "Drums!" — use a-z, 0-9 and -, starting with a letter (max 32)
+Error: a buffer named "drums" already exists
+Error: the main buffer can't be deleted
+Error: too many buffers (max 32)
 ```
 
 ---
@@ -2381,7 +2808,7 @@ Control them with the `fx` built-in.
 (fx :delay 0.5)            ; delay wet = 0.5
 
 ; Set named parameters
-(fx :reverb :wet 0.4 :room 0.8)
+(fx :reverb :wet 0.4 :dry 0.9)
 (fx :delay  :wet 0.5 :time 0.25 :feedback 0.4)
 (fx :filter :freq 800 :q 2)
 
@@ -2392,6 +2819,32 @@ Control them with the `fx` built-in.
 ; Remove an effect from the chain
 (fx :remove :delay)
 ```
+
+### `master` — the global chain in one block
+
+```lisp
+(master
+  (fx :delay  :time 0.375 :feedback 0.4)
+  (fx :reverb 0.3))
+```
+
+`master` groups the global `(fx …)` forms of a buffer. Each `(fx …)` inside runs exactly like
+the same form at top level, in source order. Rules:
+
+- Only `(fx …)` forms may appear inside. Anything else is an error:
+  `master only takes (fx …) forms — got (seq :bd)`. A per-track `(fx … pat)` is rejected too
+  (put it in the track's `->>` chain instead). `(master)` is allowed and does nothing.
+- One `master` per buffer — and per project: a second one is an error
+  (`Only one (master …) per buffer …`, or `… per project — already defined in buffer :name`).
+  None of the second block's effects are applied.
+- Top-level `(fx …)` keeps working. A buffer with both runs everything in source order and logs a
+  one-time console hint suggesting you move them into `master`.
+- `master` takes no options and does not change the signal order, which stays the built-in
+  [Effect chain order](#effect-chain-order).
+- The outline shows the block as a `master fx N` group; selecting it opens its effects in the
+  inspector, and the sliders rewrite the literal inside that `(fx …)`.
+- `(master …)` evaluates to `master: <n> fx` in the output. After a `(song …)` the song summary
+  is shown as usual.
 
 ### Per-track effects
 
@@ -3175,15 +3628,71 @@ Broadcast 24ppqn MIDI clock so external hardware/DAWs lock to REPuLse tempo:
 
 ### MIDI file export
 
-Export a track as a standard MIDI file (Type 0, 480 ticks/quarter note):
+Export a track — or the whole song — as a standard MIDI file (format 1, 480 ticks per quarter
+note, 4/4, one bar = one cycle):
 
 ```lisp
+(bpm 120)
 (track :lead (seq :c4 :e4 :g4 :b4))
-(midi-export :lead 4)    ; downloads repulse-lead.mid (4 cycles)
-(midi-export :lead 8)    ; 8 cycles
+(midi-export :lead 4)    ; repulse-lead.mid — 4 cycles of one track
+(midi-export :lead)      ; 4 cycles is the default
+(midi-export :song)      ; repulse-song-<bars>bars.mid — every track of the song
+(midi-export :drums 4 :drum-map {:perc 60})   ; add or override drum notes
 ```
 
-The `.mid` file opens in any DAW (Logic, Ableton, Reaper). Tempo is embedded in the file.
+| Form | What it does |
+|---|---|
+| `(midi-export :track [n])` | `n` cycles (default 4) of one track → `repulse-<track>.mid`. The track may be defined earlier in the same buffer |
+| `(midi-export :song)` | One pass of the song: one MIDI track per REPuLse track (those used in a section), plus a conductor track → `repulse-song-<bars>bars.mid`. Output: `exported song as MIDI — 3 tracks, 24 bars` |
+| `… :drum-map {:name note}` | Extra drum names (or overrides) merged over the GM table below; notes are integers 0–127 |
+
+- **Conductor track:** the tempo (the `(bpm …)` in effect when `midi-export` runs — put `(bpm …)`
+  above it), a 4/4 time signature and, for `:song`, one **marker** per section (`intro`, `verse`, …)
+  at the section's first bar. Every track ends at the last bar of the song / the cycle count, so a
+  DAW shows the full length even when the last bars are silent.
+- **Notes:** note keywords (`:c4` = 60), frequencies in Hz (`440` → 69) and `{:note …}` / `{:freq …}`
+  values become pitched notes; chords and overlapping notes are written correctly. Rests are skipped.
+  Note lengths are the event lengths (at least one tick). Ticks are computed from the pattern's exact
+  rational time, so long exports don't drift.
+- **Velocity from `amp`:** `velocity = round(amp × 127)`, limited to 1–127 (`amp 0.5` → 64; no `amp`
+  → 127). Tweened amps, e.g. `(amp (tween :linear 0 1 4))`, export as a velocity ramp.
+- **Drums on channel 10.** Drum keywords become General MIDI drum notes on channel 10 (the GM
+  drum channel); a track may mix drums and notes. Melodic notes use channels 1–9, 11–16 in track
+  order (a single-track export uses channel 1).
+
+  | Name | Note | Name | Note | Name | Note | Name | Note |
+  |---|---|---|---|---|---|---|---|
+  | `:bd` | 36 | `:rim` | 37 | `:sd` | 38 | `:cp` | 39 |
+  | `:hh` | 42 | `:lt` | 45 | `:oh` | 46 | `:mt` | 47 |
+  | `:cr` | 49 | `:ht` | 50 | `:rd` | 51 | `:tb` | 54 |
+  | `:cb` | 56 | `:sh` | 70 | | | | |
+
+  Bank-prefixed names (`:RolandTR808_oh`) and `(sound :bd 2)` use the part after the last `_` /
+  the sound name (`:oh` → 46). A drum-map entry wins over a note name, so `:cb` is the cowbell,
+  not C♭ (write `:cb4` for the note).
+- **Unmapped names.** Sample names with no pitch and no drum-map entry (`:tabla`, a bare
+  `defsynth` name) are left out, and the output tells you:
+  `exported 2 cycles of :p as MIDI — skipped 6 events with no GM drum note (:perc :tabla); map them with :drum-map`.
+  `(midi-export :p 2 :drum-map {:tabla 60 :perc 61})` writes them.
+- Errors: `Error: usage — (midi-export :track [cycles]) or (midi-export :song), optionally followed by :drum-map {…}`,
+  `Error: midi-export needs at least 1 cycle`,
+  `Error: :drum-map must map keywords to MIDI notes 0–127, e.g. {:perc 60}`,
+  `Error: no song — evaluate a buffer that ends with (song …) first`, `Error: no track :zz`.
+
+Live `midi-out` is unchanged (velocity there is `clamp(round(amp × 127), 0, 127)`).
+
+#### Getting a song into a DAW
+
+1. Set the DAW project tempo to the REPuLse BPM (the stems have no tempo information).
+2. **Stems:** run `(export :stems)`, unzip `repulse-stems.zip` and drag the WAV files into the
+   arrangement at **bar 1** (Ableton Live, Logic Pro, Reaper, Bitwig… all work the same). Every
+   file has the same length, so they stay aligned. Add reverb / compression on the master bus
+   yourself — master effects are not part of the stems.
+3. **MIDI:** run `(midi-export :song)` and open (or drag in) the `.mid` file. The tracks, tempo and
+   the section markers come in automatically; each REPuLse track is its own MIDI track named after
+   it. Assign an instrument to each; for the drum track (channel 10) pick a General MIDI drum kit
+   (in most DAWs the default drum rack or a GM kit works — `:bd` is C1 = 36 on a GM map).
+4. Mix and master both: stems for the sound you designed, MIDI to replay it with other instruments.
 
 ### MIDI sync input
 
@@ -3225,7 +3734,7 @@ REPuLse automatically saves all session state to `localStorage` and restores it 
 
 | State | Notes |
 |-------|-------|
-| Editor text | Full buffer contents |
+| Project buffers | Every buffer's text, which buffer is `main`, and the active tab |
 | BPM | Current tempo |
 | FX chain | Effect names, parameters, bypass state |
 | Bank prefix | Active `(bank :Name)` prefix |
@@ -3244,17 +3753,147 @@ When no session exists (first visit or after `(reset!)`), a random demo template
 (reset!)
 ```
 
-Stops playback, deletes all persisted state (editor, BPM, effects, bank, sample sources, mutes, and AI settings/history), and reloads the page to first-visit state with a fresh demo. Use this when you want a clean slate.
+Stops playback, deletes all persisted state (editor, BPM, effects, bank, sample sources, mutes, and AI settings/history), and reloads the page to first-visit state with a fresh demo. Use this when you want a clean slate. Saved snapshots and the eval history are kept (see [Snapshots & history](#snapshots--history)).
 
 ### URL sharing
 
-Click the **share** button or call `(share!)` to copy a full session URL to the clipboard. The URL encodes the complete session state (editor text, BPM, effects, bank, mutes) in the URL hash using base64. Loading the URL restores the full session immediately.
+Click the **share** button or call `(share!)` to copy a full session URL to the clipboard. The URL encodes the complete session state (all project buffers, BPM, bank, sample sources, mutes) in the URL hash using base64. Loading the URL restores the full project (it does not start playing).
 
 ```lisp
-(share!)  ; copies URL like https://repulse.app/#v2:eyJ2...
+(share!)  ; copies URL like https://repulse.app/#v3:eyJ2...
 ```
 
-Old `#v1:...` share URLs are still supported.
+Share links use the `#v3:` format. Old `#v2:` and `#v1:` links still load, as a project with a
+single `main` buffer. A share URL may be at most **64 000 characters**; a larger project shows
+
+```
+Share failed: link would be 71234 characters (limit 64000). Export the project as a .repulse file instead.
+```
+
+and nothing is copied.
+
+### `.repulse` project files
+
+The `export` button above the editor downloads the whole project as one EDN file named
+`<main>.repulse` — one buffer per line, so it diffs nicely in version control:
+
+```clojure
+{:version 3
+ :main "main"
+ :buffers [{:name "main" :code "(use :drums)\n(song (section :a 4 :all))"}
+           {:name "drums" :code "(track :kick (~ \"bd sd\"))"}]}
+```
+
+`import` reads such a file (max 5 MB), asks for confirmation and replaces the current project;
+`main` becomes active. Malformed files are rejected and the project is left unchanged:
+
+```
+Import failed: could not read EDN
+Import failed: expected a map
+Import failed: unsupported version 2 — expected :version 3
+Import failed: :buffers must be a non-empty vector
+Import failed: each buffer needs a :name and a :code string
+Import failed: invalid buffer name "Drums!" — use a-z, 0-9 and -, starting with a letter (max 32)
+Import failed: duplicate buffer name "main"
+Import failed: main buffer "song" not found
+Import failed: file too large (max 5 MB)
+```
+
+---
+
+## Snapshots & history
+
+Never lose an idea. Every project evaluation is kept in a bounded **eval history** you can
+scroll back through, preview as a line diff and restore with one click. Named **snapshots**
+("take A", "take B") save the whole project and can be restored, renamed, deleted and shared.
+
+### What is recorded
+
+- **Alt+Enter** and the **play** button record one history entry per evaluation, whether it
+  succeeded or failed. The entry stores the whole project: every buffer, BPM, bank prefix,
+  sample sources, mutes and MIDI mappings, captured right after the evaluation (so a
+  `(bpm 140)` in the code is part of it). Which tab is shown is not part of the state.
+- A new entry identical to the newest one replaces it (same `#id`, new time and status), so
+  pressing Alt+Enter ten times on the same code leaves one entry.
+- **Not recorded:** slider and inspector re-evaluations (a drag would push dozens of entries;
+  the next Alt+Enter records the result) and single-string evaluations: command bar, `(upd)` /
+  F9, tap tempo, demos, `load-gist`, the embed and AI previews.
+- The history keeps at most **500 entries** and about **20 000 000 characters** of stored
+  state; the oldest entries go first, but the newest is never dropped. Snapshots are never
+  evicted automatically (at most **100**).
+
+### Built-ins
+
+```lisp
+(snapshot! "take A")              ; => snapshot "take A" saved   (again: … updated)
+(snapshots)                       ; => ["take A"]  (newest first)
+(restore! "take A")               ; => restored snapshot "take A" — previous state is history #7
+(restore! 7)                      ; back to where you were (history entry #7)
+(rename-snapshot! "take A" "verse")   ; => snapshot "take A" renamed to "verse"
+(delete-snapshot! "verse")            ; => snapshot "verse" deleted
+(history)                         ; opens the panel: => history: 7 evaluations, 0 snapshots
+```
+
+| Built-in | Description |
+|---|---|
+| `(snapshot! name)` | Save the whole project under `name` (1-64 characters). An existing name is overwritten and becomes the newest snapshot. |
+| `(snapshots)` | Vector of snapshot names, newest first. |
+| `(restore! name)` / `(restore! id)` | Restore a snapshot by name or a history entry by number. |
+| `(rename-snapshot! old new)` | Rename a snapshot. |
+| `(delete-snapshot! name)` | Delete a snapshot permanently. |
+| `(history)` | Open the history panel and report the entry and snapshot counts. |
+
+### Restoring
+
+`restore!` (and the panel's **restore** buttons) never destroy anything: the current state is
+first recorded in the history as a "before restore" entry (unless the newest entry already holds
+exactly that state), and the message names it. `(restore! 7)` takes you back.
+
+A restore applies buffers (the `main` tab is shown), BPM, bank prefix, GitHub sample sources
+(loaded if missing) and mutes (applied after the next evaluation). It does **not** evaluate, stop
+playback or restore MIDI mappings. Press Alt+Enter to hear the restored project. When `restore!`
+is called from code, the project is replaced just after the running evaluation finishes.
+
+### The history panel
+
+Open it with the **hist** button in the top bar or `(history)`. It lists the snapshots and the
+newest 100 evaluations (**show older** loads 100 more). Each evaluation row shows the time, a
+green or red dot for success or error (hover for the error text), and a `+a -b` line summary
+against the previous entry. Click a row to preview a read-only line diff against the current
+project: `-` lines exist only in the entry, `+` lines were added since; unchanged buffers collapse
+to one line. **restore** applies it. Snapshot rows also have **link** (copies a `#v3:` share link
+for that snapshot, see [URL sharing](#url-sharing); a project over 64 000 characters shows the
+usual `Share failed: …` message), **rename** and **delete**. **clear history** removes all
+evaluation entries and keeps the snapshots. Previewing is code only; there is no audio audition.
+
+### Storage
+
+History and snapshots live in the browser's IndexedDB database `repulse-history`, local to your
+browser, and survive reloads. Identical states are stored once. `(reset!)` does not touch them;
+remove snapshots with `(delete-snapshot! …)` or the panel and the history with **clear history**.
+If IndexedDB is unavailable (some private windows) everything works but lasts only until reload;
+`(history)` then appends `— not saved across reloads (IndexedDB unavailable)`.
+
+### Errors
+
+```
+snapshot! expects one name string, e.g. (snapshot! "take A")
+restore! expects a snapshot name or a history number, e.g. (restore! "take A") or (restore! 12)
+rename-snapshot! expects two name strings, e.g. (rename-snapshot! "take A" "verse")
+delete-snapshot! expects one name string, e.g. (delete-snapshot! "take A")
+snapshot name must be 1–64 characters
+too many snapshots (max 100) — delete one with (delete-snapshot! "name")
+unknown snapshot "take B" — did you mean "take A"?
+unknown snapshot "zzz" — (snapshots) lists the saved names
+a snapshot named "verse" already exists
+unknown history entry #99
+snapshot "take A" is unreadable (corrupt data)
+history #3 is unreadable (corrupt data)
+snapshot store is still loading — try again in a moment
+snapshots and history are only available in the full app
+```
+
+The last one appears in the embedded `<repulse-editor>`, which has no history.
 
 ---
 
@@ -3273,10 +3912,26 @@ Open the built-in AI assistant panel. The assistant is a **tool-using agent** �
 
 **Getting started:**
 
-1. Click the **ai** button in the header, or run `(ai)` in the REPL
+1. Click the **AI rail** on the right edge, press **⌘I** (Ctrl+I), or run `(ai)` in the REPL
 2. Click **Enable AI assistant**
 3. Choose a provider and paste your API key (stored in localStorage; each request is relayed through the `/api/ai-stream` proxy, which never logs or stores the key)
 4. Type a question and press **Send** or **Cmd/Ctrl+Enter**
+
+### The AI rail
+
+The assistant lives in a right-hand **rail**: a 28 px strip on the right edge of the app (arrow `‹`, vertical "AI" label). Click it, press **⌘I** / **Ctrl+I**, or run `(ai)` to open a 300 px panel beside the editor. The editor shrinks when the panel opens and is never covered; click the rail (arrow `›`) or press the shortcut again to close it. The old **ai** button in the top nav is gone.
+
+- **Shortcut:** ⌘I / Ctrl+I works from the editor (it replaces CodeMirror's "select parent syntax" there), the command bar, the AI textarea and with nothing focused. Opening focuses the AI input; closing from inside the panel returns focus to the editor.
+- **Persistence:** open or closed is remembered across reloads (`localStorage` key `repulse:ai:panel-open`; `(reset!)` clears it). The first visit starts closed.
+- **Working state:** while a request runs, the panel shows three pulsing cyan dots with "thinking", a thin cyan sweep along the top of the input, and the placeholder `working…`. If the panel is closed, the rail shows a pulsing dot instead. Use **cancel** to stop a request.
+- **Context chip:** the header shows `ctx :bass` for what the model is told you mean. It is the outline selection (several tracks show `ctx 2 tracks`), or, with nothing selected, the outline entry under the cursor (`ctx :chorus`, `ctx kick`, `ctx song`). With no context the chip is hidden. The focus (kind and name) is added to the system prompt; the selected form's **source text is sent only when "Share editor code with AI" is on** in the AI settings.
+
+```lisp
+; Select the :bass row in the outline, then ask "give it more movement":
+; the header shows "ctx :bass" and the model is told the user means (track :bass ...).
+(track :bass (->> (seq :c2 :eb2) (amp 0.6)))
+(ai "give the bass more movement")   ; still works, opens the rail panel
+```
 
 **Agent tools** (the assistant calls these automatically — you never invoke them directly):
 
@@ -3612,6 +4267,14 @@ track :boom playing — Warning: unknown sound :kick — did you mean :bd?
 
 See [Keywords as sounds](#keywords-as-sounds).
 
+Errors inside a project buffer other than `main` name the buffer (and that tab becomes active):
+
+```
+Error in :drums: Undefined symbol: qqqqqqqq
+```
+
+See [Projects & buffers](#projects--buffers) for the `use`, buffer-name, share and import errors.
+
 Calling a signal as a function is an error with a hint:
 
 ```
@@ -3838,8 +4501,18 @@ do-expr    = "(do" expr+ ")"
 ;; Render 1 cycle (useful for short loops)
 (export 1)
 
-;; Capture the whole song (buffer ending in (song …)) in real time, with FX
+;; Render the whole song (buffer ending in (song …)) offline, with FX
 (export :song)
+
+;; …or record it in real time
+(export :song :realtime)
+
+;; One WAV per track (zip), or 8 cycles of a single track
+(export :stems)
+(export :kick 8)
+
+;; The whole song as a MIDI file, drums on channel 10
+(midi-export :song)
 ```
 
 ### Per-track effects

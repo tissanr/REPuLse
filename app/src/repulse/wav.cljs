@@ -1,6 +1,7 @@
 (ns repulse.wav
   "16-bit stereo PCM WAV encoding and browser download.
-   Shared by (export n) / (export :track) and (export :song).")
+   Shared by (export n) / (export :track) and (export :song)."
+  (:require [repulse.download :as download]))
 
 (defn encode-wav-16
   "Encode two Float32Array channels (equal length) as a 16-bit stereo RIFF/WAVE
@@ -46,12 +47,4 @@
 (defn download-wav!
   "Offer an encoded WAV ArrayBuffer as a file download."
   [buf filename]
-  (let [blob (js/Blob. #js [buf] #js {:type "audio/wav"})
-        url  (.createObjectURL js/URL blob)
-        a    (.createElement js/document "a")]
-    (set! (.-href a) url)
-    (set! (.-download a) filename)
-    (.appendChild (.-body js/document) a)
-    (.click a)
-    (.removeChild (.-body js/document) a)
-    (js/setTimeout #(.revokeObjectURL js/URL url) 1000)))
+  (download/download-parts! #js [buf] "audio/wav" filename))

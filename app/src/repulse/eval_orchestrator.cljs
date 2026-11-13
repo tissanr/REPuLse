@@ -2,10 +2,13 @@
   "Evaluation entry point, diagnostics, and live slider patching.
    Responsibility: own evaluate!, set-diagnostics!, pending-mutes, and all
    editor code-patching logic for slider updates.
-   Exports: evaluate!, evaluate-in-context!, set-diagnostics!, pending-mutes,
+   Exports: evaluate!, evaluate-project!, evaluate-in-context!, set-diagnostics!,
+            pending-mutes,
             slider-patch-and-eval!, fx-slider-patch-and-eval!,
             fx-select-patch-and-eval!, per-track-fx-slider-patch-and-eval!,
-            per-track-fx-select-patch-and-eval!"
+            per-track-fx-select-patch-and-eval!,
+            begin-slider-drag!, end-slider-drag! (WS1: one undo step per drag),
+            inline-slider-patch-and-eval! (WS3: inline (slider …) widget drags)"
   (:require [repulse.lisp.core :as lisp]
             [repulse.core :as core]
             [repulse.audio :as audio]
@@ -14,14 +17,22 @@
             [repulse.synth :as synth]
             [repulse.fx :as fx]
             [repulse.env.builtins :as builtins]
+            [repulse.env.builtins.fx :as b-fx]
             [repulse.song :as song]
             [repulse.song-transport :as song-transport]
+            [repulse.project :as project]
+            [repulse.project-eval :as project-eval]
             [repulse.ui.editor :as editor]
-            [repulse.ui.context-panel :as ctx-panel]
+            [repulse.ui.buffers :as buffers]
+            [repulse.ui.slider-model :as sm]
             [repulse.lisp-patcher :as patcher]
             [repulse.ai.tools :as ai-tools]
+            [repulse.history-store :as history-store]
+            [repulse.session :as session]
             [clojure.string :as cstr]
-            ["@codemirror/lint" :refer [setDiagnostics]]))
+            ["@codemirror/lint" :refer [setDiagnostics]]
+            ["@codemirror/state" :refer [Transaction]]
+            ["@codemirror/commands" :refer [isolateHistory]]))
 
 ;;; Owned atoms
 
@@ -47,6 +58,8 @@
   ;; track/song/play-from/export only collect into song-transport's pending
   ;; atoms; nothing is activated here, so the AI preview stays silent.
   (song-transport/reset-pending!)
+  (b-fx/reset-master-run!)
+  (reset! builtins/eval-warnings [])
   (try
     (builtins/ensure-env!)
     (let [env    @builtins/env-atom
@@ -61,7 +74,9 @@
     (catch :default e
       {:ok false :error (.-message e)})
     (finally
-      (song-transport/reset-pending!))))
+      (song-transport/reset-pending!)
+      (b-fx/reset-master-run!)
+      (reset! builtins/eval-warnings []))))
 
 (defn init!
   "Wire app-level callback fns into this module.
@@ -104,8 +119,9 @@
   "Warn about sound keywords in the tracks just evaluated that nothing can play
    (they fall back to a quiet 440 Hz sine). Waits for in-flight sample manifest
    loads so banks that are still loading are not reported. Appends the warning
-   to base-msg in the output line and marks each occurrence in the editor."
-  [track-names code base-msg set-output!]
+   to base-msg in the output line and marks each occurrence in the editor.
+   extra-diags (WS3 slider warnings) are kept in front of its own diagnostics."
+  [extra-diags track-names code base-msg set-output!]
   (let [gen @eval-generation]
     (samples/when-loaded!
      (fn []
@@ -125,9 +141,10 @@
                (when-let [view @editor/editor-view]
                  (set-warning-diagnostics!
                   view
-                  (for [[entry msg] (map vector unknown msgs)
-                        r           (sound-check/keyword-ranges code (:name entry))]
-                    (assoc r :message msg))))))))))))
+                  (concat extra-diags
+                          (for [[entry msg] (map vector unknown msgs)
+                                r           (sound-check/keyword-ranges code (:name entry))]
+                            (assoc r :message msg)))))))))))))
 
 ;;; Continuous signals without structure
 
@@ -149,9 +166,74 @@
                         "Warning: " (cstr/join "; " msgs))
                    :warning))))
 
+;;; Slider clamp warnings (Phase WS3)
+
+(defn- slider-warning-diags
+  "Diagnostics [{:from :to :message}] for the active editor buffer from the
+   collected eval warnings. Project mode maps global ranges to their buffer."
+  [warnings project bases]
+  (vec
+    (for [{:keys [from to message]} warnings
+          :when (and from to)
+          :let [loc (if project
+                      (when-let [l (project/locate bases from to)]
+                        (when (= (:buffer l) (buffers/active-name)) l))
+                      {:from from :to to})]
+          :when loc]
+      {:from (:from loc) :to (:to loc) :message message})))
+
+(defn- report-slider-warnings!
+  "Append the eval warnings (distinct messages) to the output line and mark
+   them in the editor. Returns nothing; no-op without warnings."
+  [diags last-output set-output!]
+  (when-let [ws (seq @builtins/eval-warnings)]
+    (let [msgs (distinct (map :message ws))]
+      (doseq [m msgs] (js/console.warn "[REPuLse]" m))
+      (set-output! (str (when @last-output (str @last-output " — "))
+                        "Warning: " (cstr/join "; " msgs))
+                   :warning)
+      (when-let [view @editor/editor-view]
+        (set-warning-diagnostics! view diags)))))
+
 ;;; Evaluation
 
-(defn evaluate! [code]
+;; Offset bases of the last successful project evaluation (Phase SONG4).
+(defonce last-bases (atom {"main" 0}))
+
+(defn- project-highlighter
+  "on-event callback for a project evaluation: map a global source range back
+   to its buffer and highlight it only when that buffer is shown."
+  [bases]
+  (fn [src]
+    (when-let [{:keys [buffer from to]} (project/locate bases (:from src) (:to src))]
+      (when (= buffer (buffers/active-name))
+        (editor/highlight-range! {:from from :to to})))))
+
+(defn- report-eval-error!
+  "Show an evaluation error: diagnostic + output line. In project mode the
+   global position is mapped to its buffer, which becomes active."
+  [result project set-output!]
+  (editor/clear-highlights!)
+  (let [{:keys [from to]} (:source result)
+        msg (:message result)]
+    (if project
+      (let [loc (project/locate (project/offset-bases project) from to)
+            buf (or (:buffer loc) (:main project))]
+        (when (and (:buffer loc) (not= buf (buffers/active-name)))
+          (buffers/switch-to! buf))
+        (buffers/clear-all-diagnostics!)
+        (when-let [view @editor/editor-view]
+          (when loc (set-diagnostics! view (:from loc) (:to loc) msg)))
+        (set-output! (if (= buf (:main project))
+                       (str "Error: " msg)
+                       (str "Error in :" buf ": " msg))
+                     :error))
+      (do
+        (when-let [view @editor/editor-view]
+          (set-diagnostics! view from to msg))
+        (set-output! (str "Error: " msg) :error)))))
+
+(defn- evaluate* [code {:keys [project]}]
   (let [{:keys [on-beat make-stop-fn set-playing!]} @cbs
         ;; Remember the last output message so an unknown-sound warning can be
         ;; appended to it rather than replacing it.
@@ -166,31 +248,44 @@
     (fx/reset-global-effects!)
     ;; Clear per-evaluation duplicate-track detector
     (reset! builtins/seen-tracks #{})
+    ;; Clear the per-evaluation eval warnings (Phase WS3: slider clamps)
+    (reset! builtins/eval-warnings [])
+    ;; Clear the per-evaluation (master …) state (Phase WS2)
+    (b-fx/reset-master-run!)
     ;; Clear tracks/song/play-from/export collected by the previous evaluation
     (song-transport/reset-pending!)
     ;; Keep stop fn up to date (in case env was reset)
     (let [env    (assoc @builtins/env-atom "stop" (make-stop-fn))
-          result (lisp/eval-string code env)]
+          ;; Project mode (Phase SONG4): evaluate from the main buffer with
+          ;; `use` enabled; every source position is global (offset per buffer).
+          {result :value bases :bases}
+          (if project
+            (project-eval/run-project project env)
+            {:value (lisp/eval-string code env)})
+          on-event (if project (project-highlighter bases) editor/highlight-range!)]
       (if (lisp/eval-error? result)
-        (do
-          (editor/clear-highlights!)
-          (when-let [view @editor/editor-view]
-            (let [{:keys [from to]} (:source result)]
-              (set-diagnostics! view from to (:message result))))
-          (set-output! (str "Error: " (:message result)) :error))
-        (let [val (:result result)]
+        (do (report-eval-error! result project set-output!)
+            {:ok? false :error (:message result)})
+        (let [slider-diags (slider-warning-diags @builtins/eval-warnings project bases)
+              run-song @song-transport/pending-song
+              ;; WS2: `(song …)` followed by `(master …)` still reports the song.
+              val      (let [v (:result result)]
+                         (if (and run-song (b-fx/master-result? v)) run-song v))]
+          (when project (reset! last-bases bases))
           ;; Clear stale diagnostics only when there is a real result.
           ;; A nil val means the command handled output itself (e.g. (upd), (stop))
           ;; and may have already set its own diagnostics — don't clobber them.
-          (when (some? val)
-            (when-let [view @editor/editor-view]
-              (set-diagnostics! view nil nil nil)))
+          (if project
+            (buffers/clear-all-diagnostics!)
+            (when (some? val)
+              (when-let [view @editor/editor-view]
+                (set-diagnostics! view nil nil nil))))
           ;; SONG1: start the tracks collected during evaluation (under the
           ;; buffer's song, if any), then apply (play-from …) / (export :song).
           ;; Runs before the cond so a buffer ending in a bare pattern still
           ;; replaces all tracks with :_ exactly as before.
           (song-transport/activate-buffer! {:on-beat      on-beat
-                                            :on-event     editor/highlight-range!
+                                            :on-event     on-event
                                             :set-playing! set-playing!})
           (cond
             ;; Song value — tracks were activated under it above
@@ -211,7 +306,7 @@
             (do
               (audio/stop!)
               (editor/clear-highlights!)
-              (audio/play-track! :_ val on-beat editor/highlight-range!)
+              (audio/play-track! :_ val on-beat on-event)
               (fx/apply-track-effects! :_ (:track-fx val))
               (set-playing! true)
               (set-output! "playing pattern — Alt+Enter to re-evaluate, (stop) to stop" :success))
@@ -222,7 +317,7 @@
             (do
               (audio/stop!)
               (editor/clear-highlights!)
-              (audio/play-track! :_ (core/pure val) on-beat editor/highlight-range!)
+              (audio/play-track! :_ (core/pure val) on-beat on-event)
               (set-playing! true)
               (set-output! "playing — Alt+Enter to re-evaluate, (stop) to stop" :success))
 
@@ -237,6 +332,12 @@
             :else
             (set-output! (str "=> " (pr-str val)) :success))
 
+          ;; WS2: one-time console hint for master + top-level (fx …)
+          (b-fx/loose-fx-hint!)
+
+          ;; WS3: clamped (slider …) values
+          (report-slider-warnings! slider-diags last-output set-output!)
+
           ;; ── Legacy :_ track hot-swap ──────────────────────────────────────
           ;; When the last form is not a pattern (e.g. (defsynth lfo ...) follows
           ;; (def bass ...)), the scheduler's :_ track is never updated because
@@ -249,7 +350,7 @@
                   pats      (filter core/pattern? defs-vals)]
               (when (= 1 (count pats))
                 (let [pat (first pats)]
-                  (audio/play-track! :_ pat on-beat editor/highlight-range!)
+                  (audio/play-track! :_ pat on-beat on-event)
                   (fx/apply-track-effects! :_ (:track-fx pat))))))
 
           ;; ── Apply restored mutes after first eval ─────────────────────────
@@ -268,16 +369,94 @@
 
           ;; ── Unknown sound names ───────────────────────────────────────────
           ;; Tracks defined by this evaluation, plus the anonymous :_ track.
-          (report-unknown-sounds! (conj @builtins/seen-tracks :_)
-                                  code @last-output set-output!))))))
+          ;; In project mode the warning ranges are placed in the active buffer.
+          (report-unknown-sounds! slider-diags
+                                  (conj @builtins/seen-tracks :_)
+                                  (if project
+                                    (or (project/code-of project (:active project)) "")
+                                    code)
+                                  @last-output set-output!)
+          {:ok? true})))))
+
+(defn evaluate!
+  "Evaluate a single code string (command bar, (upd), tap, demos, …).
+   Not recorded in the eval history (Phase SK2, K1)."
+  [code]
+  (evaluate* code nil)
+  nil)
+
+(defn evaluate-project!
+  "Evaluate the whole project starting from its main buffer (Alt+Enter, play
+   button, slider re-evaluation) — Phase SONG4. Records the result in the eval
+   history unless :record? is false (Phase SK2; slider re-evals pass false)."
+  ([] (evaluate-project! {:record? true}))
+  ([{:keys [record?]}]
+   (let [p (buffers/current-project)
+         r (evaluate* (project/code-of p (:main p)) {:project p})]
+     (when record?
+       (history-store/record-eval! (session/build-session-snapshot)
+                                   (:ok? r) (:error r)))
+     nil)))
 
 ;;; Code patching for live slider updates
 
 (defn- fmt-num [v]
   (if (== v (Math/round v)) (str (int v)) (.toFixed v 2)))
 
+;; Slider drag session (Phase WS1): the doc string at drag start, or nil.
+;; While set, slider patches stay out of the undo history; end-slider-drag!
+;; then records the whole drag as one history event.
+(defonce ^:private drag-origin (atom nil))
+
+(defn begin-slider-drag!
+  "Start a slider drag (or a one-step keyboard change) on the main editor."
+  []
+  (when-let [view @editor/editor-view]
+    (reset! drag-origin (.. view -state -doc (toString)))))
+
+(defn- no-history [] (.of (.-addToHistory Transaction) false))
+
+(defn- schedule-slider-eval!
+  "Debounced (150 ms) re-evaluation after a slider patch."
+  []
+  (when @slider-timeout (js/clearTimeout @slider-timeout))
+  (reset! slider-timeout
+    (js/setTimeout
+      (fn []
+        (reset! slider-timeout nil)
+        (evaluate-project! {:record? false}))
+      150)))
+
+(defn- clamp-to-slider
+  "Clamp v into the (slider …) range of a finder result r (WS3); v otherwise."
+  [r v]
+  (let [{:keys [min max]} (:slider r)]
+    (if (and (number? min) (number? max))
+      (cljs.core/max min (cljs.core/min max v))
+      v)))
+
 (defn- dispatch-replace! [view from to text]
-  (.dispatch view #js {:changes #js {:from from :to to :insert text}}))
+  (.dispatch view
+    (if @drag-origin
+      #js {:changes #js {:from from :to to :insert text}
+           :annotations #js [(no-history)]}
+      #js {:changes #js {:from from :to to :insert text}})))
+
+(defn end-slider-drag!
+  "Finish a slider drag: revert the buffer to its drag-start text without
+   history, then re-apply the net change as exactly one (isolated) undo event.
+   The buffer text is unchanged; only the history is collapsed."
+  []
+  (when-let [orig @drag-origin]
+    (reset! drag-origin nil)
+    (when-let [view @editor/editor-view]
+      (let [cur (.. view -state -doc (toString))]
+        (when-let [back (sm/text-diff cur orig)]
+          (.dispatch view #js {:changes (clj->js back)
+                               :annotations #js [(no-history)]})
+          (let [fwd (sm/text-diff orig cur)]
+            (.dispatch view #js {:changes (clj->js fwd)
+                                 :annotations #js [(.of isolateHistory "full")]})))))))
 
 (defn- patch-param-in-editor!
   "Replace the number in the first (param-name NUMBER) form at or after
@@ -287,75 +466,55 @@
     (let [doc         (.. view -state -doc (toString))
           track-kw    (str ":" track-name)
           scope-start (let [p (.indexOf doc track-kw)] (if (>= p 0) p 0))]
-      (when-let [{:keys [from to]} (patcher/find-param-num doc scope-start (.-length doc) param-name)]
-        (dispatch-replace! view from to (fmt-num new-val))))))
+      (when-let [{:keys [from to] :as r} (patcher/find-param-num doc scope-start (.-length doc) param-name)]
+        (dispatch-replace! view from to (fmt-num (clamp-to-slider r new-val)))))))
 
 (defn slider-patch-and-eval! [track-name param-name new-val]
   (patch-param-in-editor! track-name param-name new-val)
-  (when @slider-timeout (js/clearTimeout @slider-timeout))
-  (reset! slider-timeout
-    (js/setTimeout
-      (fn []
-        (reset! slider-timeout nil)
-        (when-let [view @editor/editor-view]
-          (evaluate! (.. view -state -doc (toString)))))
-      150)))
+  (schedule-slider-eval!))
 
 (defn- patch-fx-param-in-editor!
-  "Update or insert a param in a (fx :effect-name ...) call.
-   Named :param-name NUMBER exists -> replace the number.
-   Positional (fx :effect-name NUMBER) for primary param -> replace.
-   Not found -> insert :param-name value before the closing )."
-  [effect-name param-name new-val]
+  "Update or insert a param in a (fx :effect-name ...) call. With `at` (char
+   offset of the form's open paren) only that form is edited; a stale `at`
+   writes nothing. Without `at` the first matching form in the buffer is used."
+  [effect-name param-name new-val at]
   (when-let [view @editor/editor-view]
-    (let [doc      (.. view -state -doc (toString))
-          doc-len  (.-length doc)
-          primary? (= param-name (get ctx-panel/FX-PRIMARY-PARAM effect-name))
-          fmtd     (fmt-num new-val)
-          result   (or (patcher/find-fx-named-param-num doc 0 doc-len effect-name param-name)
-                       (when primary?
-                         (patcher/find-fx-pos-param-num doc 0 doc-len effect-name)))]
-      (if result
-        (dispatch-replace! view (:from result) (:to result) fmtd)
-        (when-let [close (patcher/find-fx-form-close doc 0 doc-len effect-name)]
-          (dispatch-replace! view close close (str " :" param-name " " fmtd)))))))
+    (let [doc (.. view -state -doc (toString))]
+      (when-let [{:keys [from to insert] :as edit}
+                 (patcher/fx-param-edit doc effect-name param-name (fmt-num new-val)
+                                        (= param-name (get sm/FX-PRIMARY-PARAM effect-name))
+                                        at)]
+        (dispatch-replace! view from to
+                           (if (:slider edit)
+                             (fmt-num (clamp-to-slider edit new-val))
+                             insert))))))
 
-(defn fx-slider-patch-and-eval! [effect-name param-name new-val]
-  (fx/set-param! effect-name param-name new-val)
-  (patch-fx-param-in-editor! effect-name param-name new-val)
-  (when @slider-timeout (js/clearTimeout @slider-timeout))
-  (reset! slider-timeout
-    (js/setTimeout
-      (fn []
-        (reset! slider-timeout nil)
-        (when-let [view @editor/editor-view]
-          (evaluate! (.. view -state -doc (toString)))))
-      150)))
+(defn fx-slider-patch-and-eval!
+  ([effect-name param-name new-val]
+   (fx-slider-patch-and-eval! effect-name param-name new-val nil))
+  ([effect-name param-name new-val at]
+   (fx/set-param! effect-name param-name new-val)
+   (patch-fx-param-in-editor! effect-name param-name new-val at)
+   (schedule-slider-eval!)))
 
 (defn- patch-fx-keyword-param-in-editor!
-  "Update or insert a keyword param in a (fx :effect-name ...) call."
-  [effect-name param-name new-val]
+  "Update or insert a keyword param in a (fx :effect-name ...) call (see
+   patch-fx-param-in-editor! for `at`)."
+  [effect-name param-name new-val at]
   (when-let [view @editor/editor-view]
-    (let [doc      (.. view -state -doc (toString))
-          doc-len  (.-length doc)
-          fmtd     (str ":" new-val)
-          result   (patcher/find-fx-named-param-keyword doc 0 doc-len effect-name param-name)]
-      (if result
-        (dispatch-replace! view (:from result) (:to result) fmtd)
-        (when-let [close (patcher/find-fx-form-close doc 0 doc-len effect-name)]
-          (dispatch-replace! view close close (str " :" param-name " " fmtd)))))))
+    (let [doc (.. view -state -doc (toString))]
+      (when-let [{:keys [from to insert]}
+                 (patcher/fx-keyword-param-edit doc effect-name param-name
+                                                (str ":" new-val) at)]
+        (dispatch-replace! view from to insert)))))
 
-(defn fx-select-patch-and-eval! [effect-name param-name new-val]
-  (fx/set-param! effect-name param-name new-val)
-  (patch-fx-keyword-param-in-editor! effect-name param-name new-val)
-  (when @slider-timeout (js/clearTimeout @slider-timeout))
-  (reset! slider-timeout
-    (js/setTimeout
-      (fn []
-        (reset! slider-timeout nil)
-        (when-let [view @editor/editor-view]
-          (evaluate! (.. view -state -doc (toString)))))
-      150)))
+(defn fx-select-patch-and-eval!
+  ([effect-name param-name new-val]
+   (fx-select-patch-and-eval! effect-name param-name new-val nil))
+  ([effect-name param-name new-val at]
+   (fx/set-param! effect-name param-name new-val)
+   (patch-fx-keyword-param-in-editor! effect-name param-name new-val at)
+   (schedule-slider-eval!)))
 
 (defn- patch-per-track-fx-param-in-editor!
   "Update or insert a param in (fx :effect-name ...) scoped to (track :track-name ...)."
@@ -367,27 +526,21 @@
       (when (>= track-start 0)
         (let [scope-end (let [p (.indexOf doc "(track :" (inc track-start))]
                           (if (>= p 0) p (.-length doc)))
-              primary?  (= param-name (get ctx-panel/FX-PRIMARY-PARAM effect-name))
+              primary?  (= param-name (get sm/FX-PRIMARY-PARAM effect-name))
               fmtd      (fmt-num new-val)
               result    (or (patcher/find-fx-named-param-num doc track-start scope-end effect-name param-name)
                             (when primary?
                               (patcher/find-fx-pos-param-num doc track-start scope-end effect-name)))]
           (if result
-            (dispatch-replace! view (:from result) (:to result) fmtd)
+            (dispatch-replace! view (:from result) (:to result)
+                               (fmt-num (clamp-to-slider result new-val)))
             (when-let [close (patcher/find-fx-form-close doc track-start scope-end effect-name)]
               (dispatch-replace! view close close (str " :" param-name " " fmtd)))))))))
 
 (defn per-track-fx-slider-patch-and-eval! [track-name effect-name param-name new-val]
   (fx/set-track-param! (keyword track-name) effect-name param-name new-val)
   (patch-per-track-fx-param-in-editor! track-name effect-name param-name new-val)
-  (when @slider-timeout (js/clearTimeout @slider-timeout))
-  (reset! slider-timeout
-    (js/setTimeout
-      (fn []
-        (reset! slider-timeout nil)
-        (when-let [view @editor/editor-view]
-          (evaluate! (.. view -state -doc (toString)))))
-      150)))
+  (schedule-slider-eval!))
 
 (defn- patch-per-track-fx-keyword-param-in-editor!
   "Update or insert a keyword param in (fx :effect-name ...) scoped to (track :track-name ...)."
@@ -409,11 +562,18 @@
 (defn per-track-fx-select-patch-and-eval! [track-name effect-name param-name new-val]
   (fx/set-track-param! (keyword track-name) effect-name param-name new-val)
   (patch-per-track-fx-keyword-param-in-editor! track-name effect-name param-name new-val)
-  (when @slider-timeout (js/clearTimeout @slider-timeout))
-  (reset! slider-timeout
-    (js/setTimeout
-      (fn []
-        (reset! slider-timeout nil)
-        (when-let [view @editor/editor-view]
-          (evaluate! (.. view -state -doc (toString)))))
-      150)))
+  (schedule-slider-eval!))
+
+;;; Inline slider widgets (Phase WS3)
+
+(defn inline-slider-patch-and-eval!
+  "Phase WS3: set the value literal of the (slider …) form whose ( is at `at` to
+   `text` and schedule the debounced re-evaluation. A stale `at` (no slider
+   form starts there) writes nothing and schedules nothing."
+  [at text]
+  (when-let [view @editor/editor-view]
+    (let [doc (.. view -state -doc (toString))]
+      (when-let [{:keys [value]} (patcher/slider-form-at doc at)]
+        (when (not= text (:text value))
+          (dispatch-replace! view (:from value) (:to value) text)
+          (schedule-slider-eval!))))))

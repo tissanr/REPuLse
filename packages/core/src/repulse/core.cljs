@@ -140,7 +140,10 @@
 ;;; Core combinators
 
 (defn pure
-  ([value] (pure value nil))
+  "A pattern with one event per cycle carrying value. Without an explicit
+   source, a {:from :to} :source in value's metadata is used, so a value map
+   returned by a call such as (sound :bd 0) still highlights in the editor."
+  ([value] (pure value (:source (meta value))))
   ([value source]
    (pattern
     (fn [{:keys [start end]}]
@@ -1506,6 +1509,97 @@
   "Apply f n times."
   [n f pat]
   ((patternify (fn [n' p] (nth (iterate f p) (max 0 (->int n'))))) n pat))
+
+;;; ── Phase TL4b: Pick & fix ───────────────────────────────────────────
+
+(defn- reset-join* [pp restart?]
+  (pattern
+   (fn [sp]
+     (for [oe (query pp sp)
+           :when (:whole oe)
+           :let [ws  (:start (:whole oe))
+                 off (if restart?
+                       ws
+                       (rat- ws (int->rat (Math/floor (rat->float ws)))))]
+           ie (query (late* off (->pat (:value oe))) (:part oe))
+           :let [p (span-intersect (:part ie) (:part oe))]
+           :when p]
+       (assoc ie
+              :whole (when (:whole ie) (span-intersect (:whole ie) (:whole oe)))
+              :part  p)))))
+
+(defn reset-join
+  "Strudel resetJoin: each outer event restarts the current cycle of its inner pattern
+   (the inner pattern is shifted so its cycle start lines up with the event)."
+  [pp] (reset-join* pp false))
+
+(defn restart-join
+  "Strudel restartJoin: each outer event restarts its inner pattern from cycle 0."
+  [pp] (reset-join* pp true))
+
+(defn- pick-num [x]
+  (cond (number? x) x
+        (and (vector? x) (= 2 (count x)) (every? number? x) (not (zero? (second x))))
+        (rat->float x)
+        :else nil))
+
+(defn- pick-entry
+  "K3/K4: the lookup entry selected by index value v, or nil."
+  [lookup v mod?]
+  (if (vector? lookup)
+    (when-let [x (pick-num v)]
+      (let [n (count lookup) i (Math/round x)]
+        (nth lookup (if mod? (mod i n) (min (dec n) (max 0 i))))))
+    (or (get lookup v)
+        (when (string? v) (get lookup (keyword v))))))
+
+(defn- pick-pats [lookup ipat mod?]
+  (fmap #(or (pick-entry lookup % mod?) silence) (->pat ipat)))
+
+(defn- pick-with [join lookup ipat mod?]
+  (if (empty? lookup) silence (join (pick-pats lookup ipat mod?))))
+
+(defn pick
+  "Strudel pick: choose a pattern from a vector (clamped index) or map (name); inner join."
+  [lookup ipat] (pick-with inner-join lookup ipat false))
+(defn pick-mod
+  "Strudel pickmod: as pick, vector index wraps; inner join."
+  [lookup ipat] (pick-with inner-join lookup ipat true))
+(defn pick-out
+  "Strudel pickOut: as pick, structure from the index pattern; outer join."
+  [lookup ipat] (pick-with outer-join lookup ipat false))
+(defn pick-mod-out
+  "Strudel pickmodOut: as pick-out, vector index wraps."
+  [lookup ipat] (pick-with outer-join lookup ipat true))
+(defn pick-restart
+  "Strudel pickRestart: chosen pattern restarts from cycle 0 at each step; restart join."
+  [lookup ipat] (pick-with restart-join lookup ipat false))
+(defn pick-mod-restart
+  "Strudel pickmodRestart: as pick-restart, vector index wraps."
+  [lookup ipat] (pick-with restart-join lookup ipat true))
+(defn pick-reset
+  "Strudel pickReset: chosen pattern's current cycle restarts at each step; reset join."
+  [lookup ipat] (pick-with reset-join lookup ipat false))
+(defn pick-mod-reset
+  "Strudel pickmodReset: as pick-reset, vector index wraps."
+  [lookup ipat] (pick-with reset-join lookup ipat true))
+(defn inhabit
+  "Strudel inhabit/pickSqueeze: squeeze one cycle of the chosen pattern into each step."
+  [lookup ipat] (pick-with squeeze-join lookup ipat false))
+(defn inhabit-mod
+  "Strudel inhabitmod/pickmodSqueeze: as inhabit, vector index wraps."
+  [lookup ipat] (pick-with squeeze-join lookup ipat true))
+
+(defn- pick-f* [ipat fs pat mod?]
+  (if (empty? fs)
+    silence
+    (inner-join (fmap #(if-let [f (pick-entry fs % mod?)] (f pat) silence) (->pat ipat)))))
+(defn pick-f
+  "Strudel pickF: apply the function chosen by ipat to pat; inner join."
+  [ipat fs pat] (pick-f* ipat fs pat false))
+(defn pick-mod-f
+  "Strudel pickmodF: as pick-f, vector index wraps."
+  [ipat fs pat] (pick-f* ipat fs pat true))
 
 ;;; ── Phase TL5: Layering & arpeggios ──────────────────────────────────
 

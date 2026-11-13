@@ -172,7 +172,7 @@ app/
     eval_orchestrator.cljs  Evaluates the editor buffer and routes results
     audio.cljs              Lookahead scheduler + AudioWorklet bridge
     env/builtins/           App-layer built-ins (tracks, fx, samples, MIDI, …)
-    ui/                     Editor, context panel, timeline, snippet panel, AI panel
+    ui/                     Editor, outline + status head + inspector, timeline, snippet panel, AI panel
     ai/                     AI assistant (agent loop, tools, providers)
     lisp-lang/              CodeMirror language support (grammar, completions, hover)
     content/                Demos, tutorial, built-in metadata (builtin_meta.edn)

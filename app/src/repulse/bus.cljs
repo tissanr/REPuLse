@@ -93,6 +93,6 @@
   (reset! bus-nodes {}))
 
 (defn active-buses
-  "Return a map of bus-name → {:type :audio|:control} for the context panel."
+  "Return a map of bus-name → {:type :audio|:control} for the outline session block."
   []
   (into {} (map (fn [[k v]] [k (select-keys v [:type])]) @bus-nodes)))

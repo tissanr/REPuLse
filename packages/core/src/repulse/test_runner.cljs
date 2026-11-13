@@ -11,19 +11,31 @@
             [repulse.fx-test]
             [repulse.session-test]
             [repulse.song-transport-test]
+            [repulse.offline-render-test]
             [repulse.wav-test]
+            [repulse.zip-test]
+            [repulse.midi-export-test]
             [repulse.samples-test]
             [repulse.sound-check-test]
             [repulse.content.demos-test]
             [repulse.ui.timeline-test]
             [repulse.outline-test]
+            [repulse.lisp-patcher-test]
+            [repulse.project-test]
+            [repulse.history-test]
+            [repulse.project-eval-test]
             [repulse.ai.safety-test]
             [repulse.ai.edit-test]
             [repulse.ai.client-test]
             [repulse.ai.models-test]
             [repulse.ai.tool-calls-test]
             [repulse.ai.knowledge-test]
-            [repulse.audio-clock-test]))
+            [repulse.ai.context-test]
+            [repulse.audio-clock-test]
+            [repulse.ui.slider-model-test]
+            [repulse.ui.status-model-test]
+            [repulse.ui.selection-test]
+            [repulse.ui.inspector-model-test]))
 
 ;; Without this the process exits 0 even when tests fail, so `npm test` (and CI)
 ;; would pass regardless of the result.
@@ -37,16 +49,25 @@
                   'repulse.lisp.eval-test 'repulse.lisp.mini-test
                   'repulse.lisp.integration-test
                   'repulse.fx-test 'repulse.session-test
-                  'repulse.song-transport-test 'repulse.wav-test
+                  'repulse.song-transport-test 'repulse.offline-render-test
+                  'repulse.wav-test 'repulse.zip-test 'repulse.midi-export-test
                   'repulse.samples-test
                   'repulse.sound-check-test
                   'repulse.content.demos-test
                   'repulse.ui.timeline-test
                   'repulse.outline-test
+                  'repulse.lisp-patcher-test
+                  'repulse.project-test 'repulse.history-test
+                  'repulse.project-eval-test
                   'repulse.ai.safety-test
                   'repulse.ai.edit-test
                   'repulse.ai.client-test
                   'repulse.ai.models-test
                   'repulse.ai.tool-calls-test
                   'repulse.ai.knowledge-test
-                  'repulse.audio-clock-test))
+                  'repulse.ai.context-test
+                  'repulse.audio-clock-test
+                  'repulse.ui.slider-model-test
+                  'repulse.ui.status-model-test
+                  'repulse.ui.selection-test
+                  'repulse.ui.inspector-model-test))
