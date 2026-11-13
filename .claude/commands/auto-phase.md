@@ -15,7 +15,9 @@ Arguments: `$ARGUMENTS`. If it contains `--dry-run`, do steps 1–4 only, report
 
 - Repository: `tissanr/REPuLse`. Main checkout: `/Users/stephan/dev/REPuLse`.
 - Integration branch: **`dev`**. Every pipeline PR targets `dev`. **Never push to, merge
-  into, or open PRs against `main`.** Never force-push `dev`.
+  into, or open PRs against `main`** — except the single `dev` → `main` release PR that
+  a test round (step 3b) opens or edits; it is never merged by the pipeline. Never
+  force-push `dev`.
 - Phase order, markers and build models: the *Implementation order* table at the top of
   `ROADMAP.md` **as it is on `origin/dev`**.
 - Labels: `auto-phase` (every pipeline PR), `escalate-opus` (Sonnet failed; next attempt
@@ -57,6 +59,23 @@ gh pr list --repo tissanr/REPuLse --label auto-phase --state open \
 
 Clean up first: `git worktree remove` any `.claude/worktrees/auto-*` worktree whose
 branch's PR is merged or closed, and delete those local branches.
+
+## 3b. Test round
+
+Only when step 3 found no open `auto-phase` PR, i.e. the last phase has landed on `dev`.
+Follow `.claude/commands/test-protocol.md` with the arguments `--auto` (step 0 decides
+whether a round is due: a roadmap block completed, a 🤖👂/🧑 phase waiting for its human
+check, ≥ 3 loose behaviour PRs, or the hard cap of 8).
+
+- **Not due** → continue with step 4.
+- **Due** → run the round in full (version bump PR + tag, protocol into the `dev` →
+  `main` PR). That is this run's unit of work: exit with
+  "test round v<version>: <release PR url>". The next run selects a new phase.
+- If the round's bump PR goes red, report it in the exit line and leave it open; never
+  retry it in the same run.
+
+The round may open or edit the `dev` → `main` PR and push a `v*` tag. It never merges
+that PR; merging into `main` stays with a human.
 
 ## 4. Select the next phase
 
@@ -159,6 +178,8 @@ sure the draft PR exists, add a PR comment saying where to resume, delete the lo
 
 - One phase per run. Never start a second phase in the same run.
 - Never touch `main`, deferred (⏸) phases, or other phases' sections in `ROADMAP.md`.
+  (The one exception is step 3b: opening or editing the `dev` → `main` release PR's
+  description. Never merge it.)
 - Never mark a phase delivered whose Definition of done isn't met.
 - Never weaken, skip or delete existing tests to make a build pass.
 - Never change GitHub settings, rulesets, labels or secrets.
