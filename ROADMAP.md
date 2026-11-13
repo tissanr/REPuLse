@@ -45,7 +45,9 @@ without a human:
 | 6 | TL5 | Layering, pitch & harmony | 🤖 | full | sonnet |
 | 6a | TL4b | Pick & fix | 🤖 | full | sonnet |
 | 7 | TL6 | Sample slicing & playback control | 🤖👂 | full | opus |
-| 8 | TL7 | Per-event effects & control parameters | 🤖👂 | outline | opus |
+| 8 | TL7a | Per-event filters, shape & crush | 🤖👂 | full | opus |
+| 8b | TL7b | Reverb & delay sends per orbit | 🤖👂 | full | opus |
+| 8c | TL7c | Vowel, envelopes & modulators | 🤖👂 | outline | opus |
 | 9 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
 | 9a | SYN6 | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | outline | opus |
 | 9b | FX1 | Mixing, space & modulation effects | 🤖👂 | outline | sonnet |
@@ -2155,19 +2157,50 @@ See full spec: [PROMPTS/PHASE-TL6.md](PROMPTS/PHASE-TL6.md)
 
 ---
 
-## Phase TL7 — Per-Event Effects & Control Parameters 📋 *planned*
+## Phase TL7a — Per-Event Filters, Shape & Crush 📋 *planned*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
-Effects become part of the pattern: per-event filter and distortion, and send-based
-reverb/delay per orbit, all patternable.
+Every event can carry its own filter, waveshaper and bit-crusher, patterned or driven
+by signals. First of three phases split from TL7 (2026-11-10).
 
 **Key additions:**
-- Per-voice inserts in WASM (allocation-free): `lpf hpf bpf resonance shape crush coarse vowel`
-- Send effects per `orbit`: `room size delay delay-time delay-feedback`
-- Same behaviour for samples and synth voices, and in offline render
+- Controls `lpf`/`cutoff` `resonance` `hpf` `hpq` `bpf` `bpq` `shape` `crush` `gain` `velocity`
+- WASM: `Inserts` per `ActiveVoice` (allocation-free), `Biquad::lowpass`, `trigger_v3` with a fixed parameter-slot layout
+- JS path (samples, `defsynth`, offline): the same inserts as native `BiquadFilterNode`/`WaveShaperNode` chains, no hand-written DSP; JS↔WASM parity test
 
-See full spec: [PROMPTS/PHASE-TL7.md](PROMPTS/PHASE-TL7.md)
+See full spec: [PROMPTS/PHASE-TL7a.md](PROMPTS/PHASE-TL7a.md)
+
+---
+
+## Phase TL7b — Reverb & Delay Sends per Orbit 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+
+Per-event send levels into a shared reverb and delay, grouped in 4 orbits.
+
+**Key additions:**
+- Controls `room` `size` `delay` `delay-time` `delay-feedback` `orbit`
+- `app/src/repulse/orbits.cljs`: one `ConvolverNode` reverb + one feedback `DelayNode` per orbit, returning into `master-gain`
+- Worklet gets 9 stereo outputs (dry + room/delay send per orbit) that feed the same orbit nodes, so the send effects exist once
+
+See full spec: [PROMPTS/PHASE-TL7b.md](PROMPTS/PHASE-TL7b.md)
+
+---
+
+## Phase TL7c — Vowel, Envelopes & Modulators 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+
+The rest of the per-event control set: movement within a note and the effects native
+nodes can't express.
+
+**Key additions:**
+- `coarse`, `vowel`, per-event `distort`, `postgain`, `nudge`
+- Filter envelopes (`lp-env` …), pitch envelope (`penv` …), `vib`, `adsr` shorthands
+- `delay-sync`; decide `duck`, per-event `tremolo`/`phaser`, FM controls
+
+See full spec: [PROMPTS/PHASE-TL7c.md](PROMPTS/PHASE-TL7c.md)
 
 ---
 

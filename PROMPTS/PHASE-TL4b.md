@@ -9,8 +9,8 @@
 
 **Milestone:** 1 — Tidal-Lisp core
 **Depends on:** TL1 (`inner-join`, `outer-join`, `squeeze-join`, `->pat`); TL4 (the
-conditional vocabulary this phase completes). TL7 is **not** required: `fix` matches the
-event-map keys that exist today and picks up TL7's controls later (D2).
+conditional vocabulary this phase completes). TL7a–c are **not** required: `fix` matches the
+event-map keys that exist today and picks up the TL7a–c controls later (D2).
 
 ## Goal
 
@@ -47,8 +47,8 @@ condition map. Two new joins, `restart-join` and `reset-join`, land in `repulse.
   (clamped to the vector's range for `pick`, wrapped with `mod` for `pick-mod`). A map is
   looked up by name: pattern values `"a"` or `:a` match the keyword key `:a`. A name that
   isn't in the map produces no event (silence) for that slot.
-- **D2 — `fix` ships in TL4b** (not split out until TL7). It matches against the
-  event-map keys that exist today (`:s`, `:note`, `:amp`, …) and will pick up TL7's
+- **D2 — `fix` ships in TL4b** (not split out until TL7a–c). It matches against the
+  event-map keys that exist today (`:s`, `:note`, `:amp`, …) and will pick up the TL7a–c
   per-event controls later without a rewrite.
 - **D3 — `fix` matching rules:** numbers compare numerically (`==`, so `1` matches
   `1.0`); keywords and strings compare exactly (`{:s :bd}` does **not** match
@@ -158,7 +158,7 @@ Core only (not Lisp built-ins, like `inner-join`): `restart-join`, `reset-join`.
   `(amp 1/2 (seq :bd))` → `{:note :bd :amp [1 2]}` (a Lisp rational stays `[n d]`);
   `(synth :saw …)` → `{:note … :synth :saw :freq …}`; rests `:_` are events.
   There is **no** `s`/`note` builder and no `:s` key today (STRUDEL-PARITY: `s`/`sound`
-  "keywords, `sound`"; `note` 🟡 TL7) — hence K9's derived `:s`.
+  "keywords, `sound`"; `note` 🟡 TL7c) — hence K9's derived `:s`.
 - The bank prefix of `(bank :AkaiLinn)` is applied at playback (`app/src/repulse/samples.cljs`,
   `active-bank-prefix`), not in event values; a pattern only contains `:AkaiLinn_bd` when the
   user writes it.
@@ -649,7 +649,7 @@ the current `inner-join`/`outer-join`/`squeeze-join`, `late`, `seq*`, `cat*` and
 - Don't change `inner-join`, `outer-join`, `squeeze-join` or any TL1–TL5 semantics; the new
   joins are additions. Don't expose `reset-join`/`restart-join` (or the other joins) as Lisp
   built-ins.
-- No `s`, `n` or `note` control builders and no new per-event keys — that is **TL7**; `fix`
+- No `s`, `n` or `note` control builders and no new per-event keys — that is **TL7a–c**; `fix`
   only reads what exists (plus the derived `:s`, K9). No `contrast`, `fix-range`,
   `unfix` or other Tidal `contrast*` relatives; no patterned condition maps.
 - No Strudel argument-swap compatibility in `pick`, no `:mod` option flag, no `pick-squeeze`
