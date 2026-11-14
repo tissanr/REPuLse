@@ -221,8 +221,9 @@ test('W7: export downloads main.repulse; import replaces the project or rejects 
   await tab(page, 'drums').locator('.buf-close').click();
   await setProject(page, '(seq :hh)', [['other', '(def a 1)']]);
 
-  page.once('dialog', (d) => d.accept());
   await page.locator('.buf-import-input').setInputFiles(file);
+  await expect(page.locator('.rp-dialog-message')).toHaveText('Replace the current project (2 buffers) with main.repulse?');
+  await page.locator('.rp-dialog-ok').click();
   await expect(output(page)).toHaveText('imported main.repulse — 2 buffers');
   const p = await project(page);
   expect(p.buffers).toEqual([

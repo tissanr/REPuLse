@@ -11,6 +11,7 @@
             [repulse.audio :as audio]
             [repulse.samples :as samples]
             [repulse.ui.buffers :as buffers]
+            [repulse.ui.dialog :as dialog]
             [repulse.ui.html :refer [escape-html]]))
 
 (defonce visible? (atom false))
@@ -174,8 +175,8 @@
           (.-clipboard js/navigator)
           (-> (.writeText (.-clipboard js/navigator) url)
               (.then (fn [] (out! msg :success)))
-              (.catch (fn [_] (js/prompt "Copy this URL:" url))))
-          :else (js/prompt "Copy this URL:" url))))))
+              (.catch (fn [_] (dialog/prompt! "Copy this URL:" url))))
+          :else (dialog/prompt! "Copy this URL:" url))))))
 
 (defn- on-click [^js e]
   (let [t    (.-target e)
@@ -186,21 +187,35 @@
       (case act
         "close" (close!)
         "older" (do (swap! shown + 100) (render!))
-        "clear" (when (js/confirm "Clear the evaluation history? Snapshots are kept.")
-                  (hs/clear-history!)
-                  (reset! selected nil)
-                  (out! "history cleared — snapshots kept" :success))
+        "clear" (-> (dialog/confirm! "Clear the evaluation history? Snapshots are kept."
+                                     {:ok-label "Clear history" :danger? true})
+                    (.then (fn [ok?]
+                             (when ok?
+                               (try
+                                 (hs/clear-history!)
+                                 (reset! selected nil)
+                                 (out! "history cleared — snapshots kept" :success)
+                                 (catch :default ex (err! ex)))))))
         "restore" (when snap (restore! snap))
         "restore-selected" (when-let [sel @selected] (restore! (second sel)))
         "link" (when snap (copy-link! snap))
         "rename" (when snap
-                   (when-let [n (js/prompt "Rename snapshot:" snap)]
-                     (reset! selected nil)
-                     (out! (hs/rename-snapshot! snap n) :success)))
+                   (-> (dialog/prompt! "Rename snapshot:" snap)
+                       (.then (fn [n]
+                                (when n
+                                  (try
+                                    (reset! selected nil)
+                                    (out! (hs/rename-snapshot! snap n) :success)
+                                    (catch :default ex (err! ex))))))))
         "delete" (when snap
-                   (when (js/confirm (str "Delete snapshot " (pr-str snap) "? This can't be undone."))
-                     (reset! selected nil)
-                     (out! (hs/delete-snapshot! snap) :success)))
+                   (-> (dialog/confirm! (str "Delete snapshot " (pr-str snap) "? This can't be undone.")
+                                        {:ok-label "Delete" :danger? true})
+                       (.then (fn [ok?]
+                                (when ok?
+                                  (try
+                                    (reset! selected nil)
+                                    (out! (hs/delete-snapshot! snap) :success)
+                                    (catch :default ex (err! ex))))))))
         ;; no button: select a row
         (cond
           snap (do (reset! selected [:snapshot snap]) (render!))

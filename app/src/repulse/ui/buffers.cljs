@@ -11,6 +11,7 @@
   (:require [clojure.string :as str]
             [repulse.project :as project]
             [repulse.session :as session]
+            [repulse.ui.dialog :as dialog]
             [repulse.ui.editor :as editor]
             [repulse.ui.goto :as goto]
             [repulse.ui.html :refer [escape-html]]
@@ -226,11 +227,15 @@
                (let [r (project/edn->project text)]
                  (if-let [p (:ok r)]
                    (let [n (count (:buffers p))]
-                     (when (js/confirm (str "Replace the current project ("
-                                            (count (:names @meta-state)) " buffers) with "
-                                            (.-name file) "?"))
-                       (replace-project! p)
-                       (set-output! (str "imported " (.-name file) " — " n " buffers") :success)))
+                     (-> (dialog/confirm! (str "Replace the current project ("
+                                               (count (:names @meta-state)) " buffers) with "
+                                               (.-name file) "?")
+                                          {:ok-label "Replace" :danger? true})
+                         (.then (fn [ok?]
+                                  (when ok?
+                                    (replace-project! p)
+                                    (set-output! (str "imported " (.-name file) " — " n " buffers")
+                                                 :success))))))
                    (set-output! (:error r) :error)))))
       (.catch (fn [_] (set-output! "Import failed: could not read the file" :error)))))
 

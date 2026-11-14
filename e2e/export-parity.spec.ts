@@ -347,7 +347,9 @@ test('visualiser plugins do not change the offline export', async ({ page }) => 
   await setText(page, '(load-plugin "/plugins/oscilloscope.js")');
   await page.evaluate(() => (window as unknown as { __REPULSE_EDITOR__: any }).__REPULSE_EDITOR__.focus());
   await page.keyboard.press('Alt+Enter');
-  await page.waitForTimeout(1000);
+  // plugin consent is an in-page dialog (a native confirm would stall audio)
+  await page.locator('.rp-dialog-ok').click();
+  await expect(output(page)).toHaveText(/^plugin loaded: /);
   const after = await exportBuffer(
     page,
     '(bpm 240)\n(track :keys (->> (seq :c4 :e4) (synth :epiano) (fx :oscilloscope)))\n(export 2)',

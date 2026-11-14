@@ -10,7 +10,8 @@
             [repulse.ai.injection-guard :as injection-guard]
             [repulse.ai.undo :as undo]
             [repulse.ai.edit :as edit]
-            [repulse.ui.html :refer [escape-html]]))
+            [repulse.ui.html :refer [escape-html]]
+            [repulse.ui.dialog :as dialog]))
 
 ;;; eval-preview dependency injected from eval-orchestrator to avoid circular deps
 (defonce eval-preview-fn (atom nil))
@@ -204,11 +205,12 @@
                  {:ok false :error (str "Unknown snippet: " id)})))))
 
 (defn- exec-set-bpm-proposal [{:keys [bpm]}]
-  (js/Promise.
-    (fn [resolve _reject]
-      (if (js/confirm (str "AI suggests BPM: " (js/Math.round bpm) ". Apply?"))
-        (do (audio/set-bpm! bpm) (resolve {:ok true :applied true}))
-        (resolve {:ok true :applied false :reason "user rejected"})))))
+  (-> (dialog/confirm! (str "AI suggests BPM: " (js/Math.round bpm) ". Apply?")
+                       {:ok-label "Apply"})
+      (.then (fn [ok?]
+               (if ok?
+                 (do (audio/set-bpm! bpm) {:ok true :applied true})
+                 {:ok true :applied false :reason "user rejected"})))))
 
 ;; ── Freesound + bank executors ────────────────────────────────────────────────
 
