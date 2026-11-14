@@ -50,7 +50,7 @@ without a human:
 | 8c | TL7c | Vowel, envelopes & modulators | 🤖👂 | outline | opus |
 | 9 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
 | 9a | SYN6 | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | full | opus |
-| 9b | FX1 | Mixing, space & modulation effects | 🤖👂 | outline | sonnet |
+| 9b | FX1 | Mixing, space & modulation effects | 🤖👂 | full | sonnet |
 | **M2** | | **Full songs** | | | |
 | 10 | SONG1 | Sections, song form & full-song render | 🤖 | full | opus |
 | 11 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
