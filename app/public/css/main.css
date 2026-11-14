@@ -2580,6 +2580,24 @@ footer {
   color: #e94560;
 }
 
+.buf-close.confirm {
+  color: #e94560;
+  font-weight: bold;
+}
+
+.buf-name-input {
+  align-self: center;
+  width: 12ch;
+  margin: 0 6px;
+  padding: 1px 6px;
+  font: inherit;
+  color: #c8d0e0;
+  background: #0b1020;
+  border: 1px solid #e94560;
+  border-radius: 2px;
+  outline: none;
+}
+
 .buf-add {
   padding: 0 10px;
   color: #5a6a8a;
@@ -2713,3 +2731,80 @@ footer {
 .hist-add  { background: rgba(152, 195, 121, 0.14); color: #98c379; }
 .hist-del  { background: rgba(224, 108, 117, 0.14); color: #e06c75; }
 .hist-same { color: var(--dim); }
+
+/* ── In-page dialogs (repulse.ui.dialog) — never block the audio thread ── */
+
+.rp-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.rp-dialog {
+  width: 420px;
+  max-width: 100%;
+  padding: 14px 16px 12px;
+  background: var(--bg2, #10172a);
+  border: 1px solid var(--border, #1a2440);
+  border-radius: 6px;
+  color: #c8d0e0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.rp-dialog-message {
+  margin: 0 0 12px;
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.rp-dialog-input {
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 5px 8px;
+  font: inherit;
+  color: #c8d0e0;
+  background: #0b1020;
+  border: 1px solid #e94560;
+  border-radius: 3px;
+  outline: none;
+}
+
+.rp-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.rp-dialog-actions button {
+  padding: 4px 12px;
+  font: inherit;
+  color: #c8d0e0;
+  background: transparent;
+  border: 1px solid var(--border, #1a2440);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.rp-dialog-actions button:hover,
+.rp-dialog-actions button:focus-visible {
+  border-color: #8a9aba;
+  outline: none;
+}
+
+.rp-dialog-ok {
+  border-color: #e94560 !important;
+}
+
+.rp-dialog-ok.danger {
+  color: #fff !important;
+  background: #e94560 !important;
+}

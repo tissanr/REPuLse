@@ -2727,15 +2727,19 @@ define before use" stays true across the whole project:
 
 | Action | How |
 |---|---|
-| New buffer | `+` — asks for a name (proposed: the first free `buffer-N`); the new buffer starts empty and becomes active |
+| New buffer | `+` — a name field opens in the tab bar (proposed: the first free `buffer-N`). **Enter** creates the buffer, which starts empty and becomes active; **Esc** or clicking elsewhere cancels |
 | Switch | click a tab |
-| Rename | double-click a tab. `(use :old)` references are **not** rewritten |
-| Delete | `×` on the tab (asks first). The main buffer (bold tab) can't be deleted |
+| Rename | double-click a tab, edit the name, **Enter**. `(use :old)` references are **not** rewritten |
+| Delete | `×` on the tab turns into `delete?` — click again within 3 s. The main buffer (bold tab) can't be deleted |
 | Export | `export` — downloads the whole project as `<main>.repulse` |
 | Import | `import` — loads a `.repulse` file and replaces the current project (asks first; does not evaluate or stop playback) |
 
 Buffer names use `a-z`, `0-9` and `-`, start with a letter, are at most 32 characters long and
 unique; a project has at most 32 buffers. Each buffer keeps its own undo history.
+
+None of these actions open a browser pop-up, so playback keeps running while you use them.
+REPuLse's own confirmations (import, history, snippets, plugin loading) are in-page dialogs for
+the same reason: **Enter** confirms, **Esc** cancels.
 
 ### `use`
 
@@ -3225,6 +3229,11 @@ Custom effect plugins follow the same interface as the built-ins and can be load
 (load-plugin "/plugins/my-effect.js")
 (load-plugin "https://example.com/chorus.js")
 ```
+
+The first plugin from an origin asks for permission in an in-page dialog; the output line shows
+`=> waiting for permission to load a plugin from <origin> …` until you answer, then
+`plugin loaded: <name>` or `Plugin from <origin> was not loaded.` The answer holds until the page
+is reloaded.
 
 See [docs/PLUGINS.md](PLUGINS.md) for the full effect plugin protocol, base classes, and worked examples.
 

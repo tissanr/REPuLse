@@ -1145,6 +1145,14 @@
     (ensure-track-node! ac track-name)
     (arm-transitions! track-name pattern ac)
     (swap! scheduler-state update :tracks assoc track-name pattern)
+    ;; The latest evaluation's callbacks win even while the scheduler already
+    ;; runs: a project evaluation's on-event maps global source positions to
+    ;; its buffer (SONG4) and must replace a stale one from an earlier
+    ;; evaluation. nil (snippet previews) keeps the current callbacks.
+    (swap! scheduler-state
+           (fn [s] (cond-> s
+                     on-beat-fn  (assoc :on-beat on-beat-fn)
+                     on-event-fn (assoc :on-event on-event-fn))))
     (-> (.resume ac)
         (.then (fn [] (ensure-running! ac on-beat-fn on-event-fn))))))
 

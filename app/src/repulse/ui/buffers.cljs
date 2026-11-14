@@ -11,6 +11,7 @@
   (:require [clojure.string :as str]
             [repulse.project :as project]
             [repulse.session :as session]
+            [repulse.ui.dialog :as dialog]
             [repulse.ui.editor :as editor]
             [repulse.ui.goto :as goto]
             [repulse.ui.html :refer [escape-html]]
@@ -29,6 +30,14 @@
 (defonce ^:private switch-hooks (atom []))
 ;; (fn [msg status]) — the app's output line.
 (defonce ^:private output-fn (atom nil))
+;; Inline tab-bar editing. Native prompt/confirm dialogs block the main
+;; thread and with it the audio scheduler, so playback stopped while one was
+;; open. nil | {:mode :add :value str} | {:mode :rename :tab name}
+(defonce ^:private editing (atom nil))
+;; Buffer whose × was clicked once (second click deletes), else nil.
+(defonce ^:private confirm-delete (atom nil))
+(defonce ^:private confirm-timer (atom nil))
+(def ^:private confirm-ms 3000)
 
 (defn- view [] @editor/editor-view)
 
@@ -68,20 +77,34 @@
 
 ;;; Tabs
 
+(defn- name-input-html [value label]
+  (str "<input class=\"buf-name-input\" type=\"text\" maxlength=\"32\""
+       " spellcheck=\"false\" autocomplete=\"off\" aria-label=\"" label "\""
+       " title=\"Enter to confirm, Esc to cancel\" value=\"" (escape-html value) "\">"))
+
 (defn- tabs-html []
-  (let [{:keys [main active names]} @meta-state]
+  (let [{:keys [main active names]} @meta-state
+        {:keys [mode tab value]} @editing
+        pending-delete @confirm-delete]
     (str
      (apply str
             (for [n names]
-              (let [m? (= n main)]
-                (str "<button class=\"buf-tab" (when (= n active) " active") (when m? " main")
-                     "\" data-buffer=\"" (escape-html n) "\""
-                     (when m? " title=\"main buffer — Alt+Enter evaluates from here\"")
-                     ">" (escape-html n)
-                     (when-not m?
-                       "<span class=\"buf-close\" data-act=\"delete\" title=\"delete buffer\">×</span>")
-                     "</button>"))))
-     "<button class=\"buf-add\" data-act=\"add\" title=\"new buffer\">+</button>"
+              (if (and (= mode :rename) (= tab n))
+                (name-input-html n "rename buffer")
+                (let [m? (= n main)
+                      confirm? (= n pending-delete)]
+                  (str "<button class=\"buf-tab" (when (= n active) " active") (when m? " main")
+                       "\" data-buffer=\"" (escape-html n) "\""
+                       (when m? " title=\"main buffer — Alt+Enter evaluates from here\"")
+                       ">" (escape-html n)
+                       (when-not m?
+                         (if confirm?
+                           "<span class=\"buf-close confirm\" data-act=\"delete\" title=\"click again to delete this buffer\">delete?</span>"
+                           "<span class=\"buf-close\" data-act=\"delete\" title=\"delete buffer\">×</span>"))
+                       "</button>")))))
+     (if (= mode :add)
+       (name-input-html value "new buffer name")
+       "<button class=\"buf-add\" data-act=\"add\" title=\"new buffer\">+</button>")
      "<span class=\"buf-spacer\"></span>"
      "<button class=\"buf-io\" data-act=\"export\" title=\"export the project as a .repulse file\">export</button>"
      "<button class=\"buf-io\" data-act=\"import\" title=\"import a .repulse file\">import</button>"
@@ -89,7 +112,10 @@
 
 (defn render-tabs! []
   (when-let [el (.getElementById js/document "buffer-tabs")]
-    (set! (.-innerHTML el) (tabs-html))))
+    (set! (.-innerHTML el) (tabs-html))
+    (when-let [input (.querySelector el ".buf-name-input")]
+      (.focus input)
+      (.select input))))
 
 ;;; Operations
 
@@ -201,44 +227,107 @@
                (let [r (project/edn->project text)]
                  (if-let [p (:ok r)]
                    (let [n (count (:buffers p))]
-                     (when (js/confirm (str "Replace the current project ("
-                                            (count (:names @meta-state)) " buffers) with "
-                                            (.-name file) "?"))
-                       (replace-project! p)
-                       (set-output! (str "imported " (.-name file) " — " n " buffers") :success)))
+                     (-> (dialog/confirm! (str "Replace the current project ("
+                                               (count (:names @meta-state)) " buffers) with "
+                                               (.-name file) "?")
+                                          {:ok-label "Replace" :danger? true})
+                         (.then (fn [ok?]
+                                  (when ok?
+                                    (replace-project! p)
+                                    (set-output! (str "imported " (.-name file) " — " n " buffers")
+                                                 :success))))))
                    (set-output! (:error r) :error)))))
       (.catch (fn [_] (set-output! "Import failed: could not read the file" :error)))))
 
 ;;; DOM events
 
+(defn- clear-confirm! []
+  (when-let [t @confirm-timer] (js/clearTimeout t))
+  (reset! confirm-timer nil)
+  (reset! confirm-delete nil))
+
+(defn- arm-confirm! [tab]
+  (clear-confirm!)
+  (reset! confirm-delete tab)
+  (reset! confirm-timer
+          (js/setTimeout (fn [] (reset! confirm-timer nil)
+                           (reset! confirm-delete nil)
+                           (render-tabs!))
+                         confirm-ms))
+  (render-tabs!))
+
+(defn- start-editing! [state]
+  (clear-confirm!)
+  (reset! editing state)
+  (render-tabs!))
+
+(defn- cancel-editing! []
+  (when @editing
+    (reset! editing nil)
+    (render-tabs!)
+    (some-> (view) (.focus))))
+
+(defn- commit-editing!
+  "Create or rename from the inline name input. On an invalid name the input
+   stays open with the typed text selected."
+  [^js input]
+  (when-let [{:keys [mode tab]} @editing]
+    (let [n (str/trim (.-value input))
+          r (if (= mode :add)
+              (do (reset! editing nil) (create-buffer! n ""))
+              (do (reset! editing nil) (rename-buffer! tab n)))]
+      (if-let [err (:error r)]
+        (do (reset! editing (if (= mode :add) {:mode :add :value n} {:mode :rename :tab tab}))
+            (error! err)
+            (.select input))
+        (do (render-tabs!)
+            (some-> (view) (.focus)))))))
+
 (defn- on-click [^js e]
   (let [t   (.-target e)
         act (some-> (.closest t "[data-act]") (.getAttribute "data-act"))
         tab (some-> (.closest t "[data-buffer]") (.getAttribute "data-buffer"))]
-    (case act
-      "delete"
-      (when (and tab (js/confirm (str "Delete buffer \"" tab "\"? This can't be undone.")))
-        (when-let [err (:error (delete-buffer! tab))] (error! err)))
+    (when-not (.closest t ".buf-name-input")
+      (if (and (= act "delete") tab)
+        (if (= tab @confirm-delete)
+          (do (clear-confirm!)
+              (when-let [err (:error (delete-buffer! tab))] (error! err))
+              (render-tabs!))
+          (arm-confirm! tab))
+        (do
+          (when @confirm-delete (clear-confirm!) (render-tabs!))
+          (case act
+            "add"
+            (start-editing! {:mode :add :value (project/next-buffer-name (current-project))})
 
-      "add"
-      (when-let [n (js/prompt "New buffer name:" (project/next-buffer-name (current-project)))]
-        (when-let [err (:error (create-buffer! (str/trim n) ""))] (error! err)))
+            "export" (export!)
 
-      "export" (export!)
+            "import"
+            (when-let [input (.querySelector (.-currentTarget e) ".buf-import-input")]
+              (set! (.-value input) "")
+              (.click input))
 
-      "import"
-      (when-let [input (.querySelector (.-currentTarget e) ".buf-import-input")]
-        (set! (.-value input) "")
-        (.click input))
-
-      (when tab (switch-to! tab)))))
+            (when tab (switch-to! tab))))))))
 
 (defn- on-dblclick [^js e]
   (let [t (.-target e)]
     (when-not (.closest t "[data-act]")
       (when-let [tab (some-> (.closest t "[data-buffer]") (.getAttribute "data-buffer"))]
-        (when-let [n (js/prompt "Rename buffer:" tab)]
-          (when-let [err (:error (rename-buffer! tab (str/trim n)))] (error! err)))))))
+        (start-editing! {:mode :rename :tab tab})))))
+
+(defn- on-keydown [^js e]
+  (let [t (.-target e)]
+    (when (.contains (.-classList t) "buf-name-input")
+      (case (.-key e)
+        "Enter"  (do (.preventDefault e) (commit-editing! t))
+        "Escape" (do (.preventDefault e) (cancel-editing!))
+        nil)
+      (.stopPropagation e))))
+
+(defn- on-focusout [^js e]
+  (let [t (.-target e)]
+    (when (and (.contains (.-classList t) "buf-name-input") (.-isConnected t))
+      (cancel-editing!))))
 
 (defn- on-change [^js e]
   (let [input (.-target e)]
@@ -261,7 +350,9 @@
    (when-let [el (.getElementById js/document "buffer-tabs")]
      (.addEventListener el "click" on-click)
      (.addEventListener el "dblclick" on-dblclick)
-     (.addEventListener el "change" on-change))
+     (.addEventListener el "change" on-change)
+     (.addEventListener el "keydown" on-keydown)
+     (.addEventListener el "focusout" on-focusout))
    (render-tabs!)
    ;; Test/debug handle (used by e2e/buffers.spec.ts).
    (set! (.-__REPULSE_BUFFERS__ js/window)
