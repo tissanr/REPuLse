@@ -256,6 +256,7 @@
     (song-transport/reset-pending!)
     ;; Keep stop fn up to date (in case env was reset)
     (let [env    (assoc @builtins/env-atom "stop" (make-stop-fn))
+          defs-before (some-> (:*defs* env) deref)
           ;; Project mode (Phase SONG4): evaluate from the main buffer with
           ;; `use` enabled; every source position is global (offset per buffer).
           {result :value bases :bases}
@@ -342,16 +343,17 @@
           ;; When the last form is not a pattern (e.g. (defsynth lfo ...) follows
           ;; (def bass ...)), the scheduler's :_ track is never updated because
           ;; no play-track! call is made.  After evaluation, if :_ is active and
-          ;; exactly one pattern exists in *defs*, update :_ with it so slider
-          ;; changes and re-evaluations are reflected immediately.
+          ;; this evaluation (re)defined exactly one pattern, update :_ with it
+          ;; so slider changes and re-evaluations are reflected immediately.
+          ;; Only defs bound by *this* evaluation count: *defs* outlives the
+          ;; buffer, so a stale def from an earlier buffer must not replace the
+          ;; playing pattern when the command bar evaluates e.g. a number.
           (when (and (not (core/pattern? val))
                      (contains? (:tracks @audio/scheduler-state) :_))
-            (let [defs-vals (vals @(:*defs* env))
-                  pats      (filter core/pattern? defs-vals)]
-              (when (= 1 (count pats))
-                (let [pat (first pats)]
-                  (audio/play-track! :_ pat on-beat on-event)
-                  (fx/apply-track-effects! :_ (:track-fx pat))))))
+            (when-let [pat (song-transport/hot-swap-def
+                            defs-before (some-> (:*defs* env) deref))]
+              (audio/play-track! :_ pat on-beat on-event)
+              (fx/apply-track-effects! :_ (:track-fx pat))))
 
           ;; ── Apply restored mutes after first eval ─────────────────────────
           ;; pending-mutes is populated during session restore; applied once tracks exist.

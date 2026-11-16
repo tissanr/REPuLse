@@ -228,7 +228,9 @@ Paste this into the editor and press **Alt+Enter**:
 only the value of the **last** expression is played. Ending the buffer with
 `(stack kick snare hats bass pad)` would play all parts as one anonymous pattern. Named tracks
 are usually the better choice: you can mute, solo and replace each part individually — see
-[Named tracks](#named-tracks).
+[Named tracks](#named-tracks). If a buffer defines tracks **and** ends in a bare pattern, the
+bare pattern wins: it replaces all tracks, and only it plays. A command-bar expression that
+returns a plain value, such as `(slider 0.7 0 1)`, leaves playback unchanged.
 
 ---
 

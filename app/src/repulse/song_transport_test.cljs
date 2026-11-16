@@ -404,3 +404,19 @@
         (is (= "Error: no track :zz" (run-midi-args "(midi-export :zz)"))))
       (finally
         (reset! audio/scheduler-state saved)))))
+
+(deftest hot-swap-def-test
+  ;; Regression: a stale def from an earlier buffer replaced the playing :_
+  ;; pattern when the command bar evaluated a plain number, e.g. (slider 0.7 0 1).
+  (let [lead  (core/seq* [:a3 :b3])
+        bass  (core/seq* [:e1 :g1])
+        bass' (core/seq* [:e1 :g1])]
+    (testing "nothing (re)defined → no swap, even with one stale pattern def"
+      (is (nil? (st/hot-swap-def {"lead" lead} {"lead" lead}))))
+    (testing "exactly one pattern bound by this evaluation → that pattern"
+      (is (identical? bass (st/hot-swap-def {"lead" lead} {"lead" lead "bass" bass})))
+      (is (identical? bass' (st/hot-swap-def {"bass" bass} {"bass" bass'}))))
+    (testing "two fresh pattern defs → ambiguous, no swap"
+      (is (nil? (st/hot-swap-def {} {"lead" lead "bass" bass}))))
+    (testing "non-pattern defs are ignored"
+      (is (identical? bass (st/hot-swap-def nil {"x" 0.7 "f" :lfo "bass" bass}))))))
