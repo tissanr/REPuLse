@@ -36,6 +36,8 @@ without a human:
 
 | # | Phase | Title | Marker | Spec | Build model |
 |---|---|---|---|---|---|
+| **Tooling** | | **Test coverage (no milestone, runs first)** | | | |
+| 0 | TEST3 | Release-protocol automation: UI workflows & measured sound | 🤖 | full | sonnet |
 | **M1** | | **Tidal-Lisp core** | | | |
 | 1 | TL1 | Patterned arguments & pattern arithmetic | 🤖 | full | opus |
 | 2 | TL2 | Continuous signals | 🤖 | full | sonnet |
@@ -1390,6 +1392,23 @@ automated verification.
 Production browser AudioWorklet + WASM PCM capture is deferred to TEST2.
 
 See full spec: [PROMPTS/PHASE-TEST1.md](PROMPTS/PHASE-TEST1.md)
+
+---
+
+## Phase TEST3 — Release-Protocol Automation: UI Workflows & Measured Sound 📋 *planned*
+
+> **Tooling** (no milestone, row 0 of the implementation order) · **Automation:** 🤖 auto
+
+Cut the hand-tested part of a release round (100 items in v0.1.1) to the ≈15 that need
+ears, hardware, login or the deployment, by automating deterministic UI and measurable sound.
+
+**Key additions:**
+- `scripts/serve-static.mjs` sends the `vercel.json` headers, so e2e catches CSP violations (`e2e/smoke.spec.ts`)
+- New full-app specs: `editor` (completion, hover, Ctrl+K S, comment toggle), `project-share` (`#v3:`/`#v2:` links, share limit, buffer-name errors), `snippets-lib` (mocked API, XSS-as-text), `embed`; additions to `history` and `ai-rail`
+- `e2e/audio-properties.spec.ts` with `spectralCentroid` / `estimatePitch` helpers: filter, amp/slider, rate, accelerate, reverb tail
+- `docs/TESTPLAN.md` table mapping every v0.1.1 release-protocol item to its test or a reason it stays manual
+
+See full spec: [PROMPTS/PHASE-TEST3.md](PROMPTS/PHASE-TEST3.md)
 
 ---
 
