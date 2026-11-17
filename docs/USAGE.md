@@ -37,6 +37,7 @@ them loop in real time.
 18. [Available sample banks](#available-sample-banks)
 19. [Per-event parameters](#per-event-parameters)
     - [Sample slicing](#sample-slicing)
+    - [Effect parameters (per event)](#effect-parameters-per-event)
 20. [Transitions](#transitions)
 
 **Performing**
@@ -155,7 +156,8 @@ Patterns describe **what** sounds and **when**. All composition happens here:
 - **Sources:** `seq`, `stack`, `pure`, `~` (mini-notation)
 - **Transforms:** `fast`, `slow`, `rev`, `every`, `cat`, `euclidean`, `jux`, `off`, `sometimes`
 - **Parameters:** `amp`, `decay`, `attack`, `release`, `pan`, `synth`, `rate`, `begin`, `end`
-- **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`
+- **Per-event effects:** `lpf`, `resonance`, `hpf`, `bpf`, `shape`, `crush`, `gain`, `velocity`
+- **Track effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`
 - **Composition:** `->>` (thread-last) chains transforms, parameters, and effects
 - **Structure:** `def`, `let`, `fn`, `if`, `do`, `track`, `arrange`, `song`, `section`
 
@@ -164,7 +166,8 @@ Patterns describe **what** sounds and **when**. All composition happens here:
 `defsynth` defines custom synthesis instruments from Web Audio UGen primitives. This is the **only** place where signal-flow constructs exist:
 
 - **Oscillators:** `sin`, `saw`, `square`, `tri`, `noise`
-- **Filters:** `lpf`, `hpf`, `bpf`
+- **Filters:** `lpf`, `hpf`, `bpf` (outside a `defsynth` body these names are the
+  [per-event effect controls](#effect-parameters-per-event))
 - **Envelopes:** `env-perc`, `env-asr`, `env` + `env-gen` (general envelope)
 - **Routing:** `mix`, `gain`, `delay-node`
 - **Modulation:** `bus`/`out`/`in` plus signal arithmetic (`*`, `+`) — any UGen parameter takes a number or a signal
@@ -2343,6 +2346,63 @@ pattern supplies the rhythm: each note takes the parameter value in force at its
      (attack 0.01))
 ```
 
+### Effect parameters (per event)
+
+Every event can carry its own filter, waveshaper and bit-crusher. Like `amp` and `pan`,
+each control writes a key into the event, accepts a number, a pattern, a mini-notation
+string or a signal, and returns a transformer when called without the pattern:
+
+| Function | Range (clamped) | Default | Meaning |
+|---|---|---|---|
+| `lpf` (alias `cutoff`) | 20–20000 Hz | off | 12 dB/oct low-pass |
+| `resonance` | 0.1–30 | 0.707 | Q of the low-pass |
+| `hpf` | 20–20000 Hz | off | 12 dB/oct high-pass |
+| `hpq` | 0.1–30 | 0.707 | Q of the high-pass |
+| `bpf` | 20–20000 Hz | off | band-pass, 0 dB peak gain |
+| `bpq` | 0.1–30 | 1 | Q of the band-pass |
+| `shape` | 0–0.99 | 0 (off) | soft waveshaper amount |
+| `crush` | 1–16 bits | 16 (off) | bit-depth quantiser |
+| `gain` | 0–2 | 1 | linear gain, multiplies `amp` |
+| `velocity` | 0–1 | 1 | linear, multiplies `amp` |
+
+```lisp
+;; Signal-driven filter sweep on hats, with resonance
+(->> (fast 8 (seq :hh))
+     (lpf (range 400 6000 (slow 4 sine)))
+     (resonance 4))
+
+;; High-pass and drive on a saw arpeggio
+(->> (seq :c3 :eb3 :g3) (synth :saw) (hpf 300) (shape 0.4))
+
+;; Clean, then 4-bit snare; accented velocity
+(->> (seq :bd :sd :bd :sd) (crush (seq 16 4)) (velocity (seq 1 0.6)))
+```
+
+- **Sampled at the onset.** A pattern or signal gives each event the value at its start,
+  as with `pan`. The filter does not move during a note (filter envelopes come in TL7c).
+- **Processing order** per voice: source → `lpf` → `hpf` → `bpf` → `crush` → `shape` → pan.
+  Only the stages an event uses are built. An event without these keys costs nothing extra.
+- **Gain model:** voice level = `amp × gain × velocity`. All three are linear, so
+  `(velocity 0.5 (gain 2 pat))` sounds like `pat`. `amp` keeps its meaning.
+- A Q without its filter (`(resonance 4 pat)` with no `lpf`) is stored but does nothing.
+- Works on every voice: WASM synth voices, samples, `defsynth` voices, JS fallbacks and
+  WAV export. Synth voices on the worklet filter in WASM; everything else uses the
+  browser's `BiquadFilterNode` / `WaveShaperNode` with the same formulas. On the JS path the
+  inserts sit after the voice's own panner, so `shape` and `crush` are driven about 3 dB
+  softer there than on the WASM path (the filters match).
+
+**Per event vs. `(fx …)`.** `(fx :filter 800)` filters a whole track or the master bus:
+one filter, one setting. `lpf` filters each note on its own, so the cutoff can change
+note by note:
+
+```lisp
+(track :hats (->> (fast 8 (seq :hh)) (fx :filter 800)))   ; one filter for the track
+(->> (fast 8 (seq :hh)) (lpf (seq 800 3000)))             ; alternating per hit
+```
+
+**Inside `defsynth`** the names `lpf`, `hpf`, `bpf` and `gain` keep their UGen meaning
+(`(lpf 2000 (saw freq))`). Outside a `defsynth` body they are these per-event controls.
+
 ---
 
 ## Transitions
@@ -3347,6 +3407,9 @@ Available UGens:
 | `(hpf cutoff src)` | Highpass filter |
 | `(bpf freq src)` | Bandpass filter |
 | `(gain level src)` | Static gain |
+
+Inside a `defsynth` body, `lpf`, `hpf`, `bpf` and `gain` are these UGens. Everywhere else
+they are the [per-event effect controls](#effect-parameters-per-event).
 | `(delay-node time src)` | Delay line |
 | `(mix a b)` | Mix two signals |
 | `(env-perc attack decay src)` | Percussive envelope |

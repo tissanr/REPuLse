@@ -3,6 +3,7 @@
             [repulse.core :as core]
             [repulse.theory :as theory]
             [repulse.samples :as samples]
+            [repulse.inserts :as inserts]
             [repulse.synth :as synth]
             [repulse.bus :as bus]
             [repulse.midi :as midi]
@@ -435,16 +436,109 @@
         (postMessage #js {:type "trigger" :value value :time t}))
     true))
 
-(defn- worklet-trigger-v2!
-  "Send a trigger_v2 message with explicit synthesis parameters. Returns true if ready.
-   dest must be the target's master gain — the worklet always outputs there."
-  [{:keys [node ready? master]} value t amp attack decay pan dest]
+(defn- worklet-trigger-v3!
+  "Send a trigger to the WASM worklet with explicit synthesis parameters and the
+   event's insert params (Phase TL7a). ins — insert-params map or nil; nil sends
+   the smaller trigger_v2 message. Returns true if ready. dest must be the
+   target's master gain — the worklet always outputs there."
+  [{:keys [node ready? master]} value t amp attack decay pan ins dest]
   (when (and ready? node (= dest master))
     (when debug? (js/console.log "[REPuLse] triggering WASM:" value "at t=" t "amp=" amp))
     (.. ^js node -port
-        (postMessage #js {:type "trigger_v2" :value value :time t
-                          :amp amp :attack attack :decay decay :pan pan}))
+        (postMessage
+          (if ins
+            ;; Slot layout = lib.rs trigger_v3 (TL7b appends, never reorders).
+            #js {:type "trigger_v3" :value value :time t
+                 :params (js/Float32Array.from
+                           (clj->js (into [amp attack decay pan] (inserts/wasm-slots ins))))}
+            #js {:type "trigger_v2" :value value :time t
+                 :amp amp :attack attack :decay decay :pan pan})))
     true))
+
+;;; Per-event inserts on the JS path (Phase TL7a) — native nodes only, no DSP.
+
+(defonce ^:private curve-cache (atom {}))
+
+(defn- cached-curve
+  "Shared WaveShaper curve for kind (:shape amount | :crush bits), keyed on the
+   value rounded to 3 decimals. Small bounded cache: a signal-driven value would
+   otherwise grow it without limit."
+  [kind x]
+  (let [x' (/ (Math/round (* x 1000)) 1000)
+        k  [kind x']]
+    (or (get @curve-cache k)
+        (let [c (if (= kind :shape)
+                  (inserts/shape-curve x' 4096)
+                  (inserts/crush-curve x' 65536))]
+          (when (>= (count @curve-cache) 64) (reset! curve-cache {}))
+          (swap! curve-cache assoc k c)
+          c))))
+
+(defn- insert-biquad [ac t type freq q]
+  (let [f (.createBiquadFilter ac)]
+    (set! (.-type f) type)
+    (.setValueAtTime (.-frequency f) freq t)
+    (.setValueAtTime (.-Q f) (inserts/q->webaudio type q) t)
+    f))
+
+(defn- insert-shaper [ac curve]
+  (let [ws (.createWaveShaper ac)]
+    (set! (.-curve ws) curve)
+    (set! (.-oversample ws) "none")
+    ws))
+
+(defn- schedule-disconnect!
+  "Disconnect nodes dur seconds (+ 0.5 s) after t. dur is a number or a Promise
+   of one (sample length, known once the buffer is loaded); ##Inf or nil = never.
+   Offline contexts skip the timer: the context is discarded after rendering."
+  [ac t nodes dur]
+  (when-not (offline-context? ac)
+    (let [arm! (fn [d]
+                 (when (and (number? d) (js/isFinite d))
+                   (js/setTimeout
+                     (fn [] (doseq [n nodes] (try (.disconnect n) (catch :default _ nil))))
+                     (* 1000 (+ (max 0 (- t (.-currentTime ac))) d 0.5)))))]
+      (if (number? dur)
+        (arm! dur)
+        (when dur (.then dur arm!))))))
+
+(defn- with-inserts
+  "Return the node a JS voice should connect to. If the event has insert params
+   (ins, from inserts/insert-params), build lpf → hpf → bpf → crush → shape
+   (only the stages present) ending in dest, and schedule disconnection after the
+   voice ends. gain ≠ 1 adds a leading GainNode (defsynth voices, whose amp the
+   audio layer does not control). Otherwise return dest — no extra nodes."
+  ([ac t ins dest dur] (with-inserts ac t ins dest dur 1.0))
+  ([ac t ins dest dur gain]
+   (if (and (nil? ins) (== gain 1))
+     dest
+     (let [{:keys [lpf resonance hpf hpq bpf bpq shape crush]} ins
+           g      (when-not (== gain 1)
+                    (let [n (.createGain ac)]
+                      (.setValueAtTime (.-gain n) gain t)
+                      n))
+           levels (when crush (inserts/crush-levels crush))
+           nodes  (cond-> []
+                    g            (conj g)
+                    lpf          (conj (insert-biquad ac t "lowpass" lpf resonance))
+                    hpf          (conj (insert-biquad ac t "highpass" hpf hpq))
+                    bpf          (conj (insert-biquad ac t "bandpass" bpf bpq))
+                    levels       (conj (insert-shaper ac (cached-curve :crush crush)))
+                    (and shape (pos? shape))
+                    (conj (insert-shaper ac (cached-curve :shape shape))))]
+       (doseq [[a b] (partition 2 1 (conj nodes dest))]
+         (.connect a b))
+       (schedule-disconnect! ac t nodes dur)
+       (first nodes)))))
+
+(defn- sample-length
+  "Promise of how long sample n of bank sounds for the event params in extra
+   (playback-plan :length), or nil when the bank has no such sample."
+  [ac bank n extra]
+  (when-let [url (samples/get-url bank n)]
+    (-> (samples/get-buffer! url ac)
+        (.then (fn [buf] (:length (samples/playback-plan extra (.-duration buf)))))
+        (.catch (fn [_] nil)))))
 
 (defn- js-synth
   "JS synthesis fallback — used when AudioWorklet is unavailable."
@@ -468,7 +562,10 @@
 
 (defn play-event
   "Play one event value at audio time t. timing — optional {:dur :cycle-dur} in
-   seconds (TL6): needed by legato, looped samples and unit :c."
+   seconds (TL6): needed by legato, looped samples and unit :c.
+   Per-event inserts (TL7a: lpf hpf bpf crush shape) run in WASM when the worklet
+   takes the event, else as native Web Audio nodes in front of dest; gain and
+   velocity multiply the voice amp."
   ([ac t value] (play-event ac t value nil nil))
   ([ac t value track-name] (play-event ac t value track-name nil))
   ([ac t value track-name timing]
@@ -477,7 +574,13 @@
    ;; takes exactly the real-time branches.
    (let [offline? (and (offline-context? ac) (nil? (offline-graph ac)))
          wt       (when-not offline? (worklet-target ac))
-         dest     (output-for-track ac track-name)]
+         dest     (output-for-track ac track-name)
+         ins      (inserts/insert-params value)
+         af       (inserts/amp-factor value)
+         ;; Destination for a JS voice sounding dur seconds. Only called on the
+         ;; fallback branches, so a worklet event never builds a node chain; WASM
+         ;; eligibility is still decided on the original dest.
+         js-dest  (fn [dur] (with-inserts ac t ins dest dur))]
      (cond
        ;; Silence / rest
        (= value :_) nil
@@ -486,7 +589,9 @@
        ;; Produced by (synth :my-synth pat) when :my-synth is registered via defsynth.
        (and (map? value) (:synth value) (synth/lookup-synth (:synth value)))
        (let [synth-def (synth/lookup-synth (:synth value))]
-         (synth/play-synth! ac t synth-def value dest))
+         ;; The defsynth's own envelope sets its length (unknown here); 30 s
+         ;; bounds the cleanup so long pads are never cut.
+         (synth/play-synth! ac t synth-def value (with-inserts ac t ins dest 30.0 af)))
 
        ;; Bare defsynth name — (seq :lfo-sine) triggers a parameterless synth,
        ;; e.g. a bus writer. Note names keep their meaning.
@@ -497,93 +602,82 @@
        ;; from amp/attack/decay/release/pan/saw/square/noise/fm transformers
        (and (map? value) (:note value))
        (let [note     (:note value)
-             amp-v    (float (:amp value 1.0))
+             amp-v    (float (* (:amp value 1.0) af))
              attack-v (float (:attack value 0.001))
              decay-v  (float (:decay value 1.5))
              pan-v    (float (:pan value 0.0))
-             synth    (:synth value)]
+             synth    (:synth value)
+             wasm!    (fn [v] (worklet-trigger-v3! wt v t amp-v attack-v decay-v pan-v ins dest))
+             tone-dur (+ attack-v decay-v)]
          (cond
            (= note :_) nil
 
            ;; New synth voices dispatched by :synth key
            (= synth :saw)
            (let [hz (if (theory/note-keyword? note) (theory/note->hz note) (double note))]
-             (or (when-not offline?
-                   (worklet-trigger-v2! wt (str "saw:" hz) t amp-v attack-v decay-v pan-v dest))
-                 (make-saw ac t hz decay-v amp-v attack-v pan-v dest)))
+             (or (when-not offline? (wasm! (str "saw:" hz)))
+                 (make-saw ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur))))
 
            (= synth :square)
            (let [hz  (if (theory/note-keyword? note) (theory/note->hz note) (double note))
                  pw' (double (or (:pw value) 0.5))]
-             (or (when-not offline?
-                   (worklet-trigger-v2! wt (str "square:" hz ":" pw')
-                                        t amp-v attack-v decay-v pan-v dest))
-                 (make-square ac t hz decay-v amp-v attack-v pan-v dest pw')))
+             (or (when-not offline? (wasm! (str "square:" hz ":" pw')))
+                 (make-square ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur) pw')))
 
            (= synth :fm)
            (let [hz    (if (theory/note-keyword? note) (theory/note->hz note) (double note))
                  index (or (:index value) 1.0)
                  ratio (or (:ratio value) 2.0)]
-             (or (when-not offline?
-                   (worklet-trigger-v2! wt (str "fm:" hz ":" index ":" ratio)
-                                        t amp-v attack-v decay-v pan-v dest))
+             (or (when-not offline? (wasm! (str "fm:" hz ":" index ":" ratio)))
                  ;; JS fallback: sine (FM needs two connected oscillators — WASM only)
-                 (make-sine ac t hz decay-v amp-v attack-v pan-v dest)))
+                 (make-sine ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur))))
 
            (#{:sax :trumpet :trumpet-muted :trombone :synth-brass
               :harmon-out :harmon-in :epiano :bell :marimba :flute} synth)
            (let [hz     (if (theory/note-keyword? note) (theory/note->hz note) (double note))
                  preset (clojure.core/name synth)]
-             (or (when-not offline?
-                   (worklet-trigger-v2! wt (str "fm:" preset ":" hz)
-                                        t amp-v attack-v decay-v pan-v dest))
-                 (make-sine ac t hz decay-v amp-v attack-v pan-v dest)))
+             (or (when-not offline? (wasm! (str "fm:" preset ":" hz)))
+                 (make-sine ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur))))
 
            (#{:western :nylon :guitar :harp :koto :pizz :lute :mandolin} synth)
            (let [hz     (if (theory/note-keyword? note) (theory/note->hz note) (double note))
                  preset (clojure.core/name synth)]
-             (or (when-not offline?
-                   (worklet-trigger-v2! wt (str "ks:" preset ":" hz)
-                                        t amp-v attack-v decay-v pan-v dest))
-                 (make-sine ac t hz decay-v amp-v attack-v pan-v dest)))
+             (or (when-not offline? (wasm! (str "ks:" preset ":" hz)))
+                 (make-sine ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur))))
 
            ;; Standard note/sample dispatch
            (keyword? note)
            (if (theory/note-keyword? note)
              (let [hz (theory/note->hz note)]
-               (if offline?
-                 (make-sine ac t hz decay-v amp-v attack-v pan-v dest)
-                 (or (worklet-trigger-v2! wt (str hz) t amp-v attack-v decay-v pan-v dest)
-                     (make-sine ac t hz decay-v amp-v attack-v pan-v dest))))
+               (or (when-not offline? (wasm! (str hz)))
+                   (make-sine ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur))))
              (let [resolved (samples/resolve-keyword note)
                    extra    (sample-extra value timing)]
                (cond
                  (samples/has-bank? resolved)
-                 (samples/play! ac t resolved 0 amp-v pan-v extra dest)
+                 (samples/play! ac t resolved 0 amp-v pan-v extra
+                                (js-dest (when ins (sample-length ac resolved 0 extra))))
                  :else
-                 (if offline?
-                   (js-synth ac t note amp-v pan-v dest)
-                   (or (worklet-trigger-v2! wt (name note) t amp-v attack-v decay-v pan-v dest)
-                       (js-synth ac t note amp-v pan-v dest))))))
+                 (or (when-not offline? (wasm! (name note)))
+                     (js-synth ac t note amp-v pan-v (js-dest 1.5))))))
 
            (number? note)
-           (if offline?
-             (make-sine ac t note decay-v amp-v attack-v pan-v dest)
-             (or (worklet-trigger-v2! wt (str note) t amp-v attack-v decay-v pan-v dest)
-                 (make-sine ac t note decay-v amp-v attack-v pan-v dest)))))
+           (or (when-not offline? (wasm! (str note)))
+               (make-sine ac t note decay-v amp-v attack-v pan-v (js-dest tone-dur)))))
 
        ;; Map {:bank :bd :n 2} from (sound :bd 2) — always use samples
        (and (map? value) (:bank value))
        (let [{:keys [bank n]} value
-             amp-v  (float (:amp  value 1.0))
+             amp-v  (float (* (:amp value 1.0) af))
              pan-v  (float (:pan  value 0.0))
              extra  (sample-extra value timing)]
          (if (samples/has-bank? bank)
-           (samples/play! ac t bank n amp-v pan-v extra dest)
+           (samples/play! ac t bank n amp-v pan-v extra
+                          (js-dest (when ins (sample-length ac bank n extra))))
            (if offline?
              (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)
-             (or (worklet-trigger-v2! wt (name bank) t amp-v 0.001 1.5 pan-v dest)
-                 (make-sine ac t 440 1.5 amp-v 0.001 pan-v dest)))))
+             (or (worklet-trigger-v3! wt (name bank) t amp-v 0.001 1.5 pan-v ins dest)
+                 (make-sine ac t 440 1.5 amp-v 0.001 pan-v (js-dest 1.5))))))
 
        ;; Keyword — note name → Hz tone, or sample bank
        (keyword? value)
@@ -603,12 +697,12 @@
 
        ;; Map with :synth :noise — no :note key
        (and (map? value) (= (:synth value) :noise))
-       (let [amp-v  (float (:amp value 1.0))
+       (let [amp-v  (float (* (:amp value 1.0) af))
              decay-v (float (:decay value 0.3))
              pan-v  (float (:pan value 0.0))]
          (or (when-not offline?
-               (worklet-trigger-v2! wt "noise" t amp-v 0.001 decay-v pan-v dest))
-             (make-noise ac t decay-v amp-v pan-v dest)))
+               (worklet-trigger-v3! wt "noise" t amp-v 0.001 decay-v pan-v ins dest))
+             (make-noise ac t decay-v amp-v pan-v (js-dest decay-v))))
 
        ;; Number — frequency in Hz
        (number? value)
