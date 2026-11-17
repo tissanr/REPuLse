@@ -49,7 +49,7 @@ without a human:
 | 8b | TL7b | Reverb & delay sends per orbit | 🤖👂 | full | opus |
 | 8c | TL7c | Vowel, envelopes & modulators | 🤖👂 | outline | opus |
 | 9 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
-| 9a | SYN6 | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | outline | opus |
+| 9a | SYN6 | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | full | opus |
 | 9b | FX1 | Mixing, space & modulation effects | 🤖👂 | outline | sonnet |
 | **M2** | | **Full songs** | | | |
 | 10 | SONG1 | Sections, song form & full-song render | 🤖 | full | opus |
@@ -2167,6 +2167,22 @@ by signals. First of three phases split from TL7 (2026-11-10).
 - Controls `lpf`/`cutoff` `resonance` `hpf` `hpq` `bpf` `bpq` `shape` `crush` `gain` `velocity`
 - WASM: `Inserts` per `ActiveVoice` (allocation-free), `Biquad::lowpass`, `trigger_v3` with a fixed parameter-slot layout
 - JS path (samples, `defsynth`, offline): the same inserts as native `BiquadFilterNode`/`WaveShaperNode` chains, no hand-written DSP; JS↔WASM parity test
+
+**Delivered:**
+- 10 control fns in `repulse.params` (+ `cutoff` alias in the Lisp): `lpf` `resonance` `hpf`
+  `hpq` `bpf` `bpq` `shape` `crush` `gain` `velocity`; patternable, signals sampled at onset.
+  Inside `defsynth` `lpf`/`hpf`/`bpf`/`gain` stay UGens
+- `repulse.inserts`: the one place for clamps, defaults, shape/crush curves and Web Audio Q
+  conversion; gain model `amp × gain × velocity`
+- WASM: `Biquad::lowpass`, inline `Inserts` per `ActiveVoice` (lpf → hpf → bpf → crush →
+  shape, built at trigger time), `trigger_v3` with the fixed 12-slot layout, amp clamp 0–2.
+  The `trigger_v2` render stays bit-identical (golden fingerprint test)
+- JS path: `with-inserts` builds only the stages an event uses (none without inserts) in front
+  of every JS voice, sample and `defsynth` voice, with cached curves and timed disconnect
+- Tests: Rust Goertzel tests (lpf/hpf/bpf/crush/shape, parity reference), `inserts_test`,
+  `params_test`, `e2e/per-event-inserts.spec.ts` (filter, sweep, gain/velocity, sample lpf,
+  shape, crush, node-count spy, JS↔WASM parity within 2 dB)
+- Human listen check: pending (PR test protocol). Mark ✅ once it passes
 
 See full spec: [PROMPTS/PHASE-TL7a.md](PROMPTS/PHASE-TL7a.md)
 
