@@ -11,6 +11,7 @@
             [repulse.auth :as auth]
             [repulse.api :as api]
             [repulse.ai.tools :as ai-tools]
+            [repulse.ui.dialog :as dialog]
             [repulse.ui.html :refer [escape-html]]
             [clojure.string :as cstr]
             [clojure.set :as cset]))
@@ -69,23 +70,27 @@
   "Append snippet code to editor, trigger (upd), and track usage."
   [snippet]
   (when-let [view @editor/editor-view]
-    (let [conflicts (conflict-tracks snippet)]
-      (when (or (empty? conflicts)
-                (js/confirm
-                  (str "Track name(s) already in use: "
-                       (cstr/join ", " (map #(str ":" (name %)) conflicts))
-                       "\n\nInsert anyway?")))
-        (let [code    (:code snippet)
-              doc-len (.. view -state -doc -length)]
-          (clear-preview!)
-          (.dispatch view
-                     #js {:changes #js {:from doc-len
-                                        :to   doc-len
-                                        :insert (str "\n\n" code)}})
-          (js/setTimeout #(eo/evaluate! "(upd)") 50)
-          ;; Silently track usage
-          (when-let [id (:id snippet)]
-            (api/track-usage! id)))))))
+    (let [conflicts (conflict-tracks snippet)
+          insert!   (fn []
+                      (let [code    (:code snippet)
+                            doc-len (.. view -state -doc -length)]
+                        (clear-preview!)
+                        (.dispatch view
+                                   #js {:changes #js {:from doc-len
+                                                      :to   doc-len
+                                                      :insert (str "\n\n" code)}})
+                        (js/setTimeout #(eo/evaluate! "(upd)") 50)
+                        ;; Silently track usage
+                        (when-let [id (:id snippet)]
+                          (api/track-usage! id))))]
+      (if (empty? conflicts)
+        (insert!)
+        (-> (dialog/confirm!
+             (str "Track name(s) already in use: "
+                  (cstr/join ", " (map #(str ":" (name %)) conflicts))
+                  "\n\nInsert anyway?")
+             {:ok-label "Insert"})
+            (.then (fn [ok?] (when ok? (insert!)))))))))
 
 ;;; Rendering
 
@@ -292,26 +297,31 @@
 
 (defn- handle-report! [snippet-id]
   (when (logged-in?)
-    (when-let [reason (js/prompt "Why are you reporting this snippet? (optional)")]
-      (-> (api/report-snippet! snippet-id reason)
-          (.then (fn [result]
-                   (if (:error result)
-                     (js/alert (str "Report failed: " (:error result)))
-                     (js/alert "Thank you — the snippet has been flagged for review."))))))))
+    (-> (dialog/prompt! "Why are you reporting this snippet? (optional)" "")
+        (.then (fn [reason]
+                 (when reason
+                   (-> (api/report-snippet! snippet-id reason)
+                       (.then (fn [result]
+                                (if (:error result)
+                                  (dialog/alert! (str "Report failed: " (:error result)))
+                                  (dialog/alert! "Thank you — the snippet has been flagged for review.")))))))))))
 
 (defn- handle-delete! [snippet-id]
   (when (and (logged-in?) (uuid-id? snippet-id))
-    (when (js/confirm "Delete this snippet? This cannot be undone.")
-      (clear-preview!)
-      (-> (api/delete-snippet! snippet-id)
-          (.then (fn [result]
-                   (if (:error result)
-                     (js/alert (str "Delete failed: " (:error result)))
-                     (do
-                       (when-let [cards (el "snippet-cards")]
-                         (set! (.-innerHTML cards)
-                               "<div class=\"snippet-empty\">loading\u2026</div>"))
-                       (snippets/reload!)))))))))
+    (-> (dialog/confirm! "Delete this snippet? This cannot be undone."
+                         {:ok-label "Delete" :danger? true})
+        (.then (fn [ok?]
+                 (when ok?
+                   (clear-preview!)
+                   (-> (api/delete-snippet! snippet-id)
+                       (.then (fn [result]
+                                (if (:error result)
+                                  (dialog/alert! (str "Delete failed: " (:error result)))
+                                  (do
+                                    (when-let [cards (el "snippet-cards")]
+                                      (set! (.-innerHTML cards)
+                                            "<div class=\"snippet-empty\">loading\u2026</div>"))
+                                    (snippets/reload!))))))))))))
 
 ;;; Show / hide
 

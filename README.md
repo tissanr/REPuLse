@@ -49,6 +49,9 @@ and **when** — not **how** synthesis works internally.
   patterns combine arithmetically (`(add 7 pat)`), and continuous signals (`sine`, `rand`,
   `perlin`) modulate parameters (`(pan sine pat)`)
 - **Expression:** `amp`, `attack`, `decay`, `pan`, … chained with `->>`
+- **Per-event effects:** filters, drive and crush on each note, patternable and
+  signal-driven: `(->> (fast 8 (seq :hh)) (lpf (range 400 6000 sine)) (resonance 4))`;
+  also `hpf`, `bpf`, `shape`, `crush`, `gain`, `velocity`
 - **Inline sliders:** `(amp (slider 0.7 0 1))` evaluates to `0.7` and is drawn as a draggable
   bar in the editor; dragging rewrites the number in the code (`Cmd/Ctrl+K S` wraps/unwraps)
 - **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`, `(fx :cab :ir :4x12)`;

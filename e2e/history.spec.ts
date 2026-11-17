@@ -118,16 +118,23 @@ test('W1-W6: record, panel, preview, snapshots, link, rename/delete/clear', asyn
   expect(await text(page2)).toBe('(seq :bd :sd)');
   await page2.close();
 
-  // W6 — rename / delete / clear via dialogs
-  page.once('dialog', (d) => d.accept('verse'));
+  // W6 — rename / delete / clear via in-page dialogs (native ones block audio)
   await page.locator('.hist-snap[data-name="take A"] [data-act="rename"]').click();
+  await expect(page.locator('.rp-dialog-input')).toHaveValue('take A');
+  await page.locator('.rp-dialog-input').fill('verse');
+  await page.locator('.rp-dialog-input').press('Enter');
   await expect(page.locator('.hist-snap[data-name="verse"]')).toHaveCount(1);
-  page.once('dialog', (d) => d.accept());
+  // Escape cancels: nothing is deleted
   await page.locator('.hist-snap[data-name="verse"] [data-act="delete"]').click();
+  await page.locator('.rp-dialog').press('Escape');
+  await expect(page.locator('.rp-dialog')).toHaveCount(0);
+  await expect(page.locator('.hist-snap')).toHaveCount(1);
+  await page.locator('.hist-snap[data-name="verse"] [data-act="delete"]').click();
+  await page.locator('.rp-dialog-ok').click();
   await expect(page.locator('.hist-snap')).toHaveCount(0);
   expect(await page.evaluate(() => window.__REPULSE_HISTORY__.snapshots())).toEqual([]);
-  page.once('dialog', (d) => d.accept());
   await page.locator('[data-act="clear"]').click();
+  await page.locator('.rp-dialog-ok').click();
   await expect(page.locator('.hist-entry')).toHaveCount(0);
 });
 
