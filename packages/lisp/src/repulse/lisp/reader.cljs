@@ -225,7 +225,39 @@
         :else
         (->SourcedVal result {:from from :to to})))))
 
-(defn read-all [src]
+(defn- shift-range [source n]
+  (cond-> source
+    (:from source) (update :from + n)
+    (:to source)   (update :to + n)))
+
+(defn shift-sources
+  "Return form with every :source {:from :to} (SourcedVal field or metadata on
+   lists/vectors/maps/symbols) shifted by n, recursively. Collection types are
+   preserved (lists stay seq?, vectors stay vectors, maps stay maps)."
+  [form n]
+  (letfn [(shift-meta [orig shifted]
+            (if-let [m (meta orig)]
+              (with-meta shifted (cond-> m (:source m) (update :source shift-range n)))
+              shifted))]
+    (cond
+      (instance? SourcedVal form)
+      (->SourcedVal (:v form) (shift-range (:source form) n))
+
+      (symbol? form)
+      (shift-meta form form)
+
+      (vector? form)
+      (shift-meta form (mapv #(shift-sources % n) form))
+
+      (map? form)
+      (shift-meta form (into {} (map (fn [[k v]] [(shift-sources k n) (shift-sources v n)])) form))
+
+      (seq? form)
+      (shift-meta form (apply list (map #(shift-sources % n) form)))
+
+      :else form)))
+
+(defn- read-all* [src]
   (let [r {:src src :pos (atom 0)}]
     (loop [forms []]
       (skip-ws-comments r)
@@ -233,6 +265,22 @@
         forms
         (let [f (read-form r)]
           (if (= f ::eof) forms (recur (conj forms f))))))))
+
+(defn read-all
+  "Read every form in src. With an offset, every source position (and the
+   position of a read error) is shifted by offset."
+  ([src] (read-all* src))
+  ([src offset]
+   (let [offset (or offset 0)
+         forms  (try (read-all* src)
+                     (catch :default e
+                       (let [d (ex-data e)]
+                         (throw (if (and d (:from d) (pos? offset))
+                                  (ex-info (ex-message e)
+                                           (assoc d :from (+ offset (:from d))
+                                                    :to   (+ offset (:to d))))
+                                  e)))))]
+     (if (pos? offset) (mapv #(shift-sources % offset) forms) forms))))
 
 (defn read-one [src]
   (first (read-all src)))

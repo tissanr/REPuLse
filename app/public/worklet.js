@@ -57,6 +57,10 @@ class RepulseProcessor extends AudioWorkletProcessor {
       }
     } else if (msg.type === 'stop') {
       if (this.engine) this.engine.stop_all();
+    } else if (msg.type === 'sync') {
+      // Phase EXP1: the offline export posts every trigger, then 'sync'; messages
+      // on one port arrive in order, so 'synced' means all triggers are queued.
+      this.port.postMessage({ type: 'synced', id: msg.id });
     } else if (msg.type === 'transition') {
       if (this.engine) {
         this.engine.start_transition(

@@ -3,13 +3,19 @@
    During evaluation `track` only collects name → pattern and `song` registers a
    song value; once the whole buffer has evaluated, activate-buffer! starts the
    collected tracks under the song (or free-running when there is no song),
-   then applies a pending (play-from …) and (export :song).
-   Depends only on audio, fx, repulse.song, wav and the Lisp typo-hint, so the
-   TEST1 harness can use it."
+   then applies a pending (play-from …) and (export …).
+   Exports (Phase EXP1) render offline (repulse.offline-render) and fall back
+   to the real-time capture when the offline path can't run.
+   Depends only on audio, fx, offline-render, repulse.song, wav and the Lisp
+   typo-hint, so the TEST1 harness can use it."
   (:require [repulse.audio :as audio]
             [repulse.fx :as fx]
+            [repulse.offline-render :as offline-render]
             [repulse.song :as song]
             [repulse.wav :as wav]
+            [repulse.zip :as zip]
+            [repulse.download :as download]
+            [clojure.string :as str]
             [repulse.lisp.eval :as leval]))
 
 ;;; Per-evaluation pending state
@@ -17,7 +23,18 @@
 (defonce pending-tracks    (atom []))   ; [[kw pattern] …] in buffer order
 (defonce pending-song      (atom nil))
 (defonce pending-play-from (atom nil))  ; integer bar
-(defonce pending-export    (atom nil))  ; {:tail secs :set-output! f}
+;; {:kind :cycles :n n :track kw-or-nil :set-output! f}
+;; {:kind :song :tail secs :realtime? bool :set-output! f}
+;; {:kind :stems :n n-or-nil :tail secs :set-output! f}   (SK1)
+(defonce pending-export    (atom nil))
+(defonce pending-track-srcs (atom {}))  ; {kw src} — first definition's source
+
+;; nil, or (fn [src] → buffer name) while a multi-buffer project evaluates
+;; (set only by repulse.project-eval/run-project, Phase SONG4).
+(defonce buffer-of (atom nil))
+
+;; True while an export (offline render or real-time capture) runs (E14).
+(defonce export-running? (atom false))
 
 ;; Last activated song buffer {:tracks [[kw pat] …] :song song} — used by
 ;; play-from / export after (stop).
@@ -31,12 +48,21 @@
   (reset! pending-tracks [])
   (reset! pending-song nil)
   (reset! pending-play-from nil)
-  (reset! pending-export nil))
+  (reset! pending-export nil)
+  (reset! pending-track-srcs {}))
 
 (defn current-song
   "The song of this evaluation, else the last activated one."
   []
   (or @pending-song (:song @song-buffer)))
+
+(defn current-song-buffer
+  "SK1: {:song s :tracks [[kw pat] …]} of this evaluation's song, else the last
+   activated song buffer, else nil."
+  []
+  (if @pending-song
+    {:song @pending-song :tracks @pending-tracks}
+    @song-buffer))
 
 (defn- src-data [src]
   (when (and src (:from src)) {:from (:from src) :to (:to src)}))
@@ -48,12 +74,20 @@
    defined below the song."
   [name' pat' src]
   (when (some #(= name' (first %)) @pending-tracks)
-    (throw (ex-info (str "Duplicate track name :" (name name')
-                         " — each track must have a unique name in the buffer")
-                    (merge {:type :eval-error} (src-data src)))))
+    (let [f (or @buffer-of (constantly nil))
+          a (f (get @pending-track-srcs name'))
+          b (f src)]
+      (throw (ex-info (if (and a b (not= a b))
+                        (str "Duplicate track name :" (name name')
+                             " — already defined in buffer :" a
+                             "; track names must be unique across the project")
+                        (str "Duplicate track name :" (name name')
+                             " — each track must have a unique name in the buffer"))
+                      (merge {:type :eval-error} (src-data src))))))
   (when @pending-song
     (throw (ex-info (str "track :" (name name') " is defined after (song …) — define tracks above the song")
                     (merge {:type :eval-error} (src-data src)))))
+  (swap! pending-track-srcs assoc name' src)
   (swap! pending-tracks conj [name' pat']))
 
 (defn- hint-fn [name-str known-strs]
@@ -87,11 +121,11 @@
     (audio/play-track! nm pat on-beat on-event)
     (fx/apply-track-effects! nm (:track-fx pat))))
 
-(defn replay-song-buffer!
-  "Restart the last activated song buffer from start-bar.
+(defn replay-buffer!
+  "Restart song buffer {:tracks [[kw pat] …] :song s} from start-bar.
    opts — {:end :stop|:loop} overrides the song's :end for this run (export)."
-  [start-bar opts]
-  (when-let [{:keys [tracks] s :song} @song-buffer]
+  [buffer start-bar opts]
+  (when-let [{:keys [tracks] s :song} buffer]
     (let [cbs @activation-cbs]
       (audio/stop!)
       (audio/set-song! (merge s (select-keys opts [:end])) {:start-bar start-bar})
@@ -99,11 +133,24 @@
       (when-let [f (:set-playing! cbs)] (f true))
       true)))
 
+(defn replay-song-buffer!
+  "Restart the last activated song buffer from start-bar.
+   opts — {:end :stop|:loop} overrides the song's :end for this run (export)."
+  [start-bar opts]
+  (replay-buffer! @song-buffer start-bar opts))
+
 (defn- apply-play-from! [bar song-activated?]
   (cond
     song-activated? nil   ; already passed as :start-bar to set-song!
     (and (audio/playing?) (:song @audio/scheduler-state)) (audio/relocate-song! bar)
     :else (replay-song-buffer! bar {})))
+
+(defn cue-bar!
+  "Cue `bar` like (play-from bar) issued while a song is active: playing → it
+   becomes the next scheduled bar; stopped → the last song buffer restarts
+   there. WS1 (status-head progress segments, inspector ▶ cue)."
+  [bar]
+  (apply-play-from! bar false))
 
 (defn- secs-str [x] (.toFixed (double x) 1))
 
@@ -114,32 +161,220 @@
        (secs-str (+ (song/song-duration-secs s (audio/get-bpm)) tail)) " s"))
 
 (defn capture-song!
-  "Replay the song buffer once from bar 0 (as :end :stop) and capture the master
-   output in real time. Resolves with {:left :right :sample-rate :frames :late}."
-  [{:keys [tail]}]
-  (-> (audio/recorder-ready)
-      (.then (fn [node]
-               (cond
-                 (nil? node)   (throw (ex-info "(export :song) needs AudioWorklet support for real-time capture" {}))
-                 (nil? @song-buffer) (throw (ex-info "no song" {}))
-                 :else (do (replay-song-buffer! 0 {:end :stop})
-                           (audio/capture! {:tail tail})))))))
+  "Replay song buffer {:tracks :song} once from bar 0 (as :end :stop) and
+   capture the master output in real time.
+   Resolves with {:left :right :sample-rate :frames :late}.
+   The one-argument form captures the last activated song buffer."
+  ([opts] (capture-song! @song-buffer opts))
+  ([buffer {:keys [tail]}]
+   (-> (audio/recorder-ready)
+       (.then (fn [node]
+                (cond
+                  (nil? node)   (throw (ex-info "(export :song) needs AudioWorklet support for real-time capture" {}))
+                  (nil? buffer) (throw (ex-info "no song" {}))
+                  :else (do (replay-buffer! buffer 0 {:end :stop})
+                            (audio/capture! {:tail tail}))))))))
+
+(defn synthetic-song-buffer
+  "E9: a one-section song that plays cycles 0…n−1 of tracks once, so the
+   real-time capture can stand in for an offline (export n)."
+  [tracks n]
+  (let [kws (mapv first tracks)]
+    {:tracks (vec tracks)
+     :song   (song/make-song [(song/make-section :export n kws)] {:end :stop} kws nil)}))
+
+(defn cycles-label
+  "\"all tracks\" or \":kick\" for an (export n) / (export :track) job."
+  [track]
+  (if track (str ":" (name track)) "all tracks"))
+
+(defn cycles-filename [track n]
+  (str "repulse-" (if track (name track) "all") "-" n "cycles.wav"))
+
+(defn fallback-notice [reason]
+  (str "offline render unavailable (" reason ") — capturing in real time instead…"))
+
+(defn- export-tracks
+  "Tracks of an (export n) / (export :track) job, after activation."
+  [track]
+  (let [all (:tracks @audio/scheduler-state)]
+    (if track
+      (select-keys all [track])
+      all)))
+
+(defn stem-tracks
+  "K2. The tracks of song s that are listed in at least one section, in song
+   track order — a track used in no section would be pure silence."
+  [s]
+  (let [used (set (mapcat :tracks (:sections s)))]
+    (filterv used (:tracks s))))
+
+(defn stem-filenames
+  "K1. [kw …] → [\"repulse-<track>.wav\" …]; characters outside [A-Za-z0-9._-]
+   become `_`, names that collide get -2, -3, … appended."
+  [track-kws]
+  (:names
+   (reduce (fn [{:keys [seen names]} kw]
+             (let [base (str/replace (name kw) #"[^A-Za-z0-9._-]" "_")
+                   k    (inc (get seen base 0))]
+               {:seen  (assoc seen base k)
+                :names (conj names (str "repulse-" base (when (> k 1) (str "-" k)) ".wav"))}))
+           {:seen {} :names []}
+           track-kws)))
+
+(defn- download! [{:keys [left right sample-rate]} filename]
+  (wav/download-wav! (wav/encode-wav-16 left right sample-rate) filename))
+
+(defn- export-job
+  "→ {:job offline-render job :filename str :done str :capture f} for a
+   pending export (nil job when there is nothing to render)."
+  [{:keys [kind n track tail]}]
+  (let [cd (:cycle-dur @audio/scheduler-state)]
+    (case kind
+      :cycles
+      (let [tracks (export-tracks track)]
+        {:job      (when (seq tracks)
+                     {:kind :cycles :tracks tracks :n n :cycle-dur cd})
+         :filename (cycles-filename track n)
+         :done     (str "exported " (cycles-label track) " — " n " cycles")
+         :capture  #(capture-song! (synthetic-song-buffer tracks n) {:tail 0})})
+
+      :song
+      (let [buf @song-buffer
+            s   (:song buf)]
+        {:job      (when s
+                     {:kind :song :tracks (into {} (:tracks buf)) :song s
+                      :tail tail :cycle-dur cd})
+         :filename (str "repulse-song-" (song/song-length s) "bars.wav")
+         :done     (str "exported song — " (song-summary s tail))
+         :capture  #(capture-song! buf {:tail tail})}))))
+
+(defn- stems-job
+  "→ {:job offline-render base job :kws [kw …] :done str} for a pending :stems
+   export. A song without a cycle count renders the song (K3); otherwise n
+   cycles (default 4) of every active track, sorted by name."
+  [{:keys [n tail]}]
+  (let [cd  (:cycle-dur @audio/scheduler-state)
+        buf @song-buffer
+        s   (:song buf)]
+    (if (and s (nil? n))
+      (let [kws (stem-tracks s)]
+        {:job  {:kind :song :tracks (into {} (:tracks buf)) :song s :tail tail :cycle-dur cd}
+         :kws  kws
+         :done (str "exported " (count kws) " stems — " (song-summary s tail))})
+      (let [tracks (export-tracks nil)
+            kws    (vec (sort (keys tracks)))
+            n'     (or n 4)]
+        {:job  {:kind :cycles :tracks tracks :n n' :cycle-dur cd}
+         :kws  kws
+         :done (str "exported " (count kws) " stems — " n' " cycles")}))))
+
+(defn- report-failure! [out e]
+  (cond
+    (:cancelled (ex-data e)) (out "export cancelled" :idle)
+    :else (do (js/console.error "[REPuLse] export failed:" e)
+              (out (str "Error: export failed — " (ex-message e)) :error))))
+
+(def stems-too-large-error
+  "Error: stems too large for one zip (over 4 GB) — export fewer bars or tracks")
+
+(defn- render-stems!
+  "Render the stems one after the other (K7) → Promise<[ArrayBuffer …]> (WAVs)."
+  [out job kws]
+  (let [total (count kws)]
+    (reduce
+     (fn [p [i kw]]
+       (.then p
+              (fn [wavs]
+                (out (str "rendering stem " (inc i) "/" total " — :" (name kw) "…") :idle)
+                (-> (offline-render/render! (assoc job :stem kw :master? false))
+                    (.then (fn [{:keys [left right sample-rate]}]
+                             (conj wavs (wav/encode-wav-16 left right sample-rate))))))))
+     (js/Promise.resolve [])
+     (map-indexed vector kws))))
+
+(defn- start-stems!
+  "(export :stems …) — one WAV per track in repulse-stems.zip. Offline only (K4)."
+  [{:keys [set-output!] :as pending}]
+  (let [out (or set-output! (fn [_ _]))
+        {:keys [job kws done]} (stems-job pending)]
+    (cond
+      (empty? kws)
+      (out "Error: no active tracks to export" :error)
+
+      @export-running?
+      (out "Error: an export is already running — (stop) cancels it" :error)
+
+      :else
+      (let [sr     (.-sampleRate ^js (audio/get-ctx))
+            size   (* 4 (offline-render/job-frames job sr))
+            names  (stem-filenames kws)]
+        (if (> (zip/zip-size (map (fn [nm] {:name nm :size (+ 44 size)}) names))
+               zip/max-zip-bytes)
+          (out stems-too-large-error :error)
+          (do
+            (reset! export-running? true)
+            (-> (render-stems! out job kws)
+                (.then (fn [wavs]
+                         (download/download-parts!
+                          (zip/zip-parts (map (fn [nm w] {:name nm :data (js/Uint8Array. w)})
+                                              names wavs))
+                          "application/zip" "repulse-stems.zip")
+                         (out (str done " (offline)") :success)))
+                (.catch (fn [e]
+                          (if (:fallback (ex-data e))
+                            (out (str "Error: stems need the offline renderer — " (ex-message e))
+                                 :error)
+                            (report-failure! out e))))
+                (.finally (fn [] (reset! export-running? false))))))))))
+
+(defn- start-wav-export!
+  "Offline render (or real-time capture) of one WAV."
+  [{:keys [kind realtime? set-output!] :as pending}]
+  (let [out (or set-output! (fn [_ _]))
+        {:keys [job filename done capture]} (export-job pending)
+        run-capture (fn []
+                      (-> (capture)
+                          (.then (fn [res]
+                                   (download! res filename)
+                                   (out (if (= kind :song) done (str done " (real time)"))
+                                        :success)))))]
+    (cond
+      (nil? job)
+      (out (if (= kind :song)
+             "Error: no song — evaluate a buffer that ends with (song …) first"
+             "Error: no active tracks to export")
+           :error)
+
+      @export-running?
+      (out "Error: an export is already running — (stop) cancels it" :error)
+
+      :else
+      (do
+        (reset! export-running? true)
+        (-> (if realtime?
+              (run-capture)
+              (-> (offline-render/render! job)
+                  (.then (fn [res]
+                           (download! res filename)
+                           (out (str done " (offline)") :success)))
+                  (.catch (fn [e]
+                            (if (:fallback (ex-data e))
+                              (do (js/console.warn "[REPuLse] offline export unavailable:" (ex-message e))
+                                  (out (fallback-notice (ex-message e)) :idle)
+                                  (run-capture))
+                              (throw e))))))
+            (.catch (fn [e] (report-failure! out e)))
+            (.finally (fn [] (reset! export-running? false))))))))
 
 (defn start-export!
-  "Run (export :song): capture one pass and download it as a WAV."
-  [{:keys [tail set-output!]}]
-  (let [s (:song @song-buffer)
-        out (or set-output! (fn [_ _]))]
-    (-> (capture-song! {:tail tail})
-        (.then (fn [{:keys [left right sample-rate]}]
-                 (let [buf (wav/encode-wav-16 left right sample-rate)]
-                   (wav/download-wav! buf (str "repulse-song-" (song/song-length s) "bars.wav"))
-                   (out (str "exported song — " (song-summary s tail)) :success))))
-        (.catch (fn [e]
-                  (if (:cancelled (ex-data e))
-                    (out "export cancelled" :idle)
-                    (do (js/console.error "[REPuLse] song export failed:" e)
-                        (out (str "Error: song export failed — " (ex-message e)) :error))))))))
+  "Run a pending export after the buffer has evaluated (E5): render offline
+   (or capture in real time for (export :song :realtime) and as the fallback)
+   and download the WAV. (export :stems …) renders one WAV per track into a zip."
+  [{:keys [kind] :as pending}]
+  (if (= :stems kind)
+    (start-stems! pending)
+    (start-wav-export! pending)))
 
 (defn activate-buffer!
   "Called after every successful evaluation. Starts the collected tracks (under

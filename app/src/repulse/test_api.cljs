@@ -5,6 +5,7 @@
             [repulse.lisp.eval :as leval]
             [repulse.bus :as bus]
             [repulse.synth :as synth]
+            [repulse.samples :as samples]
             [repulse.song :as song]
             [repulse.song-transport :as song-transport]
             [repulse.env.builtins.song :as b-song]))
@@ -71,14 +72,51 @@
                       (core/query pattern {:start [c 1] :end [(inc c) 1]}))
                     (range n)))))))
 
-(defn- schedule-pattern! [offline pattern cycles cycle-dur]
-  (doseq [c (range cycles)]
-    (let [span {:start [c 1] :end [(inc c) 1]}]
-      (doseq [ev (core/query-onsets pattern span)]
-        (let [part-start (core/rat->float (:start (:whole ev)))
-              abs-t      (* part-start cycle-dur)]
-          (when (>= abs-t 0)
-            (audio/play-event offline abs-t (:value ev))))))))
+(defn- schedule-pattern!
+  "Schedule the onsets of cycles 0…cycles−1 on offline. → Promise that resolves
+   once every sample voice has fetched its buffer and created its source."
+  [offline pattern cycles cycle-dur]
+  (js/Promise.all
+   (into-array
+    (for [c     (range cycles)
+          ev    (core/query-onsets pattern {:start [c 1] :end [(inc c) 1]})
+          :let  [w     (:whole ev)
+                 abs-t (* (core/rat->float (:start w)) cycle-dur)
+                 dur   (* (core/rat->float (core/rat- (:end w) (:start w))) cycle-dur)
+                 ret   (when (>= abs-t 0)
+                         (audio/play-event offline abs-t (:value ev) nil
+                                           {:dur dur :cycle-dur cycle-dur}))]
+          :when (and (some? ret) (fn? (.-then ^js ret)))]
+      ret))))
+
+(defn- test-sample-buffer
+  "Synthetic 1 s, 44.1 kHz mono buffers for TL6 tests:
+   \"steps\" — 4 slices of 0.25 s; slice k = 0.1 s of 440 Hz at amplitude
+             0.2·(k+1), then 0.15 s of silence.
+   \"tone\"  — 1 s of 440 Hz at amplitude 0.5."
+  [kind]
+  (let [sr  44100
+        buf (js/AudioBuffer. #js {:length sr :sampleRate sr :numberOfChannels 1})
+        d   (.getChannelData buf 0)]
+    (dotimes [i sr]
+      (let [tt  (/ i sr)
+            sig (Math/sin (* 2 Math/PI 440 tt))
+            amp (case kind
+                  "steps" (let [k (int (Math/floor (/ i (/ sr 4))))
+                                in-slice (- tt (* k 0.25))]
+                            (if (< in-slice 0.1) (* 0.2 (inc k)) 0))
+                  "tone"  0.5)]
+        (aset d i (* amp sig))))
+    buf))
+
+(defn- register-test-sample!
+  "Register bank-name as a one-sample bank holding a synthetic buffer (see
+   test-sample-buffer) — no network. Returns the bank name."
+  [bank-name kind]
+  (let [url (str "test://" bank-name)]
+    (swap! samples/buffer-cache assoc url (test-sample-buffer kind))
+    (swap! samples/registry assoc bank-name [url])
+    bank-name))
 
 (defn- channel-array [buffer idx]
   (let [data (.getChannelData buffer idx)]
@@ -96,8 +134,8 @@
          n-frames    (int (* sample-rate duration))
          offline     (js/OfflineAudioContext. 2 n-frames sample-rate)
          pattern     (pattern-from-code code offline)]
-     (schedule-pattern! offline pattern n-cycles cycle-dur)
-     (-> (.startRendering offline)
+     (-> (schedule-pattern! offline pattern n-cycles cycle-dur)
+         (.then (fn [_] (.startRendering offline)))
          (.then (fn [buffer]
                   (clj->js {:sampleRate (.-sampleRate buffer)
                             :channels   (.-numberOfChannels buffer)
@@ -231,5 +269,6 @@
              :backend (fn [] "offline-js")
              :songEvents song-events
              :audioReady audio-ready
-             :captureSong capture-song})
+             :captureSong capture-song
+             :registerTestSample register-test-sample!})
   (set! (.-__REPULSE_TEST_READY__ js/window) true))

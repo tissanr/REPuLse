@@ -32,7 +32,11 @@
     (do
       (ensure-method! plugin "init" (fn [_host] nil))
       (ensure-method! plugin "bypass" (fn [_on?] nil))
-      (ensure-method! plugin "getParams" (fn [] #js {}))
+      (when-not (has-method? plugin "getParams")
+        ;; Marked so the offline export (EXP1, decision E8) knows this plugin's
+        ;; state can't be read back.
+        (aset plugin "getParams" (fn [] #js {}))
+        (aset plugin "__repulseDefaultGetParams" true))
       plugin)
 
     plugin))

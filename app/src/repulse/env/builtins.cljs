@@ -3,8 +3,10 @@
    app-layer built-in functions.
    Responsibility: own env-atom, builtin-names, and seen-tracks; assemble the full
    Lisp environment on first call to ensure-env!.
-   Exports: env-atom, builtin-names, seen-tracks, evaluate-ref, ensure-env!, init!."
+   Exports: env-atom, builtin-names, seen-tracks, eval-warnings,
+            record-eval-warning!, evaluate-ref, ensure-env!, init!."
   (:require [repulse.lisp.eval :as leval]
+            [repulse.lisp.builtins.slider :as b-slider]
             [repulse.audio :as audio]
             [repulse.synth :as synth]
             [repulse.samples :as samples]
@@ -18,7 +20,9 @@
             [repulse.env.builtins.session :as b-session]
             [repulse.env.builtins.routing :as b-routing]
             [repulse.env.builtins.ai :as b-ai]
-            [repulse.env.builtins.song :as b-song]))
+            [repulse.env.builtins.song :as b-song]
+            [repulse.env.builtins.project :as b-project]
+            [repulse.env.builtins.history :as b-history]))
 
 ;;; Owned atoms
 
@@ -32,6 +36,15 @@
 ;; Reset by evaluate! before each eval; checked by the `track` builtin to
 ;; detect duplicate track names in the same buffer.
 (defonce seen-tracks (atom #{}))
+
+;; Eval warnings of the current evaluation (Phase WS3: slider clamps), as
+;; [{:message str :from n? :to n?}]. Reset by evaluate* before each eval.
+(defonce eval-warnings (atom []))
+
+(defn record-eval-warning!
+  "Collect one eval warning {:message :from :to} for the current evaluation."
+  [w]
+  (swap! eval-warnings conj w))
 
 ;;; Lazy reference to evaluate! — set by app.cljs after eval-orchestrator loads.
 ;; This breaks the ensure-env! ↔ evaluate! circular dependency:
@@ -69,7 +82,10 @@
       (samples/init!)
       (reset! env-atom
               (merge (assoc (leval/make-env (make-stop-fn) audio/set-bpm!)
-                            :*register-synth-fn* synth/register-synth!)
+                            :*register-synth-fn* synth/register-synth!
+                            :*master-fn* b-fx/run-master!)
+                     ;; WS3: the app's slider reports clamped values as warnings
+                     {"slider" (b-slider/make-slider-fn record-eval-warning!)}
                      (b-tracks/make-builtins ctx)
                      (b-fx/make-builtins ctx)
                      (b-samples/make-builtins ctx)
@@ -79,8 +95,10 @@
                      (b-session/make-builtins ctx)
                      (b-routing/make-builtins ctx)
                      (b-ai/make-builtins ctx)
-                     (b-song/make-builtins ctx)))
+                     (b-song/make-builtins ctx)
+                     (b-project/make-builtins ctx)
+                     (b-history/make-builtins ctx)))
       ;; Wire the FX event notification callback (used by sidechain plugin)
       (swap! audio/scheduler-state assoc :on-fx-event fx/notify-fx-event!)
-      ;; Snapshot built-in names so render-context-panel! can filter them out
+      ;; Snapshot built-in names so user bindings can be told apart from built-ins
       (reset! builtin-names (set (keys @env-atom))))))

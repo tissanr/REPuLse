@@ -247,6 +247,71 @@ const DOCS = {
     description: "Apply the transform f n times in a row.",
     example: "(apply-n 2 (fast 2) (seq :a :b))",
   },
+  "pick": {
+    signature: "(pick lookup ipat)",
+    description: "Choose a pattern out of a vector (indexed by number, clamped to its range) or a map (looked up by name) under the control of an index pattern. The chosen pattern keeps its own structure (inner join). Strings in the lookup are mini-notation; an unknown name is silent. Plain values give one onset per cycle (the index step only supplies a fragment) \u2014 use pick-out or inhabit for one value per step.",
+    example: "(pick {:a (seq :bd :sd) :b (seq :hh :hh :hh)} \"<a b>\")",
+  },
+  "pick-mod": {
+    signature: "(pick-mod lookup ipat)",
+    description: "Like pick, but a vector index wraps around instead of clamping (2 on a two-element vector selects element 0, -1 the last). Map lookups behave exactly like pick.",
+    example: "(pick-mod [(seq :bd :sd) (seq :hh :hh)] \"0 1 2\")",
+  },
+  "pick-f": {
+    signature: "(pick-f ipat fs pat)",
+    description: "Choose a function from a vector or map under the control of an index pattern and apply it to pat. The vector index is clamped; use pick-mod-f to wrap. Every entry must be a function.",
+    example: "(pick-f \"<0 1>\" [(fast 2) rev] (seq :a :b))",
+  },
+  "pick-mod-f": {
+    signature: "(pick-mod-f ipat fs pat)",
+    description: "Like pick-f, but a vector index wraps around instead of clamping.",
+    example: "(pick-mod-f \"<2 -1>\" [(fast 2) rev] (seq :a :b))",
+  },
+  "pick-out": {
+    signature: "(pick-out lookup ipat)",
+    description: "Like pick, but structure comes from the index pattern: each index step plays the chosen pattern's value at the step start (outer join). This is the one to use for one value per step.",
+    example: "(pick-out [:bd :sd :hh] \"0 1 2 1\")",
+  },
+  "pick-mod-out": {
+    signature: "(pick-mod-out lookup ipat)",
+    description: "Like pick-out, but a vector index wraps around instead of clamping.",
+    example: "(pick-mod-out [:bd :sd] \"0 1 2 3\")",
+  },
+  "pick-restart": {
+    signature: "(pick-restart lookup ipat)",
+    description: "Like pick, but at every index step the chosen pattern starts again from its cycle 0 (restart join).",
+    example: "(pick-restart [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")",
+  },
+  "pick-mod-restart": {
+    signature: "(pick-mod-restart lookup ipat)",
+    description: "Like pick-restart, but a vector index wraps around instead of clamping.",
+    example: "(pick-mod-restart [(slow 2 (seq :a :b :c :d)) :x] \"3 2\")",
+  },
+  "pick-reset": {
+    signature: "(pick-reset lookup ipat)",
+    description: "Like pick, but at every index step the current cycle of the chosen pattern starts again (reset join).",
+    example: "(pick-reset [(slow 2 (seq :a :b :c :d)) :x] \"1 0\")",
+  },
+  "pick-mod-reset": {
+    signature: "(pick-mod-reset lookup ipat)",
+    description: "Like pick-reset, but a vector index wraps around instead of clamping.",
+    example: "(pick-mod-reset [(slow 2 (seq :a :b :c :d)) :x] \"3 2\")",
+  },
+  "inhabit": {
+    signature: "(inhabit lookup ipat)",
+    description: "Squeeze one cycle of the chosen pattern into each step of the index pattern (squeeze join). Vector index clamped; map by name.",
+    example: "(inhabit {:a (seq :bd :sd) :b :hh} \"a b\")",
+  },
+  "inhabit-mod": {
+    signature: "(inhabit-mod lookup ipat)",
+    description: "Like inhabit, but a vector index wraps around instead of clamping.",
+    example: "(inhabit-mod [(seq :bd :sd) :hh] \"0 1 2\")",
+  },
+  "fix": {
+    signature: "(fix f cond pat)",
+    description: "Tidal fix: apply f only to the events matching the condition map; the rest are kept. All keys must match (AND); a vector value means any-of; numbers compare numerically, keywords and strings exactly; a missing key is no match. :s is derived from :bank or a non-note :note, so {:s :bd} matches :bd and (sound :bd 2).",
+    example: "(fix (fast 2) {:s :bd} (seq :hh :bd))",
+  },
   "jux": {
     signature: "(jux f pat)",
     description: "Juxtapose: play pat panned left, and (f pat) panned right, simultaneously.",
@@ -804,6 +869,11 @@ const DOCS = {
     description: "Interpolate a parameter from start to end over the given duration in bars. The audio engine handles per-sample interpolation — a single message is sent; no polling occurs. After the transition completes, the end value is held. Re-evaluating code restarts the transition.\n\ncurve: :linear — constant rate of change\n       :exp    — slow start, fast end (good for volume fades)\n       :sine   — S-curve: slow at both ends, fast in the middle",
     example: "(->> (seq :c4 :e4 :g4) (synth :saw) (amp (tween :linear 0.0 1.0 2)))",
   },
+  "slider": {
+    signature: "(slider value min max) or (slider value min max :log)",
+    description: "Evaluates to value, clamped to [min, max] (a warning names the clamp). In the editor the form is drawn as a draggable bar: drag to change the number in the code (⇧ = 10× finer), move the cursor onto it to edit the text, ⌘K S / Ctrl-K S to unwrap. Log scale when min > 0 and max/min ≥ 100, or with :log; :lin forces linear.",
+    example: "(->> (seq :e1 :g1) (synth :saw) (amp (slider 0.7 0 1)))",
+  },
   "amp": {
     signature: "(amp val pat) or (amp val)",
     description: "Set event amplitude (0.0 = silent, 1.0 = full). One-arg form returns a transformer for use with ->> or comp.",
@@ -914,9 +984,9 @@ const DOCS = {
     example: "(midi-clock-out! true)",
   },
   "midi-export": {
-    signature: "(midi-export :track n)",
-    description: "Export n cycles of the named track as a Standard MIDI File (.mid) and trigger a browser download. The file contains correct pitch, timing, duration, and tempo. Works in all browsers — no MIDI hardware required.",
-    example: "(midi-export :bass 4)",
+    signature: "(midi-export :track [n]) / (midi-export :song) — optionally followed by :drum-map {:name note}",
+    description: "Download a Standard MIDI File (format 1, 480 ppqn). (midi-export :track n) writes n cycles of one track; (midi-export :song) writes every track of the song as its own MIDI track with tempo and section markers. Velocity comes from amp, drum keywords map to General MIDI drum notes on channel 10 (:drum-map overrides or adds names). Works in all browsers — no MIDI hardware required.",
+    example: "(midi-export :song)",
   },
 
   // --- Freesound ---
@@ -958,6 +1028,11 @@ const DOCS = {
     signature: "(fx :name param) or (->> pat (fx :name param))",
     description: "Global: sets a master-chain effect parameter. Per-track: use inside ->> to route a track through its own effect chain — re-evaluating play without (fx ...) removes the effect automatically. Use (fx :off :name) / (fx :on :name) to bypass/restore global effects.",
     example: "(->> (seq :bd :_ :bd :_) (fx :filter 1000))",
+  },
+  "master": {
+    signature: "(master (fx :name …) …)",
+    description: "Group the global effect chain in one block. Each (fx …) inside runs exactly like a top-level (fx …); anything else is an error. One master per buffer. The signal order stays the built-in chain order.",
+    example: "(master\n  (fx :delay :time 0.375 :feedback 0.4)\n  (fx :reverb 0.3))",
   },
   "distort": {
     signature: "(fx :distort [:drive N] [:tone Hz] [:mix N] [:asym N] [:algo kw] [:oversample 1|2|4])",
@@ -1026,10 +1101,15 @@ const DOCS = {
     description: "Start (or jump) the song at the first bar of a section, or at a 0-based bar number. Works while playing and after (stop).",
     example: "(play-from :chorus)",
   },
+  "use": {
+    signature: "(use :buffer …)",
+    description: "Evaluate the named project buffers, in order, before continuing. All buffers share one environment, so their defs and tracks are visible unqualified. Each buffer runs at most once per evaluation; circular use is an error. Only works when Alt+Enter evaluates the project (not in the command bar).",
+    example: "(use :drums :bass)",
+  },
   "export": {
-    signature: "(export) / (export n) / (export :track) / (export :song [:tail secs])",
-    description: "Download a WAV. (export n) renders n cycles of all tracks offline (default 4); (export :track) renders one track; (export :song) plays the song once from bar 0 and records the master output in real time (with FX), plus a release tail (default 2 s). (stop) cancels a song export.",
-    example: "(export :song :tail 4)",
+    signature: "(export [n]) / (export :track [n]) / (export :stems [n | :tail secs]) / (export :song [:tail secs] [:realtime])",
+    description: "Download a WAV, rendered offline (faster than real time) with the same voices and FX as playback. (export n) renders n cycles of all tracks (default 4); (export :track n) renders n cycles of one track; (export :song) renders the whole song plus a release tail (default 2 s); add :realtime to record it live instead. (export :stems) renders every track of the song to its own WAV of identical length and downloads them as repulse-stems.zip (per-track FX included, master FX not; (export :stems n) = n cycles without a song).",
+    example: "(export :stems)",
   },
 
   // --- Special forms ---
@@ -1074,6 +1154,36 @@ const DOCS = {
     signature: "(tutorial) or (tutorial n)",
     description: "Load tutorial chapter n into the editor without auto-playing. Defaults to chapter 1. Press Alt+Enter to hear it.",
     example: "(tutorial 3)",
+  },
+  "snapshot!": {
+    signature: "(snapshot! name)",
+    description: "Save the whole project (every buffer, BPM, bank, sample sources, mutes) as a named snapshot. An existing name is overwritten. Snapshots are stored locally and never evicted automatically.",
+    example: '(snapshot! "take A")',
+  },
+  "snapshots": {
+    signature: "(snapshots)",
+    description: "Return the names of all saved snapshots, newest first.",
+    example: "(snapshots)",
+  },
+  "restore!": {
+    signature: "(restore! name) or (restore! id)",
+    description: "Restore a snapshot by name or an eval-history entry by number. The current state is saved to the history first, so a restore can always be undone. Does not evaluate: press Alt+Enter to hear it.",
+    example: '(restore! "take A")',
+  },
+  "rename-snapshot!": {
+    signature: "(rename-snapshot! old new)",
+    description: "Rename a saved snapshot. Fails when the new name is already taken.",
+    example: '(rename-snapshot! "take A" "verse")',
+  },
+  "delete-snapshot!": {
+    signature: "(delete-snapshot! name)",
+    description: "Delete a saved snapshot permanently.",
+    example: '(delete-snapshot! "take A")',
+  },
+  "history": {
+    signature: "(history)",
+    description: "Open the eval history and snapshots panel: scroll back through past evaluations, preview a line diff against the current code, and restore.",
+    example: "(history)",
   },
   "reset!": {
     signature: "(reset!)",

@@ -7,7 +7,7 @@
   (:require [repulse.session :as session]
             ["@codemirror/view" :refer [EditorView Decoration keymap lineNumbers]]
             ["@codemirror/state" :refer [EditorState StateEffect StateField]]
-            ["@codemirror/commands" :refer [defaultKeymap historyKeymap history selectAll]]
+            ["@codemirror/commands" :refer [defaultKeymap historyKeymap history selectAll toggleComment]]
             ["@codemirror/language" :refer [bracketMatching syntaxHighlighting]]
             ["@codemirror/lint" :refer [setDiagnostics lintGutter]]
             ["@codemirror/theme-one-dark" :refer [oneDarkTheme]]
@@ -129,40 +129,57 @@
         view  (EditorView. #js {:state state :parent container})]
     view))
 
+(defn editor-extensions
+  "The main editor's extension list (JS array).
+   on-eval — fn called with the doc string on Alt+Enter.
+   on-upd  — 0-arg fn bound to Ctrl+. and F9."
+  [on-eval on-upd]
+  (let [eval-cmd (fn [view]
+                   (on-eval (.. view -state -doc (toString)))
+                   true)
+        eval-binding    #js {:key "Alt-Enter" :run eval-cmd}
+        upd-fn          (fn [_] (on-upd) true)
+        upd-binding     #js {:key "Ctrl-." :run upd-fn}
+        upd-f9-binding  #js {:key "F9"     :run upd-fn}
+        ;; Mod-/ (in defaultKeymap) is unreachable on layouts where / needs Shift,
+        ;; e.g. German: Cmd+Shift+7 — bind that too.
+        comment-binding #js {:key "Shift-Mod-7" :run toggleComment}
+        escape-binding  #js {:key "Escape"
+                             :run (fn [_]
+                                    (when-let [cv @cmd-view] (.focus cv))
+                                    true)}]
+    #js [(history)
+         (lineNumbers)
+         oneDarkTheme
+         lispLanguage
+         (syntaxHighlighting repulseLispSyntaxTheme)
+         (bracketMatching)
+         highlights-field
+         (lintGutter)
+         save-listener
+         clear-diag-listener
+         (.-lineWrapping EditorView)
+         (.of keymap (.concat
+                      #js [escape-binding eval-binding upd-binding upd-f9-binding comment-binding]
+                      (clj->js defaultKeymap)
+                      (clj->js historyKeymap)))]))
+
+(defn make-state
+  "A fresh EditorState with `text` and the extension array `exts`."
+  [text exts]
+  (.. EditorState (create #js {:doc text :extensions exts})))
+
+(defn make-view
+  "Mount an EditorView showing `state` into `container`."
+  [container state]
+  (EditorView. #js {:state state :parent container}))
+
 (defn make-editor
   "Create the main multi-line CodeMirror editor.
    container     — DOM element to mount into.
    initial-value — initial text content.
    on-eval       — fn called with code string on Alt+Enter / F9 / Ctrl+."
   [container initial-value on-eval]
-  (let [eval-cmd (fn [view]
-                   (on-eval (.. view -state -doc (toString)))
-                   true)
-        eval-binding    #js {:key "Alt-Enter" :run eval-cmd}
-        upd-fn          (fn [_] (on-eval "(upd)") true)
-        upd-binding     #js {:key "Ctrl-." :run upd-fn}
-        upd-f9-binding  #js {:key "F9"     :run upd-fn}
-        escape-binding  #js {:key "Escape"
-                             :run (fn [_]
-                                    (when-let [cv @cmd-view] (.focus cv))
-                                    true)}
-        extensions #js [(history)
-                        (lineNumbers)
-                        oneDarkTheme
-                        lispLanguage
-                        (syntaxHighlighting repulseLispSyntaxTheme)
-                        (bracketMatching)
-                        highlights-field
-                        (lintGutter)
-                        save-listener
-                        clear-diag-listener
-                        (.-lineWrapping EditorView)
-                        (.of keymap (.concat
-                                     #js [escape-binding eval-binding upd-binding upd-f9-binding]
-                                     (clj->js defaultKeymap)
-                                     (clj->js historyKeymap)))]
-        state (.. EditorState
-                  (create #js {:doc initial-value
-                               :extensions extensions}))
-        view (EditorView. #js {:state state :parent container})]
-    view))
+  (make-view container
+             (make-state initial-value
+                         (editor-extensions on-eval #(on-eval "(upd)")))))

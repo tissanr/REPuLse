@@ -217,6 +217,28 @@ After loading, control the tremolo from the REPL:
 | `getParams()` | optional | `{}` installed by REPuLse | Return current `{ name: value }` state. |
 | `destroy()` | **required** | throws | Disconnect all nodes and release references. |
 | `clone()` | optional | shallow object clone fallback | Return a fresh effect instance for per-track chains. Required for closure-state plugins. |
+| `ready()` | optional | treated as already ready | Return a Promise that resolves once the nodes from the last `createNodes()` are fully wired (e.g. an `AudioWorkletNode` created after `addModule`, an IR generated asynchronously) and rejects if wiring failed. Awaited (5 s timeout) before an offline export renders. |
+
+### Offline export
+
+`(export …)` renders faster than real time in an `OfflineAudioContext` that mirrors the live
+graph (Phase EXP1). For every effect in the global chain, and for every per-track effect of the
+exported tracks, REPuLse makes a fresh instance exactly like a per-track chain does (`clone()`,
+or a shallow copy), then:
+
+1. calls `init(host)` **again on that instance** with an offline host whose `audioCtx` is the
+   `OfflineAudioContext` — so plugins that `addModule` in `init` load their worklet into the
+   offline context (keep the promise on `this`, as `bitcrusher.js` does);
+2. calls `createNodes(offlineCtx)`;
+3. copies the live state: `getParams()` → `setParam(name, value)` for every non-null value,
+   then replays the `(fx …)` parameter calls of the last evaluation, then `bypass(true)` if the
+   effect is bypassed (per-track effects get their `(fx …)` parameters instead);
+4. awaits `ready()` when present.
+
+A plugin that is **used** by the export (active in the global chain, or named in an exported
+track's `(fx …)`) needs a real `getParams()`; without one REPuLse can't read its state and the
+export falls back to real-time capture, naming the plugin. If `createNodes` throws or `ready()`
+rejects or times out, the export also falls back. Visual plugins are skipped offline.
 
 ### Audio graph contract
 

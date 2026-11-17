@@ -98,19 +98,20 @@ test('outline lists 10 rows and the count for the reference buffer', async ({ pa
   expect(await page.locator('#outline-panel .ol-kind').allInnerTexts()).toContain('synth');
 });
 
-test('clicking a row moves the cursor to its paren, reveals it and focuses the editor', async ({ page }) => {
+test('clicking a row selects it without moving the cursor', async ({ page }) => {
+  // Phase WS1 replaces SONG3's "click moves the cursor" with selection.
   await load(page);
-  await page.locator('#outline-panel .ol-row', { hasText: ':bass' }).first().click();
-  const expected = R.indexOf('(track :bass');
-  expect(await head(page)).toBe(expected);
-  expect(await lineOfHead(page)).toBe(7);
-  expect(await page.evaluate(() => document.activeElement?.closest('.cm-editor') !== null)).toBe(true);
-  const visible = await page.evaluate(() => {
+  const row = page.locator('#outline-panel .ol-row', { hasText: ':bass' }).first();
+  await row.click();
+  await expect(row).toHaveClass(/ol-sel/);
+  expect(await head(page)).toBe(0);
+  expect(await page.evaluate(() => document.activeElement?.closest('#editor-container .cm-editor') !== null)).toBe(true);
+  const visible = await page.evaluate((from) => {
     const v = window.__REPULSE_EDITOR__;
-    const r = v.coordsAtPos(v.state.selection.main.head);
+    const r = v.coordsAtPos(from);
     const box = v.scrollDOM.getBoundingClientRect();
     return !!r && r.top >= box.top && r.bottom <= box.bottom;
-  });
+  }, R.indexOf('(track :bass'));
   expect(visible).toBe(true);
 });
 

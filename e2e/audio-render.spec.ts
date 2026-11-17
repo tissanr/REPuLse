@@ -194,6 +194,20 @@ for (const [name, code, expected] of [
   });
 }
 
+// TL4b: pick & fix (deterministic; :cp avoided, it counts as 2 onsets)
+for (const [name, code, expected] of [
+  ['pick-out gives one onset per index step', '(pick-out [:bd :sd :hh :sd] "0 1 2 3")', 4],
+  ['inhabit squeezes a cycle into each step', '(inhabit {:a (seq :bd :sd) :b :hh} "a b")', 3],
+  ['fix speeds up only the matching kick', '(fix (fast 2) {:s :bd} (seq :hh :bd))', 3],
+  ['pick with plain values plays once per cycle (K7)', '(pick [:bd :sd] "0 1")', 1],
+] as [string, string, number][]) {
+  test(`TL4b ${name}`, async ({ page }) => {
+    const result = await render(page, code);
+    const mono = mixMono(result.left, result.right);
+    expect(countOnsets(mono, result.sampleRate)).toBe(expected);
+  });
+}
+
 // TL5: layering, pitch & harmony — note keywords from scale/chord/voicing reach the audio path
 for (const [name, code, expected] of [
   // Sine notes need a short decay so consecutive notes are separated by silence
