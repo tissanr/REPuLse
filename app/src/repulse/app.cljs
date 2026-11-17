@@ -13,6 +13,7 @@
             [repulse.ui.inspector :as inspector]
             [repulse.ui.inline-slider :as inline-slider]
             [repulse.ui.selection-highlight :as selection-highlight]
+            [repulse.ui.dialog :as dialog]
             [repulse.ui.goto :as goto]
             [repulse.ui.buffers :as buffers]
             [repulse.project :as project]
@@ -144,10 +145,10 @@
       (.-clipboard js/navigator)
       (-> (.writeText (.-clipboard js/navigator) url)
           (.then (fn [] (set-output! (str "URL copied to clipboard") :success)))
-          (.catch (fn [_] (js/prompt "Copy this URL:" url))))
+          (.catch (fn [_] (dialog/prompt! "Copy this URL:" url))))
 
       :else
-      (js/prompt "Copy this URL:" url))))
+      (dialog/prompt! "Copy this URL:" url))))
 
 ;;; App bootstrap
 
@@ -239,7 +240,8 @@
              :set-output!-fn  set-output!})
   (plugin-loading/init! {:make-host-fn             make-host
                          :mount-visual!-fn          mount-visual!
-                         :maybe-hide-visual!-fn     maybe-hide-visual-panel!})
+                         :maybe-hide-visual!-fn     maybe-hide-visual-panel!
+                         :set-output!-fn            set-output!})
   ;; Wire evaluate-ref so builtins (demo, load-gist) can call evaluate! lazily
   (reset! builtins/evaluate-ref eo/evaluate!)
 
