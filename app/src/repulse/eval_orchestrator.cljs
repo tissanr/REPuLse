@@ -238,6 +238,9 @@
         ;; Remember the last output message so an unknown-sound warning can be
         ;; appended to it rather than replacing it.
         last-output (volatile! nil)
+        ;; {:defined #{kw} :keep-anon? bool} when this evaluation saw the whole
+        ;; buffer and tracks it no longer defines should stop, else nil.
+        prune-info  (volatile! nil)
         set-output! (fn [msg status]
                       (vreset! last-output msg)
                       ((:set-output! @cbs) msg status))]
@@ -284,6 +287,18 @@
           ;; buffer's song, if any), then apply (play-from …) / (export :song).
           ;; Runs before the cond so a buffer ending in a bare pattern still
           ;; replaces all tracks with :_ exactly as before.
+          ;; Read before activate-buffer! resets the pending state.
+          (let [defined   (set (map first @song-transport/pending-tracks))
+                upd-eval  @song-transport/pending-buffer-eval
+                ;; Alt+Enter evaluates the whole project. (upd) evaluates only
+                ;; the editor buffer, which is the whole program only when the
+                ;; project has a single buffer.
+                prune?    (or (some? project)
+                              (and (some? upd-eval)
+                                   (= 1 (count (:buffers (buffers/current-project))))))]
+            (vreset! prune-info (when prune?
+                                  {:defined    defined
+                                   :keep-anon? (boolean (:keep-anon? upd-eval))})))
           (song-transport/activate-buffer! {:on-beat      on-beat
                                             :on-event     on-event
                                             :set-playing! set-playing!})
@@ -350,8 +365,27 @@
                   pats      (filter core/pattern? defs-vals)]
               (when (= 1 (count pats))
                 (let [pat (first pats)]
+                  (vswap! prune-info #(some-> % (assoc :keep-anon? true)))
                   (audio/play-track! :_ pat on-beat on-event)
                   (fx/apply-track-effects! :_ (:track-fx pat))))))
+
+          ;; ── Remove tracks the buffer no longer defines ───────────────────
+          ;; After a whole-buffer evaluation the buffer is the source of truth:
+          ;; a named track whose (track …) form was deleted stops, and so does
+          ;; the anonymous :_ track once the buffer no longer ends in a bare
+          ;; pattern. Command-bar evaluations and snippet previews are not
+          ;; affected.
+          (when-let [{:keys [defined keep-anon?]} @prune-info]
+            (let [keep  (cond-> defined
+                          (or keep-anon? (core/pattern? val)
+                              (and (map? val) (or (:note val) (:bank val) (:synth val))))
+                          (conj :_))
+                  stale (song-transport/tracks-to-prune
+                          (keys (:tracks @audio/scheduler-state)) keep)]
+              (doseq [t stale] (audio/clear-track! t))
+              (when (and (seq stale) (not (audio/playing?)))
+                (editor/clear-highlights!)
+                (set-playing! false))))
 
           ;; ── Apply restored mutes after first eval ─────────────────────────
           ;; pending-mutes is populated during session restore; applied once tracks exist.

@@ -319,8 +319,8 @@ open while something in the outline is selected), the **editor** (your program) 
 
 | Key | Action |
 |---|---|
-| **Alt+Enter** / **Option+Enter** | Evaluate the entire buffer and start playback (works even when the editor is not focused) |
-| **Ctrl+.** or **F9** | Run `(upd)` — apply changes without restarting running patterns |
+| **Alt+Enter** / **Option+Enter** | Evaluate the entire buffer and start playback (works even when the editor is not focused); tracks deleted from the buffer stop |
+| **Ctrl+.** or **F9** | Run `(upd)` — apply changes without restarting running patterns; tracks deleted from the buffer stop (one-buffer projects) |
 | **Escape** | Close the inspector (clear the outline selection); with nothing selected, jump to the command bar |
 | **F12** | With an outline selection: move the cursor to it; otherwise go to the definition under the cursor |
 | **Cmd+K S** / **Ctrl+K S** | Wrap the number under the cursor in (slider …), or unwrap the slider under the cursor |
@@ -2538,6 +2538,23 @@ Tracks start once the **whole buffer** has evaluated, not at the moment their `t
 read. A buffer is applied all-or-nothing: if any form fails, none of its tracks start. This lets
 a [`song`](#writing-a-song) at the bottom of the buffer decide which tracks play when; without
 a `song`, every track plays (in buffer order) exactly as before.
+
+**The buffer decides what plays.** When you evaluate the whole buffer (Alt+Enter, or Ctrl+. / F9
+in a project with one buffer), every running track the buffer no longer defines stops. That
+includes the unnamed track of a bare pattern once the buffer no longer ends in one:
+
+```lisp
+(synth :saw (seq :c3 :g3))                    ; Alt+Enter: plays on the unnamed track
+```
+
+```lisp
+(track :hats (fast 8 (seq :hh)))              ; replace the buffer, F9: only the hats play
+```
+
+A track started from the command bar keeps playing until the next whole-buffer evaluation. A
+buffer with an error changes nothing. In a project with several buffers, Ctrl+. / F9 sees only the
+active buffer, so it only adds and replaces tracks; Alt+Enter evaluates the whole project and
+removes the rest.
 
 ### `mute!` / `unmute!` — silence a track
 

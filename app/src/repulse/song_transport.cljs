@@ -10,6 +10,7 @@
    typo-hint, so the TEST1 harness can use it."
   (:require [repulse.audio :as audio]
             [repulse.fx :as fx]
+            [repulse.preview-track :as preview-track]
             [repulse.offline-render :as offline-render]
             [repulse.song :as song]
             [repulse.wav :as wav]
@@ -28,6 +29,11 @@
 ;; {:kind :stems :n n-or-nil :tail secs :set-output! f}   (SK1)
 (defonce pending-export    (atom nil))
 (defonce pending-track-srcs (atom {}))  ; {kw src} — first definition's source
+;; Set by (upd) after it has evaluated the editor buffer: {:keep-anon? bool},
+;; where :keep-anon? is true when the buffer's value was a bare pattern. Tells
+;; the orchestrator that this evaluation saw the whole buffer, so tracks the
+;; buffer no longer defines can be removed (see tracks-to-prune).
+(defonce pending-buffer-eval (atom nil))
 
 ;; nil, or (fn [src] → buffer name) while a multi-buffer project evaluates
 ;; (set only by repulse.project-eval/run-project, Phase SONG4).
@@ -49,7 +55,8 @@
   (reset! pending-song nil)
   (reset! pending-play-from nil)
   (reset! pending-export nil)
-  (reset! pending-track-srcs {}))
+  (reset! pending-track-srcs {})
+  (reset! pending-buffer-eval nil))
 
 (defn current-song
   "The song of this evaluation, else the last activated one."
@@ -115,6 +122,13 @@
     s))
 
 ;;; Activation
+
+(defn tracks-to-prune
+  "Running tracks a whole-buffer evaluation no longer defines: every name in
+   `running` that is not in `keep` and is not a reserved snippet-preview track.
+   Pure; the buffer is the source of truth for what plays."
+  [running keep]
+  (into [] (remove #(or (contains? keep %) (preview-track/preview-track? %))) running))
 
 (defn- play-tracks! [tracks {:keys [on-beat on-event]}]
   (doseq [[nm pat] tracks]

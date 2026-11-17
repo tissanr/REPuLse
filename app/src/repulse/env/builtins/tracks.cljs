@@ -91,6 +91,10 @@
                (set-output! (str "Error: " (:message result)) :error))
            (do
              (let [val (:result result)]
+               ;; The whole editor buffer evaluated: let the orchestrator remove
+               ;; tracks the buffer no longer defines.
+               (reset! song-transport/pending-buffer-eval
+                       {:keep-anon? (core/pattern? val)})
                (cond
                  (core/pattern? val)
                  (do (audio/play-track! :_ val on-beat

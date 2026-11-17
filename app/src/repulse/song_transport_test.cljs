@@ -404,3 +404,18 @@
         (is (= "Error: no track :zz" (run-midi-args "(midi-export :zz)"))))
       (finally
         (reset! audio/scheduler-state saved)))))
+
+(deftest tracks-to-prune-test
+  (testing "running tracks the buffer no longer defines are pruned, in order"
+    (is (= [:_ :snare] (st/tracks-to-prune [:_ :kick :snare] #{:kick}))))
+  (testing "nothing to prune when every running track is kept"
+    (is (= [] (st/tracks-to-prune [:kick :_] #{:kick :_}))))
+  (testing "snippet-preview tracks are never pruned"
+    (is (= [:hats] (st/tracks-to-prune [:__preview__ :__preview__-bass :hats] #{}))))
+  (testing "no running tracks"
+    (is (= [] (st/tracks-to-prune nil #{:kick})))))
+
+(deftest pending-buffer-eval-reset-test
+  (reset! st/pending-buffer-eval {:keep-anon? true})
+  (st/reset-pending!)
+  (is (nil? @st/pending-buffer-eval)))
