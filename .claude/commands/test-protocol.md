@@ -189,6 +189,41 @@ commit), write new tests following Rule 5 in `CLAUDE.md`:
 Use only built-ins, samples, synth voices and demos that exist on `origin/dev`
 (`docs/ai/builtins.json`, `app/src/repulse/content/`).
 
+## 3b. Split into manual and automated
+
+A round should cost the user only the checks a machine can't do. Before writing the
+protocol, sort every test into one of two parts:
+
+- **Teil 1 — Von Hand / nach Gehör** — needs ears, eyes on visual quality, a MIDI
+  device, a DAW, login, an AI key, the Supabase SQL editor, or the Vercel deployment
+  itself (real CSP headers, release build).
+- **Teil 2 — Automatisch verifiziert** (boxes pre-ticked `- [x]`) — a test on
+  `origin/dev` already asserts the same expectation.
+
+**Where to look.** Search all three suites for the built-in name, message text or UI
+element (`grep -rn`), then *read the test* — a name match is not coverage:
+
+| Suite | Files | Covers |
+|---|---|---|
+| CLJS unit / integration | `packages/*/src/**/*_test.cljs`, `app/src/**/*_test.cljs` | event values, hit counts, note names, params, message texts, import/share/session logic |
+| Rust | `packages/audio/src/**` `#[test]` | voice output, DSP |
+| Playwright | `e2e/*.spec.ts` | DOM, editor, rendered audio (RMS, onsets, Goertzel), exports |
+
+A test counts as covered when an assertion checks the same values the "Erwartet" line
+names (same events/notes/hit count, same exact message text, same DOM outcome). Partial
+coverage → keep it in Teil 1 but trim it to the uncovered part and say so:
+`ℹ️ Events automatisch geprüft (core_test › pick-restart) — nur Klang prüfen.`
+
+**One listen check per feature, not per variant.** When the event level of a family of
+built-ins is unit-tested (e.g. the eleven `pick-*` variants, or `chop`/`striate`/`fit`),
+Teil 1 keeps one representative listen test for the family; the variants go to Teil 2.
+
+In Teil 2, give each item its evidence in one line: `e2e/<spec> › <test>`,
+`<ns>_test › <deftest>` or `Text ✓` (output text checked in step 5.2). In the summary,
+report the split (`Teil 1: n von Hand · Teil 2: m automatisch`) and list Teil 1 items
+that *could* be automated but aren't yet under `### Automatisierbar (Lücken)`, so the
+gaps feed the next TEST phase instead of staying manual forever.
+
 ### Snippet rules (so they paste and run)
 
 - Each snippet is **self-contained**: it evaluates on its own in a fresh editor. If it
@@ -274,11 +309,15 @@ attribution line):
 - Preview: <deployment URL> (Vercel login required)
 - Verified: harness ✅ / app build ✅ / deployment ✅ (or why not)
 
+- Split: Teil 1: <n> von Hand · Teil 2: <m> automatisch
+
 ## Test protocol
 
 Setup: Preview öffnen, Kopfhörer auf, warten bis die Samples geladen sind.
 Jedes Snippet in den Editor kopieren (Inhalt ersetzen) und mit Alt+Enter
 (macOS Option+Enter) auswerten; zwischen den Tests `(stop)`.
+
+## Teil 1 — Von Hand / nach Gehör testen
 
 ### PR #N — title
 #### Neue Features
@@ -294,6 +333,13 @@ Jedes Snippet in den Editor kopieren (Inhalt ersetzen) und mit Alt+Enter
 - #173 chore(deps): … — nur Abhängigkeiten, durch Regressionen abgedeckt
 - #177 docs: … — keine Laufzeitänderung
 ### Bekannte Probleme / ⚠️ auf dev fehlgeschlagen
+
+## Teil 2 — Automatisch verifiziert
+### PR #N — title
+- [x] **31. `pick-restart`.** `(pick-restart [(slow 2 (seq :a :b :c :d)) :x] "1 0")` — core_test › tl4b-pick-restart-reset
+
+### Automatisierbar (Lücken)
+- 12 (Buffer umbenennen + Reload) — reine DOM-Prüfung, noch kein e2e-Test
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ````
