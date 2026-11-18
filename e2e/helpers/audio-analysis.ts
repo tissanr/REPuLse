@@ -149,3 +149,111 @@ export function rmsPerWindow(mono: number[], size: number): number[] {
 export function toDb(x: number): number {
   return 20 * Math.log10(Math.max(x, 1e-9));
 }
+
+/** In-place radix-2 FFT of (re, im); both length must be a power of two. */
+function fftInPlace(re: Float64Array, im: Float64Array): void {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i += 1) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      [re[i], re[j]] = [re[j], re[i]];
+      [im[i], im[j]] = [im[j], im[i]];
+    }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = (-2 * Math.PI) / len;
+    const wr = Math.cos(ang);
+    const wi = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let cr = 1;
+      let ci = 0;
+      for (let k = 0; k < len / 2; k += 1) {
+        const a = i + k;
+        const b = a + len / 2;
+        const tr = re[b] * cr - im[b] * ci;
+        const ti = re[b] * ci + im[b] * cr;
+        re[b] = re[a] - tr;
+        im[b] = im[a] - ti;
+        re[a] += tr;
+        im[a] += ti;
+        const nr = cr * wr - ci * wi;
+        ci = cr * wi + ci * wr;
+        cr = nr;
+      }
+    }
+  }
+}
+
+const FFT_SIZE = 4096;
+const CENTROID_MIN_RMS = 0.01; // −40 dBFS
+
+/**
+ * Spectral centroid in Hz: magnitude-weighted mean frequency of a 4096-point
+ * Hann-windowed FFT, averaged over the non-overlapping windows whose RMS is above
+ * −40 dBFS (silence would only add noise). Returns 0 when no window is loud enough.
+ */
+export function spectralCentroid(mono: number[], sampleRate: number): number {
+  const hann = new Float64Array(FFT_SIZE);
+  for (let i = 0; i < FFT_SIZE; i += 1) hann[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (FFT_SIZE - 1));
+  let sum = 0;
+  let count = 0;
+  for (let start = 0; start + FFT_SIZE <= mono.length; start += FFT_SIZE) {
+    const frame = mono.slice(start, start + FFT_SIZE);
+    if (rms(frame) < CENTROID_MIN_RMS) continue;
+    const re = new Float64Array(FFT_SIZE);
+    const im = new Float64Array(FFT_SIZE);
+    for (let i = 0; i < FFT_SIZE; i += 1) re[i] = frame[i] * hann[i];
+    fftInPlace(re, im);
+    let num = 0;
+    let den = 0;
+    for (let k = 1; k < FFT_SIZE / 2; k += 1) {
+      const mag = Math.hypot(re[k], im[k]);
+      num += mag * ((k * sampleRate) / FFT_SIZE);
+      den += mag;
+    }
+    if (den > 0) {
+      sum += num / den;
+      count += 1;
+    }
+  }
+  return count === 0 ? 0 : sum / count;
+}
+
+/**
+ * Fundamental frequency in Hz by autocorrelation: the first local maximum within
+ * 90 % of the global one over lags sampleRate/maxHz … sampleRate/minHz (so a strong
+ * 2nd period cannot win), refined by parabolic interpolation. 0 when there is none.
+ */
+export function estimatePitch(
+  mono: number[],
+  sampleRate: number,
+  minHz: number,
+  maxHz: number,
+): number {
+  const minLag = Math.max(2, Math.floor(sampleRate / maxHz));
+  const maxLag = Math.min(mono.length - 2, Math.ceil(sampleRate / minHz));
+  if (maxLag <= minLag) return 0;
+  const n = mono.length - maxLag;
+  const r = new Float64Array(maxLag + 2);
+  for (let lag = minLag - 1; lag <= maxLag + 1; lag += 1) {
+    let acc = 0;
+    for (let i = 0; i < n; i += 1) acc += mono[i] * mono[i + lag];
+    r[lag] = acc;
+  }
+  let best = -Infinity;
+  for (let lag = minLag; lag <= maxLag; lag += 1) best = Math.max(best, r[lag]);
+  if (!(best > 0)) return 0;
+  for (let lag = minLag; lag <= maxLag; lag += 1) {
+    if (r[lag] >= 0.9 * best && r[lag] >= r[lag - 1] && r[lag] >= r[lag + 1]) {
+      const a = r[lag - 1];
+      const b = r[lag];
+      const c = r[lag + 1];
+      const denom = a - 2 * b + c;
+      const shift = denom === 0 ? 0 : (0.5 * (a - c)) / denom;
+      return sampleRate / (lag + shift);
+    }
+  }
+  return 0;
+}

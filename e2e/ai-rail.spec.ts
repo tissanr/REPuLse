@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { cspViolations, trackCsp } from './helpers/csp';
 
 // Phase WS4 — AI assistant rail, ⌘I shortcut, working state and context chip,
 // against the real app page with a mocked provider (no network).
@@ -297,4 +298,79 @@ test('T10: (ai) opens the rail panel', async ({ page }) => {
   await expect(page.locator('#ai-panel')).toBeVisible();
   expect(await key(page, 'repulse:ai:panel-open')).toBe('1');
   await expect(page.locator('#ai-rail .ai-rail-arrow')).toHaveText('›');
+});
+
+// ── TEST3: client-side settings checks (no key, no network) ────────────────
+
+const CUSTOM = { 'repulse:ai:enabled': 'true', 'repulse:ai:provider': 'custom' };
+
+async function openSettings(page: Page) {
+  await page.locator('#ai-rail').click();
+  await page.waitForTimeout(150);
+  await page.locator('#ai-settings-btn').click();
+  await expect(page.locator('#ai-panel #ai-provider-sel')).toBeVisible();
+}
+
+test('A11: custom base URL — IPv6 rejected, localhost accepted, LAN http is mixed content', async ({ page }) => {
+  await setup(page, CUSTOM);
+  await load(page);
+  await openSettings(page);
+  const url = page.locator('#ai-custom-url-input');
+  const msg = page.locator('#ai-custom-url-msg');
+  await expect(url).toBeVisible();
+
+  await url.fill('http://[::1]:1234/v1');
+  await page.locator('#ai-settings-save-btn').click();
+  await expect(msg).toContainText(
+    "http://[::1] (IPv6) can't be allowed by the page's security policy. Use http://localhost or http://127.0.0.1 with the same port.",
+  );
+  await expect(page.locator('#ai-provider-sel')).toBeVisible(); // drawer stays open
+  expect(await key(page, 'repulse:ai:custom-url')).toBeNull();
+
+  await url.fill('http://192.168.1.20:1234/v1');
+  await page.locator('#ai-settings-save-btn').click();
+  await expect(msg).toContainText('Plain-HTTP addresses other than localhost are blocked by the browser as mixed content.');
+  await expect(page.locator('#ai-provider-sel')).toBeVisible();
+
+  await url.fill('http://localhost:1234/v1');
+  await page.locator('#ai-settings-save-btn').click();
+  await expect(page.locator('#ai-provider-sel')).toHaveCount(0); // saved, drawer closed
+  await expect(page.locator('#ai-input')).toBeVisible();
+  expect(await key(page, 'repulse:ai:custom-url')).toBe('http://localhost:1234/v1');
+});
+
+test('A12: opening the settings causes no CSP violation; Enter in a key field does not submit', async ({ page }) => {
+  await trackCsp(page);
+  await setup(page, SEED);
+  await mockStream(page, [TEXT]);
+  await load(page);
+  await openRail(page);
+  await page.locator('#ai-settings-btn').click();
+  await expect(page.locator('#ai-freesound-key-input')).toBeVisible();
+
+  await page.evaluate(() => { (window as any).__marker = 1; });
+  const urlBefore = page.url();
+  await page.locator('#ai-freesound-key-input').click();
+  await page.keyboard.type('abc123');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(400);
+  expect(page.url()).toBe(urlBefore);
+  expect(await page.evaluate(() => (window as any).__marker)).toBe(1); // no reload
+  await expect(page.locator('#ai-freesound-key-input')).toHaveValue('abc123');
+  await expect(page.locator('#ai-provider-sel')).toBeVisible();
+  expect(await cspViolations(page)).toEqual([]);
+});
+
+test('A13: with the rail open, selecting an outline track opens the inspector', async ({ page }) => {
+  await setup(page, SEED);
+  await mockStream(page, [TEXT]);
+  await load(page, C);
+  await openRail(page);
+  await expect(page.locator('#ai-panel')).toBeVisible();
+  await page.locator('#outline-panel .ol-row[data-id="track::bass"]').click();
+  await expect(page.locator('#inspector')).toBeVisible();
+  await expect(page.locator('#inspector .ins-header')).toContainText('bass');
+  expect((await box(page, '#editor-container')).width).toBeGreaterThanOrEqual(500);
+  await expect(page.locator('#ai-panel')).toBeVisible();
+  await expect(page.locator('#ai-rail')).toHaveClass(/open/);
 });
