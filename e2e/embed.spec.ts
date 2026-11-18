@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
 // Phase TEST3 — the <repulse-editor> embed (app/public/embed-test.html).
@@ -9,6 +10,17 @@ declare global {
     __REPULSE_EMBED_OUTPUT__?: string;
   }
 }
+
+// Serve the freshly compiled :embed-e2e bundle (gitignored, built by
+// playwright.config.ts) in place of the committed app/public/embed.js.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/embed.js', (route) =>
+    route.fulfill({
+      path: path.resolve('app/public/e2e-embed/embed.js'),
+      contentType: 'application/javascript',
+    }),
+  );
+});
 
 test('EM1: (history) in the embed is refused and no app chrome is mounted', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
