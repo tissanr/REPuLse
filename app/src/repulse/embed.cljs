@@ -69,6 +69,49 @@
         (reset! editor/editor-view @view-atom)
         (code-fn)))))
 
+;;; Play/stop button — every instance gets one in its top-right corner.
+;; Evaluating new code never stops playback (live coding), so without it an
+;; embed reader could only stop by typing (stop). Playback is global, so all
+;; buttons show ■ while anything plays.
+
+(def ^:private play-svg
+  "<svg width='12' height='12' viewBox='0 0 12 12' fill='currentColor'><polygon points='2,1 11,6 2,11'/></svg>")
+(def ^:private stop-svg
+  "<svg width='12' height='12' viewBox='0 0 12 12' fill='currentColor'><rect x='2' y='2' width='8' height='8'/></svg>")
+
+(defonce ^:private transport-btns (atom #{}))
+
+(defn- sync-transport-btn! [^js btn playing?]
+  (set! (.-innerHTML btn) (if playing? stop-svg play-svg))
+  (.setAttribute btn "aria-label" (if playing? "Stop" "Play"))
+  (set! (.-title btn) (if playing? "Stop" "Play")))
+
+(defn- sync-transport-btns! [playing?]
+  (doseq [b @transport-btns] (sync-transport-btn! b playing?)))
+
+(defonce ^:private _watch-playing
+  (add-watch audio/scheduler-state ::embed-transport
+             (fn [_ _ old new]
+               (when (not= (:playing? old) (:playing? new))
+                 (sync-transport-btns! (boolean (:playing? new)))))))
+
+(defn- add-transport-btn! [^js wrap view-atom]
+  (let [btn (.createElement js/document "button")]
+    (set! (.-type btn) "button")
+    (set! (.-className btn) "embed-transport-btn")
+    (sync-transport-btn! btn (audio/playing?))
+    (swap! transport-btns conj btn)
+    (.appendChild wrap btn)
+    (.addEventListener btn "click"
+      (fn []
+        (if (audio/playing?)
+          (do (audio/stop!)
+              (editor/clear-highlights!))
+          (when-let [^js view @view-atom]
+            (when-let [ov (.querySelector wrap ".embed-play-overlay")] (.remove ov))
+            (reset! editor/editor-view view)
+            (eo/evaluate! (.. view -state -doc toString))))))))
+
 ;;; Attribute-driven connection logic
 
 (defn- connect! [^js this]
@@ -95,11 +138,13 @@
                         view     (editor/make-editor wrap code eo/evaluate!)
                         view-atm (atom view)]
                     (reset! editor/editor-view view)
+                    (add-transport-btn! wrap view-atm)
                     (when autoplay?
                       (add-play-overlay! wrap view-atm #(eo/evaluate! code))))
                   ;; Snippet not found — mount empty editor
-                  (reset! editor/editor-view
-                          (editor/make-editor wrap (or code-attr "") eo/evaluate!))))]
+                  (let [view (editor/make-editor wrap (or code-attr "") eo/evaluate!)]
+                    (reset! editor/editor-view view)
+                    (add-transport-btn! wrap (atom view)))))]
           (if @snippets/loaded?
             (seed-from-library!)
             (add-watch snippets/library-atom ::embed-load
@@ -111,6 +156,7 @@
             view     (editor/make-editor wrap code eo/evaluate!)
             view-atm (atom view)]
         (reset! editor/editor-view view)
+        (add-transport-btn! wrap view-atm)
         (when (and autoplay? (seq code))
           (add-play-overlay! wrap view-atm #(eo/evaluate! code)))))))
 
