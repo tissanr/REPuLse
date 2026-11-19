@@ -62,6 +62,7 @@ without a human:
 | 13b | WS2 | `(master …)` form & master fx outline group | 🤖 | full | sonnet |
 | 13c | WS3 | Inline sliders in code: `(slider v min max)` | 🤖 | full | opus |
 | 13d | WS4 | AI assistant rail | 🤖 | outline | sonnet |
+| 13e | WS5 | Code is the source of truth: track reconciliation, `:mute`/`:solo` in code | 🤖 | full | opus |
 | **M3** | | **Plays with others** | | | |
 | 14 | N1 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
 | 15 | LIVE1 | Companion bridge: Ableton Link & OSC | 🧑 | outline | opus |
@@ -2563,6 +2564,25 @@ The assistant moves from the editor column to a 28 px right rail with a 300 px p
   calling, budgets or guard changes.
 
 See full spec: [PROMPTS/PHASE-WS4.md](PROMPTS/PHASE-WS4.md)
+
+---
+
+## Phase WS5 — Code Is the Source of Truth: Track Reconciliation, `:mute` & `:solo` 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖 auto
+
+After Alt+Enter, what plays is exactly what the code says: tracks whose code is gone stop,
+and mute/solo live in the code instead of hidden dashboard state.
+
+**Key additions:**
+- Whole-code evaluations reconcile: undeclared tracks (including the anonymous `:_`) retire
+  with a short gain ramp via `audio/retire-track!`; errors and command-bar evaluations change nothing
+- `(track :name pattern :mute)` / `:solo` flags (multi-solo); inspector buttons and command-bar
+  `mute!`/`unmute!`/`solo!` patch the code through `lisp-patcher/track-flag-edit`
+- A bare pattern no longer stops the named tracks; it plays as `:_` alongside them
+- Session `:muted` is migrated into `:mute` flags on load and no longer saved; `pending-mutes` removed
+
+See full spec: [PROMPTS/PHASE-WS5.md](PROMPTS/PHASE-WS5.md)
 
 ---
 
