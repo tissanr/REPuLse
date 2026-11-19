@@ -319,8 +319,8 @@ open while something in the outline is selected), the **editor** (your program) 
 
 | Key | Action |
 |---|---|
-| **Alt+Enter** / **Option+Enter** | Evaluate the entire buffer and start playback (works even when the editor is not focused); tracks deleted from the buffer stop |
-| **Ctrl+.** or **F9** | Run `(upd)` — apply changes without restarting running patterns; tracks deleted from the buffer stop (one-buffer projects) |
+| **Alt+Enter** / **Option+Enter** | Evaluate the entire buffer and start playback (works even when the editor is not focused) |
+| **Ctrl+.** or **F9** | Run `(upd)` — apply changes without restarting running patterns; in a single-buffer project also stops tracks the buffer no longer declares |
 | **Escape** | Close the inspector (clear the outline selection); with nothing selected, jump to the command bar |
 | **F12** | With an outline selection: move the cursor to it; otherwise go to the definition under the cursor |
 | **Cmd+K S** / **Ctrl+K S** | Wrap the number under the cursor in (slider …), or unwrap the slider under the cursor |
@@ -361,6 +361,11 @@ program — muting a track, tapping the tempo, loading samples:
 
 The outer parentheses are optional: `mute! :kick` works the same as `(mute! :kick)`. The command
 bar has the same highlighting and autocompletion as the editor, but its content is not saved.
+
+Command-bar evaluations never stop or remove tracks — only Alt+Enter (and the play button)
+decide what plays, see [What plays is what the code says](#what-plays-is-what-the-code-says).
+`mute!`, `unmute!` and `solo!` are **code edits**: they write `:mute` / `:solo` into the
+track's `(track :name …)` form and re-evaluate, exactly like the inspector buttons.
 
 ### Outline & go-to-definition
 
@@ -444,7 +449,7 @@ that selection. Its header names the kind and the name, `↗ L3` (move the curso
 
 | Selection | Inspector shows |
 |---|---|
-| **track** | `M` (mute) / `S` (solo) buttons and the state (`live`, `muted`, `solo`, `rests in :outro`); **params** sliders for `amp`, `pan`, `decay`, `attack`, `release`, `rate`, `begin`, `end` and text rows for `synth` / `bank`; a `≋` toggle on each param slider whose value is a literal number in the code (cyan when it is an inline `(slider …)`, click to wrap/unwrap — see [Inline sliders](#inline-sliders--slider)); the track's **fx chain** in signal order with a slider per parameter |
+| **track** | `M` (mute) / `S` (solo) buttons — they write `:mute` / `:solo` into the track's form, see [Mute and solo live in the code](#mute-and-solo-live-in-the-code) — and the state (`live`, `muted`, `solo`, `muted by solo`, `rests in :outro`); **params** sliders for `amp`, `pan`, `decay`, `attack`, `release`, `rate`, `begin`, `end` and text rows for `synth` / `bank`; a `≋` toggle on each param slider whose value is a literal number in the code (cyan when it is an inline `(slider …)`, click to wrap/unwrap — see [Inline sliders](#inline-sliders--slider)); the track's **fx chain** in signal order with a slider per parameter |
 | several tracks (⇧-click) | one block per track, each with its own `↗ L` link |
 | **section** | its length, a bar strip (current bar cyan), `▶ bar k/n` while it plays or a `▶ cue` button (cue it at the next bar), and its tracks with `M` / `S` and an `amp` slider |
 | **def / defn / synth** | a syntax-coloured preview of the form (first 12 lines) and `Used by :drums, :bass.` |
@@ -2579,10 +2584,15 @@ Each track has a keyword name and loops independently.
 > loops its own pattern on every cycle. In REPuLse you give tracks meaningful keyword names
 > (`:kick`, `:bass`, `:lead`) rather than numbers.
 
-`track` belongs in the editor buffer. The commands ending in `!` (`mute!`, `solo!`, …) change
-the running session and belong in the [command bar](#command-bar).
+`track` belongs in the editor buffer. The commands ending in `!` (`mute!`, `solo!`, …) are
+typed into the [command bar](#command-bar).
 
 ### `track` — start or replace a named track
+
+```lisp
+(track :name pattern)
+(track :name pattern :mute)        ; trailing flags: :mute and/or :solo
+```
 
 ```lisp
 (track :kick  (seq :bd :_ :bd :_))
@@ -2598,37 +2608,79 @@ read. A buffer is applied all-or-nothing: if any form fails, none of its tracks 
 a [`song`](#writing-a-song) at the bottom of the buffer decide which tracks play when; without
 a `song`, every track plays (in buffer order) exactly as before.
 
-**The buffer decides what plays.** When you evaluate the whole buffer (Alt+Enter, or Ctrl+. / F9
-in a project with one buffer), every running track the buffer no longer defines stops. That
-includes the unnamed track of a bare pattern once the buffer no longer ends in one:
+### What plays is what the code says
+
+After **Alt+Enter** (or the play button, or a slider / inspector edit that re-evaluates), the
+tracks that play are **exactly** the tracks your code declares:
+
+- every `(track :name …)` in the project (all buffers),
+- plus the anonymous `:_` track when the buffer ends with a bare pattern
+  (`(seq :bd :sd)`) or an event map (`(sound :tabla 0)`).
+
+Every other track is **retired**: delete or comment out a `track` line, press Alt+Enter, and it
+stops. Retiring is click-free — the track fades out over 30 ms just after the evaluation and its
+effects are released afterwards.
 
 ```lisp
-(synth :saw (seq :c3 :g3))                    ; Alt+Enter: plays on the unnamed track
+;; 1. evaluate this — hi-hats play on the anonymous :_ track
+(->> (fast 8 (seq :hh)) (lpf (range 400 6000 (slow 4 sine))) (resonance 4))
+
+;; 2. replace the buffer with this and press Alt+Enter — the hi-hats stop, only :d plays
+(track :d (->> (seq :bd :sd) (fx :reverb 0.4)))
 ```
+
+- A bare pattern **no longer stops the named tracks**: `(track :a (seq :bd :sd))` followed by
+  `(seq :hh :hh)` plays both `:a` and `:_`, and re-evaluating keeps the cycle position.
+- A buffer that declares nothing — only `def`s, `(bpm 120)` or comments — stops everything and
+  the output reads `nothing to play`. A trailing `(def x (seq :bd))` binds `x`, it doesn't play it.
+- **Errors change nothing.** A reader or evaluation error (an unbalanced paren, a typo like
+  `(fsat 2 …)`) retires no track and changes no mute: the set keeps playing.
+- **The command bar never reconciles.** `(tracks)`, `(bpm 130)`, `(tap!)`, demos and
+  snippets run without touching the running set. Snippet previews are never retired by an
+  editor evaluation.
+- **`(upd)` / Ctrl+. / F9 reconcile only in a single-buffer project.** There the editor buffer
+  is the whole program, so F9 retires what it no longer declares, exactly like Alt+Enter. In a
+  multi-buffer project F9 sees only the active buffer, so it only adds and replaces tracks.
+- `(stop)` and `(clear! :name)` work as before.
+
+### Mute and solo live in the code
+
+`:mute` and `:solo` are trailing flags of `track`, in any order, each at most once:
 
 ```lisp
-(track :hats (fast 8 (seq :hh)))              ; replace the buffer, F9: only the hats play
+(track :hats (seq :hh :hh :oh :hh) :mute)   ; silent — keeps its pattern and FX chain
+(track :kick (seq :bd :_ :bd :_) :solo)
+(track :bass (seq :c2 :_ :g2 :_))           ; silent while any track is soloed
+(track :lead (seq :c4 :e4) :solo)           ; several tracks may be soloed at once
 ```
 
-A track started from the command bar keeps playing until the next whole-buffer evaluation. A
-buffer with an error changes nothing. In a project with several buffers, Ctrl+. / F9 sees only the
-active buffer, so it only adds and replaces tracks; Alt+Enter evaluates the whole project and
-removes the rest.
+A track is audible when it is not `:mute` **and** (no track has `:solo`, or it has `:solo`).
+`:mute` beats `:solo` on the same track. The anonymous `:_` track has no flags and is silent
+while any track is soloed. In a [song](#writing-a-song) a `:mute` track is silent in every
+section.
 
-### `mute!` / `unmute!` — silence a track
+The inspector **M** / **S** buttons (and the track buttons under the editor) edit the code:
+**M** adds `:mute` to the track's form or removes it, **S** toggles `:solo` on that track only.
+You hear the change immediately, the buffer is re-evaluated 150 ms later, and each click is one
+undo step (`Cmd/Ctrl+Z` restores the form). In a multi-buffer project the form is patched in
+the buffer that holds it. The `:_` track's buttons are disabled
+(`name the track to mute it: (track :name …)`).
+
+Because the flags are code, copying the buffer, sharing a `#v3:` link or restoring a snapshot
+reproduces exactly what you heard — mutes included.
+
+### `mute!` / `unmute!` / `solo!` — mute and solo from the command bar
 
 ```lisp
-(mute! :kick)      ; kick goes silent but keeps its place in the session
-(unmute! :kick)    ; kick plays again
+(mute! :hats)      ; writes :mute into (track :hats …) and re-evaluates
+(unmute! :hats)    ; removes :mute again
+(solo! :kick)      ; writes :solo into (track :kick …) — other solos stay
 ```
 
-### `solo!` — isolate one track
-
-```lisp
-(solo! :lead)      ; mutes every other track
-```
-
-`solo!` works by muting all other tracks. To undo it, `unmute!` the tracks you want back.
+They are code edits, so they only work from the [command bar](#command-bar). Inside the buffer
+they are an error, e.g. `mute! edits the code — write (track :hats … :mute) instead`. A name
+without a `(track :name …)` form is an error too: `track :nope is not in the code`. To undo a
+solo, remove the `:solo` from the form (or press **S** again).
 
 ### `clear!` — remove tracks
 
@@ -2750,8 +2802,8 @@ track, the outro only the hats — then playback stops and the output shows `son
   and the export sound the same.
 - **Variants are tracks.** A section only selects tracks. For a different chorus bass, define
   `(track :bass-chorus …)` and list it in the chorus.
-- **Mute and solo still win.** `(mute! :kick)` silences the kick even in a section that lists it;
-  `solo!` works on top of the section selection.
+- **Mute and solo still win.** `(track :kick … :mute)` silences the kick even in a section that
+  lists it; `:solo` works on top of the section selection.
 
 ### Automation — `automate` and `ramp`
 
@@ -3997,7 +4049,7 @@ REPuLse automatically saves all session state to `localStorage` and restores it 
 | FX chain | Effect names, parameters, bypass state |
 | Bank prefix | Active `(bank :Name)` prefix |
 | External sample repos | URLs loaded via `(samples! ...)` |
-| Track mute/solo state | Restored after the first eval |
+| Track mute/solo state | Lives in the code as `:mute` / `:solo` flags (Phase WS5). An older session's `:muted` list is migrated into `:mute` flags on load; new sessions don't write it |
 
 Playback state (playing/stopped), audio nodes, and active cycle position are **not** persisted — the page always starts stopped.
 
@@ -4015,7 +4067,7 @@ Stops playback, deletes all persisted state (editor, BPM, effects, bank, sample 
 
 ### URL sharing
 
-Click the **share** button or call `(share!)` to copy a full session URL to the clipboard. The URL encodes the complete session state (all project buffers, BPM, bank, sample sources, mutes) in the URL hash using base64. Loading the URL restores the full project (it does not start playing).
+Click the **share** button or call `(share!)` to copy a full session URL to the clipboard. The URL encodes the complete session state (all project buffers — including their `:mute` / `:solo` flags — BPM, bank, sample sources) in the URL hash using base64. Loading the URL restores the full project (it does not start playing).
 
 ```lisp
 (share!)  ; copies URL like https://repulse.app/#v3:eyJ2...
@@ -4068,8 +4120,8 @@ scroll back through, preview as a line diff and restore with one click. Named **
 ### What is recorded
 
 - **Alt+Enter** and the **play** button record one history entry per evaluation, whether it
-  succeeded or failed. The entry stores the whole project: every buffer, BPM, bank prefix,
-  sample sources, mutes and MIDI mappings, captured right after the evaluation (so a
+  succeeded or failed. The entry stores the whole project: every buffer (with its `:mute` /
+  `:solo` flags), BPM, bank prefix, sample sources and MIDI mappings, captured right after the evaluation (so a
   `(bpm 140)` in the code is part of it). Which tab is shown is not part of the state.
 - A new entry identical to the newest one replaces it (same `#id`, new time and status), so
   pressing Alt+Enter ten times on the same code leaves one entry.
@@ -4107,8 +4159,9 @@ scroll back through, preview as a line diff and restore with one click. Named **
 first recorded in the history as a "before restore" entry (unless the newest entry already holds
 exactly that state), and the message names it. `(restore! 7)` takes you back.
 
-A restore applies buffers (the `main` tab is shown), BPM, bank prefix, GitHub sample sources
-(loaded if missing) and mutes (applied after the next evaluation). It does **not** evaluate, stop
+A restore applies buffers (the `main` tab is shown), BPM, bank prefix and GitHub sample sources
+(loaded if missing). Entries recorded before Phase WS5 carry a `:muted` list; restoring one
+writes `:mute` onto the named track forms. It does **not** evaluate, stop
 playback or restore MIDI mappings. Press Alt+Enter to hear the restored project. When `restore!`
 is called from code, the project is replaced just after the running evaluation finishes.
 
@@ -4314,7 +4367,7 @@ Returns the live session state as a map. Useful for sharing context with an AI a
 **Fields:**
 - `:bpm` — current tempo
 - `:tracks` — keyword-keyed map of active tracks. Each value is `{:fx [...]}` with the track's per-track FX chain. Pattern functions are never included.
-- `:muted` — vector of muted track name strings
+- `:muted` — vector of the currently silent track name strings (derived from the code's `:mute` / `:solo` flags)
 - `:fx` — global FX chain (effects added with a top-level `(fx ...)` call), as `[{:name :params :bypassed}]`
 - `:bank` — active drum bank prefix or `nil`
 - `:sources` — loaded external sample repos: `[{:type :id}]`
@@ -4544,6 +4597,22 @@ Error in :drums: Undefined symbol: qqqqqqqq
 ```
 
 See [Projects & buffers](#projects--buffers) for the `use`, buffer-name, share and import errors.
+
+Track options and the command-bar mute commands (Phase WS5):
+
+```
+Error: unknown track option :mut — did you mean :mute?
+Error: unknown track option :fast — expected :mute or :solo
+Error: track options must be :mute or :solo, got 3
+Error: duplicate track option :mute
+Error: mute! edits the code — write (track :hats … :mute) instead
+Error: unmute! edits the code — remove :mute from (track :hats …) instead
+Error: solo! edits the code — write (track :hats … :solo) instead
+Error: track :nope is not in the code
+```
+
+The option errors underline the offending option. A buffer that declares no track reports
+`nothing to play` (not an error).
 
 Calling a signal as a function is an error with a hint:
 

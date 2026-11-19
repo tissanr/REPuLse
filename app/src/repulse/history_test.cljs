@@ -4,7 +4,7 @@
 
 (defn st [code]
   {:v 3 :main "main" :active "main" :buffers [{:name "main" :code code}]
-   :bpm 120 :fx [] :bank nil :sources [] :muted [] :midi {}})
+   :bpm 120 :fx [] :bank nil :sources [] :midi {}})
 
 (def tA (h/state->blob (st "A")))
 (def tB (h/state->blob (st "B")))
@@ -30,17 +30,17 @@
 
 (deftest h2-blobs
   (let [t (h/state->blob (st "(seq :bd :sd)"))]
-    (is (= "{:active \"main\", :bank nil, :bpm 120, :buffers [{:code \"(seq :bd :sd)\", :name \"main\"}], :fx [], :main \"main\", :midi {}, :muted [], :sources [], :v 3}" t))
-    (is (= 149 (count t)))
-    (is (= "d76c73930618fa63" (h/content-hash t)))
+    (is (= "{:active \"main\", :bank nil, :bpm 120, :buffers [{:code \"(seq :bd :sd)\", :name \"main\"}], :fx [], :main \"main\", :midi {}, :sources [], :v 3}" t))
+    (is (= 138 (count t)))
+    (is (= "3cccdedc20455f4a" (h/content-hash t)))
     (is (= t (h/state->blob (assoc (st "(seq :bd :sd)") :active "x"))))
     (is (= t (h/state->blob (into {} (reverse (seq (st "(seq :bd :sd)"))))))))
-  (is (= 137 (count tA)))
-  (is (= "55af15e1d7cae5c1" hA))
-  (is (= "82552244434d49bc" hB))
-  (is (= "133ff32f9f2214cf" hC))
-  (is (= "ba436872783b1bb2" hD))
-  (is (= "{:active \"main\", :bank nil, :bpm 120, :buffers [{:code \"x\", :name \"main\"} {:code \"y\\n\\\"q\\\"\", :name \"drums\"}], :fx [], :main \"main\", :midi {\"1\" \"amp\"}, :muted [], :sources [{:id \"a/b\", :type \"github\"}], :v 3}"
+  (is (= 126 (count tA)))
+  (is (= "190a68de5c5c7048" hA))
+  (is (= "f55ed6756acaa13d" hB))
+  (is (= "afadbcf8d08fd562" hC))
+  (is (= "ad6f9897b490543f" hD))
+  (is (= "{:active \"main\", :bank nil, :bpm 120, :buffers [{:code \"x\", :name \"main\"} {:code \"y\\n\\\"q\\\"\", :name \"drums\"}], :fx [], :main \"main\", :midi {\"1\" \"amp\"}, :sources [{:id \"a/b\", :type \"github\"}], :v 3}"
          (h/state->blob (assoc (st "x")
                                :buffers [{:name "main" :code "x"} {:name "drums" :code "y\n\"q\""}]
                                :midi {"1" "amp"}
@@ -49,7 +49,10 @@
 (deftest h3-blob->state
   (is (= (st "A") (h/blob->state tA)))
   (is (nil? (h/blob->state "{:v 2}")))
-  (is (nil? (h/blob->state "{{"))))
+  (is (nil? (h/blob->state "{{")))
+  (testing "WS5: a pre-WS5 blob with :muted still restores (and keeps it for migration)"
+    (is (= (assoc (st "A") :muted ["kick"])
+           (h/blob->state (h/state->blob (assoc (st "A") :muted ["kick"])))))))
 
 (deftest h4-collapse
   (let [r1 (h/append-eval s0 tA 1000 true nil)
@@ -96,7 +99,7 @@
         s (-> s0 (a tA 1) (a tB 2) (a tC 3))]
     (is (= [2 3] (ids s)))
     (is (= #{hB hC} (set (keys (:blobs s)))))
-    (is (= 274 (h/total-chars s))))
+    (is (= 252 (h/total-chars s))))
   (let [lim {:max-entries 500 :max-chars 300}
         a (fn [s t now] (:store (h/append-eval s t now true nil lim)))
         s (-> (:store (h/save-snapshot s0 "keep" tA 0)) (a tA 1) (a tB 2) (a tC 3))]
