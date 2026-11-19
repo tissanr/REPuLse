@@ -13,7 +13,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      `npx shadow-cljs compile test-harness app && node scripts/serve-static.mjs app/public ${port}`,
+      `npx shadow-cljs compile test-harness app embed-e2e && node scripts/serve-static.mjs app/public ${port} 127.0.0.1 --dev-eval`,
     url: `${baseURL}/test-harness.html`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
