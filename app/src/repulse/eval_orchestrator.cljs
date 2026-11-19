@@ -100,6 +100,9 @@
   (reset! ai-tools/eval-preview-fn evaluate-in-context!)
   ;; WS5: mute!/unmute!/solo! from the command bar patch the code.
   (reset! b-tracks/flag-edit-ref (fn [k flag on?] (track-flag-patch-and-eval! k flag on?)))
+  ;; (upd) / Ctrl+. / F9 reconciles when the buffer is the whole program.
+  (reset! b-tracks/single-buffer-ref
+          #(= 1 (count (:buffers (buffers/current-project)))))
   ;; A finished (song … :end :stop) stops itself — reflect that in the UI.
   (swap! audio/scheduler-state assoc :on-song-end
          (fn []
@@ -309,6 +312,7 @@
     (b-fx/reset-master-run!)
     ;; Clear tracks/song/play-from/export collected by the previous evaluation
     (song-transport/reset-pending!)
+    (reset! b-tracks/whole-buffer-upd nil)
     ;; Keep stop fn up to date (in case env was reset)
     (let [env    (assoc @builtins/env-atom "stop" (make-stop-fn))
           defs-before (some-> (:*defs* env) deref)
@@ -428,10 +432,13 @@
                 (vreset! underscore? true)))
 
             ;; ── Reconciliation (Phase WS5) ────────────────────────────────────
-            ;; What plays is exactly what the code declares.
-            (when reconcile?
+            ;; What plays is exactly what the code declares. (upd) / F9 in a
+            ;; single-buffer project evaluated the whole program too.
+            (when-let [upd-eval (or (when reconcile? {})
+                                    @b-tracks/whole-buffer-upd)]
               (let [declared (cond-> activated
-                               @underscore? (conj [:_ {:mute? false :solo? false}]))]
+                               (or @underscore? (:underscore? upd-eval))
+                               (conj [:_ {:mute? false :solo? false}]))]
                 (when (reconcile! declared)
                   (set-playing! false)
                   (when-not (string? val)
@@ -459,7 +466,8 @@
 (defn evaluate!
   "Evaluate a single code string (command bar, (upd), tap, demos, …).
    Not recorded in the eval history (Phase SK2, K1). Never reconciles: one-off
-   commands must not tear down the running set (Phase WS5)."
+   commands must not tear down the running set (Phase WS5). The exception is
+   (upd) in a single-buffer project, which evaluates the whole program."
   [code]
   (evaluate* code nil)
   nil)

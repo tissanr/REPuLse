@@ -18,6 +18,15 @@
 ;; refuse to run inside the code they would rewrite (Phase WS5).
 (defonce reconciling? (atom false))
 
+;; (fn [] → bool): true when the project has a single buffer, so (upd) sees
+;; the whole program. Set by repulse.eval-orchestrator/init!.
+(defonce single-buffer-ref (atom nil))
+
+;; Set by (upd) after it evaluated the editor buffer of a single-buffer
+;; project: {:underscore? bool}. The orchestrator then reconciles the tracks
+;; to the buffer like a whole-code evaluation (Phase WS5).
+(defonce whole-buffer-upd (atom nil))
+
 ;; (fn [track-kw flag on?] → true | false) — patches the track's form and
 ;; schedules the re-evaluation; false when no (track :name …) form exists.
 ;; Set by repulse.eval-orchestrator/init! (breaks the require cycle).
@@ -114,7 +123,13 @@
      (when-let [view @editor/editor-view]
        (let [code   (.. view -state -doc (toString))
              env    (assoc @env-atom "stop" (make-stop-fn))
-             result (lisp/eval-string code env)]
+             ;; In a single-buffer project the buffer is the whole program:
+             ;; reconcile like Alt+Enter, so mute!/solo! may not run inside it.
+             whole? (boolean (some-> @single-buffer-ref (apply [])))
+             prev   @reconciling?
+             result (do (reset! reconciling? (or prev whole?))
+                        (try (lisp/eval-string code env)
+                             (finally (reset! reconciling? prev))))]
          (if (lisp/eval-error? result)
            (do (editor/clear-highlights!)
                (let [{:keys [from to]} (:source result)]
@@ -127,6 +142,8 @@
                (set-output! (str "Error: " (:message result)) :error))
            (do
              (let [val (:result result)]
+               (when whole?
+                 (reset! whole-buffer-upd {:underscore? (core/pattern? val)}))
                (cond
                  (core/pattern? val)
                  (do (audio/play-track! :_ val on-beat

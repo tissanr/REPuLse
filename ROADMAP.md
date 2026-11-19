@@ -2608,7 +2608,8 @@ and mute/solo live in the code instead of hidden dashboard state.
   pattern / event map / legacy hot-swap) is retired, `:__*` preview tracks excepted, and
   `scheduler-state :muted` is rebuilt from the flags. A declare-nothing buffer (only `def`s,
   `(bpm …)`, comments; a trailing `(def …)` no longer plays) stops with `nothing to play`.
-  Errors and command-bar / tap / `upd` / snippet evaluations retire nothing.
+  Errors and command-bar / tap / `upd` / snippet evaluations retire nothing (amended by
+  PR #190: `upd` / F9 in a single-buffer project reconciles like Alt+Enter).
 - `audio/retire-track!`: leaves `:tracks`/`:muted` at once, ramps the track GainNode to 0
   (50 ms → 80 ms after the evaluation), then disconnects it and destroys its FX; `play-track!`
   inside the ramp revives it; `stop!` once nothing is left. A bare pattern no longer calls

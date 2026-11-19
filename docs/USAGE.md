@@ -322,7 +322,7 @@ open while something in the outline is selected), the **editor** (your program) 
 | Key | Action |
 |---|---|
 | **Alt+Enter** / **Option+Enter** | Evaluate the entire buffer and start playback (works even when the editor is not focused) |
-| **Ctrl+.** or **F9** | Run `(upd)` — apply changes without restarting running patterns |
+| **Ctrl+.** or **F9** | Run `(upd)` — apply changes without restarting running patterns; in a single-buffer project also stops tracks the buffer no longer declares |
 | **Escape** | Close the inspector (clear the outline selection); with nothing selected, jump to the command bar |
 | **F12** | With an outline selection: move the cursor to it; otherwise go to the definition under the cursor |
 | **Cmd+K S** / **Ctrl+K S** | Wrap the number under the cursor in (slider …), or unwrap the slider under the cursor |
@@ -2637,9 +2637,12 @@ effects are released afterwards.
   the output reads `nothing to play`. A trailing `(def x (seq :bd))` binds `x`, it doesn't play it.
 - **Errors change nothing.** A reader or evaluation error (an unbalanced paren, a typo like
   `(fsat 2 …)`) retires no track and changes no mute: the set keeps playing.
-- **The command bar never reconciles.** `(tracks)`, `(bpm 130)`, `(tap!)`, `(upd)`, demos and
+- **The command bar never reconciles.** `(tracks)`, `(bpm 130)`, `(tap!)`, demos and
   snippets run without touching the running set. Snippet previews are never retired by an
   editor evaluation.
+- **`(upd)` / Ctrl+. / F9 reconcile only in a single-buffer project.** There the editor buffer
+  is the whole program, so F9 retires what it no longer declares, exactly like Alt+Enter. In a
+  multi-buffer project F9 sees only the active buffer, so it only adds and replaces tracks.
 - `(stop)` and `(clear! :name)` work as before.
 
 ### Mute and solo live in the code
