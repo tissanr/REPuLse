@@ -58,6 +58,25 @@
       (is (lisp/eval-error? r))
       (is (= "Unknown track :snar in section :verse — did you mean :snare?" (:message r)))
       (is (= ":snar" (subs code (:from (:source r)) (:to (:source r)))))))
+  (testing "SONG2 R16: unknown track in (automate …) / (fill …) — squiggle on the item's track"
+    (let [code (str tracks-s "(song (section :build 4 [:kick :hats] (automate :hatz :amp 0.5)))")
+          r    (run code)]
+      (is (lisp/eval-error? r))
+      (is (= "Unknown track :hatz in (automate …) in section :build — did you mean :hats?" (:message r)))
+      (is (= ":hatz" (subs code (:from (:source r)) (:to (:source r))))))
+    (let [code (str tracks-s "(song (section :build 4 [:kick] (fill :snar 1 :_)))")
+          r    (run code)]
+      (is (= "Unknown track :snar in (fill …) in section :build — did you mean :snare?" (:message r)))
+      (is (= ":snar" (subs code (:from (:source r)) (:to (:source r)))))))
+  (testing "register-song! prefers :item-source over the section source"
+    (st/reset-pending!)
+    (st/collect-track! :hats (core/pure :hh) nil)
+    (let [sec (assoc (song/make-section :build 4 [:hats]) :source {:from 1 :to 2})
+          bad (assoc (song/make-automation :hatz :amp 0.5 {}) :source {:from 120 :to 125})
+          sec (assoc sec :automations [bad])
+          e   (try (st/register-song! [sec] {} {:from 0 :to 3}) nil (catch :default e e))]
+      (is (= 120 (:from (ex-data e))))
+      (is (= 125 (:to (ex-data e))))))
   (testing "unknown track without a close match lists the known tracks"
     (is (= "Unknown track :zzzzzzzz in section :a — tracks defined above the song: :kick :snare :hats :bass"
            (:message (run (str tracks-s "(song (section :a 1 [:zzzzzzzz]))"))))))

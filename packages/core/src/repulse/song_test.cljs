@@ -184,3 +184,155 @@
   (testing "chorus has every track, in song order"
     (is (= [:kick :snare :hats :bass]
            (distinct (map :track (song/song-onsets S tracks-s #{} 13)))))))
+
+;;; ── Phase SONG2: automation and fills (R1–R14) ────────────────────
+
+(def tracks-a
+  {:kick  (core/seq* [:bd :bd :bd :bd])
+   :hats  (core/fast 4 (core/pure :hh))
+   :snare (core/seq* [:_ :sd :_ :sd])
+   :bass  (core/pure :c2)})
+
+(def known-a [:kick :hats :snare :bass])
+
+(defn- build-song
+  ([] (build-song [(song/make-automation :hats :amp (song/make-ramp :linear 0 1) {})
+                   (song/make-fill :snare 1 (core/fast 2 (core/pure :sd)))
+                   (song/make-fill :kick 1 :_)]))
+  ([items]
+   (song/make-song
+    [(song/make-section :intro 2 [:kick])
+     (song/make-section :build 4 [:kick :hats :bass] items)
+     (song/make-section :drop 2 :all)]
+    {} known-a hint)))
+
+(def A (build-song))
+
+(defn- approx= [a b] (< (Math/abs (- a b)) 0.01))
+
+(defn- evs-of [song bar track]
+  (filterv #(= track (:track %)) (song/song-onsets song tracks-a #{} bar)))
+
+(defn- starts-of [evs] (mapv #(:start (:whole (:event %))) evs))
+(defn- vals-of [evs] (mapv #(:value (:event %)) evs))
+
+(deftest r1-r3-ramp-values
+  (let [lin (song/make-ramp :linear 0 1)]
+    (is (= [0 0.25 0.5] (mapv #(song/ramp-value lin %) [0 0.25 0.5]))))
+  (let [e (song/make-ramp :exp 300 4000)]
+    (is (approx= 573.27 (song/ramp-value e 0.25)))
+    (is (approx= 1095.45 (song/ramp-value e 0.5)))
+    (is (approx= 2093.27 (song/ramp-value e 0.75))))
+  (let [s (song/make-ramp :sine 0 1)]
+    (is (approx= 0.1464 (* 1 (song/ramp-value s 0.25))))
+    (is (< (Math/abs (- 0.1464 (song/ramp-value s 0.25))) 0.0001))
+    (is (< (Math/abs (- 0.5 (song/ramp-value s 0.5))) 1e-9))
+    (is (< (Math/abs (- 0.8536 (song/ramp-value s 0.75))) 0.0001))))
+
+(deftest r4-hats-fade-in
+  (let [h (evs-of A 2 :hats)]
+    (is (= [[2 1] [9 4] [5 2] [11 4]] (starts-of h)))
+    (is (= [{:note :hh :amp 0} {:note :hh :amp 0.0625} {:note :hh :amp 0.125} {:note :hh :amp 0.1875}]
+           (vals-of h)))))
+
+(deftest r5-r6-automation-value
+  (is (= [0.25 0.625 0.9375]
+         (mapv #(song/automation-value A :hats :amp %) [[3 1] [9 2] [23 4]])))
+  (is (nil? (song/automation-value A :hats :amp [6 1])))
+  (is (nil? (song/automation-value A :bass :amp [3 1]))))
+
+(deftest r7-seek-is-pure
+  (let [alone  (song/song-onsets A tracks-a #{} 4)
+        _      (doseq [b (range 4)] (song/song-onsets A tracks-a #{} b))
+        after  (song/song-onsets A tracks-a #{} 4)]
+    (is (= (mapv summary alone) (mapv summary after)))
+    (is (seq alone))))
+
+(deftest r8-last-build-bar-fills
+  (let [on (fn [t] (evs-of A 5 t))]
+    (is (empty? (on :kick)))
+    (is (= [[5 1] [11 2]] (starts-of (on :snare))))
+    (is (= [:sd :sd] (vals-of (on :snare))))
+    (is (= [0.75 0.8125 0.875 0.9375] (mapv :amp (vals-of (on :hats)))))
+    (is (= [[5 1]] (starts-of (on :bass))))
+    (is (= [:c2] (vals-of (on :bass))))))
+
+(deftest r9-fill-only-covers-last-bar
+  (is (= 4 (count (evs-of A 4 :kick))))
+  (is (empty? (evs-of A 4 :snare))))
+
+(deftest r10-drop-is-plain
+  (is (= [:hh :hh :hh :hh] (vals-of (evs-of A 6 :hats))))
+  (is (= 4 (count (evs-of A 6 :kick))))
+  (is (= [[25 4] [27 4]]
+         (starts-of (remove #(= :_ (:value (:event %))) (evs-of A 6 :snare))))))
+
+(deftest r11-op-mul
+  (let [tr  {:kick (core/pure :bd) :hats (core/fast 4 (core/pure {:note :hh :amp 0.8})) :snare (core/pure :sd) :bass (core/pure :c2)}
+        S1  (build-song [(song/make-automation :hats :amp (song/make-ramp :linear 0 1) {:op :mul})])
+        evs (filterv #(= :hats (:track %)) (song/song-onsets S1 tr #{} 4))]
+    (is (= {:note :hh :amp 0.4} (:value (:event (first evs)))))
+    (is (= {:note :hh :amp 0.4} (song/automate-value S1 :hats {:note :hh :amp 0.8} [4 1])))))
+
+(deftest r12-signal-is-section-local
+  (let [curve (core/range-pat -1 1 (core/slow 4 core/saw))
+        A'    (build-song [(song/make-automation :bass :pan curve {})])]
+    (is (= [-1 -0.5 0]
+           (mapv #(song/automation-value A' :bass :pan %) [[2 1] [3 1] [4 1]])))))
+
+(deftest r13-bars-range
+  (let [A' (build-song [(song/make-automation :hats :amp (song/make-ramp :linear 0 1) {:bars [2 4]})])]
+    (is (= [nil 0 0.5]
+           (mapv #(song/automation-value A' :hats :amp %) [[3 1] [4 1] [5 1]])))))
+
+(deftest r14-loop
+  (let [L  (assoc A :end :loop)
+        a  (song/song-onsets L tracks-a #{} 2)
+        b  (song/song-onsets L tracks-a #{} 10)
+        sh (fn [r] (mapv (fn [x] [(:track x) (:value (:event x))]) r))]
+    (is (= (sh a) (sh b)))
+    (is (= (mapv #(core/rat+ % [8 1]) (starts-of a)) (starts-of b)))))
+
+(deftest song2-mute-and-rests
+  (testing "mute wins over a fill"
+    (is (empty? (filter #(= :snare (:track %)) (song/song-onsets A tracks-a #{:snare} 5)))))
+  (testing "rests are never automated (A12)"
+    (let [tr  (assoc tracks-a :hats (core/seq* [:hh :_ :hh :_]))
+          evs (filterv #(= :hats (:track %)) (song/song-onsets A tr #{} 3))]
+      (is (some #(= :_ %) (vals-of evs)))
+      (is (every? #(or (= :_ %) (map? %)) (vals-of evs)))
+      (is (every? #(not (and (map? %) (= :_ (:note %)))) (vals-of evs))))))
+
+(deftest song2-validation
+  (let [err (fn [f] (try (f) nil (catch :default e (ex-message e))))
+        r   (song/make-ramp :linear 0 1)]
+    (is (= "ramp: unknown curve :log — use :linear, :exp or :sine" (err #(song/make-ramp :log 0 1))))
+    (is (= "ramp :exp needs both values > 0, got 0 and 1 — use :linear or :sine"
+           (err #(song/make-ramp :exp 0 1))))
+    (is (= "automate: :op must be :set, :mul or :add, got :foo"
+           (err #(song/make-automation :hats :amp 1 {:op :foo}))))
+    (is (= "automate :hats :amp: expected a number, (ramp …) or a pattern, got \"x\""
+           (err #(song/make-automation :hats :amp "x" {}))))
+    (is (= "automate: :bars must be [from to] with whole numbers, got [1 \"a\"]"
+           (err #(song/make-automation :hats :amp 1 {:bars [1 "a"]}))))
+    (is (= "fill: needs one track name, got :all" (err #(song/make-fill :all 1 :_))))
+    (is (= "fill :snare: bars must be a whole number ≥ 1, got 0" (err #(song/make-fill :snare 0 :_))))
+    (is (= "automate :hats :amp: :bars [3 6] is outside section :build (4 bars) — use 0 ≤ from < to ≤ 4"
+           (err #(song/make-section :build 4 [:hats]
+                                    [(song/make-automation :hats :amp r {:bars [3 6]})]))))
+    (is (= "fill :snare: 5 bars is longer than section :build (4 bars)"
+           (err #(song/make-section :build 4 [:hats] [(song/make-fill :snare 5 :_)]))))
+    (is (= "Two fills for :snare in section :build — use one (fill …) per track"
+           (err #(song/make-section :build 4 [:hats]
+                                    [(song/make-fill :snare 1 :_) (song/make-fill :snare 2 :_)]))))
+    (is (= "section :build: unexpected argument 7 — after the tracks, sections take (automate …) and (fill …)"
+           (err #(song/make-section :build 4 [:hats] [7]))))
+    (is (= "Unknown track :hat in (automate …) in section :build — did you mean :hats?"
+           (err #(build-song [(assoc (song/make-automation :hat :amp 1 {}) :source {:from 1 :to 2})]))))
+    (is (= "Unknown track :snar in (fill …) in section :build — did you mean :snare?"
+           (err #(build-song [(song/make-fill :snar 1 :_)]))))
+    (is (= {:from 1 :to 2}
+           (try (build-song [(assoc (song/make-automation :hat :amp 1 {}) :source {:from 1 :to 2})])
+                (catch :default e (:item-source (ex-data e))))))
+    (testing ":all is fine for automate"
+      (is (some? (build-song [(song/make-automation :all :amp 0.5 {})]))))))

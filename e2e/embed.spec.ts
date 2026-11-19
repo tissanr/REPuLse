@@ -54,3 +54,29 @@ test('EM1: (history) in the embed is refused and no app chrome is mounted', asyn
     { tint: 0, chrome: 0 },
   ]);
 });
+
+test('embed play/stop button starts and stops playback', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/embed-test.html');
+  const editors = page.locator('repulse-editor');
+  await expect(editors).toHaveCount(3);
+  const btn = (i: number) => editors.nth(i).locator('.embed-transport-btn');
+  for (const i of [0, 1, 2]) await expect(btn(i)).toHaveAttribute('aria-label', 'Play');
+
+  await editors.nth(0).locator('.embed-play-overlay').click();
+  await expect
+    .poll(() => page.evaluate(() => window.__REPULSE_EMBED_OUTPUT__))
+    .toBe('=> track :kick playing');
+  // playback is global: every instance shows stop
+  for (const i of [0, 1, 2]) await expect(btn(i)).toHaveAttribute('aria-label', 'Stop');
+
+  await btn(0).click();
+  for (const i of [0, 1, 2]) await expect(btn(i)).toHaveAttribute('aria-label', 'Play');
+
+  // ▶ on a non-autoplay instance evaluates its own code
+  await btn(2).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__REPULSE_EMBED_OUTPUT__))
+    .toBe('=> track :melody playing');
+  await expect(btn(2)).toHaveAttribute('aria-label', 'Stop');
+});

@@ -56,7 +56,7 @@ class RepulseProcessor extends AudioWorkletProcessor {
         );
       }
     } else if (msg.type === 'trigger_v3') {
-      // Phase TL7a: params is a Float32Array in the lib.rs trigger_v3 slot layout.
+      // Phase TL7a/TL7b: params is a Float32Array in the lib.rs trigger_v3 slot layout.
       if (this.engine) this.engine.trigger_v3(msg.value, msg.time, msg.params);
     } else if (msg.type === 'stop') {
       if (this.engine) this.engine.stop_all();
@@ -86,6 +86,30 @@ class RepulseProcessor extends AudioWorkletProcessor {
     }
 
     const n = out[0].length;
+
+    // Phase TL7b: a node built with 9 outputs gets the orbit send buses.
+    // process_block_buses returns [bus][frame][channel]: bus 0 = dry,
+    // 1–4 = room sends of orbits 0–3, 5–8 = delay sends of orbits 0–3.
+    if (outputs.length > 1) {
+      const raw = this.engine.process_block_buses(n, currentTime);
+      const nb = Math.min(outputs.length, raw.length / (n * 2));
+      for (let b = 0; b < nb; b++) {
+        const o = outputs[b];
+        const base = b * n * 2;
+        if (o.length >= 2) {
+          for (let i = 0; i < n; i++) {
+            o[0][i] = raw[base + i * 2];
+            o[1][i] = raw[base + i * 2 + 1];
+          }
+        } else if (o.length === 1) {
+          for (let i = 0; i < n; i++) {
+            o[0][i] = (raw[base + i * 2] + raw[base + i * 2 + 1]) * 0.5;
+          }
+        }
+      }
+      return true;
+    }
+
     // process_block returns interleaved stereo: [L0, R0, L1, R1, …]
     const raw = this.engine.process_block(n, currentTime);
 

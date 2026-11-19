@@ -112,7 +112,8 @@
               (let [data (ex-data e)]
                 (if (= :song-error (:type data))
                   (let [sec    (some #(when (= (:section data) (:name %)) %) sections)
-                        src'   (or (get-in sec [:track-sources (:track data)])
+                        src'   (or (:item-source data)
+                                   (get-in sec [:track-sources (:track data)])
                                    (:source sec)
                                    src)]
                     (throw (ex-info (ex-message e)

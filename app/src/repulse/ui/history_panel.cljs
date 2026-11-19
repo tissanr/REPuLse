@@ -115,7 +115,8 @@
        "<button data-act=\"restore\">restore</button>"
        "<button data-act=\"link\">link</button>"
        "<button data-act=\"rename\">rename</button>"
-       "<button data-act=\"delete\">delete</button></div>"))
+       "<button data-act=\"delete\">delete</button></div>"
+       (when (= [:snapshot name] @selected) (preview-html))))
 
 (defn- entry-html [older {:keys [id t kind ok? error] :as e}]
   (str "<div class=\"hist-entry "
@@ -125,7 +126,10 @@
        "<span class=\"hist-id\">#" id "</span>"
        "<span class=\"hist-time\">" (escape-html (fmt-time t)) "</span>"
        (when (= kind :restore-point) "<span class=\"hist-kind\">before restore</span>")
-       "<span class=\"hist-sum\">" (escape-html (row-summary older e)) "</span></div>"))
+       "<span class=\"hist-sum\">" (escape-html (row-summary older e)) "</span></div>"
+       ;; The preview sits right under its row: appended after the whole list
+       ;; it was out of sight in a long history and selecting looked inert.
+       (when (= [:entry id] @selected) (preview-html))))
 
 (defn render! []
   (when-let [panel (el "history-panel")]
@@ -145,8 +149,17 @@
                  (apply str (map (fn [[i e]] (entry-html (when (pos? i) (nth hist (dec i))) e)) rows))
                  (when (> (count hist) @shown)
                    "<button data-act=\"older\">show older</button>")
-                 (preview-html)
-                 "</div>")))))
+                 "</div>"))
+      ;; Keep the selected row and its preview in view: if the preview runs
+      ;; past the bottom, bring the row to the top of the list.
+      (when-let [pv (.querySelector panel ".hist-preview")]
+        (when-let [body (.querySelector panel ".hist-body")]
+          (when (> (.-bottom (.getBoundingClientRect pv))
+                   (.-bottom (.getBoundingClientRect body)))
+            (set! (.-scrollTop body)
+                  (+ (.-scrollTop body)
+                     (- (.-top (.getBoundingClientRect (.-previousElementSibling pv)))
+                        (.-top (.getBoundingClientRect body)))))))))))
 
 (defn open! []
   (reset! visible? true)

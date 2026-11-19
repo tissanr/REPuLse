@@ -126,6 +126,27 @@
                (mapv (fn [{:keys [track event t]}] [track (:value event) t])
                      (offline-render/job-events job))))))))
 
+(deftest song2-automated-job-events-test
+  (testing "R15: job-events of an automated song — hats amp rises strictly over the build"
+    (let [tracks {:kick  (core/seq* [:bd :bd :bd :bd])
+                  :hats  (core/fast 4 (core/pure :hh))
+                  :snare (core/seq* [:_ :sd :_ :sd])
+                  :bass  (core/pure :c2)}
+          s (song/make-song
+             [(song/make-section :intro 2 [:kick])
+              (song/make-section :build 4 [:kick :hats :bass]
+                                 [(song/make-automation :hats :amp (song/make-ramp :linear 0 1) {})
+                                  (song/make-fill :snare 1 (core/fast 2 (core/pure :sd)))
+                                  (song/make-fill :kick 1 :_)])
+              (song/make-section :drop 2 :all)]
+             {} [:kick :hats :snare :bass] nil)
+          evs  (offline-render/job-events {:kind :song :song s :tracks tracks :cycle-dur 2})
+          hats (filterv #(and (= :hats (:track %)) (map? (:value (:event %)))) evs)
+          amps (mapv #(:amp (:value (:event %))) hats)]
+      (is (= 16 (count hats)))
+      (is (= 4.0 (:t (first hats))))
+      (is (apply < amps) "strictly increasing"))))
+
 (deftest synthetic-song-buffer-test
   (testing "E9: (export n) falls back to a one-section song of n bars"
     (let [pat (eval-pat "(seq :bd)")

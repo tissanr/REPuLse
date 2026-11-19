@@ -40,6 +40,19 @@ const M = `
 
 const M_LOOP = M.replace('(section :b 1 [:hats]))', '(section :b 1 [:hats]) :end :loop)');
 
+const GOAL = `
+(track :kick  (seq :bd :bd :bd :bd))
+(track :hats  (fast 2 (seq :hh :hh :hh :hh)))
+(track :snare (seq :_ :sd :_ :sd))
+(track :bass  (->> (seq :c2 :_ :c2 :_) (synth :saw)))
+(song
+  (section :intro 2 [:kick])
+  (section :build 4 [:kick :hats :bass]
+    (automate :hats :amp (ramp :linear 0 1))
+    (fill :snare 1 (fast 4 (seq :sd :sd)))
+    (fill :kick 1 :_))
+  (section :drop 4 :all))`;
+
 const C = `
 (bpm 480)
 (track :lead (synth :saw (seq :a3 :a3)))
@@ -101,6 +114,24 @@ test('a muted track stays silent in a section that lists it', async ({ page }) =
     [':hats', ':hh', 0, 0.25],
     [':hats', ':hh', 0.5, 0.75],
   ]);
+});
+
+test('SONG2: automation lane and fills resolve per event in song time (R17)', async ({ page }) => {
+  const evs = await harness(page).songEvents(GOAL, 2, 6);
+  const hats = evs.filter((e) => e.track === ':hats');
+  expect(hats).toHaveLength(32);
+  hats.forEach((e, i) => {
+    const v = e.value as { note: string; amp: number };
+    expect(v.note).toBe(':hh');
+    expect(v.amp).toBeCloseTo(i / 32, 10);
+  });
+  // bar 5 (last build bar): kick gone, snare roll of 8
+  expect(evs.filter((e) => e.track === ':kick' && e.wholeStart >= 5)).toHaveLength(0);
+  expect(evs.filter((e) => e.track === ':snare' && e.wholeStart >= 5 && e.wholeStart < 6)).toHaveLength(8);
+  // seek: the same events when asked for bar 4 alone
+  const seek = await harness(page).songEvents(GOAL, 4, 5);
+  const seekHats = seek.filter((e) => e.track === ':hats').map((e) => (e.value as { amp: number }).amp);
+  expect(seekHats).toEqual(hats.slice(16, 24).map((e) => (e.value as { amp: number }).amp));
 });
 
 test('(export :song) captures one pass of WASM output in real time', async ({ page }) => {

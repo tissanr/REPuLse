@@ -260,3 +260,41 @@ test('static cutoff control: brightness stays level', async ({ page }) => {
   expect(open / closed).toBeGreaterThan(0.8);
   expect(open / closed).toBeLessThan(1.25);
 });
+
+// Regression: the scheduler plans a whole cycle ahead, so a defsynth note can
+// start a second or more after play-synth! is called. Its cleanup timer used to
+// count from the call instead of the note start and disconnected the voice
+// before it sounded (second note of (synth :dark (seq :c3 :g3)) missing).
+// Offline rendering finishes before any wall-clock timer fires, so this needs
+// a real-time AudioContext.
+test('defsynth: a note scheduled 1 s ahead still sounds', async ({ page }) => {
+  await page.evaluate(() =>
+    window.__REPULSE_TEST__!.renderOffline(
+      '(defsynth dark [freq] (->> (saw freq) (lpf 800) (env-perc 0.01 0.4)))\n(pure :_)',
+    ));
+  const peak = await page.evaluate(async () => {
+    const g = window as unknown as Record<string, any>;
+    const cljs = g.cljs.core;
+    const synth = g.repulse.synth;
+    const ac = new AudioContext();
+    await ac.resume();
+    const analyser = ac.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.connect(ac.destination);
+    const def = synth.lookup_synth(cljs.keyword('dark'));
+    const params = cljs.PersistentArrayMap.fromArray([cljs.keyword('freq'), 196], true);
+    const start = ac.currentTime + 1.0;
+    synth.play_synth_BANG_(ac, start, def, params, analyser);
+    const buf = new Float32Array(analyser.fftSize);
+    let max = 0;
+    while (ac.currentTime < start + 0.3) {
+      await new Promise((r) => setTimeout(r, 20));
+      if (ac.currentTime < start) continue;
+      analyser.getFloatTimeDomainData(buf);
+      for (const v of buf) max = Math.max(max, Math.abs(v));
+    }
+    await ac.close();
+    return max;
+  });
+  expect(peak).toBeGreaterThan(0.05);
+});

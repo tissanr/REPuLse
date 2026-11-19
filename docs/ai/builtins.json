@@ -423,6 +423,101 @@
     "detail": "(velocity v pat) — per-event velocity 0–1; multiplies amp",
     "description": "Per-event velocity 0–1 (default 1). Final voice level = amp × gain × velocity."
   },
+  "room": {
+    "category": "param",
+    "signature": "(room level pat) or (room level)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c4 :e4 :g4 :b4) (synth :epiano) (room (seq 0 0.6)) (size 0.8))"
+    ],
+    "see-also": [
+      "size",
+      "orbit",
+      "delay",
+      "fx"
+    ],
+    "detail": "(room level pat) — per-event reverb send 0–1 into the event's orbit",
+    "description": "Per-event reverb send 0–1 (default 0) into the reverb of the event's orbit. The dry signal still goes through the track's fx; the orbit returns into the master. Patternable, accepts signals."
+  },
+  "size": {
+    "category": "param",
+    "signature": "(size s pat) or (size s)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :sd :_ :sd :_) (room 0.5) (size 1))"
+    ],
+    "see-also": [
+      "room",
+      "orbit"
+    ],
+    "detail": "(size s pat) — orbit reverb size 0–1 (IR 0.3 + 5.7·s s, default 0.5); last event wins",
+    "description": "Reverb size of the event's orbit, 0–1 (default 0.5): impulse response 0.3 + 5.7·size seconds. Last event wins per orbit; (stop) resets it. Changing it while a tail rings may click."
+  },
+  "delay": {
+    "category": "param",
+    "signature": "(delay level pat) or (delay level)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :sd :_ :_ :_) (delay 0.4) (delay-time 0.375) (delay-feedback 0.5))"
+    ],
+    "see-also": [
+      "delay-time",
+      "delay-feedback",
+      "orbit",
+      "room"
+    ],
+    "detail": "(delay level pat) — per-event delay send 0–1 into the event's orbit",
+    "description": "Per-event delay send 0–1 (default 0) into the feedback delay of the event's orbit. For a delay on a whole track use (fx :delay …)."
+  },
+  "delay-time": {
+    "category": "param",
+    "signature": "(delay-time secs pat) or (delay-time secs)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :sd :_ :_ :_) (delay 0.4) (delay-time 0.375))"
+    ],
+    "see-also": [
+      "delay",
+      "delay-feedback"
+    ],
+    "detail": "(delay-time secs pat) — orbit delay time 0.01–4 s (default 0.25); last event wins",
+    "description": "Delay time of the event's orbit in seconds, 0.01–4 (default 0.25). Last event wins per orbit; (stop) resets it."
+  },
+  "delay-feedback": {
+    "category": "param",
+    "signature": "(delay-feedback fb pat) or (delay-feedback fb)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :sd :_ :_ :_) (delay 0.5) (delay-feedback 0.7))"
+    ],
+    "see-also": [
+      "delay",
+      "delay-time"
+    ],
+    "detail": "(delay-feedback fb pat) — orbit delay feedback 0–0.95 (default 0.5); last event wins",
+    "description": "Feedback of the orbit's delay, 0–0.95 (default 0.5): how much of each echo comes back. Last event wins per orbit; (stop) resets it."
+  },
+  "orbit": {
+    "category": "param",
+    "signature": "(orbit n pat) or (orbit n)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(stack (->> (seq :bd :sd) (room 0.2) (orbit 0)) (->> (slow 2 (seq :c3 :g3)) (synth :saw) (room 0.7) (size 1) (orbit 1)))"
+    ],
+    "see-also": [
+      "room",
+      "delay",
+      "size"
+    ],
+    "detail": "(orbit n pat) — which orbit's reverb/delay to send into, 0–3 (default 0)",
+    "description": "Which orbit (0–3, default 0) the event's room and delay sends go to. Each orbit has its own reverb and delay with their own settings. Out-of-range values are clamped with a warning."
+  },
   "euclidean": {
     "category": "source",
     "signature": "(euclidean k n val) or (euclidean k n val rot)",
@@ -2057,6 +2152,58 @@
     ],
     "detail": "(section :name bars [:track …]) — a song section: name, length in bars, tracks that play (or :all)",
     "description": "A song section: a unique name, a length in bars (1 bar = 1 cycle) and the tracks that play in it — a vector of track names or :all. Used inside (song …)."
+  },
+  "automate": {
+    "category": "source",
+    "signature": "(automate :track|:all :param curve [:bars [a b]] [:op :set|:mul|:add]) — inside a section: set a parameter from a number, (ramp …) or pattern, in section-local time",
+    "returns": "Automation",
+    "side-effects": [],
+    "examples": [
+      "(section :build 4 [:kick :hats] (automate :hats :amp (ramp :linear 0 1)))",
+      "(section :build 4 [:hats] (automate :hats :amp (ramp :linear 0 1) :op :mul :bars [2 4]))"
+    ],
+    "see-also": [
+      "section",
+      "song",
+      "ramp",
+      "tween"
+    ],
+    "detail": "(automate :track|:all :param curve [:bars [a b]] [:op :set|:mul|:add]) — inside a section: set a parameter from a number, (ramp …) or pattern, in section-local time",
+    "description": ""
+  },
+  "ramp": {
+    "category": "source",
+    "signature": "(ramp :linear|:exp|:sine from to) — a curve over a section (or :bars range) for (automate …); never reaches `to` inside the lane",
+    "returns": "Ramp",
+    "side-effects": [],
+    "examples": [
+      "(ramp :linear 0 1)",
+      "(ramp :exp 300 4000)"
+    ],
+    "see-also": [
+      "automate",
+      "section",
+      "tween"
+    ],
+    "detail": "(ramp :linear|:exp|:sine from to) — a curve over a section (or :bars range) for (automate …); never reaches `to` inside the lane",
+    "description": ""
+  },
+  "fill": {
+    "category": "source",
+    "signature": "(fill :track bars pattern|:_) — inside a section: replace a track's events in the last N bars (:_ = drop out)",
+    "returns": "Fill",
+    "side-effects": [],
+    "examples": [
+      "(section :build 4 [:kick :snare] (fill :snare 1 (fast 4 (seq :sd :sd))))",
+      "(section :build 4 [:kick] (fill :kick 1 :_))"
+    ],
+    "see-also": [
+      "section",
+      "song",
+      "automate"
+    ],
+    "detail": "(fill :track bars pattern|:_) — inside a section: replace a track's events in the last N bars (:_ = drop out)",
+    "description": ""
   },
   "play-from": {
     "category": "audio",

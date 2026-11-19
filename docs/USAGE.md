@@ -2403,6 +2403,65 @@ note by note:
 **Inside `defsynth`** the names `lpf`, `hpf`, `bpf` and `gain` keep their UGen meaning
 (`(lpf 2000 (saw freq))`). Outside a `defsynth` body they are these per-event controls.
 
+#### Sends & orbits
+
+Events can also send part of their signal to a shared **reverb** and a shared **delay**,
+at a level set per event — like `room` and `delay` in Strudel/SuperDirt. The effects are
+grouped in four **orbits** (0–3). Each orbit has one reverb and one delay with their own
+settings, so a drum part and a pad can use different reverb sizes.
+
+| Function | Range (clamped) | Default | Meaning |
+|---|---|---|---|
+| `room` | 0–1 | 0 | reverb send level of the event |
+| `size` | 0–1 | 0.5 | reverb length of the event's orbit: `0.3 + 5.7 × size` seconds |
+| `delay` | 0–1 | 0 | delay send level of the event |
+| `delay-time` | 0.01–4 s | 0.25 | delay time of the event's orbit, in seconds |
+| `delay-feedback` | 0–0.95 | 0.5 | how much of each echo comes back |
+| `orbit` | 0–3 (integer) | 0 | which orbit's reverb and delay the event sends into |
+
+```lisp
+;; Reverb only on every second note of an e-piano line, long room
+(->> (seq :c4 :e4 :g4 :b4) (synth :epiano) (room (seq 0 0.6)) (size 0.8))
+
+;; Dotted-eighth echoes on the snare at 120 BPM
+(->> (seq :sd :_ :sd :_) (delay 0.4) (delay-time 0.375) (delay-feedback 0.5))
+
+;; Two orbits: a short room on the drums, a long one on the pad
+(stack (->> (seq :bd :sd) (room 0.2) (orbit 0))
+       (->> (slow 2 (seq :c3 :g3)) (synth :saw) (room 0.7) (size 1) (orbit 1)))
+```
+
+Signal flow — three layers, each optional:
+
+```
+event → per-event inserts (lpf … shape) → pan ─┬→ track fx (track-fx …) ─┐
+                                               └→ orbit reverb / delay ──┴→ master (fx …) → out
+```
+
+- **Per event:** `room` and `delay` are send levels; they are patternable and accept
+  signals, sampled at the onset like `pan`. An event with both at 0 builds nothing.
+- **Per orbit:** `size`, `delay-time` and `delay-feedback` set the orbit, not the event.
+  The **last event wins** (SuperDirt behaviour): an event that carries one of them sets
+  that orbit's reverb or delay at its start time; events without them leave it as it is.
+  `(stop)` puts every orbit back to the defaults above. Tails already ringing play out.
+- **Orbits are independent of tracks.** The dry signal still goes through the track's
+  `fx` chain; the send is taken before it, and the orbits return into the master, so the
+  global `(fx …)` chain processes them too. Muting a track stops its sends.
+- `orbit` values outside 0–3 are clamped and warned about once per evaluation, e.g.
+  `orbit 7 is out of range 0–3; using 3`.
+- Changing `size` swaps the reverb's impulse response; doing that while a tail rings can
+  click. Sizes are rounded to steps of 0.05. In WAV export the last `size` of an orbit
+  applies to the whole render (delay time and feedback follow every event exactly).
+- **`size` vs. Strudel's `roomsize`:** Strudel's `roomsize` has no fixed scale; REPuLse
+  keeps `size` at 0–1 and maps it to 0.3–6 s of reverb.
+- Works on every voice. WASM synth voices write their sends on the worklet's send
+  outputs; samples, `defsynth` voices and JS fallbacks use one send GainNode per level.
+  Both feed the same orbit nodes.
+
+**Sends vs. `(fx :reverb …)`.** `(fx :reverb 0.4)` puts one reverb on a whole track (or
+the master) at one wet level. `room` lets each note choose how much reverb it gets, and
+several tracks can share one orbit's reverb.
+
 ---
 
 ## Transitions
@@ -2662,7 +2721,7 @@ which tracks play in it.
   :end :stop)            ; or :end :loop
 ```
 
-The output line shows `song: 4 sections · 24 bars · 48.0 s at 120 BPM · :end :stop`. The intro
+The output line shows `song: 4 sections · 24 bars · 48.0 s at 120 BPM · :end :stop` (with `· 2 automations · 2 fills` before `:end` when a song has them). The intro
 plays kick and hats for 4 bars, the verse adds snare and bass (hats rest), the chorus plays every
 track, the outro only the hats — then playback stops and the output shows `song finished`.
 
@@ -2672,6 +2731,9 @@ track, the outro only the hats — then playback stops and the output shows `son
 |---|---|
 | `(section name bars tracks)` | A section: a keyword name (unique in the song), a length in whole bars ≥ 1, and the tracks that play — a vector of track names or `:all` (every track defined above the song) |
 | `(song section… [:end :stop\|:loop])` | Play the tracks above as a song. `:end :stop` (default) stops 2 s after the last bar so tails ring out; `:end :loop` starts again at bar 0. Returns the song value |
+| `(automate track param curve [:bars [a b]] [:op :set\|:mul\|:add])` | Inside a `section`: set one parameter of a track (or `:all`) from a number, a `(ramp …)` or a pattern/signal — see "Automation" |
+| `(ramp :linear\|:exp\|:sine from to)` | A curve over the lane's length, for `automate` |
+| `(fill track bars pattern\|:_)` | Inside a `section`: replace a track's events in the last `bars` bars — `:_` makes it drop out; see "Fills, drops and risers" |
 | `(play-from :section)` / `(play-from bar)` | Start — or, while playing, jump — the song at a section's first bar or at a 0-based bar number. After `(stop)` it restarts the last song |
 | `(export :song)` / `(export :song :tail secs)` | Render one pass of the song to WAV offline; add `:realtime` to record it in real time (see below) |
 
@@ -2690,6 +2752,102 @@ track, the outro only the hats — then playback stops and the output shows `son
   `(track :bass-chorus …)` and list it in the chorus.
 - **Mute and solo still win.** `(mute! :kick)` silences the kick even in a section that lists it;
   `solo!` works on top of the section selection.
+
+### Automation — `automate` and `ramp`
+
+Sections take extra items after the track list. `automate` writes one parameter of one track
+(or `:all`) while the section plays:
+
+```lisp
+(track :kick  (seq :bd :bd :bd :bd))
+(track :hats  (fast 2 (seq :hh :hh :hh :hh)))
+(track :bass  (->> (seq :c2 :_ :c2 :_) (synth :saw)))
+
+(song
+  (section :intro 2 [:kick])
+  (section :build 4 [:kick :hats :bass]
+    (automate :hats :amp (ramp :linear 0 1))          ; fade in over the whole section
+    (automate :bass :pan (range -1 1 (slow 4 saw))))  ; follow a signal, section-local
+  (section :drop 4 :all))
+```
+
+`(automate track param curve [:bars [from to]] [:op :set|:mul|:add])`:
+
+| Curve | Meaning |
+|---|---|
+| a number | hold that value — `(automate :bass :amp 0.5)` |
+| `(ramp :linear from to)` | `from + (to − from)·u` — amp, pan |
+| `(ramp :exp from to)` | `from · (to/from)^u`, equal ratio per bar; both values must be > 0 — frequencies, `rate`, `speed` |
+| `(ramp :sine from to)` | S-curve, the same shape as `tween :sine` |
+| a pattern or signal | sampled at the lane's local time; a non-number sample leaves the parameter alone |
+
+- **Section-local time.** For a lane covering N bars, `u` runs from 0 to 1 over those bars
+  and a pattern or signal is sampled at "bars since the lane started". `(slow 4 saw)` in a
+  4-bar lane rises exactly once, wherever the section sits in the song. The tracks themselves
+  keep playing in song time.
+- **`:bars [from to]`** narrows the lane to a bar range of the section (0-based, `to`
+  exclusive): `(automate :hats :amp (ramp :linear 0 1) :bars [2 4])` ramps over the last two
+  bars of a four-bar section.
+- **`:op`** — `:set` (default) replaces the parameter, `:mul` multiplies the event's own value,
+  `:add` adds to it. If the event has no numeric value for the parameter, `:mul` and `:add`
+  behave like `:set`. Use `:mul` to fade a track that has accents:
+  `(automate :hats :amp (ramp :linear 0 1) :op :mul)`.
+- **No hold after the lane.** The ramp never reaches `to` inside its lane (`u` stays below 1);
+  after the lane the parameter is the track's own value again. To keep a value, add a lane in
+  the next section: `(automate :hats :amp 1)`.
+- **Order.** Lanes apply in the order written; overlapping lanes on the same track and
+  parameter are allowed — with `:set` the later wins, with `:mul` they compound. Rests are
+  never automated, and `:all` reaches every track sounding in that bar (muted ones stay silent).
+- **Per event, not per sample.** The value is resolved once, at each event's start, in song
+  time — so seeking with `play-from`, `:end :loop`, re-evaluating mid-song, `(export :song)`,
+  `(export :stems)` and MIDI export all give the same values. A long sustained note keeps the
+  value it started with; automation moves *between* events. For a smooth ride inside one
+  note use `tween` and the envelope params.
+- **`ramp :exp` is a real exponential**, which differs from `tween :exp` (a quadratic
+  ease-in).
+
+Any numeric per-event parameter can be automated (`amp`, `pan`, `attack`, `decay`, `release`,
+`rate`, `speed`, …), and parameters added by later phases work the same way.
+
+### Fills, drops and risers — `fill`
+
+`(fill track bars pattern)` covers the last `bars` bars of a section: there the track's events
+come from `pattern` instead of the track's own pattern. The pattern may be `:_` (silence), a
+pattern, or a single value. The track sounds in the fill even if the section's track list does
+not include it, `track` must be a track defined above the song (not `:all`), and a section has
+at most one fill per track. Automation lanes apply to fill events like any other events.
+
+```lisp
+(section :build 4 [:kick :hats :bass]
+  (automate :hats :amp (ramp :linear 0 1))
+  (fill :snare 1 (fast 4 (seq :sd :sd)))   ; snare roll in the last bar
+  (fill :kick 1 :_))                       ; kick drops out in the last bar
+```
+
+**Drop.** `(fill :kick 1 :_)` — the kick (or the whole groove, one fill per track) goes silent
+for the last bar before the next section.
+
+**Riser.** An ordinary track that no section lists and that only plays through a `fill`,
+with an amp ramp:
+
+```lisp
+(track :kick  (seq :bd :bd :bd :bd))
+(track :riser (->> (fast 8 (seq :c4)) (synth :saw)))   ; listed in no section
+
+(song
+  (section :build 4 [:kick]
+    (fill :riser 2 (->> (fast 8 (seq :c4)) (synth :saw)))
+    (automate :riser :amp (ramp :exp 0.05 1) :bars [2 4]))
+  (section :drop 4 :all))
+```
+
+### `tween` vs `automate`
+
+`tween` is a one-shot ramp from the moment you evaluate; it restarts on every re-evaluation and
+knows nothing about sections — right for free-running live coding and small demos. `automate`
+is a function of song time: it follows the section, survives re-evaluation and seeking, and
+reaches exports. Inside a song, an `automate` lane on the same parameter overrides a `tween` on
+the events it covers.
 
 ### Rehearsing — `play-from`
 
@@ -2756,7 +2914,18 @@ exported by name. `(export :stems)` renders every track to its own WAV — see "
 
 ```
 section :intro: length must be a whole number of bars ≥ 1, got 0
-section :intro: unexpected argument 7 — sections take (section name bars tracks)
+section :build: unexpected argument 7 — after the tracks, sections take (automate …) and (fill …)
+ramp: unknown curve :log — use :linear, :exp or :sine
+ramp :exp needs both values > 0, got 0 and 1 — use :linear or :sine
+automate: :op must be :set, :mul or :add, got :foo
+automate: unknown option :foo — expected :bars or :op
+automate :hats :amp: expected a number, (ramp …) or a pattern, got "x"
+automate :hats :amp: :bars [3 6] is outside section :build (4 bars) — use 0 ≤ from < to ≤ 4
+fill: needs one track name, got :all
+fill :snare: bars must be a whole number ≥ 1, got 0
+fill :snare: 5 bars is longer than section :build (4 bars)
+Two fills for :snare in section :build — use one (fill …) per track
+Unknown track :hatz in (automate …) in section :build — did you mean :hats?
 Unknown track :snar in section :verse — did you mean :snare?
 Duplicate section name :verse — section names must be unique in a song
 Only one (song …) per buffer
@@ -4314,6 +4483,13 @@ REPuLse ships a `<repulse-editor>` [Custom Element](https://developer.mozilla.or
 </repulse-editor>
 ```
 
+### Play / stop button
+
+Every embed has a round **▶ / ■** button in its top-right corner. **▶** evaluates that editor's
+current code (like Alt+Enter), **■** stops all playback. Re-evaluating never stops playback, so
+this button (or typing `(stop)`) is how a reader stops the sound. Playback is shared across
+instances: while anything plays, every embed's button shows **■**.
+
 ### Shadow DOM isolation
 
 Each `<repulse-editor>` uses Shadow DOM (`mode: "open"`), so:
@@ -4380,6 +4556,12 @@ shown (once per evaluation):
 
 ```
 Warning: track :_ contains a continuous signal with no rhythm, which plays nothing. A signal needs structure, e.g. (segment 8 ...) or (pan sine pat)
+```
+
+An `orbit` value outside 0–3 is clamped, and a warning is shown once per evaluation:
+
+```
+Warning: orbit 7 is out of range 0–3; using 3
 ```
 
 ---

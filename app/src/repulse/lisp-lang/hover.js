@@ -954,6 +954,36 @@ const DOCS = {
     description: "Per-event velocity 0\u20131 (default 1). Final voice level = amp \u00d7 gain \u00d7 velocity.",
     example: "(->> (seq :bd :sd :bd :sd) (velocity (seq 1 0.6)))",
   },
+  "room": {
+    signature: "(room level pat) or (room level)",
+    description: "Per-event reverb send 0\u20131 (default 0) into the reverb of the event's orbit. The dry signal still goes through the track's fx; the orbit returns into the master. Patternable, accepts signals.",
+    example: "(->> (seq :c4 :e4 :g4 :b4) (synth :epiano) (room (seq 0 0.6)) (size 0.8))",
+  },
+  "size": {
+    signature: "(size s pat) or (size s)",
+    description: "Reverb size of the event's orbit, 0\u20131 (default 0.5): impulse response 0.3 + 5.7\u00b7size seconds. Last event wins per orbit; (stop) resets it. Changing it while a tail rings may click.",
+    example: "(->> (seq :sd :_ :sd :_) (room 0.5) (size 1))",
+  },
+  "delay": {
+    signature: "(delay level pat) or (delay level)",
+    description: "Per-event delay send 0\u20131 (default 0) into the feedback delay of the event's orbit. For a delay on a whole track use (fx :delay \u2026).",
+    example: "(->> (seq :sd :_ :_ :_) (delay 0.4) (delay-time 0.375) (delay-feedback 0.5))",
+  },
+  "delay-time": {
+    signature: "(delay-time secs pat) or (delay-time secs)",
+    description: "Delay time of the event's orbit in seconds, 0.01\u20134 (default 0.25). Last event wins per orbit; (stop) resets it.",
+    example: "(->> (seq :sd :_ :_ :_) (delay 0.4) (delay-time 0.375))",
+  },
+  "delay-feedback": {
+    signature: "(delay-feedback fb pat) or (delay-feedback fb)",
+    description: "Feedback of the orbit's delay, 0\u20130.95 (default 0.5): how much of each echo comes back. Last event wins per orbit; (stop) resets it.",
+    example: "(->> (seq :sd :_ :_ :_) (delay 0.5) (delay-feedback 0.7))",
+  },
+  "orbit": {
+    signature: "(orbit n pat) or (orbit n)",
+    description: "Which orbit (0\u20133, default 0) the event's room and delay sends go to. Each orbit has its own reverb and delay with their own settings. Out-of-range values are clamped with a warning.",
+    example: "(stack (->> (seq :bd :sd) (room 0.2) (orbit 0))\n       (->> (slow 2 (seq :c3 :g3)) (synth :saw) (room 0.7) (size 1) (orbit 1)))",
+  },
   "comp": {
     signature: "(comp f g ...)",
     description: "Compose transformers right-to-left. Useful for building named presets.",
