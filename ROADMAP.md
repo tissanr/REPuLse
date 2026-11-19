@@ -2188,7 +2188,7 @@ See full spec: [PROMPTS/PHASE-TL6.md](PROMPTS/PHASE-TL6.md)
 
 ---
 
-## Phase TL7a — Per-Event Filters, Shape & Crush 📋 *planned*
+## Phase TL7a — Per-Event Filters, Shape & Crush ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
@@ -2214,7 +2214,7 @@ by signals. First of three phases split from TL7 (2026-11-10).
 - Tests: Rust Goertzel tests (lpf/hpf/bpf/crush/shape, parity reference), `inserts_test`,
   `params_test`, `e2e/per-event-inserts.spec.ts` (filter, sweep, gain/velocity, sample lpf,
   shape, crush, node-count spy, JS↔WASM parity within 2 dB)
-- Human listen check: pending (PR test protocol). Mark ✅ once it passes
+- Human listen check passed (filter sweep, resonance, shape, crush; PR #183 test protocol)
 
 See full spec: [PROMPTS/PHASE-TL7a.md](PROMPTS/PHASE-TL7a.md)
 
