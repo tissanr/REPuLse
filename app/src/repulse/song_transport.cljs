@@ -9,6 +9,7 @@
    Depends only on audio, fx, offline-render, repulse.song, wav and the Lisp
    typo-hint, so the TEST1 harness can use it."
   (:require [repulse.audio :as audio]
+            [repulse.core :as core]
             [repulse.fx :as fx]
             [repulse.offline-render :as offline-render]
             [repulse.song :as song]
@@ -383,6 +384,21 @@
   (if (= :stems kind)
     (start-stems! pending)
     (start-wav-export! pending)))
+
+(defn hot-swap-def
+  "Legacy :_ hot-swap candidate: the one pattern that this evaluation bound
+   with def, else nil. defs-before / defs-after are the *defs* maps before and
+   after the evaluation; a def counts only if its value is not identical? to
+   the earlier one, so stale defs from earlier evaluations (e.g. a previous
+   buffer) never replace the playing pattern, and command-bar input such as
+   (slider 0.7 0 1) that defines nothing swaps nothing."
+  [defs-before defs-after]
+  (let [fresh (for [[k v] defs-after
+                    :when (and (core/pattern? v)
+                               (not (identical? v (get defs-before k))))]
+                v)]
+    (when (= 1 (count fresh))
+      (first fresh))))
 
 (defn activate-buffer!
   "Called after every successful evaluation. Starts the collected tracks (under
