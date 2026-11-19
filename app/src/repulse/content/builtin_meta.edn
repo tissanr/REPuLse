@@ -1209,6 +1209,43 @@
               :examples ["(->> (seq :bd :sd :bd :sd) (velocity (seq 1 0.6)))"]
               :see-also ["gain" "amp"]}
 
+ ;; ── Phase TL7b: reverb & delay sends per orbit ─────────────────────────────
+ :room       {:category "param"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :c4 :e4 :g4 :b4) (synth :epiano) (room (seq 0 0.6)) (size 0.8))"]
+              :see-also ["size" "orbit" "delay" "fx"]}
+
+ :size       {:category "param"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :sd :_ :sd :_) (room 0.5) (size 1))"]
+              :see-also ["room" "orbit"]}
+
+ :delay      {:category "param"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :sd :_ :_ :_) (delay 0.4) (delay-time 0.375) (delay-feedback 0.5))"]
+              :see-also ["delay-time" "delay-feedback" "orbit" "room"]}
+
+ :delay-time {:category "param"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(->> (seq :sd :_ :_ :_) (delay 0.4) (delay-time 0.375))"]
+              :see-also ["delay" "delay-feedback"]}
+
+ :delay-feedback {:category "param"
+                  :returns "Pattern"
+                  :side-effects []
+                  :examples ["(->> (seq :sd :_ :_ :_) (delay 0.5) (delay-feedback 0.7))"]
+                  :see-also ["delay" "delay-time"]}
+
+ :orbit      {:category "param"
+              :returns "Pattern"
+              :side-effects []
+              :examples ["(stack (->> (seq :bd :sd) (room 0.2) (orbit 0)) (->> (slow 2 (seq :c3 :g3)) (synth :saw) (room 0.7) (size 1) (orbit 1)))"]
+              :see-also ["room" "delay" "size"]}
+
  ;; ── UGens (inside defsynth) ─────────────────────────────────────────────────
  :sin        {:category "ugen"
               :returns "UGen"

@@ -2403,6 +2403,65 @@ note by note:
 **Inside `defsynth`** the names `lpf`, `hpf`, `bpf` and `gain` keep their UGen meaning
 (`(lpf 2000 (saw freq))`). Outside a `defsynth` body they are these per-event controls.
 
+#### Sends & orbits
+
+Events can also send part of their signal to a shared **reverb** and a shared **delay**,
+at a level set per event — like `room` and `delay` in Strudel/SuperDirt. The effects are
+grouped in four **orbits** (0–3). Each orbit has one reverb and one delay with their own
+settings, so a drum part and a pad can use different reverb sizes.
+
+| Function | Range (clamped) | Default | Meaning |
+|---|---|---|---|
+| `room` | 0–1 | 0 | reverb send level of the event |
+| `size` | 0–1 | 0.5 | reverb length of the event's orbit: `0.3 + 5.7 × size` seconds |
+| `delay` | 0–1 | 0 | delay send level of the event |
+| `delay-time` | 0.01–4 s | 0.25 | delay time of the event's orbit, in seconds |
+| `delay-feedback` | 0–0.95 | 0.5 | how much of each echo comes back |
+| `orbit` | 0–3 (integer) | 0 | which orbit's reverb and delay the event sends into |
+
+```lisp
+;; Reverb only on every second note of an e-piano line, long room
+(->> (seq :c4 :e4 :g4 :b4) (synth :epiano) (room (seq 0 0.6)) (size 0.8))
+
+;; Dotted-eighth echoes on the snare at 120 BPM
+(->> (seq :sd :_ :sd :_) (delay 0.4) (delay-time 0.375) (delay-feedback 0.5))
+
+;; Two orbits: a short room on the drums, a long one on the pad
+(stack (->> (seq :bd :sd) (room 0.2) (orbit 0))
+       (->> (slow 2 (seq :c3 :g3)) (synth :saw) (room 0.7) (size 1) (orbit 1)))
+```
+
+Signal flow — three layers, each optional:
+
+```
+event → per-event inserts (lpf … shape) → pan ─┬→ track fx (track-fx …) ─┐
+                                               └→ orbit reverb / delay ──┴→ master (fx …) → out
+```
+
+- **Per event:** `room` and `delay` are send levels; they are patternable and accept
+  signals, sampled at the onset like `pan`. An event with both at 0 builds nothing.
+- **Per orbit:** `size`, `delay-time` and `delay-feedback` set the orbit, not the event.
+  The **last event wins** (SuperDirt behaviour): an event that carries one of them sets
+  that orbit's reverb or delay at its start time; events without them leave it as it is.
+  `(stop)` puts every orbit back to the defaults above. Tails already ringing play out.
+- **Orbits are independent of tracks.** The dry signal still goes through the track's
+  `fx` chain; the send is taken before it, and the orbits return into the master, so the
+  global `(fx …)` chain processes them too. Muting a track stops its sends.
+- `orbit` values outside 0–3 are clamped and warned about once per evaluation, e.g.
+  `orbit 7 is out of range 0–3; using 3`.
+- Changing `size` swaps the reverb's impulse response; doing that while a tail rings can
+  click. Sizes are rounded to steps of 0.05. In WAV export the last `size` of an orbit
+  applies to the whole render (delay time and feedback follow every event exactly).
+- **`size` vs. Strudel's `roomsize`:** Strudel's `roomsize` has no fixed scale; REPuLse
+  keeps `size` at 0–1 and maps it to 0.3–6 s of reverb.
+- Works on every voice. WASM synth voices write their sends on the worklet's send
+  outputs; samples, `defsynth` voices and JS fallbacks use one send GainNode per level.
+  Both feed the same orbit nodes.
+
+**Sends vs. `(fx :reverb …)`.** `(fx :reverb 0.4)` puts one reverb on a whole track (or
+the master) at one wet level. `room` lets each note choose how much reverb it gets, and
+several tracks can share one orbit's reverb.
+
 ---
 
 ## Transitions
@@ -4473,6 +4532,12 @@ shown (once per evaluation):
 
 ```
 Warning: track :_ contains a continuous signal with no rhythm, which plays nothing. A signal needs structure, e.g. (segment 8 ...) or (pan sine pat)
+```
+
+An `orbit` value outside 0–3 is clamped, and a warning is shown once per evaluation:
+
+```
+Warning: orbit 7 is out of range 0–3; using 3
 ```
 
 ---

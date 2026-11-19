@@ -4,6 +4,7 @@
             [repulse.theory :as theory]
             [repulse.samples :as samples]
             [repulse.inserts :as inserts]
+            [repulse.orbits :as orbits]
             [repulse.synth :as synth]
             [repulse.bus :as bus]
             [repulse.midi :as midi]
@@ -87,8 +88,10 @@
     (-> (.addModule worklet (public-url "worklet.js"))
         (.then (fn []
                  (let [node (js/AudioWorkletNode. ac "repulse-processor"
-                                                  #js {:outputChannelCount #js [2]})]
-                   (.connect node @master-gain)
+                                                  (clj->js orbits/worklet-outputs))]
+                   ;; Output 0 = dry → master; outputs 1–8 = orbit sends (TL7b).
+                   (.connect node @master-gain 0)
+                   (orbits/connect-worklet! ac node @master-gain)
                    (reset! worklet-node node)
                    (set! (.. node -port -onmessage)
                          (fn [e]
@@ -437,20 +440,24 @@
     true))
 
 (defn- worklet-trigger-v3!
-  "Send a trigger to the WASM worklet with explicit synthesis parameters and the
-   event's insert params (Phase TL7a). ins — insert-params map or nil; nil sends
+  "Send a trigger to the WASM worklet with explicit synthesis parameters, the
+   event's insert params (Phase TL7a) and its orbit sends (Phase TL7b).
+   ins — insert-params map or nil; snd — send-params map or nil. Both nil sends
    the smaller trigger_v2 message. Returns true if ready. dest must be the
    target's master gain — the worklet always outputs there."
-  [{:keys [node ready? master]} value t amp attack decay pan ins dest]
+  [{:keys [node ready? master]} value t amp attack decay pan ins snd dest]
   (when (and ready? node (= dest master))
     (when debug? (js/console.log "[REPuLse] triggering WASM:" value "at t=" t "amp=" amp))
     (.. ^js node -port
         (postMessage
-          (if ins
-            ;; Slot layout = lib.rs trigger_v3 (TL7b appends, never reorders).
+          (if (or ins snd)
+            ;; Slot layout = lib.rs trigger_v3 (appended, never reordered):
+            ;; 0–3 voice · 4–11 inserts · 12–14 room delay orbit.
             #js {:type "trigger_v3" :value value :time t
                  :params (js/Float32Array.from
-                           (clj->js (into [amp attack decay pan] (inserts/wasm-slots ins))))}
+                           (clj->js (cond-> (into [amp attack decay pan]
+                                                  (inserts/wasm-slots (or ins inserts/off)))
+                                      snd (into (orbits/wasm-slots snd)))))}
             #js {:type "trigger_v2" :value value :time t
                  :amp amp :attack attack :decay decay :pan pan})))
     true))
@@ -502,15 +509,18 @@
         (arm! dur)
         (when dur (.then dur arm!))))))
 
-(defn- with-inserts
+(defn- event-output
   "Return the node a JS voice should connect to. If the event has insert params
    (ins, from inserts/insert-params), build lpf → hpf → bpf → crush → shape
    (only the stages present) ending in dest, and schedule disconnection after the
    voice ends. gain ≠ 1 adds a leading GainNode (defsynth voices, whose amp the
-   audio layer does not control). Otherwise return dest — no extra nodes."
-  ([ac t ins dest dur] (with-inserts ac t ins dest dur 1.0))
-  ([ac t ins dest dur gain]
-   (if (and (nil? ins) (== gain 1))
+   audio layer does not control). Orbit sends (snd, from orbits/send-params,
+   Phase TL7b) add an output GainNode at the end of the chain that feeds dest
+   (dry) and the room/delay inputs of the event's orbit. Without any of these,
+   return dest — no extra nodes."
+  ([ac t ins snd dest dur] (event-output ac t ins snd dest dur 1.0))
+  ([ac t ins snd dest dur gain]
+   (if (and (nil? ins) (nil? snd) (== gain 1))
      dest
      (let [{:keys [lpf resonance hpf hpq bpf bpq shape crush]} ins
            g      (when-not (== gain 1)
@@ -525,10 +535,12 @@
                     bpf          (conj (insert-biquad ac t "bandpass" bpf bpq))
                     levels       (conj (insert-shaper ac (cached-curve :crush crush)))
                     (and shape (pos? shape))
-                    (conj (insert-shaper ac (cached-curve :shape shape))))]
+                    (conj (insert-shaper ac (cached-curve :shape shape)))
+                    snd          (conj (.createGain ac)))
+           sends  (when snd (orbits/send! ac t (peek nodes) snd (output-node ac)))]
        (doseq [[a b] (partition 2 1 (conj nodes dest))]
          (.connect a b))
-       (schedule-disconnect! ac t nodes dur)
+       (schedule-disconnect! ac t (into nodes sends) dur)
        (first nodes)))))
 
 (defn- sample-length
@@ -565,7 +577,9 @@
    seconds (TL6): needed by legato, looped samples and unit :c.
    Per-event inserts (TL7a: lpf hpf bpf crush shape) run in WASM when the worklet
    takes the event, else as native Web Audio nodes in front of dest; gain and
-   velocity multiply the voice amp."
+   velocity multiply the voice amp. Orbit sends (TL7b: room delay orbit) go out
+   on the worklet's send buses or through per-event send GainNodes; size,
+   delay-time and delay-feedback set the event's orbit at t."
   ([ac t value] (play-event ac t value nil nil))
   ([ac t value track-name] (play-event ac t value track-name nil))
   ([ac t value track-name timing]
@@ -576,11 +590,17 @@
          wt       (when-not offline? (worklet-target ac))
          dest     (output-for-track ac track-name)
          ins      (inserts/insert-params value)
+         snd      (orbits/send-params value)
          af       (inserts/amp-factor value)
          ;; Destination for a JS voice sounding dur seconds. Only called on the
          ;; fallback branches, so a worklet event never builds a node chain; WASM
          ;; eligibility is still decided on the original dest.
-         js-dest  (fn [dur] (with-inserts ac t ins dest dur))]
+         js-dest  (fn [dur] (event-output ac t ins snd dest dur))]
+     ;; TL7b: size / delay-time / delay-feedback set the event's orbit, whichever
+     ;; path plays the voice (and even when its own sends are 0). Rests carry
+     ;; the keys too but are not events.
+     (when (and (map? value) (not= :_ (:note value)))
+       (orbits/apply-orbit-settings! ac (orbits/orbit-index (:orbit value)) t value))
      (cond
        ;; Silence / rest
        (= value :_) nil
@@ -591,7 +611,7 @@
        (let [synth-def (synth/lookup-synth (:synth value))]
          ;; The defsynth's own envelope sets its length (unknown here); 30 s
          ;; bounds the cleanup so long pads are never cut.
-         (synth/play-synth! ac t synth-def value (with-inserts ac t ins dest 30.0 af)))
+         (synth/play-synth! ac t synth-def value (event-output ac t ins snd dest 30.0 af)))
 
        ;; Bare defsynth name — (seq :lfo-sine) triggers a parameterless synth,
        ;; e.g. a bus writer. Note names keep their meaning.
@@ -607,7 +627,7 @@
              decay-v  (float (:decay value 1.5))
              pan-v    (float (:pan value 0.0))
              synth    (:synth value)
-             wasm!    (fn [v] (worklet-trigger-v3! wt v t amp-v attack-v decay-v pan-v ins dest))
+             wasm!    (fn [v] (worklet-trigger-v3! wt v t amp-v attack-v decay-v pan-v ins snd dest))
              tone-dur (+ attack-v decay-v)]
          (cond
            (= note :_) nil
@@ -676,7 +696,7 @@
                           (js-dest (when ins (sample-length ac bank n extra))))
            (if offline?
              (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)
-             (or (worklet-trigger-v3! wt (name bank) t amp-v 0.001 1.5 pan-v ins dest)
+             (or (worklet-trigger-v3! wt (name bank) t amp-v 0.001 1.5 pan-v ins snd dest)
                  (make-sine ac t 440 1.5 amp-v 0.001 pan-v (js-dest 1.5))))))
 
        ;; Keyword — note name → Hz tone, or sample bank
@@ -701,7 +721,7 @@
              decay-v (float (:decay value 0.3))
              pan-v  (float (:pan value 0.0))]
          (or (when-not offline?
-               (worklet-trigger-v3! wt "noise" t amp-v 0.001 decay-v pan-v ins dest))
+               (worklet-trigger-v3! wt "noise" t amp-v 0.001 decay-v pan-v ins snd dest))
              (make-noise ac t decay-v amp-v pan-v (js-dest decay-v))))
 
        ;; Number — frequency in Hz
@@ -735,8 +755,9 @@
          (-> (.addModule worklet (public-url "worklet.js"))
              (.then (fn []
                       (let [node (js/AudioWorkletNode. offline "repulse-processor"
-                                                       #js {:outputChannelCount #js [2]})]
-                        (.connect node dest)
+                                                       (clj->js orbits/worklet-outputs))]
+                        (.connect node dest 0)
+                        (orbits/connect-worklet! offline node dest)
                         (set! (.. node -port -onmessage)
                               (fn [e]
                                 (let [d (.-data e)]
@@ -1199,6 +1220,8 @@
   (cancel-capture!)
   (when-let [node @worklet-node]
     (.. node -port (postMessage #js {:type "stop"})))
+  ;; TL7b: every orbit back to its default size / delay-time / feedback
+  (orbits/reset-orbits! @ctx)
   (when-let [id (:interval-id @scheduler-state)]
     (js/clearInterval id))
   (clear-visuals!)

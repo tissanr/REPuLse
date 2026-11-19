@@ -93,6 +93,17 @@ const CHAIN_CATEGORIES = [
     ],
   },
   {
+    title: "Sends",
+    items: [
+      withBuiltinDetail("room", "(room ¦0.4)"),
+      withBuiltinDetail("size", "(size ¦0.8)"),
+      withBuiltinDetail("delay", "(delay ¦0.3)"),
+      withBuiltinDetail("delay-time", "(delay-time ¦0.375)"),
+      withBuiltinDetail("delay-feedback", "(delay-feedback ¦0.5)"),
+      withBuiltinDetail("orbit", "(orbit ¦1)"),
+    ],
+  },
+  {
     title: "Effects",
     items: [
       withDetail("reverb", "(fx :reverb ¦0.3)", "(fx :reverb mix) — add reverb to this pattern"),
