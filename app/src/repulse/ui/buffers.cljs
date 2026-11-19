@@ -7,7 +7,8 @@
    export/import). The pure operations live in repulse.project.
    Exports: init!, active-name, current-project, switch-to!, create-buffer!,
             rename-buffer!, delete-buffer!, replace-project!,
-            clear-all-diagnostics!, add-switch-hook!, render-tabs!."
+            clear-all-diagnostics!, add-switch-hook!, render-tabs!,
+            dispatch-in! (WS5)."
   (:require [clojure.string :as str]
             [repulse.project :as project]
             [repulse.session :as session]
@@ -205,6 +206,22 @@
                                   st
                                   (.-state (.update st (setDiagnostics st #js []))))]))
                    m)))))
+
+(defn dispatch-in!
+  "Phase WS5: apply a transaction spec to buffer `name` — dispatched on the
+   view when it is shown, else applied to its stored state (its own undo
+   history). Returns true when the buffer exists."
+  [name spec]
+  (cond
+    (= name (active-name))
+    (when-let [v (view)] (.dispatch v spec) true)
+
+    (contains? @states name)
+    (do (swap! states update name (fn [^js st] (.-state (.update st spec))))
+        (session/schedule-save!)
+        true)
+
+    :else false))
 
 ;;; Export / import
 

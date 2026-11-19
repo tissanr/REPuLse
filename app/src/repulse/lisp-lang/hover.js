@@ -1002,9 +1002,9 @@ const DOCS = {
     example: "(stop)",
   },
   "track": {
-    signature: "(track :name pattern)",
-    description: "Define or replace a named track. Each track runs independently.",
-    example: "(track :kick (seq :bd :_ :bd :_))",
+    signature: "(track :name pattern & flags)",
+    description: "Define or replace a named track. Each track runs independently. Trailing flags :mute (silent, keeps its FX) and :solo (only soloed tracks sound; several may be soloed) live in the code. Alt+Enter plays exactly the tracks the code declares — deleted tracks stop.",
+    example: "(track :hats (seq :hh :hh :oh :hh) :mute)",
   },
   "play": {
     signature: "(play :name pattern)",
@@ -1013,17 +1013,17 @@ const DOCS = {
   },
   "mute!": {
     signature: "(mute! :name)",
-    description: "Silence a track without removing it. Use in the command bar.",
+    description: "Command bar: writes :mute into the (track :name …) form and re-evaluates. Inside the buffer it is an error — write (track :name … :mute) instead.",
     example: "(mute! :kick)",
   },
   "unmute!": {
     signature: "(unmute! :name)",
-    description: "Re-enable a muted track.",
+    description: "Command bar: removes :mute from the (track :name …) form and re-evaluates.",
     example: "(unmute! :kick)",
   },
   "solo!": {
     signature: "(solo! :name)",
-    description: "Play only this track, muting all others.",
+    description: "Command bar: writes :solo into the (track :name …) form and re-evaluates. Several tracks may be soloed; unsoloed tracks are silent.",
     example: "(solo! :bass)",
   },
   "clear!": {

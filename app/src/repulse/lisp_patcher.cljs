@@ -474,3 +474,81 @@
            :to     (:to t)
            :insert (str "(slider " txt " " lo " " hi ")")
            :cursor (+ (:from t) (count "(slider ") (count txt))})))))
+
+;; ─── Track flags (Phase WS5) ──────────────────────────────────────────────────
+
+(defn- track-form-at
+  "When toks[j] opens `(track :name …` → {:j j :args [...] :close k}, else nil."
+  [doc toks j kw-text]
+  (let [n (count toks)]
+    (when (and (< (+ j 2) n)
+               (= :lp (:t (nth toks j)))
+               (= "(" (.charAt doc (:from (nth toks j))))
+               (= "track" (atom-text doc (nth toks (inc j))))
+               (= kw-text (atom-text doc (nth toks (+ j 2)))))
+      (let [[args close] (list-args toks j)]
+        {:j j :args args :close close}))))
+
+(defn find-track-form
+  "The first `(track :name …)` form in doc → {:from :to :flags #{kw}}, or nil.
+   :to is the end of the closing paren (the doc end when unclosed); :flags are
+   the trailing :mute / :solo keywords after the pattern argument."
+  [doc track-name]
+  (let [toks    (str-tokens doc)
+        kw-text (str ":" (name track-name))
+        n       (count toks)]
+    (some (fn [j]
+            (when-let [{:keys [args close]} (track-form-at doc toks j kw-text)]
+              {:from  (:from (nth toks j))
+               :to    (if close (:to (nth toks close)) (count doc))
+               :flags (set (keep (fn [a]
+                                   (when (:atom? a)
+                                     (some-> (#{":mute" ":solo"} (.substring doc (:from a) (:to a)))
+                                             (subs 1)
+                                             keyword)))
+                                 (drop 2 args)))}))
+          (range n))))
+
+(defn- flag-edit-in-form
+  "The edit for one `(track …)` form (args, closed), :none when the form is
+   already in the requested state."
+  [doc args fl-text on?]
+  (let [idx      (some (fn [i]
+                         (let [a (nth args i)]
+                           (when (and (:atom? a)
+                                      (= fl-text (.substring doc (:from a) (:to a))))
+                             i)))
+                       (range 2 (count args)))
+        present? (some? idx)]
+    (cond
+      (and on? (not present?) (>= (count args) 2))
+      (let [at (:to (peek args))]
+        {:from at :to at :insert (str " " fl-text)})
+
+      (and (not on?) present?)
+      (let [a    (nth args idx)
+            prev (:to (nth args (dec idx)))
+            gap  (.substring doc prev (:from a))
+            from (cond
+                   (re-matches #"\s*" gap) prev
+                   (re-find #"\s$" gap)    (dec (:from a))
+                   :else                   (:from a))]
+        {:from from :to (:to a) :insert ""})
+
+      :else :none)))
+
+(defn track-flag-edit
+  "doc, track kw, flag (:mute|:solo), on? → {:from :to :insert} or nil when the
+   form is missing (or unclosed) or already in the requested state.
+   Adding inserts \" :flag\" right after the last argument (pattern or flags);
+   removing deletes the keyword and the whitespace before it (only one space
+   when a comment sits in between)."
+  [doc track-name flag on?]
+  (let [toks    (str-tokens doc)
+        kw-text (str ":" (name track-name))
+        fl-text (str ":" (name flag))
+        r       (some (fn [j]
+                        (when-let [{:keys [args close]} (track-form-at doc toks j kw-text)]
+                          (when close (flag-edit-in-form doc args fl-text on?))))
+                      (range (count toks)))]
+    (when (map? r) r)))

@@ -1,7 +1,7 @@
 (ns repulse.ui.inspector-model
   "Pure inspector model (Phase WS1).  Input is plain data collected by the
    DOM layer (repulse.ui.inspector): event values, fx chains with their
-   params, track names and the muted set.
+   params, the declared track flags and the muted set.
    Exports: track-params, param-rows, fx-rows, track-flags, mute-action,
             solo-action, section-tracks."
   (:require [repulse.ui.slider-model :as sm]))
@@ -63,28 +63,26 @@
          chain)))
 
 (defn track-flags
-  "{:muted? :solo?} — solo = more than one track and `name` is the only
-   unmuted one."
-  [track-names muted name]
-  (let [muted   (or muted #{})
-        muted?  (contains? muted name)
-        unmuted (remove #(contains? muted %) track-names)]
-    {:muted? muted?
-     :solo?  (boolean (and (> (count track-names) 1)
-                           (not muted?)
-                           (= [name] (vec unmuted))))}))
+  "Phase WS5: M/S state from the code. declared — {kw {:mute? :solo?}} of the
+   last reconciling evaluation; muted — the scheduler's muted set.
+   → {:muted? (has :mute) :solo? (has :solo) :silenced? (silent only because
+   another track is soloed)}."
+  [declared muted name]
+  (let [{:keys [mute? solo?]} (get declared name)]
+    {:muted?    (boolean mute?)
+     :solo?     (boolean solo?)
+     :silenced? (boolean (and (not mute?) (contains? (or muted #{}) name)))}))
 
 (defn mute-action
-  "[:unmute name] when muted, else [:mute name]."
-  [muted name]
-  (if (contains? (or muted #{}) name) [:unmute name] [:mute name]))
+  "[:flag name :mute on?] — toggles the :mute flag on the track's form."
+  [flags name]
+  [:flag name :mute (not (:muted? flags))])
 
 (defn solo-action
-  "[:unmute-all] when `name` is currently solo, else [:solo name]."
-  [track-names muted name]
-  (if (:solo? (track-flags track-names muted name))
-    [:unmute-all]
-    [:solo name]))
+  "[:flag name :solo on?] — toggles the :solo flag (several tracks may be
+   soloed at once)."
+  [flags name]
+  [:flag name :solo (not (:solo? flags))])
 
 (defn section-tracks
   "Track names of an outline section; [\":all\"] → every track entry name in
