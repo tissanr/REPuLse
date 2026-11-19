@@ -105,6 +105,13 @@ regressions. "Expected" must be concrete — what you hear and see, never "works
 For changes without runtime behaviour (docs, tooling), write `No runtime behaviour changed.`
 and the commands that verify it. The full rules are Rule 5 in [CLAUDE.md](../CLAUDE.md).
 
+A PR's test protocol lists only what a human must check. Anything deterministic gets an
+e2e or unit test in the same PR, and the protocol item points at it (for example
+`e2e/editor.spec.ts › E4: Ctrl/Cmd+K S wraps numbers in (slider …)`). What stays in the
+protocol is what needs ears, a MIDI device, a DAW, a login, an AI key, the Supabase SQL
+editor or the deployment itself. [TESTPLAN.md](TESTPLAN.md) lists, item by item, which
+checks of the v0.1.1 release protocol are automated and which are not.
+
 ### Claude Code commands
 
 The repository ships [Claude Code](https://claude.com/claude-code) slash commands in
@@ -244,8 +251,10 @@ build only compiles namespaces reachable from `test_runner.cljs`; app-layer code
 `env/builtins/` and most of `ui/` is compiled only by the app build, so bracket mismatches and unresolved or
 unused requires there show up nowhere else.
 
-The browser tests render audio with an `OfflineAudioContext` and a JavaScript backend; they
-do not exercise the production AudioWorklet + WASM path. [TESTPLAN.md](TESTPLAN.md) has the
+The browser tests render audio with an `OfflineAudioContext` and a JavaScript backend (or
+read the WAV of `(export …)` from the full app); they do not capture the production
+AudioWorklet + WASM path live. The e2e server (`scripts/serve-static.mjs`) sends the
+`vercel.json` headers, including the CSP, so a CSP violation fails `e2e/smoke.spec.ts`. [TESTPLAN.md](TESTPLAN.md) has the
 full coverage map.
 
 ---

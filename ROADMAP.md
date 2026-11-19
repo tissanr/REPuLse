@@ -36,6 +36,8 @@ without a human:
 
 | # | Phase | Title | Marker | Spec | Build model |
 |---|---|---|---|---|---|
+| **Tooling** | | **Test coverage (no milestone, runs first)** | | | |
+| 0 | TEST3 | Release-protocol automation: UI workflows & measured sound | 🤖 | full | sonnet |
 | **M1** | | **Tidal-Lisp core** | | | |
 | 1 | TL1 | Patterned arguments & pattern arithmetic | 🤖 | full | opus |
 | 2 | TL2 | Continuous signals | 🤖 | full | sonnet |
@@ -50,10 +52,10 @@ without a human:
 | 8c | TL7c | Vowel, envelopes & modulators | 🤖👂 | outline | opus |
 | 9 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
 | 9a | SYN6 | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | full | opus |
-| 9b | FX1 | Mixing, space & modulation effects | 🤖👂 | outline | sonnet |
+| 9b | FX1 | Mixing, space & modulation effects | 🤖👂 | full | sonnet |
 | **M2** | | **Full songs** | | | |
 | 10 | SONG1 | Sections, song form & full-song render | 🤖 | full | opus |
-| 11 | SONG2 | Song-time automation & transitions | 🤖 | outline | sonnet |
+| 11 | SONG2 | Song-time automation & transitions | 🤖 | full | sonnet |
 | 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | full | sonnet |
 | 13 | SONG4 | Multi-buffer projects | 🤖 | full | opus |
 | 13a | WS1 | Inspector column & status head (retire context panel) | 🤖 | full | opus |
@@ -1393,6 +1395,36 @@ See full spec: [PROMPTS/PHASE-TEST1.md](PROMPTS/PHASE-TEST1.md)
 
 ---
 
+## Phase TEST3 — Release-Protocol Automation: UI Workflows & Measured Sound ✅ *delivered*
+
+> **Tooling** (no milestone, row 0 of the implementation order) · **Automation:** 🤖 auto
+
+Cut the hand-tested part of a release round (100 items in v0.1.1) to the ≈15 that need
+ears, hardware, login or the deployment, by automating deterministic UI and measurable sound.
+
+**Key additions:**
+- `scripts/serve-static.mjs` sends the `vercel.json` headers, so e2e catches CSP violations (`e2e/smoke.spec.ts`)
+- New full-app specs: `editor` (completion, hover, Ctrl+K S, comment toggle), `project-share` (`#v3:`/`#v2:` links, share limit, buffer-name errors), `snippets-lib` (mocked API, XSS-as-text), `embed`; additions to `history` and `ai-rail`
+- `e2e/audio-properties.spec.ts` with `spectralCentroid` / `estimatePitch` helpers: filter, amp/slider, rate, accelerate, reverb tail
+- `docs/TESTPLAN.md` table mapping every v0.1.1 release-protocol item to its test or a reason it stays manual
+
+**Delivered:**
+- `scripts/serve-static.mjs` sends the `vercel.json` headers (`--no-headers` to turn it off; the
+  e2e server adds `--dev-eval` because the dev build loads modules through `eval`); `e2e/smoke.spec.ts` S1–S3
+  assert no console error / CSP violation, a first evaluation + `(stop)`, and the production CSP
+- New specs `editor` (E1–E6), `project-share` (P1–P7, with the `#v2:` fixture), `snippets-lib` (L1–L4, mocked
+  API), `embed` (EM1) and `messages` (R45, R46, R59, R84, R107); additions `history` H8–H10 and `ai-rail` A11–A13
+- `spectralCentroid` and `estimatePitch` in `e2e/helpers/audio-analysis.ts` (inline FFT, no dependency) and
+  `e2e/audio-properties.spec.ts` M1–M5: filter centroid, amp/slider RMS, `rate` pitch, `accelerate` glide,
+  master-reverb tail (offline export and real-time capture). M6 was dropped: not separable (see TESTPLAN)
+- `docs/TESTPLAN.md`: the release-protocol coverage table for all 100 Teil 1 items of PR #181
+  (14 stay manual) and the new coverage-map rows
+- Test-only hooks: `__REPULSE_APP__.playing()` (app.cljs) and `window.__REPULSE_EMBED_OUTPUT__` (embed.cljs)
+
+See full spec: [PROMPTS/PHASE-TEST3.md](PROMPTS/PHASE-TEST3.md)
+
+---
+
 ## Phase TEST2 — Production Browser Audio Capture 📋 *planned*
 
 True production-path browser audio verification:
@@ -2168,6 +2200,22 @@ by signals. First of three phases split from TL7 (2026-11-10).
 - WASM: `Inserts` per `ActiveVoice` (allocation-free), `Biquad::lowpass`, `trigger_v3` with a fixed parameter-slot layout
 - JS path (samples, `defsynth`, offline): the same inserts as native `BiquadFilterNode`/`WaveShaperNode` chains, no hand-written DSP; JS↔WASM parity test
 
+**Delivered:**
+- 10 control fns in `repulse.params` (+ `cutoff` alias in the Lisp): `lpf` `resonance` `hpf`
+  `hpq` `bpf` `bpq` `shape` `crush` `gain` `velocity`; patternable, signals sampled at onset.
+  Inside `defsynth` `lpf`/`hpf`/`bpf`/`gain` stay UGens
+- `repulse.inserts`: the one place for clamps, defaults, shape/crush curves and Web Audio Q
+  conversion; gain model `amp × gain × velocity`
+- WASM: `Biquad::lowpass`, inline `Inserts` per `ActiveVoice` (lpf → hpf → bpf → crush →
+  shape, built at trigger time), `trigger_v3` with the fixed 12-slot layout, amp clamp 0–2.
+  The `trigger_v2` render stays bit-identical (golden fingerprint test)
+- JS path: `with-inserts` builds only the stages an event uses (none without inserts) in front
+  of every JS voice, sample and `defsynth` voice, with cached curves and timed disconnect
+- Tests: Rust Goertzel tests (lpf/hpf/bpf/crush/shape, parity reference), `inserts_test`,
+  `params_test`, `e2e/per-event-inserts.spec.ts` (filter, sweep, gain/velocity, sample lpf,
+  shape, crush, node-count spy, JS↔WASM parity within 2 dB)
+- Human listen check: pending (PR test protocol). Mark ✅ once it passes
+
 See full spec: [PROMPTS/PHASE-TL7a.md](PROMPTS/PHASE-TL7a.md)
 
 ---
@@ -2262,12 +2310,12 @@ See full spec: [PROMPTS/PHASE-SONG1.md](PROMPTS/PHASE-SONG1.md)
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
-Parameters that follow curves over the song timeline, plus fills, risers and drops.
+Parameters that follow curves over the song timeline, plus fills and drops at section ends.
 
 **Key additions:**
-- Automation lanes scoped to sections or bar ranges; linear/exp/hold curves or TL2 signals
-- Deterministic in song time (seeking gives the same values as playing through)
-- Fill/riser/drop helpers built from ordinary patterns; works in full-song render
+- `(automate :track :param curve [:bars [a b]] [:op :set|:mul|:add])` inside `section`: a constant, `(ramp :linear|:exp|:sine from to)` or a TL2 signal in section-local time
+- `(fill :track bars pattern|:_)`: replaces, adds or silences a track in the last bars of a section; risers and drops are recipes, not built-ins
+- Evaluated per event inside `song-onsets`, so seeking, loops, re-evaluation, every export and the MIDI file give the same values; `tween` is unchanged
 
 See full spec: [PROMPTS/PHASE-SONG2.md](PROMPTS/PHASE-SONG2.md)
 
