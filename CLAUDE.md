@@ -192,7 +192,8 @@ A phase is delivered only when **all** of these hold:
    reference tables with at least one example; `README.md` is updated if user-facing
    syntax or the quick-start changed.
 3. **Marked delivered.** In `ROADMAP.md`, `📋 *planned*` → `✅ *delivered*` plus a
-   **Delivered:** section matching the existing style.
+   **Delivered:** section matching the existing style; set its *Status* cell in the
+   *Implementation order* table to ✅ and update *Where we stand* at the top.
 4. Docs are committed with (or immediately after) the implementation.
 5. **Test protocol in the PR** (Rule 5). Its PR description ends with a `## Test protocol` section.
 
