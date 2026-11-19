@@ -212,7 +212,8 @@ test('inspector M writes :mute into the code, one undo step, also for a 3-line f
     await page.evaluate(() => window.__REPULSE_EDITOR__.focus());
     await page.keyboard.press('ControlOrMeta+z');
     expect(await doc(page)).toBe(src);
-    await page.keyboard.press('ControlOrMeta+Shift+z');
+    // CodeMirror redo: Cmd+Shift+Z on macOS, Ctrl+Y elsewhere (Ctrl+Shift+Z is unreliable on Linux CI).
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+z' : 'Control+y');
     expect(await doc(page)).toBe(muted1);
     await expect.poll(() => muted(page)).toEqual(['hats']);
     await m.click();
