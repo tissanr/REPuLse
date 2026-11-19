@@ -4466,6 +4466,13 @@ REPuLse ships a `<repulse-editor>` [Custom Element](https://developer.mozilla.or
 </repulse-editor>
 ```
 
+### Play / stop button
+
+Every embed has a round **▶ / ■** button in its top-right corner. **▶** evaluates that editor's
+current code (like Alt+Enter), **■** stops all playback. Re-evaluating never stops playback, so
+this button (or typing `(stop)`) is how a reader stops the sound. Playback is shared across
+instances: while anything plays, every embed's button shows **■**.
+
 ### Shadow DOM isolation
 
 Each `<repulse-editor>` uses Shadow DOM (`mode: "open"`), so:
