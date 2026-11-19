@@ -3,7 +3,8 @@
             [repulse.audio :as audio]
             [repulse.samples :as samples]
             [repulse.midi :as midi]
-            [repulse.specs :as specs]))
+            [repulse.specs :as specs]
+            [repulse.lisp-patcher :as patcher]))
 
 (def current-version 3)
 (def storage-key "repulse-session")
@@ -27,7 +28,7 @@
 
 (defn- empty-session []
   (merge {:v current-version} (empty-project)
-         {:bpm 120 :fx [] :bank nil :sources [] :muted [] :midi {}}))
+         {:bpm 120 :fx [] :bank nil :sources [] :midi {}}))
 
 (defn active-code
   "The active buffer's code (what the AI assistant sees), or \"\"."
@@ -55,7 +56,8 @@
                   :sources (mapv (fn [{:keys [type id]}]
                                    {:type (cljs.core/name type) :id id})
                                  (filter #(= :github (:type %)) @samples/loaded-sources))
-                  :muted   (mapv cljs.core/name (:muted @audio/scheduler-state))
+                  ;; Phase WS5: no :muted — mute/solo live in the code as
+                  ;; (track :name … :mute) flags.
                   :midi    (into {} (map (fn [[k {:keys [target]}]]
                                            [(str k) (when target (cljs.core/name target))])
                                          @midi/cc-mappings))}]
@@ -63,6 +65,35 @@
         (do
           (js/console.warn "[REPuLse] Refusing to build invalid session snapshot")
           (empty-session)))))
+
+;;; ── :muted → :mute flags (Phase WS5) ─────────────────────────────────────
+
+(defn migrate-muted
+  "Pure: buffers [{:name :code} …] with ` :mute` patched onto the `(track :x …)`
+   form of every name in muted (strings or keywords). Tracks without a form,
+   and forms that already carry :mute, are left alone."
+  [buffers muted]
+  (if (empty? muted)
+    buffers
+    (mapv (fn [{:keys [code] :as b}]
+            (assoc b :code
+                   (reduce (fn [c m]
+                             (if-let [{:keys [from to insert]}
+                                      (patcher/track-flag-edit c (keyword (name m)) :mute true)]
+                               (str (subs c 0 from) insert (subs c to))
+                               c))
+                           code muted)))
+          buffers)))
+
+(defn migrate-session-muted
+  "A loaded session (or history state) with its legacy :muted moved into the
+   code as :mute flags; the :muted key is dropped."
+  [sess]
+  (if (contains? sess :muted)
+    (-> sess
+        (update :buffers migrate-muted (:muted sess))
+        (dissoc :muted))
+    sess))
 
 ;;; ── v2 → v3 migration ───────────────────────────────────────────────────
 

@@ -61,6 +61,9 @@ and **when** — not **how** synthesis works internally.
   group the global chain with `(master (fx :delay 0.25) (fx :reverb 0.3))`
 - **Performance:** named tracks you can mute, solo and replace live; MIDI in/out; WAV, stem
   and MIDI export
+- **Code is the source of truth:** Alt+Enter plays exactly the tracks the code declares
+  (deleted tracks fade out), and mute and solo live in the code —
+  `(track :hats (seq :hh :oh) :mute)`
 - **Songs:** `song` and `section` turn the tracks of a buffer into a song with an end;
   `(play-from :chorus)` rehearses from any section and `(export :song)` renders the whole song
   to WAV offline, with every voice and effect (`(export :song :realtime)` records it in real time);

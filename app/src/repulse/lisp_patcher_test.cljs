@@ -137,3 +137,62 @@
            (p/fx-param-edit "(fx :filter :freq (slider 800 20 20000))" "filter" "freq" "900" false nil)))
     (is (= {:from 20 :to 23 :insert "0.45" :slider {:from 12 :to 28 :min 0 :max 1}}
            (p/fx-param-edit "(fx :reverb (slider 0.3 0 1))" "reverb" "wet" "0.45" true nil)))))
+
+;; ─── Phase WS5: track flags ─────────────────────────────────────────────────
+
+(defn- flag [doc k fl on?]
+  (when-let [e (p/track-flag-edit doc k fl on?)] (apply-edit doc e)))
+
+(deftest track-flag-edit-test
+  (testing "add and remove :mute on a one-line form"
+    (let [d "(track :hats (seq :hh :oh))"]
+      (is (= "(track :hats (seq :hh :oh) :mute)" (flag d :hats :mute true)))
+      (is (= d (flag (flag d :hats :mute true) :hats :mute false)))
+      (is (= {:from 26 :to 26 :insert " :mute"} (p/track-flag-edit d :hats :mute true)))))
+  (testing "already in the requested state → nil"
+    (is (nil? (p/track-flag-edit "(track :hats (seq :hh))" :hats :mute false)))
+    (is (nil? (p/track-flag-edit "(track :hats (seq :hh) :mute)" :hats :mute true))))
+  (testing "missing or unclosed form → nil"
+    (is (nil? (p/track-flag-edit "(track :kick (seq :bd))" :hats :mute true)))
+    (is (nil? (p/track-flag-edit "(track :hats (seq :hh)" :hats :mute true)))
+    (is (nil? (p/track-flag-edit "(track :hats)" :hats :mute true))))
+  (testing "only the named track's form is edited"
+    (let [d "(track :kick (seq :bd))\n(track :hats (seq :hh))"]
+      (is (= "(track :kick (seq :bd))\n(track :hats (seq :hh) :solo)" (flag d :hats :solo true)))
+      (is (= "(track :kick (seq :bd) :mute)\n(track :hats (seq :hh))" (flag d :kick :mute true)))))
+  (testing "a name that prefixes another is not confused"
+    (is (= "(track :hatsy (seq :hh))\n(track :hats (seq :oh) :mute)"
+           (flag "(track :hatsy (seq :hh))\n(track :hats (seq :oh))" :hats :mute true))))
+  (testing "both flags: add after existing flags, remove either one"
+    (let [d "(track :x (seq :bd) :solo)"
+          m (flag d :x :mute true)]
+      (is (= "(track :x (seq :bd) :solo :mute)" m))
+      (is (= "(track :x (seq :bd) :mute)" (flag m :x :solo false)))
+      (is (= d (flag m :x :mute false)))))
+  (testing "multi-line form with a ; comment inside"
+    (let [d "(track :hats\n  ;; open hat on the 2\n  (seq :hh :oh))"
+          m (flag d :hats :mute true)]
+      (is (= "(track :hats\n  ;; open hat on the 2\n  (seq :hh :oh) :mute)" m))
+      (is (= d (flag m :hats :mute false)))))
+  (testing "a trailing comment before the closing paren stays intact"
+    (let [d "(track :x (seq :bd) ; kick\n )"
+          m (flag d :x :mute true)]
+      (is (= "(track :x (seq :bd) :mute ; kick\n )" m))
+      (is (= d (flag m :x :mute false)))))
+  (testing "a flag on its own line is removed with its leading whitespace"
+    (is (= "(track :x\n  (seq :bd))"
+           (flag "(track :x\n  (seq :bd)\n  :mute)" :x :mute false))))
+  (testing "a comment between pattern and flag: only one space goes"
+    (is (= "(track :x (seq :bd) ; c\n)"
+           (flag "(track :x (seq :bd) ; c\n :mute)" :x :mute false))))
+  (testing "strings inside the form don't confuse the tokenizer"
+    (is (= "(track :v (~ \"bd ( sd\") :mute)"
+           (flag "(track :v (~ \"bd ( sd\"))" :v :mute true)))))
+
+(deftest find-track-form-test
+  (is (= {:from 0 :to 29 :flags #{:mute}}
+         (p/find-track-form "(track :hats (seq :hh) :mute)" :hats)))
+  (is (= #{:mute :solo} (:flags (p/find-track-form "(track :x (seq :bd) :solo :mute)" :x))))
+  (is (= #{} (:flags (p/find-track-form ";; c\n(track :x (seq :bd))" :x))))
+  (is (nil? (p/find-track-form "(track :x (seq :bd))" :y)))
+  (is (nil? (p/find-track-form ";; (track :y (seq :bd))" :y))))

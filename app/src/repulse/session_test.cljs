@@ -229,3 +229,54 @@
   (let [r (session/share-link "https://repulse.app/" (session/build-session-snapshot))]
     (is (string? (:url r)))
     (is (<= (count (:url r)) 64000))))
+
+;;; ── Phase WS5: :muted moves into the code ───────────────────────────────
+
+(deftest ws5-snapshot-has-no-muted
+  (reset-session-state!)
+  (swap! audio/scheduler-state assoc :muted #{:kick})
+  (reset! session/project-fn (constantly s2-project))
+  (let [snap (session/build-session-snapshot)]
+    (is (not (contains? snap :muted)) "new sessions are written without :muted")
+    (is (not (contains? (session/decode-share-hash (session/encode-share-hash snap)) :muted))
+        "#v3: links carry no :muted")
+    (session/save-session!)
+    (is (not (contains? (session/load-session) :muted)))))
+
+(deftest ws5-loader-still-accepts-muted
+  (.setItem js/localStorage session/storage-key
+            (js/JSON.stringify
+             (clj->js {:v 3 :main "main" :active "main"
+                       :buffers [{:name "main" :code "(track :hats (seq :hh))"}]
+                       :bpm 120 :fx [] :bank nil :sources [] :muted ["hats" 7] :midi {}})))
+  (is (= ["hats"] (:muted (session/load-session)))))
+
+(deftest ws5-migrate-muted
+  (testing "patches :mute onto each named track form, in any buffer"
+    (is (= [{:name "main" :code "(use :drums)\n(track :hats (seq :hh) :mute)"}
+            {:name "drums" :code "(track :kick (seq :bd) :mute)\n(track :sn (seq :sd))"}]
+           (session/migrate-muted
+            [{:name "main" :code "(use :drums)\n(track :hats (seq :hh))"}
+             {:name "drums" :code "(track :kick (seq :bd))\n(track :sn (seq :sd))"}]
+            ["hats" "kick"]))))
+  (testing "tracks without a form are ignored; existing :mute is kept once"
+    (is (= [{:name "main" :code "(track :a (seq :bd) :mute)"}]
+           (session/migrate-muted [{:name "main" :code "(track :a (seq :bd) :mute)"}]
+                                  ["a" "ghost"]))))
+  (testing "keywords work too; empty muted is a no-op"
+    (is (= [{:name "main" :code "(track :a (seq :bd) :mute)"}]
+           (session/migrate-muted [{:name "main" :code "(track :a (seq :bd))"}] [:a])))
+    (let [bs [{:name "main" :code "(track :a (seq :bd))"}]]
+      (is (identical? bs (session/migrate-muted bs []))))))
+
+(deftest ws5-migrate-session-muted
+  (let [s {:v 3 :main "main" :active "main"
+           :buffers [{:name "main" :code "(track :hats\n  (seq :hh :oh))"}]
+           :bpm 120 :fx [] :bank nil :sources [] :muted ["hats"] :midi {}}
+        m (session/migrate-session-muted s)]
+    (is (= "(track :hats\n  (seq :hh :oh) :mute)" (:code (first (:buffers m)))))
+    (is (not (contains? m :muted)))
+    (is (= (dissoc s :muted :buffers) (dissoc m :buffers))))
+  (testing "a session without :muted is unchanged"
+    (let [s {:v 3 :main "main" :buffers [{:name "main" :code "(track :a (seq :bd))"}]}]
+      (is (identical? s (session/migrate-session-muted s))))))

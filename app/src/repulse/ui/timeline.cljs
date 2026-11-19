@@ -307,6 +307,11 @@
                                  (str "<button class=\"viz-track-btn"
                                       (when muted? " muted")
                                       "\" style=\"--track-color:" color "\""
+                                      ;; WS5: muting writes :mute into the code;
+                                      ;; the anonymous :_ track has no form
+                                      (if (= :_ name)
+                                        " disabled title=\"name the track to mute it: (track :name …)\""
+                                        " title=\"mute — writes :mute into the code\"")
                                       " data-name=\"" (escape-html (cljs.core/name name))
                                       "\">:" (escape-html (cljs.core/name name)) "</button>"))
                                data))

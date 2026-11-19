@@ -122,25 +122,28 @@
 (s/def ::session (s/keys :req-un [::v ::editor ::bpm ::fx ::bank ::sources ::muted ::midi]))
 
 ;; Shared by the v2 and v3 sanitizers: everything except the editor/buffers.
+;; Phase WS5: :muted is only kept when the input has it (legacy sessions —
+;; it is migrated into :mute flags on load); new sessions never write it.
 (defn- sanitize-session-common
   [data]
-  {:bpm     (:bpm data)
-   :fx      []
-   :bank    (when (string? (:bank data)) (:bank data))
-   :sources (->> (or (:sources data) [])
-                 (filter #(and (map? %)
-                               (= "github" (str (:type %)))
-                               (non-empty-string? (:id %))))
-                 (mapv #(select-keys % [:type :id])))
-   :muted   (->> (or (:muted data) [])
-                 (filter string?)
-                 vec)
-   :midi    (into {}
-                  (keep (fn [[k v]]
-                          (when (and (or (string? k) (keyword? k))
-                                     (or (nil? v) (string? v)))
-                            [(name k) v])))
-                  (or (:midi data) {}))})
+  (cond-> {:bpm     (:bpm data)
+           :fx      []
+           :bank    (when (string? (:bank data)) (:bank data))
+           :sources (->> (or (:sources data) [])
+                         (filter #(and (map? %)
+                                       (= "github" (str (:type %)))
+                                       (non-empty-string? (:id %))))
+                         (mapv #(select-keys % [:type :id])))
+           :midi    (into {}
+                          (keep (fn [[k v]]
+                                  (when (and (or (string? k) (keyword? k))
+                                             (or (nil? v) (string? v)))
+                                    [(name k) v])))
+                          (or (:midi data) {}))}
+    (contains? data :muted)
+    (assoc :muted (->> (or (:muted data) [])
+                       (filter string?)
+                       vec))))
 
 (defn sanitize-session-v2
   "Return a sanitized v2 session map, or nil if the input is not a session map."
@@ -148,6 +151,7 @@
   (when (and (map? data) (= 2 (:v data)))
     (let [session (merge {:v      2
                           :editor (if (string? (:editor data)) (:editor data) "")}
+                         {:muted []}
                          (sanitize-session-common data))]
       (when (s/valid? ::session session)
         session))))
@@ -197,7 +201,8 @@
 (s/def ::name valid-buffer-name?)
 (s/def ::code string?)
 (s/def ::session-v3 (s/keys :req-un [:repulse.specs.v3/v ::main ::active ::buffers ::bpm ::fx ::bank
-                                     ::sources ::muted ::midi]))
+                                     ::sources ::midi]
+                            :opt-un [::muted]))
 
 (defn sanitize-session-v3
   "Return a sanitized v3 session map, or nil."

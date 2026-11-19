@@ -1,30 +1,70 @@
 (ns repulse.env.builtins.tracks
-  "Multi-track transport builtins: track, mute!, unmute!, solo!, clear!, tracks, upd, tap!"
+  "Multi-track transport builtins: track, mute!, unmute!, solo!, clear!, tracks, upd, tap!
+   Phase WS5: `track` takes trailing :mute / :solo flags; mute!/unmute!/solo!
+   edit the code (command bar only)."
   (:require [repulse.core :as core]
             [repulse.audio :as audio]
             [repulse.fx :as fx]
             [repulse.song-transport :as song-transport]
+            [repulse.tracks-model :as tracks-model]
             [repulse.lisp.core :as lisp]
             [repulse.lisp.eval :as leval]
             [repulse.ui.editor :as editor]
             [clojure.string :as cstr]
             ["@codemirror/lint" :refer [setDiagnostics]]))
 
+;; True while a reconciling (whole-code) evaluation runs — set by
+;; repulse.eval-orchestrator/evaluate*. mute!/unmute!/solo! are code edits and
+;; refuse to run inside the code they would rewrite (Phase WS5).
+(defonce reconciling? (atom false))
+
+;; (fn [track-kw flag on?] → true | false) — patches the track's form and
+;; schedules the re-evaluation; false when no (track :name …) form exists.
+;; Set by repulse.eval-orchestrator/init! (breaks the require cycle).
+(defonce flag-edit-ref (atom nil))
+
+(defn- src-data [x]
+  (when-let [{:keys [from to]} (:source x)]
+    (when from {:from from :to to})))
+
+(defn- flag-edit-builtin
+  "mute! / unmute! / solo! (Phase WS5, decision 9)."
+  [fname flag on? in-code-hint done-msg]
+  (fn [track-name]
+    (let [name' (leval/unwrap track-name)
+          tn    (str ":" (name name'))]
+      (cond
+        @reconciling?
+        (throw (ex-info (str fname " edits the code — " (in-code-hint tn) " instead")
+                        (merge {:type :eval-error} (src-data track-name))))
+
+        (not (and @flag-edit-ref (@flag-edit-ref name' flag on?)))
+        (throw (ex-info (str "track " tn " is not in the code")
+                        (merge {:type :eval-error} (src-data track-name))))
+
+        :else (str "=> " done-msg " " tn)))))
+
 (defn make-builtins
   "ctx — {:on-beat f :set-playing! f :set-output! f :make-stop-fn f
            :env-atom atom :seen-tracks atom}"
   [{:keys [on-beat set-playing! set-output! make-stop-fn env-atom seen-tracks]}]
   {"track"
-   (fn [track-name pat]
+   (fn [track-name pat & flag-args]
      (let [name' (leval/unwrap track-name)
            pat'  (leval/unwrap pat)
-           src   (:source track-name)]
+           src   (:source track-name)
+           flags (tracks-model/parse-flags (mapv leval/unwrap flag-args))]
+       (when-let [msg (:error flags)]
+         ;; WS5: underline the offending option
+         (throw (ex-info msg (merge {:type :eval-error}
+                                    (or (src-data (nth flag-args (:index flags)))
+                                        (src-data track-name))))))
        (if (core/pattern? pat')
          (do
            ;; SONG1: tracks are only collected here; eval-orchestrator activates
            ;; them (under the buffer's song, if any) once the whole buffer has
            ;; evaluated. collect-track! rejects duplicates and tracks below a song.
-           (song-transport/collect-track! name' pat' src)
+           (song-transport/collect-track! name' pat' src flags)
            (swap! seen-tracks conj name')
            (str "=> track :" (cljs.core/name name') " playing"))
          "Error: second argument to track must be a pattern")))
@@ -33,23 +73,19 @@
    (fn [& _args]
      (throw (js/Error. "play is renamed to track — use (track :name pattern)")))
 
+   ;; WS5: code edits — from the command bar they patch the track's form
+   ;; (like the inspector M/S buttons) and re-evaluate.
    "mute!"
-   (fn [track-name]
-     (let [name' (leval/unwrap track-name)]
-       (audio/mute-track! name')
-       (str "=> muted :" (name name'))))
+   (flag-edit-builtin "mute!" :mute true
+                      #(str "write (track " % " … :mute)") "muted")
 
    "unmute!"
-   (fn [track-name]
-     (let [name' (leval/unwrap track-name)]
-       (audio/unmute-track! name')
-       (str "=> unmuted :" (name name'))))
+   (flag-edit-builtin "unmute!" :mute false
+                      #(str "remove :mute from (track " % " …)") "unmuted")
 
    "solo!"
-   (fn [track-name]
-     (let [name' (leval/unwrap track-name)]
-       (audio/solo-track! name')
-       (str "=> solo :" (name name'))))
+   (flag-edit-builtin "solo!" :solo true
+                      #(str "write (track " % " … :solo)") "solo")
 
    "clear!"
    (fn

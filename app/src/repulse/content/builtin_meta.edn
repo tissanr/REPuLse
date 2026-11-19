@@ -1472,7 +1472,9 @@
               :returns "nil"
               :side-effects ["audio" "dom"]
               :examples ["(track :kick (seq :bd :_ :bd :_))"
-                         "(track :bass (->> (scale :minor :c2 (seq 0 3 5)) (amp 0.9)))"]
+                         "(track :bass (->> (scale :minor :c2 (seq 0 3 5)) (amp 0.9)))"
+                         "(track :hats (seq :hh :hh :oh :hh) :mute)"
+                         "(track :kick (seq :bd :_ :bd :_) :solo)"]
               :see-also ["mute!" "unmute!" "solo!" "clear!" "tracks"]}
 
  :mute!      {:category "audio"
