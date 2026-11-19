@@ -2567,7 +2567,7 @@ See full spec: [PROMPTS/PHASE-WS4.md](PROMPTS/PHASE-WS4.md)
 
 ---
 
-## Phase WS5 — Code Is the Source of Truth: Track Reconciliation, `:mute` & `:solo` 📋 *planned*
+## Phase WS5 — Code Is the Source of Truth: Track Reconciliation, `:mute` & `:solo` ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2581,6 +2581,31 @@ and mute/solo live in the code instead of hidden dashboard state.
   `mute!`/`unmute!`/`solo!` patch the code through `lisp-patcher/track-flag-edit`
 - A bare pattern no longer stops the named tracks; it plays as `:_` alongside them
 - Session `:muted` is migrated into `:mute` flags on load and no longer saved; `pending-mutes` removed
+
+**Delivered:**
+- New pure `repulse.tracks-model` (`parse-flags`, `muted-set`, `plan`): `evaluate-project!` and the
+  embed's `evaluate-whole!` pass `:reconcile? true`; after a successful evaluation every scheduled
+  track that is not declared (named tracks across all buffers, plus `:_` for a final bare
+  pattern / event map / legacy hot-swap) is retired, `:__*` preview tracks excepted, and
+  `scheduler-state :muted` is rebuilt from the flags. A declare-nothing buffer (only `def`s,
+  `(bpm …)`, comments; a trailing `(def …)` no longer plays) stops with `nothing to play`.
+  Errors and command-bar / tap / `upd` / snippet evaluations retire nothing.
+- `audio/retire-track!`: leaves `:tracks`/`:muted` at once, ramps the track GainNode to 0
+  (50 ms → 80 ms after the evaluation), then disconnects it and destroys its FX; `play-track!`
+  inside the ramp revives it; `stop!` once nothing is left. A bare pattern no longer calls
+  `stop!` — `:_` plays next to the named tracks and the cycle keeps running.
+- `(track :name pat & flags)` with `:mute` / `:solo` (fuzzy `did you mean :mute?`, underlined);
+  inspector M/S, the track-panel buttons and command-bar `mute!`/`unmute!`/`solo!` patch the code
+  through `lisp-patcher/track-flag-edit` (any buffer, one undo step) via
+  `eval-orchestrator/track-flag-patch-and-eval!`; in the buffer the commands are eval errors.
+  `:_` buttons are disabled. `audio/mute-track!`/`unmute-track!`/`solo-track!` are removed.
+- Sessions, `#v3:` links, snapshots and history no longer store `:muted`;
+  `session/migrate-muted` writes a legacy list into `:mute` flags on load/restore.
+  `pending-mutes` / `:set-pending-mutes!` are gone; history blobs hash differently from before.
+- Tests: `tracks-model-test`, `track-flag-edit` / `find-track-form` and `migrate-muted` cases,
+  updated `history_test` canonical text, `inspector-model` flags; `e2e/code-truth.spec.ts`
+  (15 real-app tests incl. the gain-ramp and project-mode checks). Docs: USAGE "What plays is
+  what the code says", "Mute and solo live in the code", README feature line.
 
 See full spec: [PROMPTS/PHASE-WS5.md](PROMPTS/PHASE-WS5.md)
 
