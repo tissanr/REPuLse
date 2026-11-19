@@ -2220,7 +2220,7 @@ See full spec: [PROMPTS/PHASE-TL7a.md](PROMPTS/PHASE-TL7a.md)
 
 ---
 
-## Phase TL7b — Reverb & Delay Sends per Orbit 📋 *planned*
+## Phase TL7b — Reverb & Delay Sends per Orbit ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
@@ -2249,7 +2249,8 @@ Per-event send levels into a shared reverb and delay, grouped in 4 orbits.
   `e2e/orbit-sends.spec.ts` (tail, size, echoes, no nodes for `delay 0`, independent
   orbits, patterned `room`), `e2e/orbit-sends-app.spec.ts` (WASM export tail, live worklet
   sends per orbit, warning text, `(stop)` reset)
-- Human listen check: pending (PR test protocol). Mark ✅ once it passes
+- Marked delivered on merge at the project owner's request; the listen checks run in the
+  next release test round (PR #194 test protocol)
 
 See full spec: [PROMPTS/PHASE-TL7b.md](PROMPTS/PHASE-TL7b.md)
 
