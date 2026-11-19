@@ -78,6 +78,24 @@
               :examples ["(section :verse 8 [:kick :snare :bass])" "(section :chorus 8 :all)"]
               :see-also ["song" "track" "play-from"]}
 
+ :automate   {:category "source"
+              :returns "Automation"
+              :side-effects []
+              :examples ["(section :build 4 [:kick :hats] (automate :hats :amp (ramp :linear 0 1)))" "(section :build 4 [:hats] (automate :hats :amp (ramp :linear 0 1) :op :mul :bars [2 4]))"]
+              :see-also ["section" "song" "ramp" "tween"]}
+
+ :ramp       {:category "source"
+              :returns "Ramp"
+              :side-effects []
+              :examples ["(ramp :linear 0 1)" "(ramp :exp 300 4000)"]
+              :see-also ["automate" "section" "tween"]}
+
+ :fill       {:category "source"
+              :returns "Fill"
+              :side-effects []
+              :examples ["(section :build 4 [:kick :snare] (fill :snare 1 (fast 4 (seq :sd :sd))))" "(section :build 4 [:kick] (fill :kick 1 :_))"]
+              :see-also ["section" "song" "automate"]}
+
  :play-from  {:category "audio"
               :returns "nil"
               :side-effects ["audio"]

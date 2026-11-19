@@ -2327,7 +2327,7 @@ See full spec: [PROMPTS/PHASE-SONG1.md](PROMPTS/PHASE-SONG1.md)
 
 ---
 
-## Phase SONG2 — Song-Time Automation & Transitions 📋 *planned*
+## Phase SONG2 — Song-Time Automation & Transitions ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2337,6 +2337,21 @@ Parameters that follow curves over the song timeline, plus fills and drops at se
 - `(automate :track :param curve [:bars [a b]] [:op :set|:mul|:add])` inside `section`: a constant, `(ramp :linear|:exp|:sine from to)` or a TL2 signal in section-local time
 - `(fill :track bars pattern|:_)`: replaces, adds or silences a track in the last bars of a section; risers and drops are recipes, not built-ins
 - Evaluated per event inside `song-onsets`, so seeking, loops, re-evaluation, every export and the MIDI file give the same values; `tween` is unchanged
+
+**Delivered:**
+- Pure core model in `repulse.song`: `make-ramp`, `make-automation`, `make-fill`, a 4-arity `make-section`
+  (items validated against the section length), `make-song` item track checks with fuzzy hints and
+  `:item-source`, absolute lane/fill ranges, `ramp-value`, `sample-at`, `curve-value`, `automate-value`,
+  `automation-value`, `fill-at`
+- `song-onsets` applies fills (replace / add / silence a track in the last bars) and automation lanes per
+  event in song time, so the scheduler, `play-from`, `:end :loop`, re-evaluation, `(export :song)`,
+  `(export :stems)`, MIDI export and the TEST1 harness all agree; songs without items take the old path
+- Lisp built-ins `ramp`, `automate`, `fill` and `section` items, every error with a source range;
+  `register-song!` prefers the item's source; the song output line gains `N automations · N fills`
+- Grammar, completions, `builtin_meta.edn`, AI docs; USAGE "Automation", "Fills, drops and risers",
+  `tween` vs `automate`
+- Tests: reference vectors R1–R14 (`song_test`), R15 (`offline_render_test`), R16 (`song_transport_test`),
+  Lisp argument errors (`integration_test`), R17 via `songEvents` (`e2e/song.spec.ts`)
 
 See full spec: [PROMPTS/PHASE-SONG2.md](PROMPTS/PHASE-SONG2.md)
 

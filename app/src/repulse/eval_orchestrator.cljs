@@ -315,7 +315,12 @@
             (set-output! (str "song: " (count (:sections val)) " sections · "
                               (song/song-length val) " bars · "
                               (.toFixed (song/song-duration-secs val (audio/get-bpm)) 1)
-                              " s at " (Math/round (audio/get-bpm)) " BPM · :end :"
+                              " s at " (Math/round (audio/get-bpm)) " BPM"
+                              (let [cnt (fn [k] (reduce + (map (comp count k) (:sections val))))
+                                    pl  (fn [n w] (when (pos? n) (str " · " n " " w (when (> n 1) "s"))))]
+                                (str (pl (cnt :automations) "automation")
+                                     (pl (cnt :fills) "fill")))
+                              " · :end :"
                               (name (:end val)))
                          :success)
 

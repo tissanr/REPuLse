@@ -303,6 +303,9 @@ export const BUILTINS = [
   { label: "play-scenes",  type: "function", detail: "(play-scenes [pat …]) — play patterns as 1-cycle scenes" },
   { label: "song",         type: "function", detail: "(song (section …) … [:end :stop|:loop]) — play tracks as a song with sections; stops (or loops) after the last bar" },
   { label: "section",      type: "function", detail: "(section :name bars [:track …]) — a song section: name, length in bars, tracks that play (or :all)" },
+  { label: "automate",     type: "function", detail: "(automate :track|:all :param curve [:bars [a b]] [:op :set|:mul|:add]) — inside a section: set a parameter from a number, (ramp …) or pattern, in section-local time" },
+  { label: "ramp",         type: "function", detail: "(ramp :linear|:exp|:sine from to) — a curve over a section (or :bars range) for (automate …); never reaches `to` inside the lane" },
+  { label: "fill",         type: "function", detail: "(fill :track bars pattern|:_) — inside a section: replace a track's events in the last N bars (:_ = drop out)" },
   { label: "play-from",    type: "function", detail: "(play-from :section) / (play-from bar) — start or jump the song to a section or 0-based bar" },
   { label: "use",          type: "function", detail: "(use :drums :bass) — evaluate other project buffers first (once per evaluation, shared definitions)" },
   // --- Special forms ---
