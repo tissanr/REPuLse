@@ -2231,6 +2231,26 @@ Per-event send levels into a shared reverb and delay, grouped in 4 orbits.
 - `app/src/repulse/orbits.cljs`: one `ConvolverNode` reverb + one feedback `DelayNode` per orbit, returning into `master-gain`
 - Worklet gets 9 stereo outputs (dry + room/delay send per orbit) that feed the same orbit nodes, so the send effects exist once
 
+**Delivered:**
+- 6 control fns in `repulse.params` (`delay*` registered as `delay`): `room` `size` `delay`
+  `delay-time` `delay-feedback` `orbit`; patternable, signals sampled at onset
+- `repulse.orbits`: per-context orbit buses (`ConvolverNode` reverb + feedback `DelayNode`,
+  output into the master gain), created on first use; last-event-wins orbit settings,
+  seeded noise-burst IRs cached per 0.05 size step, `reset-orbits!` on `(stop)`;
+  `orbit` outside 0–3 clamped with the warning `orbit 7 is out of range 0–3; using 3`
+- WASM: `trigger_v3` slots 12–14 (room delay orbit), per-voice `Sends`, pre-allocated bus
+  buffer and `process_block_buses`; the dry bus stays bit-identical to `process_block`.
+  `worklet.js` writes 9 stereo outputs; the live and EXP1 offline worklets connect them
+  to the orbit buses
+- JS path (samples, `defsynth`, fallbacks, offline-js): `event-output` adds an output
+  GainNode plus one send GainNode per level, only when an event sends
+- Tests: Rust `send_tests` (bus routing, zero sends, clamps, bit-identical dry bus, no
+  reallocation over 1000 blocks), `orbits_test`, `params_test`,
+  `e2e/orbit-sends.spec.ts` (tail, size, echoes, no nodes for `delay 0`, independent
+  orbits, patterned `room`), `e2e/orbit-sends-app.spec.ts` (WASM export tail, live worklet
+  sends per orbit, warning text, `(stop)` reset)
+- Human listen check: pending (PR test protocol). Mark ✅ once it passes
+
 See full spec: [PROMPTS/PHASE-TL7b.md](PROMPTS/PHASE-TL7b.md)
 
 ---

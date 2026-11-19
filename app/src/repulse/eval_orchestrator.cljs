@@ -14,6 +14,7 @@
             [repulse.audio :as audio]
             [repulse.samples :as samples]
             [repulse.sound-check :as sound-check]
+            [repulse.orbits :as orbits]
             [repulse.synth :as synth]
             [repulse.fx :as fx]
             [repulse.env.builtins :as builtins]
@@ -160,6 +161,27 @@
                                 (catch :default _ false))))
                        track-names)
         msgs   (map sound-check/structure-warning-message bad)]
+    (when (seq msgs)
+      (doseq [m msgs] (js/console.warn "[REPuLse]" m))
+      (set-output! (str (when @last-output (str @last-output " — "))
+                        "Warning: " (cstr/join "; " msgs))
+                   :warning))))
+
+;;; Out-of-range orbits (Phase TL7b)
+
+(def ^:private orbit-scan-cycles
+  "Cycles of each evaluated track scanned for out-of-range :orbit values."
+  8)
+
+(defn- report-orbit-warnings!
+  "Warn once per evaluation about :orbit values outside 0–3 in the tracks just
+   evaluated (they are clamped, e.g. `orbit 7 is out of range 0–3; using 3`).
+   Appends to the current output line, like the structureless-signal warning."
+  [track-names last-output set-output!]
+  (let [tracks (:tracks @audio/scheduler-state)
+        msgs   (orbits/orbit-warnings (keep #(get tracks %) track-names)
+                                      (fn [pat c] (core/query pat (core/cycle-span c)))
+                                      orbit-scan-cycles)]
     (when (seq msgs)
       (doseq [m msgs] (js/console.warn "[REPuLse]" m))
       (set-output! (str (when @last-output (str @last-output " — "))
@@ -366,6 +388,10 @@
           ;; ── Continuous signals with no rhythm ─────────────────────────────
           (report-structureless-signals! (sort (conj @builtins/seen-tracks :_))
                                          last-output set-output!)
+
+          ;; ── Orbits outside 0–3 (TL7b) ─────────────────────────────────────
+          (report-orbit-warnings! (sort (conj @builtins/seen-tracks :_))
+                                  last-output set-output!)
 
           ;; ── Unknown sound names ───────────────────────────────────────────
           ;; Tracks defined by this evaluation, plus the anonymous :_ track.
