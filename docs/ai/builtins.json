@@ -2058,6 +2058,58 @@
     "detail": "(section :name bars [:track …]) — a song section: name, length in bars, tracks that play (or :all)",
     "description": "A song section: a unique name, a length in bars (1 bar = 1 cycle) and the tracks that play in it — a vector of track names or :all. Used inside (song …)."
   },
+  "automate": {
+    "category": "source",
+    "signature": "(automate :track|:all :param curve [:bars [a b]] [:op :set|:mul|:add]) — inside a section: set a parameter from a number, (ramp …) or pattern, in section-local time",
+    "returns": "Automation",
+    "side-effects": [],
+    "examples": [
+      "(section :build 4 [:kick :hats] (automate :hats :amp (ramp :linear 0 1)))",
+      "(section :build 4 [:hats] (automate :hats :amp (ramp :linear 0 1) :op :mul :bars [2 4]))"
+    ],
+    "see-also": [
+      "section",
+      "song",
+      "ramp",
+      "tween"
+    ],
+    "detail": "(automate :track|:all :param curve [:bars [a b]] [:op :set|:mul|:add]) — inside a section: set a parameter from a number, (ramp …) or pattern, in section-local time",
+    "description": ""
+  },
+  "ramp": {
+    "category": "source",
+    "signature": "(ramp :linear|:exp|:sine from to) — a curve over a section (or :bars range) for (automate …); never reaches `to` inside the lane",
+    "returns": "Ramp",
+    "side-effects": [],
+    "examples": [
+      "(ramp :linear 0 1)",
+      "(ramp :exp 300 4000)"
+    ],
+    "see-also": [
+      "automate",
+      "section",
+      "tween"
+    ],
+    "detail": "(ramp :linear|:exp|:sine from to) — a curve over a section (or :bars range) for (automate …); never reaches `to` inside the lane",
+    "description": ""
+  },
+  "fill": {
+    "category": "source",
+    "signature": "(fill :track bars pattern|:_) — inside a section: replace a track's events in the last N bars (:_ = drop out)",
+    "returns": "Fill",
+    "side-effects": [],
+    "examples": [
+      "(section :build 4 [:kick :snare] (fill :snare 1 (fast 4 (seq :sd :sd))))",
+      "(section :build 4 [:kick] (fill :kick 1 :_))"
+    ],
+    "see-also": [
+      "section",
+      "song",
+      "automate"
+    ],
+    "detail": "(fill :track bars pattern|:_) — inside a section: replace a track's events in the last N bars (:_ = drop out)",
+    "description": ""
+  },
   "play-from": {
     "category": "audio",
     "signature": "(play-from :section) / (play-from bar)",
