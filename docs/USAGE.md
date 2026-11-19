@@ -4329,9 +4329,14 @@ Each `<repulse-editor>` uses Shadow DOM (`mode: "open"`), so:
 ### Building the embed bundle
 
 ```bash
-npx shadow-cljs compile embed    # dev build → app/public/embed.js
+npx shadow-cljs compile embed    # dev build → app/public/embed.js (local only)
 npx shadow-cljs release embed    # optimised release build (much smaller)
 ```
+
+`app/public/embed.js` is a build artifact and is not committed. The Vercel build
+(`scripts/vercel-build.sh`) produces the release bundle on every deploy. Never deploy a
+dev build: it loads its modules through `eval`, which the site's Content Security Policy
+blocks, so `<repulse-editor>` never registers.
 
 ---
 

@@ -330,6 +330,8 @@
                  ;; Phase EXP1 (e2e/export-parity.spec.ts): evaluate like the
                  ;; command bar, and report whether the live WASM backend is up.
                  :evaluate     (fn [code] (eo/evaluate! code))
+                 ;; Phase TEST3 (e2e/smoke.spec.ts): is the scheduler running?
+                 :playing      (fn [] (boolean (audio/playing?)))
                  :audioBackend (fn [] (if (and @audio/worklet-ready? @audio/recorder-node)
                                         "audioworklet+wasm" "js"))
                  ;; Phase SK1 (e2e/stems-midi.spec.ts): the last song buffer's
