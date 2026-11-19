@@ -8,6 +8,7 @@ app/public/test-js/
 app/public/e2e-embed/
 app/public/cljs-runtime/
 app/public/manifest.edn
+app/public/embed.js
 out/
 .shadow-cljs/
 .tsc-out/

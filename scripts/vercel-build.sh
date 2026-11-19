@@ -15,4 +15,4 @@ fi
 
 cargo install --locked wasm-pack@0.14.0
 npm run build:wasm
-npx shadow-cljs release app
+npx shadow-cljs release app embed
