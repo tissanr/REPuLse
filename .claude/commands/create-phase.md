@@ -79,9 +79,11 @@ Always end the list with `- [ ] The PR description ends with a test protocol (CL
 **`ROADMAP.md`** — two changes:
 
 1. Add a row to the **Implementation order** table at the top, in its milestone block, with
-   the marker, spec status (`full` / `outline`) and build model (`sonnet` for routine work,
+   status 📋, the marker, spec status (`full` / `outline`) and build model (`sonnet` for routine work,
    `opus` for design-heavy work). The auto-phase pipeline picks phases from this table in
    order, so the position matters.
+   Also add it to **Where we stand** above the table (milestone count and *Still open*,
+   or the side-track line) and set the date there.
 2. Add a new section near related phases:
 
 ```markdown

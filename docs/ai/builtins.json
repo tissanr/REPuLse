@@ -2528,7 +2528,7 @@
   },
   "track": {
     "category": "audio",
-    "signature": "(track :name pattern)",
+    "signature": "(track :name pattern & flags)",
     "returns": "nil",
     "side-effects": [
       "audio",
@@ -2536,7 +2536,9 @@
     ],
     "examples": [
       "(track :kick (seq :bd :_ :bd :_))",
-      "(track :bass (->> (scale :minor :c2 (seq 0 3 5)) (amp 0.9)))"
+      "(track :bass (->> (scale :minor :c2 (seq 0 3 5)) (amp 0.9)))",
+      "(track :hats (seq :hh :hh :oh :hh) :mute)",
+      "(track :kick (seq :bd :_ :bd :_) :solo)"
     ],
     "see-also": [
       "mute!",
@@ -2545,8 +2547,8 @@
       "clear!",
       "tracks"
     ],
-    "detail": "(track :name pattern) — define or replace a named track",
-    "description": "Define or replace a named track. Each track runs independently."
+    "detail": "(track :name pattern & flags) — define or replace a named track; flags :mute / :solo",
+    "description": "Define or replace a named track. Each track runs independently. Trailing flags :mute (silent, keeps its FX) and :solo (only soloed tracks sound; several may be soloed) live in the code. Alt+Enter plays exactly the tracks the code declares — deleted tracks stop."
   },
   "mute!": {
     "category": "audio",
@@ -2565,8 +2567,8 @@
       "solo!",
       "track"
     ],
-    "detail": "(mute! :name) — silence a track without removing it (use in command bar)",
-    "description": "Silence a track without removing it. Use in the command bar."
+    "detail": "(mute! :name) — command bar: writes :mute into the track's form and re-evaluates",
+    "description": "Command bar: writes :mute into the (track :name …) form and re-evaluates. Inside the buffer it is an error — write (track :name … :mute) instead."
   },
   "unmute!": {
     "category": "audio",
@@ -2585,8 +2587,8 @@
       "solo!",
       "track"
     ],
-    "detail": "(unmute! :name) — re-enable a muted track (use in command bar)",
-    "description": "Re-enable a muted track."
+    "detail": "(unmute! :name) — command bar: removes :mute from the track's form and re-evaluates",
+    "description": "Command bar: removes :mute from the (track :name …) form and re-evaluates."
   },
   "solo!": {
     "category": "audio",
@@ -2605,8 +2607,8 @@
       "unmute!",
       "track"
     ],
-    "detail": "(solo! :name) — play only this track, mute all others (use in command bar)",
-    "description": "Play only this track, muting all others."
+    "detail": "(solo! :name) — command bar: writes :solo into the track's form and re-evaluates",
+    "description": "Command bar: writes :solo into the (track :name …) form and re-evaluates. Several tracks may be soloed; unsoloed tracks are silent."
   },
   "clear!": {
     "category": "audio",

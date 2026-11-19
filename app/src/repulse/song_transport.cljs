@@ -29,6 +29,9 @@
 ;; {:kind :stems :n n-or-nil :tail secs :set-output! f}   (SK1)
 (defonce pending-export    (atom nil))
 (defonce pending-track-srcs (atom {}))  ; {kw src} — first definition's source
+;; {kw {:mute? bool :solo? bool}} — trailing track flags (Phase WS5). Kept
+;; apart from pending-tracks so every [[kw pat] …] consumer stays pair-based.
+(defonce pending-track-flags (atom {}))
 
 ;; nil, or (fn [src] → buffer name) while a multi-buffer project evaluates
 ;; (set only by repulse.project-eval/run-project, Phase SONG4).
@@ -50,7 +53,8 @@
   (reset! pending-song nil)
   (reset! pending-play-from nil)
   (reset! pending-export nil)
-  (reset! pending-track-srcs {}))
+  (reset! pending-track-srcs {})
+  (reset! pending-track-flags {}))
 
 (defn current-song
   "The song of this evaluation, else the last activated one."
@@ -72,8 +76,9 @@
 
 (defn collect-track!
   "Register a track during evaluation. Throws on duplicates and on tracks
-   defined below the song."
-  [name' pat' src]
+   defined below the song. flags — {:mute? :solo?} (Phase WS5), default off."
+  ([name' pat' src] (collect-track! name' pat' src nil))
+  ([name' pat' src flags]
   (when (some #(= name' (first %)) @pending-tracks)
     (let [f (or @buffer-of (constantly nil))
           a (f (get @pending-track-srcs name'))
@@ -89,7 +94,9 @@
     (throw (ex-info (str "track :" (name name') " is defined after (song …) — define tracks above the song")
                     (merge {:type :eval-error} (src-data src)))))
   (swap! pending-track-srcs assoc name' src)
-  (swap! pending-tracks conj [name' pat']))
+  (swap! pending-track-flags assoc name' (merge {:mute? false :solo? false}
+                                                (select-keys flags [:mute? :solo?])))
+  (swap! pending-tracks conj [name' pat'])))
 
 (defn- hint-fn [name-str known-strs]
   (leval/typo-hint name-str known-strs))
@@ -395,9 +402,12 @@
 
 (defn activate-buffer!
   "Called after every successful evaluation. Starts the collected tracks (under
-   the song, if any), then applies (play-from …) and (export :song)."
+   the song, if any), then applies (play-from …) and (export :song).
+   Returns the declared tracks [[kw {:mute? :solo?}] …] in buffer order
+   (Phase WS5: the evaluation reconciles the scheduler against them)."
   [{:keys [set-playing!] :as cbs}]
   (let [tracks    @pending-tracks
+        flags     @pending-track-flags
         s         @pending-song
         play-from @pending-play-from
         export    @pending-export]
@@ -413,4 +423,5 @@
     (when (some? play-from)
       (apply-play-from! play-from (some? s)))
     (when export
-      (start-export! export))))
+      (start-export! export))
+    (mapv (fn [[k _]] [k (get flags k {:mute? false :solo? false})]) tracks)))

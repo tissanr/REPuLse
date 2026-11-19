@@ -262,13 +262,14 @@
   (setBankNamesProvider (fn [] (clj->js (samples/bank-names))))
   (setFxNamesProvider   (fn [] (clj->js (mapv :name @fx/chain))))
 
-  ;; Register global mute-toggle for the track panel's button click handlers
+  ;; Register global mute-toggle for the track panel's button click handlers.
+  ;; Phase WS5: it toggles the :mute flag on the track's form in the code.
   (set! (.-_repulseMuteToggle js/window)
         (fn [track-name-str]
           (let [kw (keyword track-name-str)]
-            (if (contains? (:muted @audio/scheduler-state) kw)
-              (audio/unmute-track! kw)
-              (audio/mute-track! kw)))))
+            (when-not (= :_ kw)
+              (eo/track-flag-patch-and-eval!
+               kw :mute (not (:mute? (get @eo/declared-flags kw))))))))
 
   (reset! editor/cmd-view (editor/make-cmd-editor (el "cmd-container") eo/evaluate!))
 
@@ -279,8 +280,11 @@
         url-session (session/decode-share-hash hash)
         stored      (or (session/load-session) (session/migrate-legacy!))
         active-sess (or url-session stored)
+        ;; WS5: a legacy :muted list becomes :mute flags in the code before
+        ;; the buffers reach the editor (no undo entry — it is the load).
         proj        (if active-sess
-                      (select-keys active-sess [:main :active :buffers])
+                      (select-keys (session/migrate-session-muted active-sess)
+                                   [:main :active :buffers])
                       (project/empty-project))]
 
     ;; Remove hash from URL (avoid re-consuming on F5)
@@ -320,6 +324,12 @@
       (set! (.-__REPULSE_APP__ js/window)
             #js {:cycleDur   (fn [] (:cycle-dur @audio/scheduler-state))
                  :muted      (fn [] (clj->js (sort (map name (:muted @audio/scheduler-state)))))
+                 ;; Phase WS5 (e2e/code-truth.spec.ts): scheduled track names and
+                 ;; a track's GainNode (to watch the retire ramp).
+                 :tracks     (fn [] (clj->js (sort (map name (keys (:tracks @audio/scheduler-state))))))
+                 :cycle      (fn [] (:cycle @audio/scheduler-state))
+                 :trackGainNode (fn [track] (get-in @audio/track-nodes [(keyword track) :gain-node]))
+                 :audioTime  (fn [] (.-currentTime (audio/get-ctx)))
                  :selection  (fn [] (clj->js @outline-panel/selection))
                  :trackParam (fn [track param]
                                (inspector/track-param (keyword track) (keyword param)))
@@ -356,8 +366,7 @@
     (reset! session/project-fn buffers/current-project)
 
     ;; Phase SK2: eval history + snapshots (IndexedDB, in-memory fallback)
-    (history-panel/init! {:set-output!        set-output!
-                          :set-pending-mutes! #(reset! eo/pending-mutes %)})
+    (history-panel/init! {:set-output! set-output!})
     (history-idb/open!
       (fn [idb]
         (when-not idb
@@ -374,14 +383,10 @@
         ;; Re-fetch external github sample sources asynchronously
         (doseq [{:keys [type id]} (or (:sources active-sess) [])]
           (when (and id (= "github" (str type)))
-            (samples/load-external! (str "github:" id))))
-        ;; Store mutes for application after the user's first eval creates tracks.
-        ;; FX params are intentionally NOT restored from localStorage — the buffer's
-        ;; source code is the sole source of truth for which effects are active.
-        (js/setTimeout
-          (fn []
-            (reset! eo/pending-mutes (set (map keyword (or (:muted active-sess) [])))))
-          500))
+            (samples/load-external! (str "github:" id)))))
+        ;; FX params and mutes are intentionally NOT restored as hidden state —
+        ;; the buffer's source code is the sole source of truth (mutes were
+        ;; migrated into :mute flags above, Phase WS5).
 
       ;; ── First visit / after (reset!) ─────────────────────────────────────
       (first-visit/first-visit-setup! editor/editor-view set-output!)))

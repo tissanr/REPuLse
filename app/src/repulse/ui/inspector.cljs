@@ -166,11 +166,21 @@
     (str "<span class=\"ins-jump\" data-act=\"jump\" data-from=\"" from "\""
          " title=\"Go to code  F12\">↗ L" (line-of from) "</span>")))
 
-(defn- ms-html [tname {:keys [muted? solo?]}]
-  (str "<button class=\"ins-ms ins-m" (when muted? " on") "\" data-act=\"mute\""
-       " data-track=\"" (escape-html tname) "\" title=\"mute\">M</button>"
-       "<button class=\"ins-ms ins-s" (when solo? " on") "\" data-act=\"solo\""
-       " data-track=\"" (escape-html tname) "\" title=\"solo\">S</button>"))
+(def anon-flag-tooltip
+  "Phase WS5: the anonymous :_ track has no form to put :mute / :solo on."
+  "name the track to mute it: (track :name …)")
+
+(defn- ms-html
+  "M/S buttons. They edit the code: M toggles :mute, S toggles :solo on the
+   track's form (Phase WS5); disabled for the anonymous :_ track."
+  [tname {:keys [muted? solo?]}]
+  (if (= "_" tname)
+    (str "<button class=\"ins-ms ins-m\" disabled title=\"" (escape-html anon-flag-tooltip) "\">M</button>"
+         "<button class=\"ins-ms ins-s\" disabled title=\"" (escape-html anon-flag-tooltip) "\">S</button>")
+    (str "<button class=\"ins-ms ins-m" (when muted? " on") "\" data-act=\"mute\""
+         " data-track=\"" (escape-html tname) "\" title=\"mute — writes :mute into the code\">M</button>"
+         "<button class=\"ins-ms ins-s" (when solo? " on") "\" data-act=\"solo\""
+         " data-track=\"" (escape-html tname) "\" title=\"solo — writes :solo into the code\">S</button>")))
 
 (defn- label [s] (str "<div class=\"ins-lbl\">" s "</div>"))
 
@@ -210,11 +220,12 @@
         kw     (keyword tname)
         tracks (:tracks state)
         pat    (get tracks kw)
-        flags  (im/track-flags (keys tracks) (:muted state) kw)
-        resting (when-not (or (:muted? flags) (:solo? flags))
+        flags  (im/track-flags @eo/declared-flags (:muted state) kw)
+        resting (when-not (or (:muted? flags) (:solo? flags) (:silenced? flags))
                   (stm/inactive-section state kw))
-        status (cond (:muted? flags) "muted"
-                     (:solo? flags)  "solo"
+        status (cond (:muted? flags)    "muted"
+                     (:solo? flags)     "solo"
+                     (:silenced? flags) "muted by solo"
                      resting         (str "rests in :" (name resting))
                      :else           "live")
         tnames (mapv :name (filter #(= :track (:kind %)) @outline-panel/entries))]
@@ -265,7 +276,7 @@
         tnames  (mapv :name tentries)
         tracks  (im/section-tracks entry tentries)
         muted   (:muted state)
-        tkeys   (keys (:tracks state))]
+        declared @eo/declared-flags]
     (str "<div class=\"ins-blk\">"
          "<div class=\"ins-secrow\"><span>" (if bars (str (slm/fmt-pv bars) " bars") "? bars") "</span>"
          "<span class=\"ins-spacer\"></span>"
@@ -291,10 +302,10 @@
          (apply str
            (map (fn [tn]
                   (let [kw    (track-kw tn)
-                        flags (im/track-flags tkeys muted kw)
+                        flags (im/track-flags declared muted kw)
                         amp   (:amp (live-track-params kw))
                         tname (name kw)]
-                    (str "<div class=\"ins-sectrack" (when (:muted? flags) " muted") "\">"
+                    (str "<div class=\"ins-sectrack" (when (contains? muted kw) " muted") "\">"
                          "<div class=\"ins-thead\">"
                          "<span class=\"ins-dot\" style=\"background:" (track-color tnames tn) "\"></span>"
                          "<span class=\"ins-tname2\">" (escape-html tn) "</span>"
@@ -543,23 +554,25 @@
 
 ;;; Buttons
 
-(defn- run-action! [[op kw]]
+(defn- run-action!
+  "Phase WS5: the buttons edit the code (one undo step each)."
+  [[op kw flag on?]]
   (case op
-    :mute       (audio/mute-track! kw)
-    :unmute     (audio/unmute-track! kw)
-    :solo       (audio/solo-track! kw)
-    :unmute-all (doseq [m (:muted @audio/scheduler-state)] (audio/unmute-track! m))))
+    :flag (eo/track-flag-patch-and-eval! kw flag on?)))
 
 (defn- on-click [^js e]
   (let [t      (.-target e)
         act-el (.closest t "[data-act]")
         act    (when act-el (.getAttribute act-el "data-act"))
-        state  @audio/scheduler-state]
+        flags  (fn [kw] (im/track-flags @eo/declared-flags
+                                        (:muted @audio/scheduler-state) kw))]
     (case act
       "mute"  (let [kw (keyword (.getAttribute act-el "data-track"))]
-                (run-action! (im/mute-action (:muted state) kw)))
+                (run-action! (im/mute-action (flags kw) kw))
+                (schedule-render!))
       "solo"  (let [kw (keyword (.getAttribute act-el "data-track"))]
-                (run-action! (im/solo-action (keys (:tracks state)) (:muted state) kw)))
+                (run-action! (im/solo-action (flags kw) kw))
+                (schedule-render!))
       "cue"   (when-let [b (.getAttribute act-el "data-bar")]
                 (song-transport/cue-bar! (js/parseInt b 10)))
       "jump"  (when-let [view @editor/editor-view]

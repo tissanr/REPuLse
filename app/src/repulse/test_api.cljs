@@ -8,7 +8,8 @@
             [repulse.samples :as samples]
             [repulse.song :as song]
             [repulse.song-transport :as song-transport]
-            [repulse.env.builtins.song :as b-song]))
+            [repulse.env.builtins.song :as b-song]
+            [repulse.tracks-model :as tracks-model]))
 
 (def ^:private default-sample-rate 44100)
 (def ^:private default-cycle-dur 2.0)
@@ -180,11 +181,13 @@
    bpm-fn — (bpm …) handler: a no-op for songEvents, audio/set-bpm! for captures."
   [bpm-fn]
   (merge (leval/make-env (fn [] nil) bpm-fn)
-         {"track" (fn [n p]
-                    (let [name' (leval/unwrap n) pat' (leval/unwrap p)]
+         {"track" (fn [n p & flag-args]
+                    (let [name' (leval/unwrap n) pat' (leval/unwrap p)
+                          flags (tracks-model/parse-flags (mapv leval/unwrap flag-args))]
+                      (when-let [msg (:error flags)] (throw (js/Error. msg)))
                       (when-not (core/pattern? pat')
                         (throw (js/Error. "second argument to track must be a pattern")))
-                      (song-transport/collect-track! name' pat' (leval/source-of n))
+                      (song-transport/collect-track! name' pat' (leval/source-of n) flags)
                       (str "=> track :" (name name') " playing")))}
          (b-song/make-builtins {})))
 
@@ -207,14 +210,16 @@
 (defn- song-events
   "Onsets the scheduler would play for song bars [from-bar, to-bar), as
    [{track value wholeStart wholeEnd}] sorted by wholeStart then track; rests dropped.
-   opts.muted — array of \":kick\"-style track names."
+   opts.muted — array of \":kick\"-style track names, on top of the muted set
+   derived from the tracks' :mute / :solo flags (Phase WS5)."
   ([code from-bar to-bar] (song-events code from-bar to-bar nil))
   ([code from-bar to-bar opts]
    (eval-song-code code (fn [_] nil))
    (let [s      @song-transport/pending-song
          tracks (into {} @song-transport/pending-tracks)
          o      (js->clj (or opts #js {}) :keywordize-keys true)
-         muted  (set (map #(keyword (subs % 1)) (:muted o)))
+         muted  (into (tracks-model/muted-set (vec @song-transport/pending-track-flags))
+                      (map #(keyword (subs % 1)) (:muted o)))
          evs    (for [bar (range (int from-bar) (int to-bar))
                       {:keys [track event]} (song/song-onsets s tracks muted bar)
                       :when (not (rest-value? (:value event)))]

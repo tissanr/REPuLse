@@ -178,8 +178,12 @@
   "Create the main multi-line CodeMirror editor.
    container     — DOM element to mount into.
    initial-value — initial text content.
-   on-eval       — fn called with code string on Alt+Enter / F9 / Ctrl+."
-  [container initial-value on-eval]
-  (make-view container
-             (make-state initial-value
-                         (editor-extensions on-eval #(on-eval "(upd)")))))
+   on-eval       — fn called with code string on Alt+Enter / F9 / Ctrl+.
+   on-upd        — optional fn of no args for F9 / Ctrl+. (default: on-eval
+                   with \"(upd)\")."
+  ([container initial-value on-eval]
+   (make-editor container initial-value on-eval #(on-eval "(upd)")))
+  ([container initial-value on-eval on-upd]
+   (make-view container
+              (make-state initial-value
+                          (editor-extensions on-eval on-upd)))))

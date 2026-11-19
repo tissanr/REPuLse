@@ -10,7 +10,8 @@
             [repulse.lisp.eval :as leval]
             [repulse.preview-track :as preview-track]
             [repulse.samples :as samples]
-            [repulse.synth :as synth]))
+            [repulse.synth :as synth]
+            [repulse.tracks-model :as tracks-model]))
 
 (defn- ->num [x]
   (let [v (leval/unwrap x)]
@@ -102,17 +103,23 @@
     (assoc env
            :*register-synth-fn* synth/register-synth!
            "track"
-           (fn [track-name pat]
+           ;; WS5: trailing :mute / :solo flags are accepted; a :mute track
+           ;; is not previewed, :solo is ignored (previews loop every track).
+           (fn [track-name pat & flag-args]
              (let [name'         (leval/unwrap track-name)
                    pat'          (leval/unwrap pat)
-                   preview-name  (preview-track/preview-track-name name')]
-               (if (core/pattern? pat')
+                   preview-name  (preview-track/preview-track-name name')
+                   flags         (tracks-model/parse-flags (mapv leval/unwrap flag-args))]
+               (cond
+                 (:error flags) (str "Error: " (:error flags))
+                 (:mute? flags) (str "=> preview :" (name name') " muted")
+                 (core/pattern? pat')
                  (do
                    (on-track preview-name)
                    (audio/play-track! preview-name pat' nil nil)
                    (fx/apply-track-effects! preview-name (:track-fx pat'))
                    (str "=> preview :" (name name') " playing"))
-                 "Error: second argument to track must be a pattern")))
+                 :else "Error: second argument to track must be a pattern")))
            "fx" sandbox-fx
            ;; SONG1: previews play every track looping; the song form is ignored
            "song" (fn [& _] "preview: song form ignored — tracks loop")

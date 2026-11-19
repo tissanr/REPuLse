@@ -1,15 +1,17 @@
 (ns repulse.eval-orchestrator
   "Evaluation entry point, diagnostics, and live slider patching.
-   Responsibility: own evaluate!, set-diagnostics!, pending-mutes, and all
-   editor code-patching logic for slider updates.
-   Exports: evaluate!, evaluate-project!, evaluate-in-context!, set-diagnostics!,
-            pending-mutes,
+   Responsibility: own evaluate!, set-diagnostics!, track reconciliation
+   (Phase WS5) and all editor code-patching logic for slider updates.
+   Exports: evaluate!, evaluate-project!, evaluate-whole!, evaluate-in-context!,
+            set-diagnostics!, declared-flags, track-flag-patch-and-eval!,
             slider-patch-and-eval!, fx-slider-patch-and-eval!,
             fx-select-patch-and-eval!, per-track-fx-slider-patch-and-eval!,
             per-track-fx-select-patch-and-eval!,
             begin-slider-drag!, end-slider-drag! (WS1: one undo step per drag),
             inline-slider-patch-and-eval! (WS3: inline (slider …) widget drags)"
   (:require [repulse.lisp.core :as lisp]
+            [repulse.lisp.reader :as reader]
+            [repulse.lisp.eval :as leval]
             [repulse.core :as core]
             [repulse.audio :as audio]
             [repulse.samples :as samples]
@@ -19,6 +21,8 @@
             [repulse.fx :as fx]
             [repulse.env.builtins :as builtins]
             [repulse.env.builtins.fx :as b-fx]
+            [repulse.env.builtins.tracks :as b-tracks]
+            [repulse.tracks-model :as tracks-model]
             [repulse.song :as song]
             [repulse.song-transport :as song-transport]
             [repulse.project :as project]
@@ -37,8 +41,10 @@
 
 ;;; Owned atoms
 
-;; Muted tracks restored from localStorage — applied after the first eval creates tracks.
-(defonce pending-mutes (atom #{}))
+;; Phase WS5: {track-kw {:mute? :solo?}} declared by the last reconciling
+;; evaluation (:_ included, unflagged). The inspector reads its M/S state from
+;; here — it is the code's view, never a second store.
+(defonce declared-flags (atom {}))
 
 (defonce ^:private slider-timeout (atom nil))
 
@@ -79,6 +85,8 @@
       (b-fx/reset-master-run!)
       (reset! builtins/eval-warnings []))))
 
+(declare track-flag-patch-and-eval!)
+
 (defn init!
   "Wire app-level callback fns into this module.
    Must be called during app init before the first evaluation.
@@ -90,6 +98,8 @@
                :set-output!  set-output!-fn})
   ;; Wire the silent eval function for the AI agent eval_preview tool.
   (reset! ai-tools/eval-preview-fn evaluate-in-context!)
+  ;; WS5: mute!/unmute!/solo! from the command bar patch the code.
+  (reset! b-tracks/flag-edit-ref (fn [k flag on?] (track-flag-patch-and-eval! k flag on?)))
   ;; A finished (song … :end :stop) stops itself — reflect that in the UI.
   (swap! audio/scheduler-state assoc :on-song-end
          (fn []
@@ -255,7 +265,30 @@
           (set-diagnostics! view from to msg))
         (set-output! (str "Error: " msg) :error)))))
 
-(defn- evaluate* [code {:keys [project]}]
+(defn- def-final?
+  "True when the last top-level form of code is a (def …): its value is a
+   binding, not something to play (Phase WS5 — a buffer of only defs plays
+   nothing)."
+  [code]
+  (try
+    (let [form (last (reader/read-all (or code "")))]
+      (and (seq? form)
+           (= "def" (str (leval/unwrap (first form))))))
+    (catch :default _ false)))
+
+(defn- reconcile!
+  "Phase WS5: make the scheduler match the declared tracks
+   [[kw {:mute? :solo?}] …] — retire every other (non-preview) track and
+   rebuild the muted set from the flags. Returns true when nothing is declared."
+  [declared]
+  (let [{:keys [retire]} (tracks-model/plan (set (keys (:tracks @audio/scheduler-state)))
+                                            (set (map first declared)))]
+    (doseq [k retire] (audio/retire-track! k))
+    (swap! audio/scheduler-state assoc :muted (tracks-model/muted-set declared))
+    (reset! declared-flags (into {} declared))
+    (empty? declared)))
+
+(defn- evaluate* [code {:keys [project reconcile?]}]
   (let [{:keys [on-beat make-stop-fn set-playing!]} @cbs
         ;; Remember the last output message so an unknown-sound warning can be
         ;; appended to it rather than replacing it.
@@ -281,19 +314,31 @@
           defs-before (some-> (:*defs* env) deref)
           ;; Project mode (Phase SONG4): evaluate from the main buffer with
           ;; `use` enabled; every source position is global (offset per buffer).
+          ;; WS5: mute!/unmute!/solo! refuse to run inside a reconciling eval.
           {result :value bases :bases}
-          (if project
-            (project-eval/run-project project env)
-            {:value (lisp/eval-string code env)})
+          (do (reset! b-tracks/reconciling? (boolean reconcile?))
+              (try
+                (if project
+                  (project-eval/run-project project env)
+                  {:value (lisp/eval-string code env)})
+                (finally (reset! b-tracks/reconciling? false))))
           on-event (if project (project-highlighter bases) editor/highlight-range!)]
       (if (lisp/eval-error? result)
+        ;; WS5 decision 3: an error retires nothing and changes no mute state.
         (do (report-eval-error! result project set-output!)
             {:ok? false :error (:message result)})
         (let [slider-diags (slider-warning-diags @builtins/eval-warnings project bases)
               run-song @song-transport/pending-song
               ;; WS2: `(song …)` followed by `(master …)` still reports the song.
               val      (let [v (:result result)]
-                         (if (and run-song (b-fx/master-result? v)) run-song v))]
+                         (cond
+                           (and run-song (b-fx/master-result? v)) run-song
+                           ;; WS5: a trailing (def …) binds, it doesn't play
+                           (and reconcile? (core/pattern? v)
+                                (def-final? (if project (project/code-of project (:main project)) code)))
+                           nil
+                           :else v))
+              underscore? (volatile! false)]
           (when project (reset! last-bases bases))
           ;; Clear stale diagnostics only when there is a real result.
           ;; A nil val means the command handled output itself (e.g. (upd), (stop))
@@ -305,92 +350,92 @@
                 (set-diagnostics! view nil nil nil))))
           ;; SONG1: start the tracks collected during evaluation (under the
           ;; buffer's song, if any), then apply (play-from …) / (export :song).
-          ;; Runs before the cond so a buffer ending in a bare pattern still
-          ;; replaces all tracks with :_ exactly as before.
-          (song-transport/activate-buffer! {:on-beat      on-beat
-                                            :on-event     on-event
-                                            :set-playing! set-playing!})
-          (cond
-            ;; Song value — tracks were activated under it above
-            (song/song? val)
-            (set-output! (str "song: " (count (:sections val)) " sections · "
-                              (song/song-length val) " bars · "
-                              (.toFixed (song/song-duration-secs val (audio/get-bpm)) 1)
-                              " s at " (Math/round (audio/get-bpm)) " BPM"
-                              (let [cnt (fn [k] (reduce + (map (comp count k) (:sections val))))
-                                    pl  (fn [n w] (when (pos? n) (str " · " n " " w (when (> n 1) "s"))))]
-                                (str (pl (cnt :automations) "automation")
-                                     (pl (cnt :fills) "fill")))
-                              " · :end :"
-                              (name (:end val)))
-                         :success)
+          ;; WS5: returns the declared tracks with their :mute/:solo flags.
+          (let [activated (song-transport/activate-buffer! {:on-beat      on-beat
+                                                            :on-event     on-event
+                                                            :set-playing! set-playing!})]
+            (cond
+              ;; Song value — tracks were activated under it above
+              (song/song? val)
+              (set-output! (str "song: " (count (:sections val)) " sections · "
+                                (song/song-length val) " bars · "
+                                (.toFixed (song/song-duration-secs val (audio/get-bpm)) 1)
+                                " s at " (Math/round (audio/get-bpm)) " BPM"
+                                (let [cnt (fn [k] (reduce + (map (comp count k) (:sections val))))
+                                      pl  (fn [n w] (when (pos? n) (str " · " n " " w (when (> n 1) "s"))))]
+                                  (str (pl (cnt :automations) "automation")
+                                       (pl (cnt :fills) "fill")))
+                                " · :end :"
+                                (name (:end val)))
+                           :success)
 
-            ;; Pattern — start playing (legacy single-pattern mode).
-            ;; Uses play-track! on the anonymous :_ track so that :track-fx
-            ;; metadata (from per-track fx calls in ->>) is applied correctly.
-            ;; audio/start! did not create a track node, so output-for-track
-            ;; always fell back to master-gain and FX were silently skipped.
-            (core/pattern? val)
-            (do
-              (audio/stop!)
-              (editor/clear-highlights!)
-              (audio/play-track! :_ val on-beat on-event)
-              (fx/apply-track-effects! :_ (:track-fx val))
-              (set-playing! true)
-              (set-output! "playing pattern — Alt+Enter to re-evaluate, (stop) to stop" :success))
+              ;; Pattern — the anonymous :_ track (legacy single-pattern mode).
+              ;; WS5 decision 4: no stop! — :_ is hot-swapped in place next to
+              ;; the named tracks, keeping the cycle position. play-track!
+              ;; creates the track node so :track-fx (per-track fx in ->>) apply.
+              (core/pattern? val)
+              (do
+                ;; replaces stop!'s old job of leaving song mode
+                (when-not run-song (audio/clear-song!))
+                (audio/play-track! :_ val on-beat on-event)
+                (fx/apply-track-effects! :_ (:track-fx val))
+                (vreset! underscore? true)
+                (set-playing! true)
+                (set-output! "playing pattern — Alt+Enter to re-evaluate, (stop) to stop" :success))
 
-            ;; Plain event-value map: (sound :tabla 0), (noise), (fm :c4), etc.
-            ;; Auto-wrap in pure so users don't need to write (pure (fm :c4)).
-            (and (map? val) (or (:note val) (:bank val) (:synth val)))
-            (do
-              (audio/stop!)
-              (editor/clear-highlights!)
-              (audio/play-track! :_ (core/pure val) on-beat on-event)
-              (set-playing! true)
-              (set-output! "playing — Alt+Enter to re-evaluate, (stop) to stop" :success))
+              ;; Plain event-value map: (sound :tabla 0), (noise), (fm :c4), etc.
+              ;; Auto-wrap in pure so users don't need to write (pure (fm :c4)).
+              (and (map? val) (or (:note val) (:bank val) (:synth val)))
+              (do
+                (when-not run-song (audio/clear-song!))
+                (audio/play-track! :_ (core/pure val) on-beat on-event)
+                (vreset! underscore? true)
+                (set-playing! true)
+                (set-output! "playing — Alt+Enter to re-evaluate, (stop) to stop" :success))
 
-            ;; stop fn was called directly — handled inside stop fn
-            (nil? val)
-            nil
+              ;; stop fn was called directly — handled inside stop fn
+              (nil? val)
+              nil
 
-            ;; Pre-formatted string (e.g. sample-banks, track ops) — display as-is
-            (string? val)
-            (set-output! val :success)
+              ;; Pre-formatted string (e.g. sample-banks, track ops) — display as-is
+              (string? val)
+              (set-output! val :success)
 
-            :else
-            (set-output! (str "=> " (pr-str val)) :success))
+              :else
+              (set-output! (str "=> " (pr-str val)) :success))
 
-          ;; WS2: one-time console hint for master + top-level (fx …)
-          (b-fx/loose-fx-hint!)
+            ;; WS2: one-time console hint for master + top-level (fx …)
+            (b-fx/loose-fx-hint!)
 
-          ;; WS3: clamped (slider …) values
-          (report-slider-warnings! slider-diags last-output set-output!)
+            ;; WS3: clamped (slider …) values
+            (report-slider-warnings! slider-diags last-output set-output!)
 
-          ;; ── Legacy :_ track hot-swap ──────────────────────────────────────
-          ;; When the last form is not a pattern (e.g. (defsynth lfo ...) follows
-          ;; (def bass ...)), the scheduler's :_ track is never updated because
-          ;; no play-track! call is made.  After evaluation, if :_ is active and
-          ;; this evaluation (re)defined exactly one pattern, update :_ with it
-          ;; so slider changes and re-evaluations are reflected immediately.
-          ;; Only defs bound by *this* evaluation count: *defs* outlives the
-          ;; buffer, so a stale def from an earlier buffer must not replace the
-          ;; playing pattern when the command bar evaluates e.g. a number.
-          (when (and (not (core/pattern? val))
-                     (contains? (:tracks @audio/scheduler-state) :_))
-            (when-let [pat (song-transport/hot-swap-def
-                            defs-before (some-> (:*defs* env) deref))]
-              (audio/play-track! :_ pat on-beat on-event)
-              (fx/apply-track-effects! :_ (:track-fx pat))))
+            ;; ── Legacy :_ track hot-swap ──────────────────────────────────────
+            ;; When the last form is not a pattern (e.g. (defsynth lfo ...) follows
+            ;; (def bass ...)), the scheduler's :_ track is never updated because
+            ;; no play-track! call is made.  After evaluation, if :_ is active and
+            ;; this evaluation (re)defined exactly one pattern, update :_ with it
+            ;; so slider changes and re-evaluations are reflected immediately.
+            ;; Only defs bound by *this* evaluation count: *defs* outlives the
+            ;; buffer, so a stale def from an earlier buffer must not replace the
+            ;; playing pattern when the command bar evaluates e.g. a number.
+            (when (and (not (core/pattern? val))
+                       (contains? (:tracks @audio/scheduler-state) :_))
+              (when-let [pat (song-transport/hot-swap-def
+                              defs-before (some-> (:*defs* env) deref))]
+                (audio/play-track! :_ pat on-beat on-event)
+                (fx/apply-track-effects! :_ (:track-fx pat))
+                (vreset! underscore? true)))
 
-          ;; ── Apply restored mutes after first eval ─────────────────────────
-          ;; pending-mutes is populated during session restore; applied once tracks exist.
-          (when (seq @pending-mutes)
-            (let [tracks (set (keys (:tracks @audio/scheduler-state)))]
-              (when (seq tracks)
-                (doseq [tk @pending-mutes]
-                  (when (contains? tracks tk)
-                    (audio/mute-track! tk)))
-                (reset! pending-mutes #{}))))
+            ;; ── Reconciliation (Phase WS5) ────────────────────────────────────
+            ;; What plays is exactly what the code declares.
+            (when reconcile?
+              (let [declared (cond-> activated
+                               @underscore? (conj [:_ {:mute? false :solo? false}]))]
+                (when (reconcile! declared)
+                  (set-playing! false)
+                  (when-not (string? val)
+                    (set-output! "nothing to play" :success))))))
 
           ;; ── Continuous signals with no rhythm ─────────────────────────────
           (report-structureless-signals! (sort (conj @builtins/seen-tracks :_))
@@ -413,19 +458,28 @@
 
 (defn evaluate!
   "Evaluate a single code string (command bar, (upd), tap, demos, …).
-   Not recorded in the eval history (Phase SK2, K1)."
+   Not recorded in the eval history (Phase SK2, K1). Never reconciles: one-off
+   commands must not tear down the running set (Phase WS5)."
   [code]
   (evaluate* code nil)
+  nil)
+
+(defn evaluate-whole!
+  "Evaluate a whole single-buffer program and reconcile the tracks to it
+   (Phase WS5) — the embed editor's Alt+Enter / play."
+  [code]
+  (evaluate* code {:reconcile? true})
   nil)
 
 (defn evaluate-project!
   "Evaluate the whole project starting from its main buffer (Alt+Enter, play
    button, slider re-evaluation) — Phase SONG4. Records the result in the eval
-   history unless :record? is false (Phase SK2; slider re-evals pass false)."
+   history unless :record? is false (Phase SK2; slider re-evals pass false).
+   Reconciles the scheduled tracks to the code (Phase WS5)."
   ([] (evaluate-project! {:record? true}))
   ([{:keys [record?]}]
    (let [p (buffers/current-project)
-         r (evaluate* (project/code-of p (:main p)) {:project p})]
+         r (evaluate* (project/code-of p (:main p)) {:project p :reconcile? true})]
      (when record?
        (history-store/record-eval! (session/build-session-snapshot)
                                    (:ok? r) (:error r)))
@@ -610,3 +664,43 @@
         (when (not= text (:text value))
           (dispatch-replace! view (:from value) (:to value) text)
           (schedule-slider-eval!))))))
+
+;;; Track flags in the code (Phase WS5)
+
+(defn- flag-target
+  "{:buffer name-or-nil :code str} of the buffer holding `(track :name …)`, or
+   nil. Without a project (embed) the editor's own doc is searched."
+  [track-kw]
+  (if (buffers/active-name)
+    (some (fn [{:keys [name code]}]
+            (when (patcher/find-track-form code track-kw)
+              {:buffer name :code code}))
+          (:buffers (buffers/current-project)))
+    (when-let [view @editor/editor-view]
+      (let [code (.. view -state -doc (toString))]
+        (when (patcher/find-track-form code track-kw)
+          {:buffer nil :code code})))))
+
+(defn track-flag-patch-and-eval!
+  "Phase WS5: set (on? true) or remove the :mute / :solo flag on the
+   `(track :name …)` form, in whichever buffer holds it. The predicted muted
+   set is applied at once (the click is heard immediately), the form is
+   patched as one undo step, then the debounced re-evaluation reconciles to
+   the same state. Returns false when no such form exists."
+  [track-kw flag on?]
+  (if-let [{:keys [buffer code]} (flag-target track-kw)]
+    (do
+      (when-let [{:keys [from to insert]} (patcher/track-flag-edit code track-kw flag on?)]
+        (let [fk        ({:mute :mute? :solo :solo?} flag)
+              predicted (assoc-in (merge {track-kw {:mute? false :solo? false}} @declared-flags)
+                                  [track-kw fk] (boolean on?))
+              spec      #js {:changes     #js {:from from :to to :insert insert}
+                             :annotations #js [(.of isolateHistory "full")]}]
+          (reset! declared-flags predicted)
+          (swap! audio/scheduler-state assoc :muted (tracks-model/muted-set (vec predicted)))
+          (if buffer
+            (buffers/dispatch-in! buffer spec)
+            (when-let [view @editor/editor-view] (.dispatch view spec)))
+          (schedule-slider-eval!)))
+      true)
+    false))

@@ -26,15 +26,19 @@
          (:selects (first (im/fx-rows [{:name "cab" :params {"mix" 1 "ir" "4x12"}}]))))))
 
 (deftest track-flags-test
-  (is (= {:muted? false :solo? true} (im/track-flags [:drums :bass] #{:bass} :drums)))
-  (is (= {:muted? true :solo? false} (im/track-flags [:drums :bass] #{:bass} :bass)))
-  (is (= {:muted? false :solo? false} (im/track-flags [:drums] #{} :drums))))
+  ;; Phase WS5: flags come from the code (declared), not from the muted set
+  (let [d {:drums {:mute? false :solo? true} :bass {:mute? false :solo? false}
+           :keys {:mute? true :solo? false}}]
+    (is (= {:muted? false :solo? true :silenced? false} (im/track-flags d #{:bass :keys} :drums)))
+    (is (= {:muted? false :solo? false :silenced? true} (im/track-flags d #{:bass :keys} :bass)))
+    (is (= {:muted? true :solo? false :silenced? false} (im/track-flags d #{:bass :keys} :keys)))
+    (is (= {:muted? false :solo? false :silenced? false} (im/track-flags {} #{} :drums)))))
 
 (deftest actions-test
-  (is (= [:unmute :bass] (im/mute-action #{:bass} :bass)))
-  (is (= [:mute :bass] (im/mute-action #{} :bass)))
-  (is (= [:solo :drums] (im/solo-action [:drums :bass :keys] #{} :drums)))
-  (is (= [:unmute-all] (im/solo-action [:drums :bass :keys] #{:bass :keys} :drums))))
+  (is (= [:flag :bass :mute false] (im/mute-action {:muted? true} :bass)))
+  (is (= [:flag :bass :mute true] (im/mute-action {:muted? false} :bass)))
+  (is (= [:flag :drums :solo true] (im/solo-action {:solo? false} :drums)))
+  (is (= [:flag :drums :solo false] (im/solo-action {:solo? true} :drums))))
 
 (deftest section-tracks-test
   (is (= [":drums" ":bass"]

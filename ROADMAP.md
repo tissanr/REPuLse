@@ -1,5 +1,24 @@
 # REPuLse — Roadmap
 
+## Where we stand (updated 2026-11-19)
+
+| Milestone | Delivered | Still open |
+|---|---|---|
+| **M1** Tidal-Lisp core | 10 / 14 | TL7c, KIT1, SYN6, FX1 — all 🤖👂, need a human listen |
+| **M2** Full songs | 8 / 9 | WS5 |
+| **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
+| **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
+
+- **Next for the unattended pipeline:** WS5 — the last open 🤖 phase. After it, every
+  remaining phase on the critical path needs a human (🤖👂 or 🧑).
+- **Next for a human session:** TL7c (spec is an outline, expand first), then KIT1,
+  SYN6, FX1; N1 opens M3.
+- **Side track open:** DOC1, TEST2, UI1, R3, PLUG1, O2, PL1.
+
+The *Status* column in the [implementation order](#implementation-order) table shows
+every phase at a glance. Keep this box and that column current whenever a phase is
+delivered or added.
+
 ## Direction & milestones (from 2026-10-26)
 
 REPuLse is a **Tidal-style Lisp** for writing **full songs in code**, which can also
@@ -34,46 +53,46 @@ without a human:
 
 ### Implementation order
 
-| # | Phase | Title | Marker | Spec | Build model |
-|---|---|---|---|---|---|
-| **Tooling** | | **Test coverage (no milestone, runs first)** | | | |
-| 0 | TEST3 | Release-protocol automation: UI workflows & measured sound | 🤖 | full | sonnet |
-| **M1** | | **Tidal-Lisp core** | | | |
-| 1 | TL1 | Patterned arguments & pattern arithmetic | 🤖 | full | opus |
-| 2 | TL2 | Continuous signals | 🤖 | full | sonnet |
-| 3 | TL3 | Time & structure combinators | 🤖 | full | sonnet |
-| 4 | TL3b | Zoom, compress & structure extras | 🤖 | full | sonnet |
-| 5 | TL4 | Randomness & conditionals | 🤖 | full | sonnet |
-| 6 | TL5 | Layering, pitch & harmony | 🤖 | full | sonnet |
-| 6a | TL4b | Pick & fix | 🤖 | full | sonnet |
-| 7 | TL6 | Sample slicing & playback control | 🤖👂 | full | opus |
-| 8 | TL7a | Per-event filters, shape & crush | 🤖👂 | full | opus |
-| 8b | TL7b | Reverb & delay sends per orbit | 🤖👂 | full | opus |
-| 8c | TL7c | Vowel, envelopes & modulators | 🤖👂 | outline | opus |
-| 9 | KIT1 | High-quality drum kits | 🤖👂 | outline | sonnet |
-| 9a | SYN6 | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | full | opus |
-| 9b | FX1 | Mixing, space & modulation effects | 🤖👂 | full | sonnet |
-| **M2** | | **Full songs** | | | |
-| 10 | SONG1 | Sections, song form & full-song render | 🤖 | full | opus |
-| 11 | SONG2 | Song-time automation & transitions | 🤖 | full | sonnet |
-| 12 | SONG3 | Editor navigation: outline & go-to-definition | 🤖 | full | sonnet |
-| 13 | SONG4 | Multi-buffer projects | 🤖 | full | opus |
-| 13a | WS1 | Inspector column & status head (retire context panel) | 🤖 | full | opus |
-| 13b | WS2 | `(master …)` form & master fx outline group | 🤖 | full | sonnet |
-| 13c | WS3 | Inline sliders in code: `(slider v min max)` | 🤖 | full | opus |
-| 13d | WS4 | AI assistant rail | 🤖 | outline | sonnet |
-| 13e | WS5 | Code is the source of truth: track reconciliation, `:mute`/`:solo` in code | 🤖 | full | opus |
-| **M3** | | **Plays with others** | | | |
-| 14 | N1 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
-| 15 | LIVE1 | Companion bridge: Ableton Link & OSC | 🧑 | outline | opus |
-| 16 | LIVE2 | Latency compensation, nudge & per-track outputs | 🧑 | outline | sonnet |
-| **M4** | | **Sketchpad** | | | |
-| 17 | EXP1 | Export parity: offline render with WASM voices & FX | 🤖 | outline | opus |
-| 18 | SK1 | Stem export & full-song MIDI export | 🤖 | full | sonnet |
-| 19 | SK2 | Session snapshots & eval history | 🤖 | full | sonnet |
-| 20 | SK3 | MIDI capture 1: click, fixed grid, velocity → code | 🤖👂 | outline | sonnet |
-| 21 | SK4 | MIDI capture 2: always-on capture | 🤖👂 | outline | sonnet |
-| 22 | SK5 | MIDI capture 3: grid & feel detection | 🤖👂 | outline | opus |
+| # | Phase | Status | Title | Marker | Spec | Build model |
+|---|---|---|---|---|---|---|
+| **Tooling** | | | **Test coverage (no milestone, runs first)** | | | |
+| 0 | TEST3 | ✅ | Release-protocol automation: UI workflows & measured sound | 🤖 | full | sonnet |
+| **M1** | | | **Tidal-Lisp core** | | | |
+| 1 | TL1 | ✅ | Patterned arguments & pattern arithmetic | 🤖 | full | opus |
+| 2 | TL2 | ✅ | Continuous signals | 🤖 | full | sonnet |
+| 3 | TL3 | ✅ | Time & structure combinators | 🤖 | full | sonnet |
+| 4 | TL3b | ✅ | Zoom, compress & structure extras | 🤖 | full | sonnet |
+| 5 | TL4 | ✅ | Randomness & conditionals | 🤖 | full | sonnet |
+| 6 | TL5 | ✅ | Layering, pitch & harmony | 🤖 | full | sonnet |
+| 6a | TL4b | ✅ | Pick & fix | 🤖 | full | sonnet |
+| 7 | TL6 | ✅ | Sample slicing & playback control | 🤖👂 | full | opus |
+| 8 | TL7a | ✅ | Per-event filters, shape & crush | 🤖👂 | full | opus |
+| 8b | TL7b | ✅ | Reverb & delay sends per orbit | 🤖👂 | full | opus |
+| 8c | TL7c | 📋 | Vowel, envelopes & modulators | 🤖👂 | outline | opus |
+| 9 | KIT1 | 📋 | High-quality drum kits | 🤖👂 | outline | sonnet |
+| 9a | SYN6 | 📋 | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | full | opus |
+| 9b | FX1 | 📋 | Mixing, space & modulation effects | 🤖👂 | full | sonnet |
+| **M2** | | | **Full songs** | | | |
+| 10 | SONG1 | ✅ | Sections, song form & full-song render | 🤖 | full | opus |
+| 11 | SONG2 | ✅ | Song-time automation & transitions | 🤖 | full | sonnet |
+| 12 | SONG3 | ✅ | Editor navigation: outline & go-to-definition | 🤖 | full | sonnet |
+| 13 | SONG4 | ✅ | Multi-buffer projects | 🤖 | full | opus |
+| 13a | WS1 | ✅ | Inspector column & status head (retire context panel) | 🤖 | full | opus |
+| 13b | WS2 | ✅ | `(master …)` form & master fx outline group | 🤖 | full | sonnet |
+| 13c | WS3 | ✅ | Inline sliders in code: `(slider v min max)` | 🤖 | full | opus |
+| 13d | WS4 | ✅ | AI assistant rail | 🤖 | outline | sonnet |
+| 13e | WS5 | 📋 | Code is the source of truth: track reconciliation, `:mute`/`:solo` in code | 🤖 | full | opus |
+| **M3** | | | **Plays with others** | | | |
+| 14 | N1 | 📋 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
+| 15 | LIVE1 | 📋 | Companion bridge: Ableton Link & OSC | 🧑 | outline | opus |
+| 16 | LIVE2 | 📋 | Latency compensation, nudge & per-track outputs | 🧑 | outline | sonnet |
+| **M4** | | | **Sketchpad** | | | |
+| 17 | EXP1 | ✅ | Export parity: offline render with WASM voices & FX | 🤖 | outline | opus |
+| 18 | SK1 | ✅ | Stem export & full-song MIDI export | 🤖 | full | sonnet |
+| 19 | SK2 | ✅ | Session snapshots & eval history | 🤖 | full | sonnet |
+| 20 | SK3 | 📋 | MIDI capture 1: click, fixed grid, velocity → code | 🤖👂 | outline | sonnet |
+| 21 | SK4 | 📋 | MIDI capture 2: always-on capture | 🤖👂 | outline | sonnet |
+| 22 | SK5 | 📋 | MIDI capture 3: grid & feel detection | 🤖👂 | outline | opus |
 
 **Models.** Expanding an outline into a full spec is always done with **Opus**: it makes
 the design decisions and writes reference test cases. The *Build model* column is the
@@ -2567,7 +2586,7 @@ See full spec: [PROMPTS/PHASE-WS4.md](PROMPTS/PHASE-WS4.md)
 
 ---
 
-## Phase WS5 — Code Is the Source of Truth: Track Reconciliation, `:mute` & `:solo` 📋 *planned*
+## Phase WS5 — Code Is the Source of Truth: Track Reconciliation, `:mute` & `:solo` ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2581,6 +2600,31 @@ and mute/solo live in the code instead of hidden dashboard state.
   `mute!`/`unmute!`/`solo!` patch the code through `lisp-patcher/track-flag-edit`
 - A bare pattern no longer stops the named tracks; it plays as `:_` alongside them
 - Session `:muted` is migrated into `:mute` flags on load and no longer saved; `pending-mutes` removed
+
+**Delivered:**
+- New pure `repulse.tracks-model` (`parse-flags`, `muted-set`, `plan`): `evaluate-project!` and the
+  embed's `evaluate-whole!` pass `:reconcile? true`; after a successful evaluation every scheduled
+  track that is not declared (named tracks across all buffers, plus `:_` for a final bare
+  pattern / event map / legacy hot-swap) is retired, `:__*` preview tracks excepted, and
+  `scheduler-state :muted` is rebuilt from the flags. A declare-nothing buffer (only `def`s,
+  `(bpm …)`, comments; a trailing `(def …)` no longer plays) stops with `nothing to play`.
+  Errors and command-bar / tap / `upd` / snippet evaluations retire nothing.
+- `audio/retire-track!`: leaves `:tracks`/`:muted` at once, ramps the track GainNode to 0
+  (50 ms → 80 ms after the evaluation), then disconnects it and destroys its FX; `play-track!`
+  inside the ramp revives it; `stop!` once nothing is left. A bare pattern no longer calls
+  `stop!` — `:_` plays next to the named tracks and the cycle keeps running.
+- `(track :name pat & flags)` with `:mute` / `:solo` (fuzzy `did you mean :mute?`, underlined);
+  inspector M/S, the track-panel buttons and command-bar `mute!`/`unmute!`/`solo!` patch the code
+  through `lisp-patcher/track-flag-edit` (any buffer, one undo step) via
+  `eval-orchestrator/track-flag-patch-and-eval!`; in the buffer the commands are eval errors.
+  `:_` buttons are disabled. `audio/mute-track!`/`unmute-track!`/`solo-track!` are removed.
+- Sessions, `#v3:` links, snapshots and history no longer store `:muted`;
+  `session/migrate-muted` writes a legacy list into `:mute` flags on load/restore.
+  `pending-mutes` / `:set-pending-mutes!` are gone; history blobs hash differently from before.
+- Tests: `tracks-model-test`, `track-flag-edit` / `find-track-form` and `migrate-muted` cases,
+  updated `history_test` canonical text, `inspector-model` flags; `e2e/code-truth.spec.ts`
+  (15 real-app tests incl. the gain-ramp and project-mode checks). Docs: USAGE "What plays is
+  what the code says", "Mute and solo live in the code", README feature line.
 
 See full spec: [PROMPTS/PHASE-WS5.md](PROMPTS/PHASE-WS5.md)
 
