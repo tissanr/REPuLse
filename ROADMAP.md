@@ -2189,7 +2189,7 @@ See full spec: [PROMPTS/PHASE-TL6.md](PROMPTS/PHASE-TL6.md)
 
 ---
 
-## Phase TL7a — Per-Event Filters, Shape & Crush 📋 *planned*
+## Phase TL7a — Per-Event Filters, Shape & Crush ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
@@ -2215,13 +2215,13 @@ by signals. First of three phases split from TL7 (2026-11-10).
 - Tests: Rust Goertzel tests (lpf/hpf/bpf/crush/shape, parity reference), `inserts_test`,
   `params_test`, `e2e/per-event-inserts.spec.ts` (filter, sweep, gain/velocity, sample lpf,
   shape, crush, node-count spy, JS↔WASM parity within 2 dB)
-- Human listen check: pending (PR test protocol). Mark ✅ once it passes
+- Human listen check passed (filter sweep, resonance, shape, crush; PR #183 test protocol)
 
 See full spec: [PROMPTS/PHASE-TL7a.md](PROMPTS/PHASE-TL7a.md)
 
 ---
 
-## Phase TL7b — Reverb & Delay Sends per Orbit 📋 *planned*
+## Phase TL7b — Reverb & Delay Sends per Orbit ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
@@ -2231,6 +2231,27 @@ Per-event send levels into a shared reverb and delay, grouped in 4 orbits.
 - Controls `room` `size` `delay` `delay-time` `delay-feedback` `orbit`
 - `app/src/repulse/orbits.cljs`: one `ConvolverNode` reverb + one feedback `DelayNode` per orbit, returning into `master-gain`
 - Worklet gets 9 stereo outputs (dry + room/delay send per orbit) that feed the same orbit nodes, so the send effects exist once
+
+**Delivered:**
+- 6 control fns in `repulse.params` (`delay*` registered as `delay`): `room` `size` `delay`
+  `delay-time` `delay-feedback` `orbit`; patternable, signals sampled at onset
+- `repulse.orbits`: per-context orbit buses (`ConvolverNode` reverb + feedback `DelayNode`,
+  output into the master gain), created on first use; last-event-wins orbit settings,
+  seeded noise-burst IRs cached per 0.05 size step, `reset-orbits!` on `(stop)`;
+  `orbit` outside 0–3 clamped with the warning `orbit 7 is out of range 0–3; using 3`
+- WASM: `trigger_v3` slots 12–14 (room delay orbit), per-voice `Sends`, pre-allocated bus
+  buffer and `process_block_buses`; the dry bus stays bit-identical to `process_block`.
+  `worklet.js` writes 9 stereo outputs; the live and EXP1 offline worklets connect them
+  to the orbit buses
+- JS path (samples, `defsynth`, fallbacks, offline-js): `event-output` adds an output
+  GainNode plus one send GainNode per level, only when an event sends
+- Tests: Rust `send_tests` (bus routing, zero sends, clamps, bit-identical dry bus, no
+  reallocation over 1000 blocks), `orbits_test`, `params_test`,
+  `e2e/orbit-sends.spec.ts` (tail, size, echoes, no nodes for `delay 0`, independent
+  orbits, patterned `room`), `e2e/orbit-sends-app.spec.ts` (WASM export tail, live worklet
+  sends per orbit, warning text, `(stop)` reset)
+- Marked delivered on merge at the project owner's request; the listen checks run in the
+  next release test round (PR #194 test protocol)
 
 See full spec: [PROMPTS/PHASE-TL7b.md](PROMPTS/PHASE-TL7b.md)
 

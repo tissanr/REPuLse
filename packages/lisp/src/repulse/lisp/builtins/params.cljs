@@ -3,7 +3,8 @@
    loop-sample, comp, tween, env — and TL6 sample slicing: chop, striate, slice,
    splice, fit, loop-at, speed, unit, accelerate, legato, sustain, cut,
    loop-begin, loop-end — and TL7a per-event inserts: lpf/cutoff, resonance, hpf,
-   hpq, bpf, bpq, shape, crush, gain, velocity."
+   hpq, bpf, bpq, shape, crush, gain, velocity — and TL7b sends: room, size, delay,
+   delay-time, delay-feedback, orbit."
   (:require [repulse.params :as params]
             [repulse.lisp.util :as u]))
 
@@ -49,6 +50,13 @@
    "crush"      (param params/crush)
    "gain"       (param params/gain)
    "velocity"   (param params/velocity)
+   ;; Phase TL7b — reverb & delay sends per orbit
+   "room"           (param params/room)
+   "size"           (param params/size)
+   "delay"          (param params/delay*)
+   "delay-time"     (param params/delay-time)
+   "delay-feedback" (param params/delay-feedback)
+   "orbit"          (param params/orbit)
 "amp"     (fn
                ([v]   (params/amp (u/unwrap v)))
                ([v p] (params/amp (u/unwrap v) (u/unwrap p))))

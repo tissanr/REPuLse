@@ -32,6 +32,7 @@ Map    { OpenBrace expr* CloseBrace }
     "scale" | "chord" | "transpose" |
     "->>" | "->" | "amp" | "attack" | "decay" | "release" | "pan" |
     "cutoff" | "resonance" | "hpq" | "bpq" | "shape" | "crush" | "velocity" |
+    "room" | "size" | "delay" | "delay-time" | "delay-feedback" | "orbit" |
     "euclidean" | "cat" | "late" | "early" |
     "sometimes" | "often" | "rarely" | "sometimes-by" |
     "degrade" | "degrade-by" |
