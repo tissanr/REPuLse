@@ -481,3 +481,43 @@
    (velocity 0.6 pat) · (velocity 0.6) → transformer"
   ([v]     (fn [pat] (velocity v pat)))
   ([v pat] (apply-param :velocity v pat)))
+
+;;; ── Phase TL7b: reverb & delay sends per orbit ───────────────────────
+;;; Core only writes the key; the audio layer (repulse.orbits) clamps.
+
+(defn room
+  "Per-event reverb send level (0–1, default 0) into the event's orbit.
+   (room 0.4 pat) · (room (seq 0 0.8) pat) · (room 0.4) → transformer"
+  ([v]     (fn [pat] (room v pat)))
+  ([v pat] (apply-param :room v pat)))
+
+(defn size
+  "Reverb size of the event's orbit (0–1, default 0.5; IR length 0.3 + 5.7·size s).
+   Last event wins per orbit. (size 0.8 pat) · (size 0.8) → transformer"
+  ([v]     (fn [pat] (size v pat)))
+  ([v pat] (apply-param :size v pat)))
+
+(defn delay*
+  "Per-event delay send level (0–1, default 0) into the event's orbit.
+   Registered as `delay` in REPuLse-Lisp (`delay` is a cljs.core macro).
+   (delay* 0.4 pat) · (delay* 0.4) → transformer"
+  ([v]     (fn [pat] (delay* v pat)))
+  ([v pat] (apply-param :delay v pat)))
+
+(defn delay-time
+  "Delay time of the event's orbit in seconds (0.01–4, default 0.25).
+   Last event wins per orbit. (delay-time 0.375 pat) · (delay-time 0.375) → transformer"
+  ([v]     (fn [pat] (delay-time v pat)))
+  ([v pat] (apply-param :delay-time v pat)))
+
+(defn delay-feedback
+  "Delay feedback of the event's orbit (0–0.95, default 0.5).
+   Last event wins per orbit. (delay-feedback 0.6 pat) · (delay-feedback 0.6) → transformer"
+  ([v]     (fn [pat] (delay-feedback v pat)))
+  ([v pat] (apply-param :delay-feedback v pat)))
+
+(defn orbit
+  "Which orbit's reverb and delay the event sends into (integer 0–3, default 0).
+   (orbit 1 pat) · (orbit 1) → transformer"
+  ([v]     (fn [pat] (orbit v pat)))
+  ([v pat] (apply-param :orbit v pat)))

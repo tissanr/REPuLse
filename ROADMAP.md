@@ -62,6 +62,7 @@ without a human:
 | 13b | WS2 | `(master …)` form & master fx outline group | 🤖 | full | sonnet |
 | 13c | WS3 | Inline sliders in code: `(slider v min max)` | 🤖 | full | opus |
 | 13d | WS4 | AI assistant rail | 🤖 | outline | sonnet |
+| 13e | WS5 | Code is the source of truth: track reconciliation, `:mute`/`:solo` in code | 🤖 | full | opus |
 | **M3** | | **Plays with others** | | | |
 | 14 | N1 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
 | 15 | LIVE1 | Companion bridge: Ableton Link & OSC | 🧑 | outline | opus |
@@ -2188,7 +2189,7 @@ See full spec: [PROMPTS/PHASE-TL6.md](PROMPTS/PHASE-TL6.md)
 
 ---
 
-## Phase TL7a — Per-Event Filters, Shape & Crush 📋 *planned*
+## Phase TL7a — Per-Event Filters, Shape & Crush ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
@@ -2214,13 +2215,13 @@ by signals. First of three phases split from TL7 (2026-11-10).
 - Tests: Rust Goertzel tests (lpf/hpf/bpf/crush/shape, parity reference), `inserts_test`,
   `params_test`, `e2e/per-event-inserts.spec.ts` (filter, sweep, gain/velocity, sample lpf,
   shape, crush, node-count spy, JS↔WASM parity within 2 dB)
-- Human listen check: pending (PR test protocol). Mark ✅ once it passes
+- Human listen check passed (filter sweep, resonance, shape, crush; PR #183 test protocol)
 
 See full spec: [PROMPTS/PHASE-TL7a.md](PROMPTS/PHASE-TL7a.md)
 
 ---
 
-## Phase TL7b — Reverb & Delay Sends per Orbit 📋 *planned*
+## Phase TL7b — Reverb & Delay Sends per Orbit ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
@@ -2230,6 +2231,27 @@ Per-event send levels into a shared reverb and delay, grouped in 4 orbits.
 - Controls `room` `size` `delay` `delay-time` `delay-feedback` `orbit`
 - `app/src/repulse/orbits.cljs`: one `ConvolverNode` reverb + one feedback `DelayNode` per orbit, returning into `master-gain`
 - Worklet gets 9 stereo outputs (dry + room/delay send per orbit) that feed the same orbit nodes, so the send effects exist once
+
+**Delivered:**
+- 6 control fns in `repulse.params` (`delay*` registered as `delay`): `room` `size` `delay`
+  `delay-time` `delay-feedback` `orbit`; patternable, signals sampled at onset
+- `repulse.orbits`: per-context orbit buses (`ConvolverNode` reverb + feedback `DelayNode`,
+  output into the master gain), created on first use; last-event-wins orbit settings,
+  seeded noise-burst IRs cached per 0.05 size step, `reset-orbits!` on `(stop)`;
+  `orbit` outside 0–3 clamped with the warning `orbit 7 is out of range 0–3; using 3`
+- WASM: `trigger_v3` slots 12–14 (room delay orbit), per-voice `Sends`, pre-allocated bus
+  buffer and `process_block_buses`; the dry bus stays bit-identical to `process_block`.
+  `worklet.js` writes 9 stereo outputs; the live and EXP1 offline worklets connect them
+  to the orbit buses
+- JS path (samples, `defsynth`, fallbacks, offline-js): `event-output` adds an output
+  GainNode plus one send GainNode per level, only when an event sends
+- Tests: Rust `send_tests` (bus routing, zero sends, clamps, bit-identical dry bus, no
+  reallocation over 1000 blocks), `orbits_test`, `params_test`,
+  `e2e/orbit-sends.spec.ts` (tail, size, echoes, no nodes for `delay 0`, independent
+  orbits, patterned `room`), `e2e/orbit-sends-app.spec.ts` (WASM export tail, live worklet
+  sends per orbit, warning text, `(stop)` reset)
+- Marked delivered on merge at the project owner's request; the listen checks run in the
+  next release test round (PR #194 test protocol)
 
 See full spec: [PROMPTS/PHASE-TL7b.md](PROMPTS/PHASE-TL7b.md)
 
@@ -2306,7 +2328,7 @@ See full spec: [PROMPTS/PHASE-SONG1.md](PROMPTS/PHASE-SONG1.md)
 
 ---
 
-## Phase SONG2 — Song-Time Automation & Transitions 📋 *planned*
+## Phase SONG2 — Song-Time Automation & Transitions ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2316,6 +2338,21 @@ Parameters that follow curves over the song timeline, plus fills and drops at se
 - `(automate :track :param curve [:bars [a b]] [:op :set|:mul|:add])` inside `section`: a constant, `(ramp :linear|:exp|:sine from to)` or a TL2 signal in section-local time
 - `(fill :track bars pattern|:_)`: replaces, adds or silences a track in the last bars of a section; risers and drops are recipes, not built-ins
 - Evaluated per event inside `song-onsets`, so seeking, loops, re-evaluation, every export and the MIDI file give the same values; `tween` is unchanged
+
+**Delivered:**
+- Pure core model in `repulse.song`: `make-ramp`, `make-automation`, `make-fill`, a 4-arity `make-section`
+  (items validated against the section length), `make-song` item track checks with fuzzy hints and
+  `:item-source`, absolute lane/fill ranges, `ramp-value`, `sample-at`, `curve-value`, `automate-value`,
+  `automation-value`, `fill-at`
+- `song-onsets` applies fills (replace / add / silence a track in the last bars) and automation lanes per
+  event in song time, so the scheduler, `play-from`, `:end :loop`, re-evaluation, `(export :song)`,
+  `(export :stems)`, MIDI export and the TEST1 harness all agree; songs without items take the old path
+- Lisp built-ins `ramp`, `automate`, `fill` and `section` items, every error with a source range;
+  `register-song!` prefers the item's source; the song output line gains `N automations · N fills`
+- Grammar, completions, `builtin_meta.edn`, AI docs; USAGE "Automation", "Fills, drops and risers",
+  `tween` vs `automate`
+- Tests: reference vectors R1–R14 (`song_test`), R15 (`offline_render_test`), R16 (`song_transport_test`),
+  Lisp argument errors (`integration_test`), R17 via `songEvents` (`e2e/song.spec.ts`)
 
 See full spec: [PROMPTS/PHASE-SONG2.md](PROMPTS/PHASE-SONG2.md)
 
@@ -2527,6 +2564,25 @@ The assistant moves from the editor column to a 28 px right rail with a 300 px p
   calling, budgets or guard changes.
 
 See full spec: [PROMPTS/PHASE-WS4.md](PROMPTS/PHASE-WS4.md)
+
+---
+
+## Phase WS5 — Code Is the Source of Truth: Track Reconciliation, `:mute` & `:solo` 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖 auto
+
+After Alt+Enter, what plays is exactly what the code says: tracks whose code is gone stop,
+and mute/solo live in the code instead of hidden dashboard state.
+
+**Key additions:**
+- Whole-code evaluations reconcile: undeclared tracks (including the anonymous `:_`) retire
+  with a short gain ramp via `audio/retire-track!`; errors and command-bar evaluations change nothing
+- `(track :name pattern :mute)` / `:solo` flags (multi-solo); inspector buttons and command-bar
+  `mute!`/`unmute!`/`solo!` patch the code through `lisp-patcher/track-flag-edit`
+- A bare pattern no longer stops the named tracks; it plays as `:_` alongside them
+- Session `:muted` is migrated into `:mute` flags on load and no longer saved; `pending-mutes` removed
+
+See full spec: [PROMPTS/PHASE-WS5.md](PROMPTS/PHASE-WS5.md)
 
 ---
 

@@ -242,10 +242,10 @@
   (is (= :all (:tracks (eval-result "(section :chorus 8 :all)")))))
 
 (deftest section-errors
-  (testing "extra arguments are reserved for SONG2"
+  (testing "extra arguments must be (automate …) or (fill …) items (SONG2)"
     (let [r (lisp/eval-string "(section :intro 4 [:kick] 7)" (make-test-env))]
       (is (lisp/eval-error? r))
-      (is (= "section :intro: unexpected argument 7 — sections take (section name bars tracks)"
+      (is (= "section :intro: unexpected argument 7 — after the tracks, sections take (automate …) and (fill …)"
              (:message r)))
       (is (= {:from 26 :to 27} (:source r)))))
   (testing "bars must be a whole number ≥ 1"
@@ -260,6 +260,61 @@
     (let [r (lisp/eval-string "(section :intro 4 :kick)" (make-test-env))]
       (is (lisp/eval-error? r))
       (is (includes? (:message r) "tracks must be :all or a vector of track names")))))
+
+;;; ── Phase SONG2: ramp, automate, fill ───────────────────────────────
+
+(defn- err-of [code]
+  (let [r (lisp/eval-string code (make-test-env))]
+    (is (lisp/eval-error? r) (str "expected an error for " code))
+    r))
+
+(deftest song2-builtins-evaluate-to-data
+  (let [r (eval-result "(ramp :linear 0 1)")]
+    (is (= {:type :ramp :curve :linear :from 0 :to 1} r)))
+  (let [a (eval-result "(automate :hats :amp (ramp :exp 1 2) :op :mul :bars [1 3])")]
+    (is (= {:type :automation :track :hats :param :amp :op :mul :bars [1 3]}
+           (select-keys a [:type :track :param :op :bars])))
+    (is (= {:from 10 :to 15} (:source a))))
+  (let [f (eval-result "(fill :snare 1 :_)")]
+    (is (= {:type :fill :track :snare :bars 1 :pattern nil} (select-keys f [:type :track :bars :pattern]))))
+  (let [s (eval-result "(section :build 4 [:hats] (automate :hats :amp 0.5) (fill :hats 1 :_))")]
+    (is (= 1 (count (:automations s))))
+    (is (= 1 (count (:fills s))))))
+
+(deftest song2-errors
+  (let [r (err-of "(ramp :log 0 1)")]
+    (is (= "ramp: unknown curve :log — use :linear, :exp or :sine" (:message r)))
+    (is (= {:from 6 :to 10} (:source r))))
+  (let [r (err-of "(ramp :exp 0 1)")]
+    (is (= "ramp :exp needs both values > 0, got 0 and 1 — use :linear or :sine" (:message r)))
+    (is (some? (:source r))))
+  (let [r (err-of "(automate :hats :amp 1 :op :foo)")]
+    (is (= "automate: :op must be :set, :mul or :add, got :foo" (:message r)))
+    (is (= {:from 10 :to 15} (:source r))))
+  (let [r (err-of "(automate :hats :amp 1 :foo 2)")]
+    (is (= "automate: unknown option :foo — expected :bars or :op" (:message r)))
+    (is (some? (:source r))))
+  (let [r (err-of "(automate :hats :amp 1 :bars)")]
+    (is (= "automate: option :bars needs a value" (:message r))))
+  (let [r (err-of "(automate :hats :amp \"x\")")]
+    (is (= "automate :hats :amp: expected a number, (ramp …) or a pattern, got \"x\"" (:message r)))
+    (is (some? (:source r))))
+  (let [r (err-of "(section :build 4 [:hats] (automate :hats :amp 1 :bars [3 6]))")]
+    (is (= "automate :hats :amp: :bars [3 6] is outside section :build (4 bars) — use 0 ≤ from < to ≤ 4"
+           (:message r)))
+    (is (some? (:source r))))
+  (let [r (err-of "(fill :all 1 :_)")]
+    (is (= "fill: needs one track name, got :all" (:message r)))
+    (is (some? (:source r))))
+  (let [r (err-of "(fill :snare 0 :_)")]
+    (is (= "fill :snare: bars must be a whole number ≥ 1, got 0" (:message r)))
+    (is (some? (:source r))))
+  (let [r (err-of "(section :build 4 [:snare] (fill :snare 5 :_))")]
+    (is (= "fill :snare: 5 bars is longer than section :build (4 bars)" (:message r)))
+    (is (= {:from 33 :to 39} (:source r))))
+  (let [r (err-of "(section :build 4 [:snare] (fill :snare 1 :_) (fill :snare 2 :_))")]
+    (is (= "Two fills for :snare in section :build — use one (fill …) per track" (:message r)))
+    (is (some? (:source r)))))
 
 ;;; ── Phase TL1: patterned arguments & pattern arithmetic ─────────────
 

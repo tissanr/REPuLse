@@ -107,6 +107,12 @@
     ("lowpass" "highpass") (* 20 (Math/log10 q))
     q))
 
+(def off
+  "Insert params with every stage off — the trigger_v3 slots 4–11 an event
+   without inserts sends when it needs the longer layout (TL7b sends)."
+  {:lpf nil :resonance (:lpf default-q) :hpf nil :hpq (:hpf default-q)
+   :bpf nil :bpq (:bpf default-q) :shape 0.0 :crush 16.0})
+
 (defn wasm-slots
   "trigger_v3 params (slots 4–11) for an insert map from insert-params:
    lpf resonance hpf hpq bpf bpq shape crush, filter slots 0 = off."

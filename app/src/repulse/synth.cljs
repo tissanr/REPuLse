@@ -301,22 +301,25 @@
   "Creates the Web Audio graph builder function for a defsynth.
    When called with [ac t param-map] it evaluates the synth body
    with UGen functions and param bindings in scope, and returns
-   [result release!] — release! detaches the voice from shared bus nodes
-   and stops sources started for signal arithmetic.
+   [result release! sources] — release! detaches the voice from shared bus
+   nodes and stops sources started for signal arithmetic; sources are the
+   oscillator/noise sources the body started, for play-synth! to stop.
    synth-name is used by out-node for replace-on-retrigger tracking."
   [synth-name param-names body closed-env]
   (fn [ac t param-map]
     (let [releases (atom [])
           on-release! (fn [f] (swap! releases conj f))
+          sources  (atom [])
+          src!     (fn [node] (swap! sources conj node) node)
           ;; Bind param values from the event's parameter map
           param-bindings (zipmap param-names
                                  (map #(get param-map (keyword %)) param-names))
           ;; UGen functions capture ac and t from the call site
-          ugen-env {"sin"        (fn [freq]          (sin-osc    ac t (unwrap freq)))
-                    "saw"        (fn [freq]          (saw-osc    ac t (unwrap freq)))
-                    "square"     (fn [freq]          (square-osc ac t (unwrap freq)))
-                    "tri"        (fn [freq]          (tri-osc    ac t (unwrap freq)))
-                    "noise"      (fn []              (noise-src  ac t))
+          ugen-env {"sin"        (fn [freq]          (src! (sin-osc    ac t (unwrap freq))))
+                    "saw"        (fn [freq]          (src! (saw-osc    ac t (unwrap freq))))
+                    "square"     (fn [freq]          (src! (square-osc ac t (unwrap freq))))
+                    "tri"        (fn [freq]          (src! (tri-osc    ac t (unwrap freq))))
+                    "noise"      (fn []              (src! (noise-src  ac t)))
                     ;; Processor UGens: source is last arg — use with ->>
                     "lpf"        (fn [cutoff src]    (lpf-node   ac (unwrap cutoff) (unwrap src)))
                     "hpf"        (fn [cutoff src]    (hpf-node   ac (unwrap cutoff) (unwrap src)))
@@ -351,28 +354,33 @@
                                    (kr-node (unwrap rate-v) (unwrap signal-v)))}
           local  (merge closed-env param-bindings ugen-env)
           result (last (map #(leval/eval-form % local) body))]
-      [result (fn [] (doseq [f @releases] (f)))])))
+      [result (fn [] (doseq [f @releases] (f))) @sources])))
 
 ;;; ── Synth playback ───────────────────────────────────────────────────
 
 (defn play-synth!
   "Instantiate a user-defined synth at scheduled time t.
    dest is the AudioNode to connect to (e.g. master-gain or track gain node).
-   Schedules disconnection after the envelope completes."
+   Once the envelope completes, stops the voice's sources (in audio time) and
+   disconnects it. t may lie up to a cycle ahead of currentTime — the scheduler
+   plans a whole cycle at once — so the cleanup timer counts from t, not now."
   [ac t synth-def param-map dest]
   (let [{:keys [build-fn]} synth-def
-        [result release!] (build-fn ac t param-map)
+        [result release! sources] (build-fn ac t param-map)
         ;; result is either:
         ;;   AudioNode               — no envelope, use 1.5 s default duration
         ;;   {:node AudioNode :duration N} — from env-perc / env-asr / env-gen
         ;;   {:node nil :bus-writer true}  — synth writes to bus, no audio output
         finish! (fn [out-n dur]
                   (.connect out-n dest)
-                  (js/setTimeout
-                    (fn []
-                      (try (.disconnect out-n) (catch :default _))
-                      (release!))
-                    (* (+ dur 0.1) 1000)))]
+                  (let [end (+ t dur 0.1)]
+                    (doseq [s sources]
+                      (try (.stop s end) (catch :default _)))
+                    (js/setTimeout
+                      (fn []
+                        (try (.disconnect out-n) (catch :default _))
+                        (release!))
+                      (* 1000 (+ (max 0 (- end (.-currentTime ac))) 0.1)))))]
     (cond
       ;; Bus writer — no audio connection, oscillator keeps running in bus
       (and result (map? result) (:bus-writer result))

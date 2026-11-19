@@ -32,6 +32,12 @@ export const BUILTINS = [
   { label: "shape",        type: "function", detail: "(shape amount pat) — per-event soft waveshaper, 0–0.99 (0 = off)" },
   { label: "crush",        type: "function", detail: "(crush bits pat) — per-event bit-depth quantiser, 1–16 bits (16 = off)" },
   { label: "velocity",     type: "function", detail: "(velocity v pat) — per-event velocity 0–1; multiplies amp" },
+  { label: "room",         type: "function", detail: "(room level pat) — per-event reverb send 0–1 into the event's orbit" },
+  { label: "size",         type: "function", detail: "(size s pat) — orbit reverb size 0–1 (IR 0.3 + 5.7·s s, default 0.5); last event wins" },
+  { label: "delay",        type: "function", detail: "(delay level pat) — per-event delay send 0–1 into the event's orbit" },
+  { label: "delay-time",   type: "function", detail: "(delay-time secs pat) — orbit delay time 0.01–4 s (default 0.25); last event wins" },
+  { label: "delay-feedback", type: "function", detail: "(delay-feedback fb pat) — orbit delay feedback 0–0.95 (default 0.5); last event wins" },
+  { label: "orbit",        type: "function", detail: "(orbit n pat) — which orbit's reverb/delay to send into, 0–3 (default 0)" },
   // --- Pattern combinators ---
   { label: "euclidean",    type: "function", detail: "(euclidean k n val) — Björklund (Tidal) rhythm: k onsets in n steps; a pattern as val gets the rhythm as structure, e.g. (euclidean 3 8 (seq :bd :sd)); optional left rotation (euclidean k n val rot); k/n/rot may be patterns" },
   { label: "cat",          type: "function", detail: "(cat pat …) — play patterns one per cycle, then loop the sequence" },
@@ -297,6 +303,9 @@ export const BUILTINS = [
   { label: "play-scenes",  type: "function", detail: "(play-scenes [pat …]) — play patterns as 1-cycle scenes" },
   { label: "song",         type: "function", detail: "(song (section …) … [:end :stop|:loop]) — play tracks as a song with sections; stops (or loops) after the last bar" },
   { label: "section",      type: "function", detail: "(section :name bars [:track …]) — a song section: name, length in bars, tracks that play (or :all)" },
+  { label: "automate",     type: "function", detail: "(automate :track|:all :param curve [:bars [a b]] [:op :set|:mul|:add]) — inside a section: set a parameter from a number, (ramp …) or pattern, in section-local time" },
+  { label: "ramp",         type: "function", detail: "(ramp :linear|:exp|:sine from to) — a curve over a section (or :bars range) for (automate …); never reaches `to` inside the lane" },
+  { label: "fill",         type: "function", detail: "(fill :track bars pattern|:_) — inside a section: replace a track's events in the last N bars (:_ = drop out)" },
   { label: "play-from",    type: "function", detail: "(play-from :section) / (play-from bar) — start or jump the song to a section or 0-based bar" },
   { label: "use",          type: "function", detail: "(use :drums :bass) — evaluate other project buffers first (once per evaluation, shared definitions)" },
   // --- Special forms ---
