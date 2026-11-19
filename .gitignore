@@ -5,6 +5,7 @@ node_modules
 # shadow-cljs build output
 app/public/js/
 app/public/test-js/
+app/public/e2e-embed/
 app/public/cljs-runtime/
 app/public/manifest.edn
 app/public/embed.js

@@ -162,3 +162,68 @@ test('W7: history and snapshots survive a reload', async ({ page }) => {
   await evaluate(page, '(restore! "take A")');
   await expect.poll(() => text(page)).toBe('(qqqqqqqq)');
 });
+
+// ── TEST3: what must not (or must still) be recorded ───────────────────────
+
+test('H8: command bar, (upd)/F9 and slider drags create no history entry', async ({ page }) => {
+  await fresh(page);
+  await setText(page, '(track :a (amp (slider 0.5 0 1) (seq :bd)))');
+  await altEnter(page);
+  await expect.poll(async () => (await entries(page)).length).toBe(1);
+
+  // command bar
+  await page.locator('#cmd-container .cm-content').click();
+  await page.keyboard.type('(bpm 131)');
+  await page.keyboard.press('Enter');
+  await evaluate(page, '(bpm 132)');
+  // (upd) from the command bar and F9 in the editor
+  await page.keyboard.type('(upd)');
+  await page.keyboard.press('Enter');
+  await page.evaluate(() => window.__REPULSE_EDITOR__.focus());
+  await page.keyboard.press('F9');
+  // dragging the inline slider re-evaluates but does not record
+  const w = page.locator('#editor-container .cm-inline-slider').first();
+  await expect(w).toHaveCount(1);
+  const box = (await w.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 14, box.y + box.height / 2);
+  await page.mouse.up();
+  await expect.poll(() => text(page)).toContain('(slider 0.60 0 1)');
+
+  await page.waitForTimeout(500);
+  expect((await entries(page)).length).toBe(1);
+  await evaluate(page, '(stop)');
+});
+
+test('H9: (reset!) clears the session, snapshots survive the reload', async ({ page }) => {
+  await fresh(page);
+  await threeEvaluations(page);
+  await evaluate(page, '(snapshot! "take A")');
+  await expect(output(page)).toHaveText('snapshot "take A" saved');
+  await page.waitForTimeout(300);
+  await setText(page, '(seq :bd :sd :hh :cp)');
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('repulse-session') ?? ''))
+    .toContain('(seq :bd :sd :hh :cp)');
+
+  const reloaded = page.waitForEvent('load');
+  await evaluate(page, '(reset!)');
+  await reloaded;
+  await ready(page);
+  // a fresh session: one main tab, not the text we had
+  await expect(page.locator('.buf-tab')).toHaveCount(1);
+  expect(await text(page)).not.toContain('(seq :bd :sd :hh :cp)');
+  expect(await page.evaluate(() => window.__REPULSE_HISTORY__.snapshots())).toEqual(['take A']);
+  expect((await entries(page)).length).toBe(3);
+});
+
+test('H10: (share!) still puts a link on the clipboard', async ({ page, context, baseURL }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await fresh(page);
+  await setText(page, '(seq :bd :sd)');
+  await evaluate(page, '(share!)');
+  await expect(output(page)).toHaveText('URL copied to clipboard');
+  const link = await page.evaluate(() => navigator.clipboard.readText());
+  expect(link.startsWith(`${baseURL}/#v3:`)).toBe(true);
+});
