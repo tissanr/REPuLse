@@ -76,6 +76,8 @@ Update `README.md` too if the phase adds user-facing syntax or changes the quick
 **`ROADMAP.md`** — find the `## Phase $ARGUMENTS` section and:
 - Change `📋 *planned*` → `✅ *delivered*` in the heading
 - Add a **Delivered:** section with 2–6 bullet points summarising what was built (match the style of existing delivered phases)
+- In the **Implementation order** table, set the phase's *Status* cell from 📋 to ✅
+- In **Where we stand** at the top, bump the milestone's *Delivered* count, drop the phase from *Still open*, update the *Next* lines if they named it, and set the date
 
 ### 7. Write the test protocol (Rule 5)
 
