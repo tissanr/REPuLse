@@ -69,12 +69,38 @@ const CHAIN_CATEGORIES = [
       withBuiltinDetail("attack", "(attack ¦0.01)"),
       withBuiltinDetail("decay", "(decay ¦0.2)"),
       withBuiltinDetail("release", "(release ¦0.2)"),
+      withBuiltinDetail("gain", "(gain ¦0.8)"),
+      withBuiltinDetail("velocity", "(velocity ¦0.8)"),
     ],
   },
   {
     title: "Spatial",
     items: [
       withBuiltinDetail("pan", "(pan ¦-0.5)"),
+    ],
+  },
+  {
+    title: "Per-event effects",
+    items: [
+      withBuiltinDetail("lpf", "(lpf ¦800)"),
+      withBuiltinDetail("resonance", "(resonance ¦4)"),
+      withBuiltinDetail("hpf", "(hpf ¦300)"),
+      withBuiltinDetail("hpq", "(hpq ¦2)"),
+      withBuiltinDetail("bpf", "(bpf ¦1000)"),
+      withBuiltinDetail("bpq", "(bpq ¦4)"),
+      withBuiltinDetail("shape", "(shape ¦0.4)"),
+      withBuiltinDetail("crush", "(crush ¦8)"),
+    ],
+  },
+  {
+    title: "Sends",
+    items: [
+      withBuiltinDetail("room", "(room ¦0.4)"),
+      withBuiltinDetail("size", "(size ¦0.8)"),
+      withBuiltinDetail("delay", "(delay ¦0.3)"),
+      withBuiltinDetail("delay-time", "(delay-time ¦0.375)"),
+      withBuiltinDetail("delay-feedback", "(delay-feedback ¦0.5)"),
+      withBuiltinDetail("orbit", "(orbit ¦1)"),
     ],
   },
   {

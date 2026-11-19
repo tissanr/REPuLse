@@ -14,16 +14,22 @@
 
 ;;; One-time module initialisation — idempotent via defonce guards in each module.
 
+(defn- record-output!
+  "The embed has no output line. Keep the last message on a window property so
+   e2e/embed.spec.ts (Phase TEST3) can read it; nothing in the app reads it."
+  [msg _kind]
+  (set! (.-__REPULSE_EMBED_OUTPUT__ js/window) (str msg)))
+
 (defn- ensure-initialized! []
   (builtins/init! {:on-beat-fn      (fn [])
                    :set-playing!-fn (fn [_])
-                   :set-output!-fn  (fn [_ _])
+                   :set-output!-fn  record-output!
                    :make-stop-fn-fn (fn [] (fn [] (audio/stop!)))
                    :share!-fn       (fn [])})
   (eo/init! {:on-beat-fn      (fn [])
              :make-stop-fn-fn (fn [] (fn [] (audio/stop!)))
              :set-playing!-fn (fn [_])
-             :set-output!-fn  (fn [_ _])})
+             :set-output!-fn  record-output!})
   (reset! builtins/evaluate-ref eo/evaluate!)
   (builtins/ensure-env!))
 

@@ -899,6 +899,91 @@ const DOCS = {
     description: "Set stereo panning. -1.0 = hard left, 0.0 = centre, 1.0 = hard right.",
     example: "(pan -0.5 (seq :c4 :e4))",
   },
+  "lpf": {
+    signature: "(lpf hz pat) or (lpf hz)",
+    description: "Per-event 12 dB/oct low-pass, cutoff 20\u201320000 Hz. Patternable and signal-driven; the value is sampled once at each event's onset. Alias: cutoff. Pair with resonance. Inside a defsynth body, lpf is the (lpf cutoff signal) UGen instead.",
+    example: "(->> (fast 8 (seq :hh)) (lpf (range 400 6000 (slow 4 sine))) (resonance 4))",
+  },
+  "cutoff": {
+    signature: "(cutoff hz pat) or (cutoff hz)",
+    description: "Alias of lpf: per-event low-pass cutoff in Hz (20\u201320000).",
+    example: "(cutoff 800 (seq :c3 :eb3 :g3))",
+  },
+  "resonance": {
+    signature: "(resonance q pat) or (resonance q)",
+    description: "Q of the per-event low-pass, 0.1\u201330 (default 0.707). No effect without lpf.",
+    example: "(->> (seq :c2 :c2 :eb2 :g1) (synth :saw) (lpf 600) (resonance 8))",
+  },
+  "hpf": {
+    signature: "(hpf hz pat) or (hpf hz)",
+    description: "Per-event 12 dB/oct high-pass, cutoff 20\u201320000 Hz. Pair with hpq. Inside a defsynth body, hpf is the (hpf cutoff signal) UGen instead.",
+    example: "(->> (seq :c3 :eb3 :g3) (synth :saw) (hpf 300))",
+  },
+  "hpq": {
+    signature: "(hpq q pat) or (hpq q)",
+    description: "Q of the per-event high-pass, 0.1\u201330 (default 0.707). No effect without hpf.",
+    example: "(->> (seq :c3 :g3) (synth :saw) (hpf 800) (hpq 5))",
+  },
+  "bpf": {
+    signature: "(bpf hz pat) or (bpf hz)",
+    description: "Per-event band-pass (constant 0 dB peak gain) at 20\u201320000 Hz. Pair with bpq. Inside a defsynth body, bpf is the (bpf freq signal) UGen instead.",
+    example: "(->> (fast 4 (seq :hh)) (bpf (seq 1000 3000)) (bpq 5))",
+  },
+  "bpq": {
+    signature: "(bpq q pat) or (bpq q)",
+    description: "Q of the per-event band-pass, 0.1\u201330 (default 1). No effect without bpf.",
+    example: "(->> (seq :sd) (bpf 1500) (bpq 8))",
+  },
+  "shape": {
+    signature: "(shape amount pat) or (shape amount)",
+    description: "Per-event soft waveshaper, amount 0\u20130.99 (0 = off): y = (1+k)\u00b7x / (1+k\u00b7|x|), k = 2a/(1\u2212a). Runs after the filters and crush.",
+    example: "(->> (seq :bd :_ :bd :_) (shape 0.6))",
+  },
+  "crush": {
+    signature: "(crush bits pat) or (crush bits)",
+    description: "Per-event bit-depth quantiser, 1\u201316 bits (16 = off). Runs after the filters, before shape. For a whole track use (fx :bitcrusher \u2026).",
+    example: "(->> (seq :bd :sd :bd :sd) (crush (seq 16 4)))",
+  },
+  "gain": {
+    signature: "(gain g pat) or (gain g)",
+    description: "Per-event linear gain 0\u20132 (default 1). Final voice level = amp \u00d7 gain \u00d7 velocity. Inside a defsynth body, gain is the (gain level signal) UGen instead.",
+    example: "(gain 0.5 (seq :bd :sd))",
+  },
+  "velocity": {
+    signature: "(velocity v pat) or (velocity v)",
+    description: "Per-event velocity 0\u20131 (default 1). Final voice level = amp \u00d7 gain \u00d7 velocity.",
+    example: "(->> (seq :bd :sd :bd :sd) (velocity (seq 1 0.6)))",
+  },
+  "room": {
+    signature: "(room level pat) or (room level)",
+    description: "Per-event reverb send 0\u20131 (default 0) into the reverb of the event's orbit. The dry signal still goes through the track's fx; the orbit returns into the master. Patternable, accepts signals.",
+    example: "(->> (seq :c4 :e4 :g4 :b4) (synth :epiano) (room (seq 0 0.6)) (size 0.8))",
+  },
+  "size": {
+    signature: "(size s pat) or (size s)",
+    description: "Reverb size of the event's orbit, 0\u20131 (default 0.5): impulse response 0.3 + 5.7\u00b7size seconds. Last event wins per orbit; (stop) resets it. Changing it while a tail rings may click.",
+    example: "(->> (seq :sd :_ :sd :_) (room 0.5) (size 1))",
+  },
+  "delay": {
+    signature: "(delay level pat) or (delay level)",
+    description: "Per-event delay send 0\u20131 (default 0) into the feedback delay of the event's orbit. For a delay on a whole track use (fx :delay \u2026).",
+    example: "(->> (seq :sd :_ :_ :_) (delay 0.4) (delay-time 0.375) (delay-feedback 0.5))",
+  },
+  "delay-time": {
+    signature: "(delay-time secs pat) or (delay-time secs)",
+    description: "Delay time of the event's orbit in seconds, 0.01\u20134 (default 0.25). Last event wins per orbit; (stop) resets it.",
+    example: "(->> (seq :sd :_ :_ :_) (delay 0.4) (delay-time 0.375))",
+  },
+  "delay-feedback": {
+    signature: "(delay-feedback fb pat) or (delay-feedback fb)",
+    description: "Feedback of the orbit's delay, 0\u20130.95 (default 0.5): how much of each echo comes back. Last event wins per orbit; (stop) resets it.",
+    example: "(->> (seq :sd :_ :_ :_) (delay 0.5) (delay-feedback 0.7))",
+  },
+  "orbit": {
+    signature: "(orbit n pat) or (orbit n)",
+    description: "Which orbit (0\u20133, default 0) the event's room and delay sends go to. Each orbit has its own reverb and delay with their own settings. Out-of-range values are clamped with a warning.",
+    example: "(stack (->> (seq :bd :sd) (room 0.2) (orbit 0))\n       (->> (slow 2 (seq :c3 :g3)) (synth :saw) (room 0.7) (size 1) (orbit 1)))",
+  },
   "comp": {
     signature: "(comp f g ...)",
     description: "Compose transformers right-to-left. Useful for building named presets.",

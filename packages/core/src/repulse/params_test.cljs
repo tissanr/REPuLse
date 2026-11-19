@@ -443,3 +443,79 @@
     (is (= {:note :bd :loop-begin 0.25 :loop-end 0.5}
            (v (params/loop-end 0.5 (params/loop-begin 0.25 (core/pure :bd))))))
     (is (thrown? js/Error (params/unit :x (core/pure :bd))))))
+
+;;; ── Phase TL7a: per-event insert controls ────────────────────────────
+
+(def ^:private tl7a-controls
+  [[params/lpf :lpf] [params/resonance :resonance] [params/hpf :hpf]
+   [params/hpq :hpq] [params/bpf :bpf] [params/bpq :bpq]
+   [params/shape :shape] [params/crush :crush]
+   [params/gain :gain] [params/velocity :velocity]])
+
+(deftest tl7a-controls-set-their-key
+  (doseq [[f kw] tl7a-controls]
+    (testing (name kw)
+      (is (= {:note :c4 kw 3} (:value (first (core/query (f 3 (core/pure :c4)) one-cycle)))))
+      (is (= {:bank :bd :n 0 kw 3}
+             (:value (first (core/query (f 3 (core/pure {:bank :bd :n 0})) one-cycle))))
+          "keeps an existing map (sample event)"))))
+
+(deftest tl7a-controls-transformer-arity
+  (doseq [[f kw] tl7a-controls]
+    (is (= {:note :hh kw 0.5}
+           (:value (first (core/query ((f 0.5) (core/pure :hh)) one-cycle)))))))
+
+(deftest tl7a-controls-no-clamping-in-core
+  (is (= 99999 (:lpf (:value (first (core/query (params/lpf 99999 (core/pure :c4)) one-cycle))))))
+  (is (= 5 (:gain (:value (first (core/query (params/gain 5 (core/pure :c4)) one-cycle)))))))
+
+(deftest tl7a-lpf-patterned
+  (let [evs (core/query (params/lpf (core/seq* [400 4000]) (core/seq* [:hh :hh :hh :hh]))
+                        one-cycle)]
+    (is (= [400 400 4000 4000] (mapv (comp :lpf :value) evs)))
+    (is (= 4 (count evs)) "structure comes from the note pattern")))
+
+(deftest tl7a-lpf-signal-sampled-at-onset
+  (let [evs (core/query (params/lpf core/saw (core/seq* [:hh :hh :hh :hh])) one-cycle)]
+    (is (= [0 0.25 0.5 0.75] (mapv (comp :lpf :value) evs)))))
+
+(deftest tl7a-chain-builds-one-map
+  (let [p   (->> (core/pure :c3) (params/lpf 800) (params/resonance 4)
+                 (params/shape 0.4) (params/crush 8) (params/gain 0.5) (params/velocity 0.6))
+        v   (:value (first (core/query p one-cycle)))]
+    (is (= {:note :c3 :lpf 800 :resonance 4 :shape 0.4 :crush 8 :gain 0.5 :velocity 0.6} v))))
+
+;;; ── Phase TL7b: send & orbit controls ────────────────────────────────
+
+(def ^:private tl7b-controls
+  [[params/room :room] [params/size :size] [params/delay* :delay]
+   [params/delay-time :delay-time] [params/delay-feedback :delay-feedback]
+   [params/orbit :orbit]])
+
+(deftest tl7b-controls-set-their-key
+  (doseq [[f kw] tl7b-controls]
+    (testing (name kw)
+      (is (= {:note :c4 kw 3} (:value (first (core/query (f 3 (core/pure :c4)) one-cycle)))))
+      (is (= {:bank :sd :n 0 kw 3}
+             (:value (first (core/query (f 3 (core/pure {:bank :sd :n 0})) one-cycle))))
+          "keeps an existing map (sample event)")
+      (is (= {:note :hh kw 0.5}
+             (:value (first (core/query ((f 0.5) (core/pure :hh)) one-cycle))))
+          "transformer arity"))))
+
+(deftest tl7b-no-clamping-in-core
+  (is (= 7 (:orbit (:value (first (core/query (params/orbit 7 (core/pure :bd)) one-cycle))))))
+  (is (= 2 (:room (:value (first (core/query (params/room 2 (core/pure :bd)) one-cycle)))))))
+
+(deftest tl7b-room-patterned
+  (let [evs (core/query (params/room (core/seq* [0 0.8]) (core/seq* [:c4 :c4])) one-cycle)]
+    (is (= [0 0.8] (mapv (comp :room :value) evs)))
+    (is (= 2 (count evs)) "structure comes from the note pattern")))
+
+(deftest tl7b-chain-builds-one-map
+  (let [p (->> (core/pure :sd) (params/delay* 0.4) (params/delay-time 0.375)
+               (params/delay-feedback 0.5) (params/room 0.2) (params/size 0.8)
+               (params/orbit 1))]
+    (is (= {:note :sd :delay 0.4 :delay-time 0.375 :delay-feedback 0.5
+            :room 0.2 :size 0.8 :orbit 1}
+           (:value (first (core/query p one-cycle)))))))

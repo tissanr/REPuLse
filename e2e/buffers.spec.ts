@@ -99,22 +99,31 @@ test('W2: create, rename, switch, persist and delete buffers', async ({ page }) 
   await fresh(page);
   await setText(page, '(use :kit)');
 
-  page.once('dialog', (d) => d.accept('drums'));
+  // inline name input (native dialogs block the audio scheduler)
   await page.locator('.buf-add').click();
+  await page.locator('.buf-name-input').fill('drums');
+  await page.locator('.buf-name-input').press('Enter');
   await expect(tab(page, 'drums')).toHaveClass(/active/);
   await setText(page, '(track :kick (seq :bd))');
 
-  page.once('dialog', (d) => d.accept('kit'));
   await tab(page, 'drums').dblclick();
+  await page.locator('.buf-name-input').fill('kit');
+  await page.locator('.buf-name-input').press('Enter');
   await expect(tab(page, 'kit')).toHaveClass(/active/);
   await expect(tab(page, 'drums')).toHaveCount(0);
 
-  page.once('dialog', (d) => d.accept('Drums!'));
   await page.locator('.buf-add').click();
+  await page.locator('.buf-name-input').fill('Drums!');
+  await page.locator('.buf-name-input').press('Enter');
   await expect(output(page)).toHaveText(
     'Error: invalid buffer name "Drums!" — use a-z, 0-9 and -, starting with a letter (max 32)',
   );
   await expect(page.locator('.buf-tab')).toHaveCount(2);
+  // the input stays open with the typed name; Escape cancels
+  await expect(page.locator('.buf-name-input')).toHaveValue('Drums!');
+  await page.locator('.buf-name-input').press('Escape');
+  await expect(page.locator('.buf-name-input')).toHaveCount(0);
+  await expect(page.locator('.buf-add')).toHaveCount(1);
 
   await tab(page, 'main').click();
   expect(await text(page)).toBe('(use :kit)');
@@ -133,7 +142,10 @@ test('W2: create, rename, switch, persist and delete buffers', async ({ page }) 
   await tab(page, 'main').click();
   expect(await text(page)).toBe('(use :kit)');
 
-  page.once('dialog', (d) => d.accept());
+  // first click on × arms, second click deletes
+  await tab(page, 'kit').locator('.buf-close').click();
+  await expect(tab(page, 'kit').locator('.buf-close')).toHaveText('delete?');
+  await expect(page.locator('.buf-tab')).toHaveCount(2);
   await tab(page, 'kit').locator('.buf-close').click();
   await expect(page.locator('.buf-tab')).toHaveCount(1);
   await expect(page.locator('.buf-tab.main .buf-close')).toHaveCount(0);
@@ -205,12 +217,13 @@ test('W7: export downloads main.repulse; import replaces the project or rejects 
 
   // replace the project with something else, then import the export back
   await page.evaluate(() => window.__REPULSE_BUFFERS__.switchTo('drums'));
-  page.once('dialog', (d) => d.accept());
+  await tab(page, 'drums').locator('.buf-close').click();
   await tab(page, 'drums').locator('.buf-close').click();
   await setProject(page, '(seq :hh)', [['other', '(def a 1)']]);
 
-  page.once('dialog', (d) => d.accept());
   await page.locator('.buf-import-input').setInputFiles(file);
+  await expect(page.locator('.rp-dialog-message')).toHaveText('Replace the current project (2 buffers) with main.repulse?');
+  await page.locator('.rp-dialog-ok').click();
   await expect(output(page)).toHaveText('imported main.repulse — 2 buffers');
   const p = await project(page);
   expect(p.buffers).toEqual([

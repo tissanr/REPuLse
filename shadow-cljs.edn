@@ -44,4 +44,15 @@
    :asset-path  "/"
    :modules     {:embed {:init-fn repulse.embed/init!}}
    :compiler-options {:language-out :ecmascript-2020
+                      :externs ["app/externs/lezer-lr.js"]}}
+
+  ;; Same bundle as :embed, but written to a gitignored dir so the e2e suite
+  ;; (e2e/embed.spec.ts) can test a fresh build without dirtying the tracked
+  ;; app/public/embed.js.
+  :embed-e2e
+  {:target      :browser
+   :output-dir  "app/public/e2e-embed"
+   :asset-path  "/e2e-embed"
+   :modules     {:embed {:init-fn repulse.embed/init!}}
+   :compiler-options {:language-out :ecmascript-2020
                       :externs ["app/externs/lezer-lr.js"]}}}}

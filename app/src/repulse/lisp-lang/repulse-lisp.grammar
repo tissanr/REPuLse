@@ -31,6 +31,8 @@ Map    { OpenBrace expr* CloseBrace }
     "seq" | "stack" | "pure" | "fast" | "slow" | "rev" | "every" | "fmap" |
     "scale" | "chord" | "transpose" |
     "->>" | "->" | "amp" | "attack" | "decay" | "release" | "pan" |
+    "cutoff" | "resonance" | "hpq" | "bpq" | "shape" | "crush" | "velocity" |
+    "room" | "size" | "delay" | "delay-time" | "delay-feedback" | "orbit" |
     "euclidean" | "cat" | "late" | "early" |
     "sometimes" | "often" | "rarely" | "sometimes-by" |
     "degrade" | "degrade-by" |
@@ -43,7 +45,7 @@ Map    { OpenBrace expr* CloseBrace }
     "add" | "sub" | "mul" | "div" | "set" |
     "def" | "defn" | "let" | "fn" | "lambda" | "if" | "do" |
     "defmacro" | "defsynth" | "loop" | "recur" | "quasiquote" |
-    "bpm" | "stop" | "fx" | "master" | "load-plugin" | "unload-plugin" | "arrange" | "play-scenes" | "song" | "section" | "play-from" | "use" | "sound" | "bank" |
+    "bpm" | "stop" | "fx" | "master" | "load-plugin" | "unload-plugin" | "arrange" | "play-scenes" | "song" | "section" | "automate" | "ramp" | "fill" | "play-from" | "use" | "sound" | "bank" |
     "distort" | "amp-sim" | "waveshape" | "cab" |
     "chebyshev" | "fold" | "bitcrush" |
     "get" | "assoc" | "merge" | "not" | "and" | "or" | "comp" |

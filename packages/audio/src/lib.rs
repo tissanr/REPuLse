@@ -42,6 +42,26 @@ impl Biquad {
         }
     }
 
+    /// Audio EQ Cookbook low-pass (Phase TL7a per-event `lpf`).
+    fn lowpass(freq: f32, q: f32, sr: f32) -> Self {
+        let w0 = 2.0 * std::f32::consts::PI * freq / sr;
+        let alpha = w0.sin() / (2.0 * q);
+        let cos_w0 = w0.cos();
+        let a0 = 1.0 + alpha;
+        let b1 = 1.0 - cos_w0;
+        Biquad {
+            b0: b1 / 2.0 / a0,
+            b1: b1 / a0,
+            b2: b1 / 2.0 / a0,
+            a1: -2.0 * cos_w0 / a0,
+            a2: (1.0 - alpha) / a0,
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
+        }
+    }
+
     fn highpass(freq: f32, q: f32, sr: f32) -> Self {
         let w0 = 2.0 * std::f32::consts::PI * freq / sr;
         let alpha = w0.sin() / (2.0 * q);
@@ -575,11 +595,157 @@ impl Voice {
     }
 }
 
+// ── Per-event inserts (Phase TL7a) ─────────────────────────────────────────
+//
+// Clamps, defaults and formulas mirror app/src/repulse/inserts.cljs, which
+// drives the Web Audio node chain of the JS voice path:
+//   shape:  k = 2a / (1 − a),  y = (1 + k)·x / (1 + k·|x|)
+//   crush:  levels = 2^(bits − 1),  y = round(x·levels) / levels  (bits ≥ 16 → off)
+// Inline fields only: no heap allocation, built at trigger time in `activate`.
+
+/// Insert params of one event (trigger_v3 slots 4–11). Filter freq 0.0 = off.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct InsertParams {
+    lpf: f32,
+    resonance: f32,
+    hpf: f32,
+    hpq: f32,
+    bpf: f32,
+    bpq: f32,
+    shape: f32,
+    crush: f32,
+}
+
+impl InsertParams {
+    const OFF: InsertParams = InsertParams {
+        lpf: 0.0,
+        resonance: 0.707,
+        hpf: 0.0,
+        hpq: 0.707,
+        bpf: 0.0,
+        bpq: 1.0,
+        shape: 0.0,
+        crush: 16.0,
+    };
+}
+
+struct Inserts {
+    lpf: Option<Biquad>,
+    hpf: Option<Biquad>,
+    bpf: Option<Biquad>,
+    crush_levels: f32, // 0.0 = bypass
+    shape_k: f32,      // 0.0 = bypass
+}
+
+fn finite_or(x: f32, d: f32) -> f32 {
+    if x.is_finite() {
+        x
+    } else {
+        d
+    }
+}
+
+impl Inserts {
+    fn new(p: &InsertParams, sr: f32) -> Self {
+        // Cutoffs are also kept below Nyquist so a low sample rate stays stable.
+        let nyq = sr * 0.49;
+        let filt = |freq: f32, q: f32, dq: f32, make: fn(f32, f32, f32) -> Biquad| {
+            let freq = finite_or(freq, 0.0);
+            if freq > 0.0 {
+                let f = freq.clamp(20.0, 20_000.0).min(nyq);
+                Some(make(f, finite_or(q, dq).clamp(0.1, 30.0), sr))
+            } else {
+                None
+            }
+        };
+        let bits = finite_or(p.crush, 16.0).clamp(1.0, 16.0);
+        let a = finite_or(p.shape, 0.0).clamp(0.0, 0.99);
+        Inserts {
+            lpf: filt(p.lpf, p.resonance, 0.707, Biquad::lowpass),
+            hpf: filt(p.hpf, p.hpq, 0.707, Biquad::highpass),
+            bpf: filt(p.bpf, p.bpq, 1.0, Biquad::bandpass),
+            crush_levels: if bits < 16.0 {
+                2.0_f32.powf(bits - 1.0)
+            } else {
+                0.0
+            },
+            shape_k: if a > 0.0 { 2.0 * a / (1.0 - a) } else { 0.0 },
+        }
+    }
+
+    /// lpf → hpf → bpf → crush → shape. All stages off returns `x` unchanged.
+    #[inline]
+    fn tick(&mut self, x: f32) -> f32 {
+        let mut y = x;
+        if let Some(f) = self.lpf.as_mut() {
+            y = f.tick(y);
+        }
+        if let Some(f) = self.hpf.as_mut() {
+            y = f.tick(y);
+        }
+        if let Some(f) = self.bpf.as_mut() {
+            y = f.tick(y);
+        }
+        if self.crush_levels > 0.0 {
+            // floor(x + 0.5) = JS Math.round, as in the WaveShaper curve.
+            let l = self.crush_levels;
+            y = (y.clamp(-1.0, 1.0) * l + 0.5).floor() / l;
+        }
+        if self.shape_k > 0.0 {
+            let k = self.shape_k;
+            let c = y.clamp(-1.0, 1.0);
+            y = (1.0 + k) * c / (1.0 + k * c.abs());
+        }
+        y
+    }
+}
+
 // ── ActiveVoice — wraps a Voice with its stereo pan position ──────────────
 
 struct ActiveVoice {
     voice: Voice,
     pan: f32, // -1.0 (left) … 0.0 (centre) … 1.0 (right)
+    inserts: Inserts,
+    sends: Sends,
+}
+
+// ── Orbit sends (Phase TL7b) ──────────────────────────────────────────────
+// The reverb and delay of each orbit are Web Audio nodes on the main thread
+// (app/src/repulse/orbits.cljs). The engine only writes each voice's panned
+// output, scaled by its send levels, into per-orbit send buses.
+
+/// Number of orbits (0–3). Must match `n-orbits` in orbits.cljs.
+pub const N_ORBITS: usize = 4;
+/// Buses in the `process_block_buses` output: dry + room ×4 + delay ×4.
+pub const N_BUSES: usize = 1 + 2 * N_ORBITS;
+/// Render quantum the bus buffer is pre-allocated for.
+const BUS_FRAMES: usize = 128;
+
+/// Send levels of one event (trigger_v3 slots 12–14). Levels are clamped to
+/// 0–1 and the orbit to 0–3 (rounded) in `Sends::new`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Sends {
+    room: f32,
+    delay: f32,
+    orbit: usize,
+}
+
+impl Sends {
+    const OFF: Sends = Sends {
+        room: 0.0,
+        delay: 0.0,
+        orbit: 0,
+    };
+
+    fn new(room: f32, delay: f32, orbit: f32) -> Self {
+        Sends {
+            room: finite_or(room, 0.0).clamp(0.0, 1.0),
+            delay: finite_or(delay, 0.0).clamp(0.0, 1.0),
+            orbit: finite_or(orbit, 0.0)
+                .round()
+                .clamp(0.0, (N_ORBITS - 1) as f32) as usize,
+        }
+    }
 }
 
 // ── Pending event ──────────────────────────────────────────────────────────
@@ -587,10 +753,12 @@ struct ActiveVoice {
 struct Pending {
     time: f64,
     value: String,
-    amp: f32,    // 0.0–1.0, default 1.0
+    amp: f32,    // 0.0–2.0 (amp × gain × velocity), default 1.0
     attack: f32, // seconds, default 0.001
     decay: f32,  // seconds, default 1.5 for tones
     pan: f32,    // -1.0–1.0, default 0.0
+    inserts: InsertParams,
+    sends: Sends,
 }
 
 // ── Parameter transitions ──────────────────────────────────────────────────
@@ -656,6 +824,31 @@ impl Transition {
 
 // ── AudioEngine ────────────────────────────────────────────────────────────
 
+/// Build a Pending from a trigger_v3 slot array (see `AudioEngine::trigger_v3`).
+fn pending_v3(value: &str, time: f64, params: &[f32]) -> Pending {
+    let slot = |i: usize, d: f32| params.get(i).copied().unwrap_or(d);
+    let off = InsertParams::OFF;
+    Pending {
+        time,
+        value: value.to_string(),
+        amp: slot(0, 1.0),
+        attack: slot(1, 0.001),
+        decay: slot(2, 1.5),
+        pan: slot(3, 0.0),
+        inserts: InsertParams {
+            lpf: slot(4, off.lpf),
+            resonance: slot(5, off.resonance),
+            hpf: slot(6, off.hpf),
+            hpq: slot(7, off.hpq),
+            bpf: slot(8, off.bpf),
+            bpq: slot(9, off.bpq),
+            shape: slot(10, off.shape),
+            crush: slot(11, off.crush),
+        },
+        sends: Sends::new(slot(12, 0.0), slot(13, 0.0), slot(14, 0.0)),
+    }
+}
+
 #[wasm_bindgen]
 pub struct AudioEngine {
     sample_rate: f32,
@@ -664,6 +857,9 @@ pub struct AudioEngine {
     noise_seed: u32,
     amp_transition: Option<Transition>,
     pan_transition: Option<Transition>,
+    /// Phase TL7b: pre-allocated bus buffer for `process_block_buses_raw`,
+    /// layout [bus][frame][channel] for the current block length n.
+    bus: Vec<f32>,
 }
 
 #[wasm_bindgen]
@@ -681,6 +877,7 @@ impl AudioEngine {
             noise_seed: 0xDEAD_BEEF,
             amp_transition: None,
             pan_transition: None,
+            bus: vec![0.0; BUS_FRAMES * 2 * N_BUSES],
         }
     }
 
@@ -721,6 +918,8 @@ impl AudioEngine {
             attack: 0.001,
             decay: 1.5,
             pan: 0.0,
+            inserts: InsertParams::OFF,
+            sends: Sends::OFF,
         });
     }
 
@@ -741,7 +940,21 @@ impl AudioEngine {
             attack,
             decay,
             pan,
+            inserts: InsertParams::OFF,
+            sends: Sends::OFF,
         });
+    }
+
+    /// Schedule a sound event with a parameter slot array (Phase TL7a).
+    ///
+    /// Slot layout (fixed; later phases append, never reorder):
+    /// 0 amp · 1 attack · 2 decay · 3 pan · 4 lpf · 5 resonance · 6 hpf · 7 hpq
+    /// 8 bpf · 9 bpq · 10 shape · 11 crush        (filter slots: 0.0 = off)
+    /// 12 room · 13 delay · 14 orbit              (Phase TL7b sends)
+    ///
+    /// A missing trailing slot means its default.
+    pub fn trigger_v3(&mut self, value: &str, time: f64, params: &[f32]) {
+        self.pending.push(pending_v3(value, time, params));
     }
 
     /// Generate one audio quantum. Returns an interleaved stereo Float32Array of
@@ -751,6 +964,19 @@ impl AudioEngine {
         let buf = self.process_block_raw(n_samples, current_time);
         let arr = Float32Array::new_with_length(n_samples * 2);
         arr.copy_from(&buf);
+        arr
+    }
+
+    /// Generate one audio quantum into all buses (Phase TL7b). Returns
+    /// `N_BUSES · n_samples · 2` floats, layout [bus][frame][channel]:
+    /// bus 0 = dry (identical to `process_block`), 1..=4 = room sends of
+    /// orbits 0–3, 5..=8 = delay sends of orbits 0–3.
+    pub fn process_block_buses(&mut self, n_samples: u32, current_time: f64) -> Float32Array {
+        let n = n_samples as usize;
+        self.process_block_buses_raw(n_samples, current_time);
+        let len = N_BUSES * n * 2;
+        let arr = Float32Array::new_with_length(len as u32);
+        arr.copy_from(&self.bus[..len]);
         arr
     }
 
@@ -771,6 +997,7 @@ impl AudioEngine {
             noise_seed: 0xDEAD_BEEF,
             amp_transition: None,
             pan_transition: None,
+            bus: vec![0.0; BUS_FRAMES * 2 * N_BUSES],
         }
     }
 
@@ -783,6 +1010,8 @@ impl AudioEngine {
             attack: 0.001,
             decay: 1.5,
             pan: 0.0,
+            inserts: InsertParams::OFF,
+            sends: Sends::OFF,
         });
     }
 
@@ -803,16 +1032,48 @@ impl AudioEngine {
             attack,
             decay,
             pan,
+            inserts: InsertParams::OFF,
+            sends: Sends::OFF,
         });
     }
 
     /// Pure-Rust stereo render — no JS types. Returns interleaved [L0, R0, L1, …].
+    /// The dry signal only: send levels are ignored here.
     pub fn process_block_raw(&mut self, n_samples: u32, current_time: f64) -> Vec<f32> {
-        let sr = self.sample_rate;
         let n = n_samples as usize;
         if n == 0 {
             return Vec::new();
         }
+        let mut buf = vec![0.0f32; n * 2];
+        self.render(n, current_time, &mut buf, false);
+        buf
+    }
+
+    /// Render one block into the pre-allocated bus buffer (Phase TL7b) and
+    /// return it, layout [bus][frame][channel]; see `process_block_buses`.
+    /// Bus 0 is bit-identical to `process_block_raw`. The buffer only grows
+    /// when n exceeds its capacity (never for 128-frame render quanta).
+    pub fn process_block_buses_raw(&mut self, n_samples: u32, current_time: f64) -> &[f32] {
+        let n = n_samples as usize;
+        let len = N_BUSES * n * 2;
+        if self.bus.len() < len {
+            self.bus.resize(len, 0.0);
+        }
+        let mut bus = std::mem::take(&mut self.bus);
+        bus[..len].fill(0.0);
+        if n > 0 {
+            self.render(n, current_time, &mut bus, true);
+        }
+        self.bus = bus;
+        &self.bus[..len]
+    }
+
+    /// Shared render loop. `out` holds at least n·2 floats (dry, interleaved);
+    /// with `sends`, it holds N_BUSES·n·2 zeroed floats and each voice is also
+    /// added to the room/delay bus of its orbit. The engine's amp/pan
+    /// transitions and the output clamp apply to the dry bus only.
+    fn render(&mut self, n: usize, current_time: f64, out: &mut [f32], sends: bool) {
+        let sr = self.sample_rate;
         let block_end = current_time + n as f64 / sr as f64;
 
         let pending = std::mem::take(&mut self.pending);
@@ -832,7 +1093,7 @@ impl AudioEngine {
         }
         self.pending = deferred;
 
-        let mut buf = vec![0.0f32; n * 2];
+        let stride = n * 2;
         for i in 0..n {
             for p in std::mem::take(&mut scheduled[i]) {
                 self.activate(p);
@@ -841,10 +1102,24 @@ impl AudioEngine {
             let mut l = 0.0f32;
             let mut r = 0.0f32;
             for av in self.voices.iter_mut() {
-                let s = av.voice.tick(sr);
+                let s = av.inserts.tick(av.voice.tick(sr));
                 let angle = (av.pan + 1.0) / 2.0 * std::f32::consts::FRAC_PI_2;
-                l += s * angle.cos();
-                r += s * angle.sin();
+                let (vl, vr) = (s * angle.cos(), s * angle.sin());
+                l += vl;
+                r += vr;
+                if sends {
+                    let Sends { room, delay, orbit } = av.sends;
+                    if room > 0.0 {
+                        let k = (1 + orbit) * stride + i * 2;
+                        out[k] += vl * room;
+                        out[k + 1] += vr * room;
+                    }
+                    if delay > 0.0 {
+                        let k = (1 + N_ORBITS + orbit) * stride + i * 2;
+                        out[k] += vl * delay;
+                        out[k + 1] += vr * delay;
+                    }
+                }
             }
 
             let amp_scale = if let Some(ref mut tr) = self.amp_transition {
@@ -856,15 +1131,14 @@ impl AudioEngine {
             if let Some(ref mut tr) = self.pan_transition {
                 let pan_val = tr.tick().clamp(-1.0, 1.0);
                 let bal_angle = (pan_val + 1.0) / 2.0 * std::f32::consts::FRAC_PI_2;
-                buf[i * 2] = ((l + r) * bal_angle.cos() * amp_scale).clamp(-1.0, 1.0);
-                buf[i * 2 + 1] = ((l + r) * bal_angle.sin() * amp_scale).clamp(-1.0, 1.0);
+                out[i * 2] = ((l + r) * bal_angle.cos() * amp_scale).clamp(-1.0, 1.0);
+                out[i * 2 + 1] = ((l + r) * bal_angle.sin() * amp_scale).clamp(-1.0, 1.0);
             } else {
-                buf[i * 2] = (l * amp_scale).clamp(-1.0, 1.0);
-                buf[i * 2 + 1] = (r * amp_scale).clamp(-1.0, 1.0);
+                out[i * 2] = (l * amp_scale).clamp(-1.0, 1.0);
+                out[i * 2 + 1] = (r * amp_scale).clamp(-1.0, 1.0);
             }
         }
         self.voices.retain(|av| !av.voice.is_silent());
-        buf
     }
 
     fn next_seed(&mut self) -> u32 {
@@ -878,7 +1152,9 @@ impl AudioEngine {
     fn activate(&mut self, p: Pending) {
         let sr = self.sample_rate;
         let seed = self.next_seed();
-        let amp = p.amp.clamp(0.0, 1.0);
+        // 0–2: amp × gain may exceed 1 (TL7a); the output clamp at ±1 stays.
+        let amp = p.amp.clamp(0.0, 2.0);
+        let inserts = Inserts::new(&p.inserts, sr);
         let value = p.value.trim_start_matches(':');
 
         let voice = if let Some(rest) = value.strip_prefix("saw:") {
@@ -1008,6 +1284,8 @@ impl AudioEngine {
                     body_filters: ks_body_filters(preset, sr),
                 },
                 pan: p.pan.clamp(-1.0, 1.0),
+                inserts,
+                sends: p.sends,
             });
             return;
         } else {
@@ -1063,6 +1341,8 @@ impl AudioEngine {
         self.voices.push(ActiveVoice {
             voice,
             pan: p.pan.clamp(-1.0, 1.0),
+            inserts,
+            sends: p.sends,
         });
     }
 }
@@ -1449,5 +1729,356 @@ mod engine_tests {
             "event at t=1.0 should not activate in block at t=0.0"
         );
         assert_eq!(eng.pending.len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod tl7a_insert_tests {
+    use super::*;
+
+    const SR: f32 = 44100.0;
+
+    /// Goertzel magnitude of `freq` in `buf`.
+    fn goertzel(buf: &[f32], freq: f32, sr: f32) -> f32 {
+        let w = 2.0 * std::f64::consts::PI * freq as f64 / sr as f64;
+        let coeff = 2.0 * w.cos();
+        let (mut s1, mut s2) = (0.0f64, 0.0f64);
+        for &x in buf {
+            let s0 = x as f64 + coeff * s1 - s2;
+            s2 = s1;
+            s1 = s0;
+        }
+        ((s1 * s1 + s2 * s2 - coeff * s1 * s2).max(0.0)).sqrt() as f32
+    }
+
+    fn db(ratio: f32) -> f32 {
+        20.0 * ratio.max(1e-12).log10()
+    }
+
+    fn sine(freq: f32, amp: f32, secs: f32) -> Vec<f32> {
+        let n = (secs * SR) as usize;
+        (0..n)
+            .map(|i| amp * (2.0 * std::f32::consts::PI * freq * i as f32 / SR).sin())
+            .collect()
+    }
+
+    fn params(f: impl FnOnce(&mut InsertParams)) -> InsertParams {
+        let mut p = InsertParams::OFF;
+        f(&mut p);
+        p
+    }
+
+    /// Run `input` through inserts built from `p`; drop the first 0.05 s (filter settling).
+    fn through(p: InsertParams, input: &[f32]) -> Vec<f32> {
+        let mut ins = Inserts::new(&p, SR);
+        let out: Vec<f32> = input.iter().map(|&x| ins.tick(x)).collect();
+        out[(0.05 * SR) as usize..].to_vec()
+    }
+
+    /// Filter response at `freq` in dB (filtered vs unfiltered sine).
+    fn response_db(p: InsertParams, freq: f32) -> f32 {
+        let x = sine(freq, 0.5, 0.5);
+        let dry = &x[(0.05 * SR) as usize..];
+        db(goertzel(&through(p, &x), freq, SR) / goertzel(dry, freq, SR))
+    }
+
+    #[test]
+    fn inserts_off_is_identity() {
+        let mut ins = Inserts::new(&InsertParams::OFF, SR);
+        for &x in &[0.0f32, 0.25, -0.731, 1.5, -2.0] {
+            assert_eq!(ins.tick(x).to_bits(), x.to_bits());
+        }
+        assert!(ins.lpf.is_none() && ins.hpf.is_none() && ins.bpf.is_none());
+    }
+
+    #[test]
+    fn lpf_500_cuts_5k_and_passes_200() {
+        let p = params(|p| p.lpf = 500.0);
+        let at_5k = response_db(p, 5000.0);
+        let at_200 = response_db(p, 200.0);
+        assert!(at_5k <= -20.0, "5 kHz through lpf 500: {at_5k} dB");
+        assert!(at_200.abs() <= 1.0, "200 Hz through lpf 500: {at_200} dB");
+    }
+
+    #[test]
+    fn hpf_2000_cuts_200() {
+        let p = params(|p| p.hpf = 2000.0);
+        let at_200 = response_db(p, 200.0);
+        assert!(at_200 <= -20.0, "200 Hz through hpf 2000: {at_200} dB");
+    }
+
+    #[test]
+    fn bpf_1000_q5_rejects_100_and_8k() {
+        let p = params(|p| {
+            p.bpf = 1000.0;
+            p.bpq = 5.0;
+        });
+        let centre = response_db(p, 1000.0);
+        for f in [100.0, 8000.0] {
+            let rel = centre - response_db(p, f);
+            assert!(rel >= 15.0, "{f} Hz is only {rel} dB below 1 kHz");
+        }
+    }
+
+    #[test]
+    fn crush_4_has_at_most_16_values() {
+        let mut e = AudioEngine::new_for_test(SR);
+        e.trigger_v3(
+            "440",
+            0.0,
+            &[
+                1.0, 0.001, 1.5, 0.0, 0.0, 0.707, 0.0, 0.707, 0.0, 1.0, 0.0, 4.0,
+            ],
+        );
+        let buf = e.process_block_raw((0.1 * SR) as u32, 0.0);
+        let mut vals: Vec<u32> = buf.iter().step_by(2).map(|x| x.to_bits()).collect();
+        vals.sort_unstable();
+        vals.dedup();
+        assert!(vals.len() <= 16, "{} distinct values", vals.len());
+        assert!(vals.len() >= 3, "crush must still pass a waveform");
+    }
+
+    #[test]
+    fn shape_08_raises_third_harmonic_20db() {
+        let x = sine(440.0, 0.5, 0.3);
+        let dry = through(InsertParams::OFF, &x);
+        let wet = through(params(|p| p.shape = 0.8), &x);
+        let rise = db(goertzel(&wet, 1320.0, SR) / goertzel(&dry, 1320.0, SR));
+        assert!(rise >= 20.0, "3rd harmonic rose by {rise} dB");
+    }
+
+    #[test]
+    fn amp_clamp_allows_two() {
+        let render = |amp: f32| {
+            let mut e = AudioEngine::new_for_test(SR);
+            e.trigger_raw_v2("440", 0.0, amp, 0.001, 1.5, 0.0);
+            let b = e.process_block_raw(4410, 0.0);
+            (b.iter().map(|x| x * x).sum::<f32>() / b.len() as f32).sqrt()
+        };
+        let ratio = render(1.6) / render(0.8);
+        assert!((ratio - 2.0).abs() < 0.01, "amp 1.6 / amp 0.8 = {ratio}");
+    }
+
+    /// Fingerprint of a fixed trigger_v2 render. GOLDEN was recorded on the engine
+    /// before Phase TL7a: the no-insert path must stay bit-identical.
+    fn v2_fingerprint(v3: bool) -> u64 {
+        let mut e = AudioEngine::new_for_test(SR);
+        let voices = [
+            "saw:261.63",
+            "square:220:0.3",
+            "bd",
+            "sd",
+            "hh",
+            "440",
+            "fm:epiano:220",
+            "ks:nylon:110",
+            "noise",
+        ];
+        for (i, v) in voices.iter().enumerate() {
+            let t = i as f64 * 0.05;
+            if v3 {
+                e.trigger_v3(v, t, &[0.8, 0.01, 0.3, 0.25]);
+            } else {
+                e.trigger_raw_v2(v, t, 0.8, 0.01, 0.3, 0.25);
+            }
+        }
+        let mut h: u64 = 0;
+        for b in 0..40 {
+            for s in e.process_block_raw(128, b as f64 * 128.0 / SR as f64) {
+                h = h
+                    .wrapping_mul(1_099_511_628_211)
+                    .wrapping_add(s.to_bits() as u64);
+            }
+        }
+        h
+    }
+
+    const GOLDEN: u64 = 0xfd60_f3d5_f69d_e5e7;
+
+    #[test]
+    fn trigger_v2_render_is_bit_identical_to_pre_tl7a() {
+        assert_eq!(v2_fingerprint(false), GOLDEN);
+    }
+
+    #[test]
+    fn trigger_v3_without_inserts_matches_v2() {
+        assert_eq!(v2_fingerprint(true), GOLDEN);
+    }
+
+    #[test]
+    fn trigger_v3_missing_slots_default() {
+        let p = pending_v3("bd", 1.0, &[0.5]);
+        assert_eq!(p.amp, 0.5);
+        assert_eq!(p.decay, 1.5);
+        assert_eq!(p.inserts, InsertParams::OFF);
+    }
+
+    /// Relative levels (dB vs the 262 Hz fundamental) of a saw at C4 through
+    /// lpf 1200, resonance 4 — the WASM half of the JS↔WASM parity check.
+    /// e2e/audio-render.spec.ts asserts the offline JS render (make-saw → native
+    /// BiquadFilterNode) against PARITY_DB within 2 dB.
+    pub(crate) fn parity_levels() -> [f32; 2] {
+        let mut e = AudioEngine::new_for_test(SR);
+        e.trigger_v3(
+            "saw:261.6255653005986",
+            0.0,
+            &[
+                1.0, 0.001, 1.5, 0.0, 1200.0, 4.0, 0.0, 0.707, 0.0, 1.0, 0.0, 16.0,
+            ],
+        );
+        let n = (0.5 * SR) as u32;
+        let buf = e.process_block_raw(n, 0.0);
+        let mono: Vec<f32> = buf.iter().step_by(2).copied().collect();
+        let w = &mono[(0.05 * SR) as usize..];
+        let f0 = goertzel(w, 261.625_57, SR);
+        // 1200 Hz is not a harmonic of C4; measure the harmonics nearest it
+        // (1308 Hz = 5th) and 4000 Hz (3924 Hz = 15th), as the JS side does.
+        [
+            db(goertzel(w, 261.625_57 * 5.0, SR) / f0),
+            db(goertzel(w, 261.625_57 * 15.0, SR) / f0),
+        ]
+    }
+
+    pub(crate) const PARITY_DB: [f32; 2] = [-4.69, -44.36];
+
+    #[test]
+    fn parity_reference_levels() {
+        let l = parity_levels();
+        println!("PARITY_DB = {:?}", l);
+        for (got, want) in l.iter().zip(PARITY_DB.iter()) {
+            assert!(
+                (got - want).abs() <= 0.5,
+                "parity level {got} dB, pinned {want} dB"
+            );
+        }
+    }
+}
+
+// ── Phase TL7b: orbit send buses ───────────────────────────────────────────
+#[cfg(test)]
+mod send_tests {
+    use super::*;
+
+    const SR: f32 = 44100.0;
+
+    /// trigger_v3 slots with defaults for 0–11 and the given sends in 12–14.
+    fn slots(room: f32, delay: f32, orbit: f32) -> Vec<f32> {
+        vec![
+            1.0, 0.001, 1.5, 0.0, 0.0, 0.707, 0.0, 0.707, 0.0, 1.0, 0.0, 16.0, room, delay, orbit,
+        ]
+    }
+
+    /// Render `blocks` 128-frame blocks; return the per-bus sum of |x|.
+    fn bus_energy(e: &mut AudioEngine, blocks: usize) -> [f32; N_BUSES] {
+        let mut acc = [0.0f32; N_BUSES];
+        for b in 0..blocks {
+            let t = (b * 128) as f64 / SR as f64;
+            let buf = e.process_block_buses_raw(128, t);
+            for (k, slot) in acc.iter_mut().enumerate() {
+                *slot += buf[k * 256..(k + 1) * 256]
+                    .iter()
+                    .map(|x| x.abs())
+                    .sum::<f32>();
+            }
+        }
+        acc
+    }
+
+    #[test]
+    fn room_on_orbit_2_writes_only_dry_and_room_bus_3() {
+        let mut e = AudioEngine::new_for_test(SR);
+        e.trigger_v3("440", 0.0, &slots(0.5, 0.0, 2.0));
+        let acc = bus_energy(&mut e, 40);
+        for (k, v) in acc.iter().enumerate() {
+            if k == 0 || k == 3 {
+                assert!(*v > 0.0, "bus {k} should carry signal");
+            } else {
+                assert_eq!(*v, 0.0, "bus {k} should be silent");
+            }
+        }
+        // room 0.5 → the send is half the (unclamped) dry level
+        let ratio = acc[3] / acc[0];
+        assert!((ratio - 0.5).abs() < 1e-3, "room/dry ratio {ratio}");
+    }
+
+    #[test]
+    fn delay_on_orbit_1_writes_delay_bus_6() {
+        let mut e = AudioEngine::new_for_test(SR);
+        e.trigger_v3("440", 0.0, &slots(0.0, 0.8, 1.0));
+        let acc = bus_energy(&mut e, 20);
+        for (k, v) in acc.iter().enumerate() {
+            if k == 0 || k == 1 + N_ORBITS + 1 {
+                assert!(*v > 0.0, "bus {k} should carry signal");
+            } else {
+                assert_eq!(*v, 0.0, "bus {k} should be silent");
+            }
+        }
+    }
+
+    #[test]
+    fn room_0_leaves_send_buses_exactly_zero() {
+        let mut e = AudioEngine::new_for_test(SR);
+        e.trigger_v3("440", 0.0, &slots(0.0, 0.0, 0.0));
+        e.trigger_v3("bd", 0.0, &slots(0.0, 0.0, 3.0));
+        for b in 0..40 {
+            let buf = e.process_block_buses_raw(128, (b * 128) as f64 / SR as f64);
+            assert!(buf[256..].iter().all(|x| x.to_bits() == 0), "block {b}");
+        }
+    }
+
+    #[test]
+    fn sends_clamp_and_out_of_range_orbit_uses_3() {
+        let s = Sends::new(1.7, -0.2, 7.0);
+        assert_eq!(
+            s,
+            Sends {
+                room: 1.0,
+                delay: 0.0,
+                orbit: 3
+            }
+        );
+        assert_eq!(Sends::new(f32::NAN, 0.5, -2.0).orbit, 0);
+        assert_eq!(Sends::new(0.0, 0.0, 1.4).orbit, 1);
+        // missing trailing slots = no sends (TL7a messages stay valid)
+        let p = pending_v3("440", 0.0, &[1.0, 0.001, 1.5, 0.0]);
+        assert_eq!(p.sends, Sends::OFF);
+    }
+
+    /// Dry bus of process_block_buses_raw is bit-identical to process_block_raw,
+    /// with and without sends on the voices.
+    #[test]
+    fn dry_bus_is_bit_identical_to_process_block_raw() {
+        let mut a = AudioEngine::new_for_test(SR);
+        let mut b = AudioEngine::new_for_test(SR);
+        for e in [&mut a, &mut b] {
+            e.trigger_v3("440", 0.0, &slots(0.6, 0.3, 1.0));
+            e.trigger_v3("saw:110", 0.01, &slots(0.0, 0.9, 3.0));
+            e.trigger_raw("sd", 0.02);
+            e.trigger_v2("ks:guitar:196", 0.05, 0.8, 0.001, 1.5, -0.4);
+        }
+        for blk in 0..200 {
+            let t = (blk * 128) as f64 / SR as f64;
+            let raw = a.process_block_raw(128, t);
+            let bus = b.process_block_buses_raw(128, t);
+            for i in 0..256 {
+                assert_eq!(raw[i].to_bits(), bus[i].to_bits(), "block {blk} sample {i}");
+            }
+        }
+    }
+
+    #[test]
+    fn bus_buffer_is_not_reallocated_across_1000_blocks() {
+        let mut e = AudioEngine::new_for_test(SR);
+        let ptr = e.bus.as_ptr();
+        let cap = e.bus.capacity();
+        for blk in 0..1000 {
+            if blk % 50 == 0 {
+                e.trigger_v3("440", (blk * 128) as f64 / SR as f64, &slots(0.5, 0.5, 2.0));
+            }
+            let out = e.process_block_buses_raw(128, (blk * 128) as f64 / SR as f64);
+            assert_eq!(out.as_ptr(), ptr, "block {blk}");
+        }
+        assert_eq!(e.bus.as_ptr(), ptr);
+        assert_eq!(e.bus.capacity(), cap);
     }
 }
