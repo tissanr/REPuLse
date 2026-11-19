@@ -178,4 +178,26 @@
 }
 .embed-play-overlay:hover .embed-play-btn { transform: scale(1.1); background: #e94560; }
 .embed-play-btn svg { display: block; }
+
+/* Play/stop button, top-right of every embed */
+.embed-transport-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 5;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(233, 69, 96, 0.6);
+  background: rgba(24, 27, 34, 0.85);
+  color: #e94560;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+.embed-transport-btn:hover { background: #e94560; color: #fff; }
+.embed-transport-btn:focus-visible { outline: 2px solid #61afef; outline-offset: 1px; }
+.embed-transport-btn svg { display: block; }
 ")
