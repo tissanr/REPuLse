@@ -4,7 +4,8 @@
    splice, fit, loop-at, speed, unit, accelerate, legato, sustain, cut,
    loop-begin, loop-end — and TL7a per-event inserts: lpf/cutoff, resonance, hpf,
    hpq, bpf, bpq, shape, crush, gain, velocity — and TL7b sends: room, size, delay,
-   delay-time, delay-feedback, orbit."
+   delay-time, delay-feedback, orbit — and TL7c envelopes, pitch
+   modulation, vowel, coarse, djf, postgain, nudge, delay-sync."
   (:require [repulse.params :as params]
             [repulse.lisp.util :as u]))
 
@@ -57,6 +58,35 @@
    "delay-time"     (param params/delay-time)
    "delay-feedback" (param params/delay-feedback)
    "orbit"          (param params/orbit)
+   ;; Phase TL7c — envelopes, pitch, vowel, coarse, djf, postgain, nudge, delay-sync
+   "lp-env"       (param params/lp-env)
+   "lp-attack"    (param params/lp-attack)
+   "lp-decay"     (param params/lp-decay)
+   "lp-sustain"   (param params/lp-sustain)
+   "lp-release"   (param params/lp-release)
+   "hp-env"       (param params/hp-env)
+   "hp-attack"    (param params/hp-attack)
+   "hp-decay"     (param params/hp-decay)
+   "hp-sustain"   (param params/hp-sustain)
+   "hp-release"   (param params/hp-release)
+   "bp-env"       (param params/bp-env)
+   "bp-attack"    (param params/bp-attack)
+   "bp-decay"     (param params/bp-decay)
+   "bp-sustain"   (param params/bp-sustain)
+   "bp-release"   (param params/bp-release)
+   "penv"         (param params/penv)
+   "p-attack"     (param params/p-attack)
+   "p-decay"      (param params/p-decay)
+   "p-sustain"    (param params/p-sustain)
+   "p-release"    (param params/p-release)
+   "vib"          (param params/vib)
+   "vib-mod"      (param params/vib-mod)
+   "vowel"        (param params/vowel)
+   "coarse"       (param params/coarse)
+   "djf"          (param params/djf)
+   "postgain"     (param params/postgain)
+   "nudge"        (param params/nudge)
+   "delay-sync"   (param params/delay-sync)
 "amp"     (fn
                ([v]   (params/amp (u/unwrap v)))
                ([v p] (params/amp (u/unwrap v) (u/unwrap p))))

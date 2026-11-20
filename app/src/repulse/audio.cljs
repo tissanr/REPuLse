@@ -335,7 +335,8 @@
      (.connect gain panner)
      (.connect panner dest)
      (.start osc t)
-     (.stop osc stop-t))))
+     (.stop osc stop-t)
+     osc)))
 
 (defn- make-saw [ac t freq dur amp attack pan dest]
   (let [osc    (.createOscillator ac)
@@ -354,7 +355,8 @@
     (.connect gain panner)
     (.connect panner dest)
     (.start osc t)
-    (.stop osc stop-t)))
+    (.stop osc stop-t)
+    osc))
 
 (defn- make-pulse-wave
   "Build a PeriodicWave for a pulse wave with duty cycle pw (0.0–1.0).
@@ -396,7 +398,8 @@
     (.connect gain panner)
     (.connect panner dest)
     (.start osc t)
-    (.stop osc stop-t)))
+    (.stop osc stop-t)
+    osc))
 
 (defn- make-noise [ac t dur amp pan dest]
   (let [buf-size (max 1 (* (.-sampleRate ac) (int (Math/ceil dur))))
@@ -441,23 +444,26 @@
 
 (defn- worklet-trigger-v3!
   "Send a trigger to the WASM worklet with explicit synthesis parameters, the
-   event's insert params (Phase TL7a) and its orbit sends (Phase TL7b).
-   ins — insert-params map or nil; snd — send-params map or nil. Both nil sends
-   the smaller trigger_v2 message. Returns true if ready. dest must be the
-   target's master gain — the worklet always outputs there."
-  [{:keys [node ready? master]} value t amp attack decay pan ins snd dest]
+   event's insert params (Phase TL7a), its orbit sends (Phase TL7b) and its
+   envelopes / pitch modulation (Phase TL7c, pm from inserts/pitch-params;
+   gate = event length in seconds or nil). ins, snd, pm nil sends the smaller
+   trigger_v2 message. Returns true if ready. dest must be the target's master
+   gain — the worklet always outputs there."
+  [{:keys [node ready? master]} value t amp attack decay pan ins snd pm gate dest]
   (when (and ready? node (= dest master))
     (when debug? (js/console.log "[REPuLse] triggering WASM:" value "at t=" t "amp=" amp))
     (.. ^js node -port
         (postMessage
-          (if (or ins snd)
+          (if (or ins snd pm)
             ;; Slot layout = lib.rs trigger_v3 (appended, never reordered):
-            ;; 0–3 voice · 4–11 inserts · 12–14 room delay orbit.
-            #js {:type "trigger_v3" :value value :time t
-                 :params (js/Float32Array.from
-                           (clj->js (cond-> (into [amp attack decay pan]
-                                                  (inserts/wasm-slots (or ins inserts/off)))
-                                      snd (into (orbits/wasm-slots snd)))))}
+            ;; 0–3 voice · 4–11 inserts · 12–14 room delay orbit · 15–40 TL7c.
+            (let [c? (inserts/tl7c? ins pm)]
+              #js {:type "trigger_v3" :value value :time t
+                   :params (js/Float32Array.from
+                             (clj->js (cond-> (into [amp attack decay pan]
+                                                    (inserts/wasm-slots (or ins inserts/off)))
+                                        (or snd c?) (into (orbits/wasm-slots snd))
+                                        c?          (into (inserts/wasm-slots-tl7c ins pm gate)))))})
             #js {:type "trigger_v2" :value value :time t
                  :amp amp :attack attack :decay decay :pan pan})))
     true))
@@ -481,12 +487,80 @@
           (swap! curve-cache assoc k c)
           c))))
 
-(defn- insert-biquad [ac t type freq q]
-  (let [f (.createBiquadFilter ac)]
-    (set! (.-type f) type)
-    (.setValueAtTime (.-frequency f) freq t)
-    (.setValueAtTime (.-Q f) (inserts/q->webaudio type q) t)
-    f))
+(defn- insert-biquad
+  "BiquadFilterNode of type at freq/q. env (inserts/env-params map, TL7c)
+   moves the cutoff from freq to freq·2^depth and back, following
+   inserts/env-points: exponential ramps = straight lines in octaves."
+  ([ac t type freq q] (insert-biquad ac t type freq q nil nil))
+  ([ac t type freq q env gate]
+   (let [f (.createBiquadFilter ac)
+         p (.-frequency f)]
+     (set! (.-type f) type)
+     (if env
+       (let [d (inserts/effective-depth freq (:depth env) (.-sampleRate ac))]
+         (doseq [[pt e kind] (inserts/env-points env gate)
+                 :let [v (* freq (Math/pow 2 (* d e)))]]
+           (if (= kind :set)
+             (.setValueAtTime p v (+ t pt))
+             (.exponentialRampToValueAtTime p v (+ t pt)))))
+       (.setValueAtTime p freq t))
+     (.setValueAtTime (.-Q f) (inserts/q->webaudio type q) t)
+     f)))
+
+(defn- vowel-stage
+  "Formant bank for vowel kw (TL7c): in → 5 band-passes × formant gains → out
+   (gain inserts/vowel-makeup). → {:in node :out node :nodes [all]}"
+  [ac t kw]
+  (let [[freqs dbs bws] (get inserts/vowel-table kw)
+        in    (.createGain ac)
+        out   (.createGain ac)
+        bands (mapv (fn [f db bw]
+                      (let [bq (insert-biquad ac t "bandpass" f (/ f bw))
+                            g  (.createGain ac)]
+                        (.setValueAtTime (.-gain g) (Math/pow 10 (/ db 20)) t)
+                        (.connect in bq)
+                        (.connect bq g)
+                        (.connect g out)
+                        [bq g]))
+                    freqs dbs bws)]
+    (.setValueAtTime (.-gain out) inserts/vowel-makeup t)
+    {:in in :out out :nodes (into [in out] (mapcat identity bands))}))
+
+(defn- pitch-mods!
+  "Pitch envelope and vibrato (TL7c, pm from inserts/pitch-params) on the
+   detune AudioParam of src (an OscillatorNode or AudioBufferSourceNode)
+   starting at t. The vibrato LFO stops when src ends."
+  [ac t ^js src pm gate]
+  (let [param (.-detune src)]
+    (when-let [env (:penv pm)]
+      (let [cents (* 100 (:depth env))]
+        (doseq [[pt e kind] (inserts/env-points env gate)]
+          (if (= kind :set)
+            (.setValueAtTime param (* cents e) (+ t pt))
+            (.linearRampToValueAtTime param (* cents e) (+ t pt))))))
+    (when (pos? (:vib pm 0))
+      (let [lfo (.createOscillator ac)
+            g   (.createGain ac)]
+        (set! (.-type lfo) "sine")
+        (.setValueAtTime (.-frequency lfo) (:vib pm) t)
+        (.setValueAtTime (.-gain g) (* 100 (:vib-mod pm)) t)
+        (.connect lfo g)
+        (.connect g param)
+        (.start lfo t)
+        (.addEventListener src "ended"
+                           (fn [] (try (.stop lfo) (.disconnect g) (catch :default _ nil))))))
+    src))
+
+(defonce ^:private coarse-warned? (atom false))
+
+(defn- warn-coarse!
+  "coarse has no native node (TL7c decision 2): warn once per session when an
+   event with coarse takes the JS path."
+  []
+  (when-not @coarse-warned?
+    (reset! coarse-warned? true)
+    (js/console.warn "[REPuLse] coarse only works on synth voices (WASM); ignored for"
+                     "samples, defsynth voices and tracks with an fx chain")))
 
 (defn- insert-shaper [ac curve]
   (let [ws (.createWaveShaper ac)]
@@ -511,37 +585,49 @@
 
 (defn- event-output
   "Return the node a JS voice should connect to. If the event has insert params
-   (ins, from inserts/insert-params), build lpf → hpf → bpf → crush → shape
-   (only the stages present) ending in dest, and schedule disconnection after the
-   voice ends. gain ≠ 1 adds a leading GainNode (defsynth voices, whose amp the
-   audio layer does not control). Orbit sends (snd, from orbits/send-params,
-   Phase TL7b) add an output GainNode at the end of the chain that feeds dest
-   (dry) and the room/delay inputs of the event's orbit. Without any of these,
-   return dest — no extra nodes."
-  ([ac t ins snd dest dur] (event-output ac t ins snd dest dur 1.0))
-  ([ac t ins snd dest dur gain]
+   (ins, from inserts/insert-params), build lpf → hpf → bpf → vowel → crush →
+   shape → postgain (only the stages present; filter envelopes from TL7c ride
+   on their biquad, released at gate seconds) ending in dest, and schedule
+   disconnection after the voice ends. gain ≠ 1 adds a leading GainNode
+   (defsynth voices, whose amp the audio layer does not control). Orbit sends
+   (snd, from orbits/send-params, Phase TL7b) add an output GainNode at the end
+   of the chain that feeds dest (dry) and the room/delay inputs of the event's
+   orbit. Without any of these, return dest — no extra nodes. coarse has no
+   node here (warned once)."
+  ([ac t ins snd dest dur] (event-output ac t ins snd dest dur 1.0 nil))
+  ([ac t ins snd dest dur gain gate]
    (if (and (nil? ins) (nil? snd) (== gain 1))
      dest
-     (let [{:keys [lpf resonance hpf hpq bpf bpq shape crush]} ins
-           g      (when-not (== gain 1)
-                    (let [n (.createGain ac)]
-                      (.setValueAtTime (.-gain n) gain t)
-                      n))
+     (let [{:keys [lpf resonance hpf hpq bpf bpq shape crush
+                   lp-env hp-env bp-env vowel coarse postgain]} ins
+           node   (fn [n] {:in n :out n :nodes [n]})
            levels (when crush (inserts/crush-levels crush))
-           nodes  (cond-> []
-                    g            (conj g)
-                    lpf          (conj (insert-biquad ac t "lowpass" lpf resonance))
-                    hpf          (conj (insert-biquad ac t "highpass" hpf hpq))
-                    bpf          (conj (insert-biquad ac t "bandpass" bpf bpq))
-                    levels       (conj (insert-shaper ac (cached-curve :crush crush)))
+           _      (when coarse (warn-coarse!))
+           stages (cond-> []
+                    (not (== gain 1))
+                    (conj (node (let [n (.createGain ac)]
+                                  (.setValueAtTime (.-gain n) gain t)
+                                  n)))
+                    lpf    (conj (node (insert-biquad ac t "lowpass" lpf resonance lp-env gate)))
+                    hpf    (conj (node (insert-biquad ac t "highpass" hpf hpq hp-env gate)))
+                    bpf    (conj (node (insert-biquad ac t "bandpass" bpf bpq bp-env gate)))
+                    vowel  (conj (vowel-stage ac t vowel))
+                    levels (conj (node (insert-shaper ac (cached-curve :crush crush))))
                     (and shape (pos? shape))
-                    (conj (insert-shaper ac (cached-curve :shape shape)))
-                    snd          (conj (.createGain ac)))
-           sends  (when snd (orbits/send! ac t (peek nodes) snd (output-node ac)))]
-       (doseq [[a b] (partition 2 1 (conj nodes dest))]
-         (.connect a b))
-       (schedule-disconnect! ac t (into nodes sends) dur)
-       (first nodes)))))
+                    (conj (node (insert-shaper ac (cached-curve :shape shape))))
+                    (and postgain (not= postgain 1.0))
+                    (conj (node (let [n (.createGain ac)]
+                                  (.setValueAtTime (.-gain n) postgain t)
+                                  n)))
+                    snd    (conj (node (.createGain ac))))
+           ;; coarse alone builds no stage: connect straight to dest.
+           stages (if (seq stages) stages [(node (.createGain ac))])
+           sends  (when snd (orbits/send! ac t (:out (peek stages)) snd (output-node ac)))]
+       (doseq [[a b] (partition 2 1 stages)]
+         (.connect (:out a) (:in b)))
+       (.connect (:out (peek stages)) dest)
+       (schedule-disconnect! ac t (into (vec (mapcat :nodes stages)) sends) dur)
+       (:in (first stages))))))
 
 (defn- sample-length
   "Promise of how long sample n of bank sounds for the event params in extra
@@ -567,10 +653,13 @@
   [:rate :begin :end :loop :loop-begin :loop-end :unit :accelerate :legato :sustain :cut])
 
 (defn- sample-extra
-  "Sample playback params of an event value plus the event timing (TL6, S12)."
-  [value timing]
-  (merge (select-keys value sample-param-keys)
-         (select-keys timing [:dur :cycle-dur])))
+  "Sample playback params of an event value plus the event timing (TL6, S12).
+   With pitch modulation (pm, TL7c) :on-source applies pitch! to the source."
+  ([value timing] (sample-extra value timing nil nil))
+  ([value timing pitch! pm]
+   (cond-> (merge (select-keys value sample-param-keys)
+                  (select-keys timing [:dur :cycle-dur]))
+     pm (assoc :on-source (fn [src _t'] (pitch! src))))))
 
 (defn play-event
   "Play one event value at audio time t. timing — optional {:dur :cycle-dur} in
@@ -579,28 +668,40 @@
    takes the event, else as native Web Audio nodes in front of dest; gain and
    velocity multiply the voice amp. Orbit sends (TL7b: room delay orbit) go out
    on the worklet's send buses or through per-event send GainNodes; size,
-   delay-time and delay-feedback set the event's orbit at t."
+   delay-time and delay-feedback set the event's orbit at t.
+   TL7c: filter envelopes ride on the inserts (gate = (:dur timing)); penv/vib
+   modulate tonal voices and samples (not drums, noise, ks or defsynth);
+   nudge shifts t; delay-sync sets the orbit delay in cycles."
   ([ac t value] (play-event ac t value nil nil))
   ([ac t value track-name] (play-event ac t value track-name nil))
-  ([ac t value track-name timing]
+  ([ac t0 value track-name timing]
    ;; An OfflineAudioContext without a registered graph has no worklet — skip
    ;; to JS fallbacks (TEST1 harness). A registered offline graph (EXP1 export)
    ;; takes exactly the real-time branches.
-   (let [offline? (and (offline-context? ac) (nil? (offline-graph ac)))
+   (let [nud      (inserts/nudge value)
+         t        (if (zero? nud)
+                    t0
+                    (cond-> (+ t0 nud) (offline-context? ac) (max 0)))
+         offline? (and (offline-context? ac) (nil? (offline-graph ac)))
          wt       (when-not offline? (worklet-target ac))
          dest     (output-for-track ac track-name)
          ins      (inserts/insert-params value)
          snd      (orbits/send-params value)
          af       (inserts/amp-factor value)
+         pm       (inserts/pitch-params value)
+         gate     (:dur timing)
+         ;; TL7c: pitch envelope / vibrato on a JS voice's source node.
+         pitch!   (fn [src] (when (and pm src) (pitch-mods! ac t src pm gate)) src)
          ;; Destination for a JS voice sounding dur seconds. Only called on the
          ;; fallback branches, so a worklet event never builds a node chain; WASM
          ;; eligibility is still decided on the original dest.
-         js-dest  (fn [dur] (event-output ac t ins snd dest dur))]
+         js-dest  (fn [dur] (event-output ac t ins snd dest dur 1.0 gate))]
      ;; TL7b: size / delay-time / delay-feedback set the event's orbit, whichever
      ;; path plays the voice (and even when its own sends are 0). Rests carry
      ;; the keys too but are not events.
      (when (and (map? value) (not= :_ (:note value)))
-       (orbits/apply-orbit-settings! ac (orbits/orbit-index (:orbit value)) t value))
+       (orbits/apply-orbit-settings! ac (orbits/orbit-index (:orbit value)) t value
+                                     (:cycle-dur timing)))
      (cond
        ;; Silence / rest
        (= value :_) nil
@@ -611,7 +712,7 @@
        (let [synth-def (synth/lookup-synth (:synth value))]
          ;; The defsynth's own envelope sets its length (unknown here); 30 s
          ;; bounds the cleanup so long pads are never cut.
-         (synth/play-synth! ac t synth-def value (event-output ac t ins snd dest 30.0 af)))
+         (synth/play-synth! ac t synth-def value (event-output ac t ins snd dest 30.0 af gate)))
 
        ;; Bare defsynth name — (seq :lfo-sine) triggers a parameterless synth,
        ;; e.g. a bus writer. Note names keep their meaning.
@@ -627,7 +728,7 @@
              decay-v  (float (:decay value 1.5))
              pan-v    (float (:pan value 0.0))
              synth    (:synth value)
-             wasm!    (fn [v] (worklet-trigger-v3! wt v t amp-v attack-v decay-v pan-v ins snd dest))
+             wasm!    (fn [v] (worklet-trigger-v3! wt v t amp-v attack-v decay-v pan-v ins snd pm gate dest))
              tone-dur (+ attack-v decay-v)]
          (cond
            (= note :_) nil
@@ -636,13 +737,13 @@
            (= synth :saw)
            (let [hz (if (theory/note-keyword? note) (theory/note->hz note) (double note))]
              (or (when-not offline? (wasm! (str "saw:" hz)))
-                 (make-saw ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur))))
+                 (pitch! (make-saw ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur)))))
 
            (= synth :square)
            (let [hz  (if (theory/note-keyword? note) (theory/note->hz note) (double note))
                  pw' (double (or (:pw value) 0.5))]
              (or (when-not offline? (wasm! (str "square:" hz ":" pw')))
-                 (make-square ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur) pw')))
+                 (pitch! (make-square ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur) pw'))))
 
            (= synth :fm)
            (let [hz    (if (theory/note-keyword? note) (theory/note->hz note) (double note))
@@ -650,14 +751,14 @@
                  ratio (or (:ratio value) 2.0)]
              (or (when-not offline? (wasm! (str "fm:" hz ":" index ":" ratio)))
                  ;; JS fallback: sine (FM needs two connected oscillators — WASM only)
-                 (make-sine ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur))))
+                 (pitch! (make-sine ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur)))))
 
            (#{:sax :trumpet :trumpet-muted :trombone :synth-brass
               :harmon-out :harmon-in :epiano :bell :marimba :flute} synth)
            (let [hz     (if (theory/note-keyword? note) (theory/note->hz note) (double note))
                  preset (clojure.core/name synth)]
              (or (when-not offline? (wasm! (str "fm:" preset ":" hz)))
-                 (make-sine ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur))))
+                 (pitch! (make-sine ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur)))))
 
            (#{:western :nylon :guitar :harp :koto :pizz :lute :mandolin} synth)
            (let [hz     (if (theory/note-keyword? note) (theory/note->hz note) (double note))
@@ -670,9 +771,9 @@
            (if (theory/note-keyword? note)
              (let [hz (theory/note->hz note)]
                (or (when-not offline? (wasm! (str hz)))
-                   (make-sine ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur))))
+                   (pitch! (make-sine ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur)))))
              (let [resolved (samples/resolve-keyword note)
-                   extra    (sample-extra value timing)]
+                   extra    (sample-extra value timing pitch! pm)]
                (cond
                  (samples/has-bank? resolved)
                  (samples/play! ac t resolved 0 amp-v pan-v extra
@@ -683,20 +784,20 @@
 
            (number? note)
            (or (when-not offline? (wasm! (str note)))
-               (make-sine ac t note decay-v amp-v attack-v pan-v (js-dest tone-dur)))))
+               (pitch! (make-sine ac t note decay-v amp-v attack-v pan-v (js-dest tone-dur))))))
 
        ;; Map {:bank :bd :n 2} from (sound :bd 2) — always use samples
        (and (map? value) (:bank value))
        (let [{:keys [bank n]} value
              amp-v  (float (* (:amp value 1.0) af))
              pan-v  (float (:pan  value 0.0))
-             extra  (sample-extra value timing)]
+             extra  (sample-extra value timing pitch! pm)]
          (if (samples/has-bank? bank)
            (samples/play! ac t bank n amp-v pan-v extra
                           (js-dest (when ins (sample-length ac bank n extra))))
            (if offline?
              (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)
-             (or (worklet-trigger-v3! wt (name bank) t amp-v 0.001 1.5 pan-v ins snd dest)
+             (or (worklet-trigger-v3! wt (name bank) t amp-v 0.001 1.5 pan-v ins snd pm gate dest)
                  (make-sine ac t 440 1.5 amp-v 0.001 pan-v (js-dest 1.5))))))
 
        ;; Keyword — note name → Hz tone, or sample bank
@@ -721,7 +822,7 @@
              decay-v (float (:decay value 0.3))
              pan-v  (float (:pan value 0.0))]
          (or (when-not offline?
-               (worklet-trigger-v3! wt "noise" t amp-v 0.001 decay-v pan-v ins snd dest))
+               (worklet-trigger-v3! wt "noise" t amp-v 0.001 decay-v pan-v ins snd pm gate dest))
              (make-noise ac t decay-v amp-v pan-v (js-dest decay-v))))
 
        ;; Number — frequency in Hz

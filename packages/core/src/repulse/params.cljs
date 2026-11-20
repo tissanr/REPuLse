@@ -521,3 +521,173 @@
    (orbit 1 pat) · (orbit 1) → transformer"
   ([v]     (fn [pat] (orbit v pat)))
   ([v pat] (apply-param :orbit v pat)))
+
+;;; ── Phase TL7c: envelopes, pitch, vowel & the rest ───────────────────
+
+(defn lp-env
+  "Depth of the low-pass (lpf) envelope in octaves above the cutoff (−10…10, 0 = off).
+   (lp-env 4 pat) · (lp-env 4) → transformer"
+  ([v]     (fn [pat] (lp-env v pat)))
+  ([v pat] (apply-param :lp-env v pat)))
+
+(defn lp-attack
+  "low-pass (lpf) envelope attack time in seconds (default 0.001).
+   (lp-attack 0.01 pat)"
+  ([v]     (fn [pat] (lp-attack v pat)))
+  ([v pat] (apply-param :lp-attack v pat)))
+
+(defn lp-decay
+  "low-pass (lpf) envelope decay time in seconds (default 0.2).
+   (lp-decay 0.2 pat)"
+  ([v]     (fn [pat] (lp-decay v pat)))
+  ([v pat] (apply-param :lp-decay v pat)))
+
+(defn lp-sustain
+  "low-pass (lpf) envelope sustain level, a fraction 0–1 of the depth (default 0).
+   (lp-sustain 0.5 pat)"
+  ([v]     (fn [pat] (lp-sustain v pat)))
+  ([v pat] (apply-param :lp-sustain v pat)))
+
+(defn lp-release
+  "low-pass (lpf) envelope release time in seconds after the event ends (default 0.1).
+   (lp-release 0.3 pat)"
+  ([v]     (fn [pat] (lp-release v pat)))
+  ([v pat] (apply-param :lp-release v pat)))
+
+(defn hp-env
+  "Depth of the high-pass (hpf) envelope in octaves above the cutoff (−10…10, 0 = off).
+   (hp-env 4 pat) · (hp-env 4) → transformer"
+  ([v]     (fn [pat] (hp-env v pat)))
+  ([v pat] (apply-param :hp-env v pat)))
+
+(defn hp-attack
+  "high-pass (hpf) envelope attack time in seconds (default 0.001).
+   (hp-attack 0.01 pat)"
+  ([v]     (fn [pat] (hp-attack v pat)))
+  ([v pat] (apply-param :hp-attack v pat)))
+
+(defn hp-decay
+  "high-pass (hpf) envelope decay time in seconds (default 0.2).
+   (hp-decay 0.2 pat)"
+  ([v]     (fn [pat] (hp-decay v pat)))
+  ([v pat] (apply-param :hp-decay v pat)))
+
+(defn hp-sustain
+  "high-pass (hpf) envelope sustain level, a fraction 0–1 of the depth (default 0).
+   (hp-sustain 0.5 pat)"
+  ([v]     (fn [pat] (hp-sustain v pat)))
+  ([v pat] (apply-param :hp-sustain v pat)))
+
+(defn hp-release
+  "high-pass (hpf) envelope release time in seconds after the event ends (default 0.1).
+   (hp-release 0.3 pat)"
+  ([v]     (fn [pat] (hp-release v pat)))
+  ([v pat] (apply-param :hp-release v pat)))
+
+(defn bp-env
+  "Depth of the band-pass (bpf) envelope in octaves above the cutoff (−10…10, 0 = off).
+   (bp-env 4 pat) · (bp-env 4) → transformer"
+  ([v]     (fn [pat] (bp-env v pat)))
+  ([v pat] (apply-param :bp-env v pat)))
+
+(defn bp-attack
+  "band-pass (bpf) envelope attack time in seconds (default 0.001).
+   (bp-attack 0.01 pat)"
+  ([v]     (fn [pat] (bp-attack v pat)))
+  ([v pat] (apply-param :bp-attack v pat)))
+
+(defn bp-decay
+  "band-pass (bpf) envelope decay time in seconds (default 0.2).
+   (bp-decay 0.2 pat)"
+  ([v]     (fn [pat] (bp-decay v pat)))
+  ([v pat] (apply-param :bp-decay v pat)))
+
+(defn bp-sustain
+  "band-pass (bpf) envelope sustain level, a fraction 0–1 of the depth (default 0).
+   (bp-sustain 0.5 pat)"
+  ([v]     (fn [pat] (bp-sustain v pat)))
+  ([v pat] (apply-param :bp-sustain v pat)))
+
+(defn bp-release
+  "band-pass (bpf) envelope release time in seconds after the event ends (default 0.1).
+   (bp-release 0.3 pat)"
+  ([v]     (fn [pat] (bp-release v pat)))
+  ([v pat] (apply-param :bp-release v pat)))
+
+(defn penv
+  "Depth of the pitch envelope in semitones (−48…48, 0 = off).
+   (penv 12 pat) — start an octave up and fall back · (penv 12) → transformer"
+  ([v]     (fn [pat] (penv v pat)))
+  ([v pat] (apply-param :penv v pat)))
+
+(defn p-attack
+  "Pitch envelope attack time in seconds (default 0.001).
+   (p-attack 0.1 pat)"
+  ([v]     (fn [pat] (p-attack v pat)))
+  ([v pat] (apply-param :p-attack v pat)))
+
+(defn p-decay
+  "Pitch envelope decay time in seconds (default 0.2).
+   (p-decay 0.1 pat)"
+  ([v]     (fn [pat] (p-decay v pat)))
+  ([v pat] (apply-param :p-decay v pat)))
+
+(defn p-sustain
+  "Pitch envelope sustain level, a fraction 0–1 of the depth (default 0).
+   (p-sustain 0.1 pat)"
+  ([v]     (fn [pat] (p-sustain v pat)))
+  ([v pat] (apply-param :p-sustain v pat)))
+
+(defn p-release
+  "Pitch envelope release time in seconds after the event ends (default 0.1).
+   (p-release 0.1 pat)"
+  ([v]     (fn [pat] (p-release v pat)))
+  ([v pat] (apply-param :p-release v pat)))
+
+(defn vib
+  "Vibrato rate in Hz (0–40, 0 = off).
+   (vib 6 pat) · (vib 6) → transformer"
+  ([v]     (fn [pat] (vib v pat)))
+  ([v pat] (apply-param :vib v pat)))
+
+(defn vib-mod
+  "Vibrato depth in semitones (0–12, default 0.5).
+   (vib-mod 0.3 pat)"
+  ([v]     (fn [pat] (vib-mod v pat)))
+  ([v pat] (apply-param :vib-mod v pat)))
+
+(defn vowel
+  "Formant filter: :a :e :i :o or :u.
+   (vowel :a pat) · (vowel (seq :a :o) pat)"
+  ([v]     (fn [pat] (vowel v pat)))
+  ([v pat] (apply-param :vowel v pat)))
+
+(defn coarse
+  "Sample-and-hold every n samples (1–64, 1 = off). WASM synth voices only.
+   (coarse 8 pat)"
+  ([v]     (fn [pat] (coarse v pat)))
+  ([v pat] (apply-param :coarse v pat)))
+
+(defn djf
+  "DJ filter, one knob 0–1: below 0.5 low-pass, above 0.5 high-pass, 0.5 = off.
+   (djf 0.2 pat) · (djf (slow 4 sine) pat)"
+  ([v]     (fn [pat] (djf v pat)))
+  ([v pat] (apply-param :djf v pat)))
+
+(defn postgain
+  "Linear gain after the insert chain (0–4, default 1).
+   (postgain 0.5 pat)"
+  ([v]     (fn [pat] (postgain v pat)))
+  ([v pat] (apply-param :postgain v pat)))
+
+(defn nudge
+  "Move each event in time by seconds (−1…1; positive = later).
+   (nudge 0.02 pat)"
+  ([v]     (fn [pat] (nudge v pat)))
+  ([v pat] (apply-param :nudge v pat)))
+
+(defn delay-sync
+  "Orbit delay time in cycles (1/64–16); overrides delay-time.
+   (delay-sync 3/16 pat)"
+  ([v]     (fn [pat] (delay-sync v pat)))
+  ([v pat] (apply-param :delay-sync v pat)))

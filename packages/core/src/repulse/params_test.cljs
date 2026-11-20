@@ -519,3 +519,51 @@
     (is (= {:note :sd :delay 0.4 :delay-time 0.375 :delay-feedback 0.5
             :room 0.2 :size 0.8 :orbit 1}
            (:value (first (core/query p one-cycle)))))))
+
+;;; ── Phase TL7c: envelopes, pitch, vowel & the rest ───────────────────
+
+(def ^:private tl7c-controls
+  [[params/lp-env :lp-env] [params/lp-attack :lp-attack] [params/lp-decay :lp-decay]
+   [params/lp-sustain :lp-sustain] [params/lp-release :lp-release]
+   [params/hp-env :hp-env] [params/hp-attack :hp-attack] [params/hp-decay :hp-decay]
+   [params/hp-sustain :hp-sustain] [params/hp-release :hp-release]
+   [params/bp-env :bp-env] [params/bp-attack :bp-attack] [params/bp-decay :bp-decay]
+   [params/bp-sustain :bp-sustain] [params/bp-release :bp-release]
+   [params/penv :penv] [params/p-attack :p-attack] [params/p-decay :p-decay]
+   [params/p-sustain :p-sustain] [params/p-release :p-release]
+   [params/vib :vib] [params/vib-mod :vib-mod] [params/vowel :vowel]
+   [params/coarse :coarse] [params/djf :djf] [params/postgain :postgain]
+   [params/nudge :nudge] [params/delay-sync :delay-sync]])
+
+(deftest tl7c-controls-set-their-key
+  (doseq [[f kw] tl7c-controls]
+    (testing (name kw)
+      (is (= {:note :c4 kw 3} (:value (first (core/query (f 3 (core/pure :c4)) one-cycle)))))
+      (is (= {:bank :bd :n 0 kw 3}
+             (:value (first (core/query (f 3 (core/pure {:bank :bd :n 0})) one-cycle))))
+          "keeps an existing map (sample event)")
+      (is (= {:note :hh kw 0.5}
+             (:value (first (core/query ((f 0.5) (core/pure :hh)) one-cycle))))
+          "transformer arity"))))
+
+(deftest tl7c-no-clamping-in-core
+  (is (= 99 (:lp-env (:value (first (core/query (params/lp-env 99 (core/pure :c4)) one-cycle))))))
+  (is (= 500 (:coarse (:value (first (core/query (params/coarse 500 (core/pure :c4)) one-cycle)))))))
+
+(deftest tl7c-vowel-patterned
+  (let [evs (core/query (params/vowel (core/seq* [:a :o]) (core/seq* [:c3 :c3 :c3 :c3]))
+                        one-cycle)]
+    (is (= [:a :a :o :o] (mapv (comp :vowel :value) evs)))
+    (is (= 4 (count evs)) "structure comes from the note pattern")))
+
+(deftest tl7c-djf-signal-sampled-at-onset
+  (let [evs (core/query (params/djf core/saw (core/seq* [:hh :hh :hh :hh])) one-cycle)]
+    (is (= [0 0.25 0.5 0.75] (mapv (comp :djf :value) evs)))))
+
+(deftest tl7c-chain-builds-one-map
+  (let [p (->> (core/pure :c2) (params/lpf 300) (params/lp-env 4) (params/lp-decay 0.2)
+               (params/penv 12) (params/vib 6) (params/vowel :a) (params/postgain 0.5)
+               (params/nudge 0.01) (params/delay-sync [3 16]))]
+    (is (= {:note :c2 :lpf 300 :lp-env 4 :lp-decay 0.2 :penv 12 :vib 6 :vowel :a
+            :postgain 0.5 :nudge 0.01 :delay-sync [3 16]}
+           (:value (first (core/query p one-cycle)))))))
