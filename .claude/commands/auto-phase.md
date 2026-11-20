@@ -34,8 +34,14 @@ Arguments: `$ARGUMENTS`. If it contains `--dry-run`, do steps 1–4 only, report
 Call `mcp__ccd_session_mgmt__get_usage` (load it with ToolSearch first if needed).
 
 - Exit with "usage gate" if the **5-hour** window is ≥ **80%** or the **weekly · all
-  models** window (or any per-model weekly window for the model you'd use) is ≥ **60%**.
-  Report the percentages and reset times.
+  models** window (or any per-model weekly window for the model you'd use) is at or above
+  the **weekly limit for today**:
+  - **Monday–Wednesday: 60%**
+  - **Thursday–Sunday: 80%** (late in the week the remaining budget would otherwise
+    expire unused at the weekly reset)
+
+  Determine the weekday from local time with `date +%u` (1 = Monday … 7 = Sunday).
+  Report the percentages, the limit applied, and reset times.
 - If the status is not `ok` (unavailable, not applicable), exit with "usage unknown". Never
   run blind.
 - Repeat this check before steps 6, 7 and 8 and before each fix attempt. If a later check
