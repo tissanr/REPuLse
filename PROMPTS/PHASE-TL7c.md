@@ -389,7 +389,7 @@ Everywhere:
 Live app (WASM path) and one sample-based line (JS path):
 
 1. Acid pluck: `(->> (seq :c2 :c2 :eb2 :g1) (synth :saw) (lpf 300) (resonance 8) (lp-env 4) (lp-decay 0.2))` — each note opens bright and closes within ~0.2 s.
-2. Filter release: same with `(lp-sustain 1) (lp-release 0.3)` and `(slow 2 …)` — the filter stays open while the note is held and closes after.
+2. Filter sustain & release: `(->> (seq :c3 :_ :g2 :_) (synth :saw) (decay 2) (lpf 400) (lp-env 3) (lp-decay 0.2) (lp-sustain 0.5) (lp-release 0.3))` — each note opens bright, settles half-open while held (a quarter cycle), then closes within 0.3 s while still ringing.
 3. Pitch drop: `(->> (seq :c3 :c3) (synth :saw) (penv 12) (p-decay 0.08))` — each note starts an octave high and falls.
 4. Vibrato: `(->> (seq :a4) (synth :square) (vib 6) (vib-mod 0.3))` — steady 6 Hz wobble.
 5. Vowels: `(->> (seq :a2 :a2 :a2 :a2 :a2) (synth :saw) (decay 0.4) (vowel (seq :a :e :i :o :u)))` — five distinct vowels.

@@ -2431,9 +2431,10 @@ the cutoff; the curve is a straight line in octaves (an exponential sweep in Hz)
 (->> (seq :c2 :c2 :eb2 :g1) (synth :saw)
      (lpf 300) (resonance 8) (lp-env 4) (lp-decay 0.2))
 
-;; Hold the filter open while the note lasts, close it in 0.3 s after
-(->> (slow 2 (seq :c3 :g2)) (synth :saw) (decay 3)
-     (lpf 400) (lp-env 3) (lp-sustain 1) (lp-release 0.3))
+;; Three stages: open to 3.2 kHz, settle at half the depth (400·2^1.5 ≈ 1.1 kHz)
+;; while the note is held (a quarter cycle), then close in 0.3 s while it still rings
+(->> (seq :c3 :_ :g2 :_) (synth :saw) (decay 2)
+     (lpf 400) (lp-env 3) (lp-decay 0.2) (lp-sustain 0.5) (lp-release 0.3))
 ```
 
 - The envelope needs its filter on the same event (`lp-env` without `lpf` does nothing)
@@ -2441,6 +2442,10 @@ the cutoff; the curve is a straight line in octaves (an exponential sweep in Hz)
 - The **gate** is the event's length: the release starts when the event ends, e.g. after
   half a cycle for each step of a two-step `seq`. The voice's own volume envelope
   (`attack`, `decay`) is unchanged.
+- The release is only audible if the voice still sounds after its event ends, so give it
+  a `decay` longer than the event. `lp-sustain 1` keeps the filter fully open for the
+  whole event: the cutoff does not move until the release, so it sounds like a static,
+  brighter `lpf`.
 
 **Pitch envelope and vibrato:**
 
