@@ -33,6 +33,11 @@ Map    { OpenBrace expr* CloseBrace }
     "->>" | "->" | "amp" | "attack" | "decay" | "release" | "pan" |
     "cutoff" | "resonance" | "hpq" | "bpq" | "shape" | "crush" | "velocity" |
     "room" | "size" | "delay" | "delay-time" | "delay-feedback" | "orbit" |
+    "lp-env" | "lp-attack" | "lp-decay" | "lp-sustain" | "lp-release" | "hp-env" |
+    "hp-attack" | "hp-decay" | "hp-sustain" | "hp-release" | "bp-env" | "bp-attack" |
+    "bp-decay" | "bp-sustain" | "bp-release" | "penv" | "p-attack" | "p-decay" |
+    "p-sustain" | "p-release" | "vib" | "vib-mod" | "vowel" | "coarse" | "djf" |
+    "postgain" | "nudge" | "delay-sync" |
     "euclidean" | "cat" | "late" | "early" |
     "sometimes" | "often" | "rarely" | "sometimes-by" |
     "degrade" | "degrade-by" |

@@ -11,6 +11,7 @@ extern "C" {
 
 // ── Biquad filter (Direct Form I) ──────────────────────────────────────────
 
+#[derive(Clone, Copy)]
 struct Biquad {
     b0: f32,
     b1: f32,
@@ -117,6 +118,16 @@ impl Biquad {
             y1: 0.0,
             y2: 0.0,
         }
+    }
+
+    /// Take the coefficients of `from`, keep this filter's state (TL7c
+    /// control-rate cutoff modulation).
+    fn set_coeffs(&mut self, from: &Biquad) {
+        self.b0 = from.b0;
+        self.b1 = from.b1;
+        self.b2 = from.b2;
+        self.a1 = from.a1;
+        self.a2 = from.a2;
     }
 
     fn tick(&mut self, x: f32) -> f32 {
@@ -373,7 +384,10 @@ enum Voice {
 }
 
 impl Voice {
-    fn tick(&mut self, sr: f32) -> f32 {
+    /// One sample. `pitch` multiplies the oscillator frequency of the tonal
+    /// voices (Tone, Saw, Square, FM) — TL7c pitch envelope and vibrato; every
+    /// other voice ignores it. 1.0 = unmodulated (bit-identical to before).
+    fn tick(&mut self, sr: f32, pitch: f64) -> f32 {
         use std::f64::consts::TAU;
         match self {
             Voice::Kick {
@@ -436,7 +450,7 @@ impl Voice {
                     *gain *= *gain_decay;
                 }
                 let s = (*phase * TAU).sin() as f32;
-                *phase += *freq / sr as f64;
+                *phase += *freq * pitch / sr as f64;
                 s * *gain
             }
             Voice::Saw {
@@ -459,7 +473,7 @@ impl Voice {
                 }
                 // Sawtooth: ramp from -1 to +1 over one period
                 let s = (2.0 * (*phase % 1.0) - 1.0) as f32;
-                *phase += *freq / sr as f64;
+                *phase += *freq * pitch / sr as f64;
                 s * *gain
             }
             Voice::Square {
@@ -483,7 +497,7 @@ impl Voice {
                 }
                 let p = *phase % 1.0;
                 let s: f32 = if p < *pulse_width as f64 { 1.0 } else { -1.0 };
-                *phase += *freq / sr as f64;
+                *phase += *freq * pitch / sr as f64;
                 s * *gain
             }
             Voice::Noise {
@@ -532,8 +546,8 @@ impl Voice {
                 *env_phase += dt;
                 let mod_sig = (*mod_phase * TAU).sin() as f32;
                 let carrier_raw = (*carrier_phase * TAU + (*index * mod_sig) as f64).sin() as f32;
-                *carrier_phase += *carrier_freq / sr as f64;
-                *mod_phase += *mod_freq / sr as f64;
+                *carrier_phase += *carrier_freq * pitch / sr as f64;
+                *mod_phase += *mod_freq * pitch / sr as f64;
                 let tonal = body_filters.iter_mut().fold(carrier_raw, |s, f| f.tick(s));
                 let noise_out = noise_hpf.tick(lcg_next(noise_state)) * *noise_amp;
                 (tonal + noise_out) * *gain
@@ -629,12 +643,231 @@ impl InsertParams {
     };
 }
 
+// ── Phase TL7c: envelopes, vowel, coarse, postgain ────────────────────────
+// Formulas mirror app/src/repulse/inserts.cljs (env-value, effective-depth,
+// vowel-table, djf is folded into lpf/hpf there). Envelopes are linear in
+// the log domain: cutoff in octaves, pitch in semitones.
+
+/// Control-rate period (samples) of envelope, vibrato and cutoff updates.
+const MOD_PERIOD: u32 = 16;
+
+/// One envelope: depth (octaves or semitones) and A D S R (seconds, S 0–1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct EnvSpec {
+    depth: f32,
+    attack: f32,
+    decay: f32,
+    sustain: f32,
+    release: f32,
+}
+
+impl EnvSpec {
+    /// Clamped envelope from five trigger_v3 slots, None when depth is 0.
+    fn from_slots(sl: [f32; 5], lim: f32) -> Option<EnvSpec> {
+        let depth = finite_or(sl[0], 0.0).clamp(-lim, lim);
+        if depth == 0.0 {
+            return None;
+        }
+        Some(EnvSpec {
+            depth,
+            attack: finite_or(sl[1], 0.001).clamp(0.0, 10.0),
+            decay: finite_or(sl[2], 0.2).clamp(0.0, 10.0),
+            sustain: finite_or(sl[3], 0.0).clamp(0.0, 1.0),
+            release: finite_or(sl[4], 0.1).clamp(0.0, 10.0),
+        })
+    }
+
+    /// The envelope without release at t ≥ 0.
+    fn peak(&self, t: f32) -> f32 {
+        if t < self.attack {
+            t / self.attack
+        } else if t < self.attack + self.decay {
+            1.0 + (self.sustain - 1.0) * (t - self.attack) / self.decay
+        } else {
+            self.sustain
+        }
+    }
+
+    /// e(t) for gate seconds (≤ 0 = infinite).
+    fn value(&self, gate: f32, t: f32) -> f32 {
+        let g = if gate > 0.0 { gate } else { f32::INFINITY };
+        if t < 0.0 {
+            0.0
+        } else if t < g {
+            self.peak(t)
+        } else if t < g + self.release {
+            self.peak(g) * (1.0 - (t - g) / self.release)
+        } else {
+            0.0
+        }
+    }
+}
+
+/// TL7c params of one event (trigger_v3 slots 15–40).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Tl7cParams {
+    gate: f32,
+    lp_env: Option<EnvSpec>,
+    hp_env: Option<EnvSpec>,
+    bp_env: Option<EnvSpec>,
+    penv: Option<EnvSpec>,
+    vib: f32,
+    vib_mod: f32,
+    vowel: usize, // 0 off, 1–5 = a e i o u
+    coarse: u32,  // 1 = off
+    postgain: f32,
+}
+
+impl Tl7cParams {
+    const OFF: Tl7cParams = Tl7cParams {
+        gate: 0.0,
+        lp_env: None,
+        hp_env: None,
+        bp_env: None,
+        penv: None,
+        vib: 0.0,
+        vib_mod: 0.5,
+        vowel: 0,
+        coarse: 1,
+        postgain: 1.0,
+    };
+
+    fn from_slots(slot: impl Fn(usize, f32) -> f32) -> Tl7cParams {
+        let env = |i: usize, lim: f32| {
+            EnvSpec::from_slots(
+                [
+                    slot(i, 0.0),
+                    slot(i + 1, 0.001),
+                    slot(i + 2, 0.2),
+                    slot(i + 3, 0.0),
+                    slot(i + 4, 0.1),
+                ],
+                lim,
+            )
+        };
+        Tl7cParams {
+            gate: finite_or(slot(15, 0.0), 0.0).max(0.0),
+            lp_env: env(16, 10.0),
+            hp_env: env(21, 10.0),
+            bp_env: env(26, 10.0),
+            penv: env(31, 48.0),
+            vib: finite_or(slot(36, 0.0), 0.0).clamp(0.0, 40.0),
+            vib_mod: finite_or(slot(37, 0.5), 0.5).clamp(0.0, 12.0),
+            vowel: finite_or(slot(38, 0.0), 0.0).round().clamp(0.0, 5.0) as usize,
+            coarse: finite_or(slot(39, 1.0), 1.0).round().clamp(1.0, 64.0) as u32,
+            postgain: finite_or(slot(40, 1.0), 1.0).clamp(0.0, 4.0),
+        }
+    }
+}
+
+/// Formants per vowel a e i o u: (freqs Hz, gains dB, bandwidths Hz).
+/// Mirrors `vowel-table` in inserts.cljs (Csound bass formants; `i` from the
+/// tenor table).
+const VOWELS: [([f32; 5], [f32; 5], [f32; 5]); 5] = [
+    (
+        [600.0, 1040.0, 2250.0, 2450.0, 2750.0],
+        [0.0, -7.0, -9.0, -9.0, -20.0],
+        [60.0, 70.0, 110.0, 120.0, 130.0],
+    ),
+    (
+        [400.0, 1620.0, 2400.0, 2800.0, 3100.0],
+        [0.0, -12.0, -9.0, -12.0, -18.0],
+        [40.0, 80.0, 100.0, 120.0, 120.0],
+    ),
+    // i: Csound tenor formants (the bass table's F2 at −30 dB sounds like "u").
+    (
+        [290.0, 1870.0, 2800.0, 3250.0, 3540.0],
+        [0.0, -15.0, -18.0, -20.0, -30.0],
+        [40.0, 90.0, 100.0, 120.0, 120.0],
+    ),
+    (
+        [400.0, 750.0, 2400.0, 2600.0, 2900.0],
+        [0.0, -11.0, -21.0, -20.0, -40.0],
+        [40.0, 80.0, 100.0, 120.0, 120.0],
+    ),
+    (
+        [350.0, 600.0, 2400.0, 2675.0, 2950.0],
+        [0.0, -20.0, -32.0, -28.0, -36.0],
+        [40.0, 80.0, 100.0, 120.0, 120.0],
+    ),
+];
+
+/// Make-up gain after the formant bank (both paths).
+const VOWEL_MAKEUP: f32 = 2.0;
+
+#[derive(Clone, Copy)]
+struct VowelBank {
+    bands: [Biquad; 5],
+    gains: [f32; 5],
+}
+
+impl VowelBank {
+    fn new(index: usize, sr: f32) -> Option<VowelBank> {
+        if index == 0 || index > 5 {
+            return None;
+        }
+        let (freqs, dbs, bws) = VOWELS[index - 1];
+        let nyq = sr * 0.49;
+        let band = |i: usize| {
+            let f = freqs[i].min(nyq);
+            Biquad::bandpass(f, f / bws[i], sr)
+        };
+        Some(VowelBank {
+            bands: [band(0), band(1), band(2), band(3), band(4)],
+            gains: dbs.map(|d| 10.0_f32.powf(d / 20.0)),
+        })
+    }
+
+    #[inline]
+    fn tick(&mut self, x: f32) -> f32 {
+        let mut y = 0.0;
+        for i in 0..5 {
+            y += self.gains[i] * self.bands[i].tick(x);
+        }
+        y * VOWEL_MAKEUP
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum FilterKind {
+    Low,
+    High,
+    Band,
+}
+
+impl FilterKind {
+    fn make(self, freq: f32, q: f32, sr: f32) -> Biquad {
+        match self {
+            FilterKind::Low => Biquad::lowpass(freq, q, sr),
+            FilterKind::High => Biquad::highpass(freq, q, sr),
+            FilterKind::Band => Biquad::bandpass(freq, q, sr),
+        }
+    }
+}
+
+/// A filter envelope bound to its stage: base cutoff, Q and effective depth.
+#[derive(Clone, Copy)]
+struct FilterEnv {
+    env: EnvSpec,
+    kind: FilterKind,
+    base: f32,
+    q: f32,
+    depth: f32, // effective depth in octaves (peak clamped to 20 Hz … min(20 kHz, 0.49·sr))
+}
+
 struct Inserts {
     lpf: Option<Biquad>,
     hpf: Option<Biquad>,
     bpf: Option<Biquad>,
+    /// TL7c: envelopes of lpf, hpf, bpf (index 0–2).
+    envs: [Option<FilterEnv>; 3],
+    vowel: Option<VowelBank>,
+    coarse_n: u32, // 1 = bypass
+    coarse_count: u32,
+    coarse_hold: f32,
     crush_levels: f32, // 0.0 = bypass
     shape_k: f32,      // 0.0 = bypass
+    postgain: f32,     // 1.0 = bypass
 }
 
 fn finite_or(x: f32, d: f32) -> f32 {
@@ -646,34 +879,89 @@ fn finite_or(x: f32, d: f32) -> f32 {
 }
 
 impl Inserts {
-    fn new(p: &InsertParams, sr: f32) -> Self {
+    fn new(p: &InsertParams, t: &Tl7cParams, sr: f32) -> Self {
         // Cutoffs are also kept below Nyquist so a low sample rate stays stable.
         let nyq = sr * 0.49;
-        let filt = |freq: f32, q: f32, dq: f32, make: fn(f32, f32, f32) -> Biquad| {
+        // (freq, q) of a stage that is on, else None.
+        let stage = |freq: f32, q: f32, dq: f32| {
             let freq = finite_or(freq, 0.0);
             if freq > 0.0 {
-                let f = freq.clamp(20.0, 20_000.0).min(nyq);
-                Some(make(f, finite_or(q, dq).clamp(0.1, 30.0), sr))
+                Some((
+                    freq.clamp(20.0, 20_000.0).min(nyq),
+                    finite_or(q, dq).clamp(0.1, 30.0),
+                ))
             } else {
                 None
             }
         };
+        let lp = stage(p.lpf, p.resonance, 0.707);
+        let hp = stage(p.hpf, p.hpq, 0.707);
+        let bp = stage(p.bpf, p.bpq, 1.0);
+        let fenv = |st: Option<(f32, f32)>, env: Option<EnvSpec>, kind: FilterKind| match (st, env)
+        {
+            (Some((base, q)), Some(env)) => {
+                let peak = (base * 2.0_f32.powf(env.depth)).clamp(20.0, 20_000.0_f32.min(nyq));
+                Some(FilterEnv {
+                    env,
+                    kind,
+                    base,
+                    q,
+                    depth: (peak / base).log2(),
+                })
+            }
+            _ => None,
+        };
         let bits = finite_or(p.crush, 16.0).clamp(1.0, 16.0);
         let a = finite_or(p.shape, 0.0).clamp(0.0, 0.99);
         Inserts {
-            lpf: filt(p.lpf, p.resonance, 0.707, Biquad::lowpass),
-            hpf: filt(p.hpf, p.hpq, 0.707, Biquad::highpass),
-            bpf: filt(p.bpf, p.bpq, 1.0, Biquad::bandpass),
+            lpf: lp.map(|(f, q)| Biquad::lowpass(f, q, sr)),
+            hpf: hp.map(|(f, q)| Biquad::highpass(f, q, sr)),
+            bpf: bp.map(|(f, q)| Biquad::bandpass(f, q, sr)),
+            envs: [
+                fenv(lp, t.lp_env, FilterKind::Low),
+                fenv(hp, t.hp_env, FilterKind::High),
+                fenv(bp, t.bp_env, FilterKind::Band),
+            ],
+            vowel: VowelBank::new(t.vowel, sr),
+            coarse_n: t.coarse.max(1),
+            coarse_count: 0,
+            coarse_hold: 0.0,
             crush_levels: if bits < 16.0 {
                 2.0_f32.powf(bits - 1.0)
             } else {
                 0.0
             },
             shape_k: if a > 0.0 { 2.0 * a / (1.0 - a) } else { 0.0 },
+            postgain: t.postgain,
         }
     }
 
-    /// lpf → hpf → bpf → crush → shape. All stages off returns `x` unchanged.
+    fn has_envelope(&self) -> bool {
+        self.envs.iter().any(|e| e.is_some())
+    }
+
+    /// Recompute the coefficients of the enveloped stages for t seconds after
+    /// onset (control rate; filter state is kept).
+    fn modulate(&mut self, t: f32, gate: f32, sr: f32) {
+        let nyq = sr * 0.49;
+        for i in 0..3 {
+            if let Some(fe) = self.envs[i] {
+                let f = (fe.base * 2.0_f32.powf(fe.depth * fe.env.value(gate, t)))
+                    .clamp(20.0, 20_000.0_f32.min(nyq));
+                let target = match i {
+                    0 => self.lpf.as_mut(),
+                    1 => self.hpf.as_mut(),
+                    _ => self.bpf.as_mut(),
+                };
+                if let Some(bq) = target {
+                    bq.set_coeffs(&fe.kind.make(f, fe.q, sr));
+                }
+            }
+        }
+    }
+
+    /// lpf → hpf → bpf → vowel → coarse → crush → shape → postgain.
+    /// All stages off returns `x` unchanged.
     #[inline]
     fn tick(&mut self, x: f32) -> f32 {
         let mut y = x;
@@ -686,6 +974,16 @@ impl Inserts {
         if let Some(f) = self.bpf.as_mut() {
             y = f.tick(y);
         }
+        if let Some(v) = self.vowel.as_mut() {
+            y = v.tick(y);
+        }
+        if self.coarse_n > 1 {
+            if self.coarse_count == 0 {
+                self.coarse_hold = y;
+            }
+            self.coarse_count = (self.coarse_count + 1) % self.coarse_n;
+            y = self.coarse_hold;
+        }
         if self.crush_levels > 0.0 {
             // floor(x + 0.5) = JS Math.round, as in the WaveShaper curve.
             let l = self.crush_levels;
@@ -696,7 +994,52 @@ impl Inserts {
             let c = y.clamp(-1.0, 1.0);
             y = (1.0 + k) * c / (1.0 + k * c.abs());
         }
+        if self.postgain != 1.0 {
+            y *= self.postgain;
+        }
         y
+    }
+}
+
+/// Per-voice modulation state (TL7c): pitch envelope, vibrato, and the
+/// control-rate clock that also drives the filter envelopes.
+#[derive(Clone, Copy)]
+struct Mods {
+    age: u32, // samples since activation
+    gate: f32,
+    penv: Option<EnvSpec>,
+    vib: f32,
+    vib_mod: f32,
+    filter_env: bool,
+    pitch: f64, // frequency multiplier, 1.0 = none
+}
+
+impl Mods {
+    fn new(t: &Tl7cParams, filter_env: bool) -> Mods {
+        Mods {
+            age: 0,
+            gate: t.gate,
+            penv: t.penv,
+            vib: t.vib,
+            vib_mod: if t.vib > 0.0 { t.vib_mod } else { 0.0 },
+            filter_env,
+            pitch: 1.0,
+        }
+    }
+
+    fn active(&self) -> bool {
+        self.filter_env || self.penv.is_some() || self.vib > 0.0
+    }
+
+    /// Semitones of pitch modulation t seconds after onset.
+    fn semitones(&self, t: f32) -> f32 {
+        let env = self.penv.map_or(0.0, |e| e.depth * e.value(self.gate, t));
+        let vib = if self.vib > 0.0 {
+            self.vib_mod * (std::f32::consts::TAU * self.vib * t).sin()
+        } else {
+            0.0
+        };
+        env + vib
     }
 }
 
@@ -707,6 +1050,7 @@ struct ActiveVoice {
     pan: f32, // -1.0 (left) … 0.0 (centre) … 1.0 (right)
     inserts: Inserts,
     sends: Sends,
+    mods: Mods,
 }
 
 // ── Orbit sends (Phase TL7b) ──────────────────────────────────────────────
@@ -759,6 +1103,7 @@ struct Pending {
     pan: f32,    // -1.0–1.0, default 0.0
     inserts: InsertParams,
     sends: Sends,
+    tl7c: Tl7cParams,
 }
 
 // ── Parameter transitions ──────────────────────────────────────────────────
@@ -846,6 +1191,7 @@ fn pending_v3(value: &str, time: f64, params: &[f32]) -> Pending {
             crush: slot(11, off.crush),
         },
         sends: Sends::new(slot(12, 0.0), slot(13, 0.0), slot(14, 0.0)),
+        tl7c: Tl7cParams::from_slots(slot),
     }
 }
 
@@ -920,6 +1266,7 @@ impl AudioEngine {
             pan: 0.0,
             inserts: InsertParams::OFF,
             sends: Sends::OFF,
+            tl7c: Tl7cParams::OFF,
         });
     }
 
@@ -942,6 +1289,7 @@ impl AudioEngine {
             pan,
             inserts: InsertParams::OFF,
             sends: Sends::OFF,
+            tl7c: Tl7cParams::OFF,
         });
     }
 
@@ -1012,6 +1360,7 @@ impl AudioEngine {
             pan: 0.0,
             inserts: InsertParams::OFF,
             sends: Sends::OFF,
+            tl7c: Tl7cParams::OFF,
         });
     }
 
@@ -1034,6 +1383,7 @@ impl AudioEngine {
             pan,
             inserts: InsertParams::OFF,
             sends: Sends::OFF,
+            tl7c: Tl7cParams::OFF,
         });
     }
 
@@ -1102,7 +1452,19 @@ impl AudioEngine {
             let mut l = 0.0f32;
             let mut r = 0.0f32;
             for av in self.voices.iter_mut() {
-                let s = av.inserts.tick(av.voice.tick(sr));
+                // TL7c: envelopes and vibrato at control rate.
+                let m = &mut av.mods;
+                if m.active() && m.age % MOD_PERIOD == 0 {
+                    let t = m.age as f32 / sr;
+                    if m.filter_env {
+                        av.inserts.modulate(t, m.gate, sr);
+                    }
+                    if m.penv.is_some() || m.vib > 0.0 {
+                        m.pitch = 2.0_f64.powf(m.semitones(t) as f64 / 12.0);
+                    }
+                }
+                m.age = m.age.wrapping_add(1);
+                let s = av.inserts.tick(av.voice.tick(sr, m.pitch));
                 let angle = (av.pan + 1.0) / 2.0 * std::f32::consts::FRAC_PI_2;
                 let (vl, vr) = (s * angle.cos(), s * angle.sin());
                 l += vl;
@@ -1154,7 +1516,8 @@ impl AudioEngine {
         let seed = self.next_seed();
         // 0–2: amp × gain may exceed 1 (TL7a); the output clamp at ±1 stays.
         let amp = p.amp.clamp(0.0, 2.0);
-        let inserts = Inserts::new(&p.inserts, sr);
+        let inserts = Inserts::new(&p.inserts, &p.tl7c, sr);
+        let mods = Mods::new(&p.tl7c, inserts.has_envelope());
         let value = p.value.trim_start_matches(':');
 
         let voice = if let Some(rest) = value.strip_prefix("saw:") {
@@ -1286,6 +1649,7 @@ impl AudioEngine {
                 pan: p.pan.clamp(-1.0, 1.0),
                 inserts,
                 sends: p.sends,
+                mods,
             });
             return;
         } else {
@@ -1343,6 +1707,7 @@ impl AudioEngine {
             pan: p.pan.clamp(-1.0, 1.0),
             inserts,
             sends: p.sends,
+            mods,
         });
     }
 }
@@ -1770,7 +2135,7 @@ mod tl7a_insert_tests {
 
     /// Run `input` through inserts built from `p`; drop the first 0.05 s (filter settling).
     fn through(p: InsertParams, input: &[f32]) -> Vec<f32> {
-        let mut ins = Inserts::new(&p, SR);
+        let mut ins = Inserts::new(&p, &Tl7cParams::OFF, SR);
         let out: Vec<f32> = input.iter().map(|&x| ins.tick(x)).collect();
         out[(0.05 * SR) as usize..].to_vec()
     }
@@ -1784,7 +2149,7 @@ mod tl7a_insert_tests {
 
     #[test]
     fn inserts_off_is_identity() {
-        let mut ins = Inserts::new(&InsertParams::OFF, SR);
+        let mut ins = Inserts::new(&InsertParams::OFF, &Tl7cParams::OFF, SR);
         for &x in &[0.0f32, 0.25, -0.731, 1.5, -2.0] {
             assert_eq!(ins.tick(x).to_bits(), x.to_bits());
         }
@@ -2080,5 +2445,395 @@ mod send_tests {
         }
         assert_eq!(e.bus.as_ptr(), ptr);
         assert_eq!(e.bus.capacity(), cap);
+    }
+}
+
+// ── Phase TL7c: envelopes, pitch, vowel, coarse, postgain ────────────────
+#[cfg(test)]
+mod tl7c_tests {
+    use super::*;
+
+    const SR: f32 = 44100.0;
+    const A2: f32 = 110.0;
+
+    /// trigger_v3 slots 0–40, all at their defaults (TL7a/TL7b/TL7c off).
+    fn base_slots() -> Vec<f32> {
+        let mut v = vec![
+            1.0, 0.001, 1.5, 0.0, // amp attack decay pan
+            0.0, 0.707, 0.0, 0.707, 0.0, 1.0, 0.0, 16.0, // inserts
+            0.0, 0.0, 0.0, // sends
+            0.0, // gate
+        ];
+        for _ in 0..4 {
+            v.extend_from_slice(&[0.0, 0.001, 0.2, 0.0, 0.1]); // lp hp bp pitch envs
+        }
+        v.extend_from_slice(&[0.0, 0.5, 0.0, 1.0, 1.0]); // vib vib-mod vowel coarse postgain
+        assert_eq!(v.len(), 41);
+        v
+    }
+
+    fn slots(f: impl FnOnce(&mut Vec<f32>)) -> Vec<f32> {
+        let mut v = base_slots();
+        f(&mut v);
+        v
+    }
+
+    /// Mono render of one voice triggered at 0 with the given slots.
+    fn render(value: &str, sl: &[f32], secs: f32) -> Vec<f32> {
+        let mut e = AudioEngine::new_for_test(SR);
+        e.trigger_v3(value, 0.0, sl);
+        let buf = e.process_block_raw((secs * SR) as u32, 0.0);
+        buf.iter().step_by(2).copied().collect()
+    }
+
+    fn goertzel(buf: &[f32], freq: f32) -> f32 {
+        let w = 2.0 * std::f64::consts::PI * freq as f64 / SR as f64;
+        let coeff = 2.0 * w.cos();
+        let (mut s1, mut s2) = (0.0f64, 0.0f64);
+        for &x in buf {
+            let s0 = x as f64 + coeff * s1 - s2;
+            s2 = s1;
+            s1 = s0;
+        }
+        ((s1 * s1 + s2 * s2 - coeff * s1 * s2).max(0.0)).sqrt() as f32
+    }
+
+    fn db(ratio: f32) -> f32 {
+        20.0 * ratio.max(1e-12).log10()
+    }
+
+    fn win(x: &[f32], from: f32, to: f32) -> &[f32] {
+        &x[(from * SR) as usize..(to * SR) as usize]
+    }
+
+    /// Hann-windowed copy (keeps leakage from the strong low harmonics out of
+    /// the 1–3 kHz bins).
+    fn hann(x: &[f32]) -> Vec<f32> {
+        let n = x.len() as f32;
+        x.iter()
+            .enumerate()
+            .map(|(i, s)| s * 0.5 * (1.0 - (std::f32::consts::TAU * i as f32 / n).cos()))
+            .collect()
+    }
+
+    /// Energy of the A2 harmonics between 1 and 3 kHz (k = 10…27), Hann window.
+    fn high_band(x: &[f32]) -> f32 {
+        let w = hann(x);
+        (10..=27)
+            .map(|k| goertzel(&w, A2 * k as f32).powi(2))
+            .sum::<f32>()
+            .sqrt()
+    }
+
+    fn rms(x: &[f32]) -> f32 {
+        (x.iter().map(|s| s * s).sum::<f32>() / x.len() as f32).sqrt()
+    }
+
+    fn fingerprint(sl: &[f32]) -> u64 {
+        let mut e = AudioEngine::new_for_test(SR);
+        for (i, v) in [
+            "saw:261.63",
+            "square:220:0.3",
+            "bd",
+            "440",
+            "fm:epiano:220",
+            "ks:nylon:110",
+        ]
+        .iter()
+        .enumerate()
+        {
+            e.trigger_v3(v, i as f64 * 0.05, sl);
+        }
+        let mut h: u64 = 0;
+        for b in 0..40 {
+            for s in e.process_block_raw(128, b as f64 * 128.0 / SR as f64) {
+                h = h
+                    .wrapping_mul(1_099_511_628_211)
+                    .wrapping_add(s.to_bits() as u64);
+            }
+        }
+        h
+    }
+
+    #[test]
+    fn env_value_breakpoints() {
+        let e = EnvSpec {
+            depth: 1.0,
+            attack: 0.1,
+            decay: 0.2,
+            sustain: 0.5,
+            release: 0.4,
+        };
+        // Same table as inserts_test.cljs env-value-breakpoints.
+        for (t, want) in [
+            (0.0, 0.0),
+            (0.05, 0.5),
+            (0.1, 1.0),
+            (0.2, 0.75),
+            (0.3, 0.5),
+            (1.0, 0.5),
+            (1.2, 0.25),
+            (1.4, 0.0),
+            (2.0, 0.0),
+        ] {
+            assert!((e.value(1.0, t) - want).abs() < 1e-5, "t={t}");
+        }
+        assert!(
+            (e.value(0.05, 0.05) - 0.5).abs() < 1e-5,
+            "release from inside the attack"
+        );
+        assert!((e.value(0.05, 0.25) - 0.25).abs() < 1e-5);
+        assert!(
+            (e.value(0.0, 100.0) - 0.5).abs() < 1e-5,
+            "gate 0 = infinite"
+        );
+    }
+
+    #[test]
+    fn slots_parse_and_clamp() {
+        let t = Tl7cParams::from_slots(|i, d| {
+            *slots(|v| {
+                v[15] = 0.5;
+                v[16] = 99.0;
+                v[17] = -1.0;
+                v[31] = 12.0;
+                v[36] = 100.0;
+                v[38] = 3.2;
+                v[39] = 500.0;
+                v[40] = 9.0;
+            })
+            .get(i)
+            .unwrap_or(&d)
+        });
+        assert_eq!(t.gate, 0.5);
+        let lp = t.lp_env.unwrap();
+        assert_eq!((lp.depth, lp.attack), (10.0, 0.0));
+        assert!(t.hp_env.is_none() && t.bp_env.is_none());
+        assert_eq!(t.penv.unwrap().depth, 12.0);
+        assert_eq!((t.vib, t.vowel, t.coarse, t.postgain), (40.0, 3, 64, 4.0));
+        // Missing trailing slots → defaults (a 15-slot TL7b trigger).
+        let short = [0.0f32; 15];
+        assert_eq!(
+            Tl7cParams::from_slots(|i, d| short.get(i).copied().unwrap_or(d)),
+            Tl7cParams::OFF
+        );
+    }
+
+    #[test]
+    fn all_default_tl7c_slots_are_bit_identical() {
+        let fifteen = &base_slots()[..15];
+        assert_eq!(fingerprint(&base_slots()), fingerprint(fifteen));
+        assert_eq!(fingerprint(&base_slots()), fingerprint(&base_slots()[..4]));
+    }
+
+    /// Filter-envelope ratio, early (5–25 ms) over late (300–320 ms) energy of
+    /// the 1–3 kHz harmonics of a saw at A2 through lpf 300, lp-env 4,
+    /// lp-decay 0.2 (decay 10 so the amp envelope barely moves) — the WASM half
+    /// of the JS↔WASM check in e2e/audio-render.spec.ts.
+    pub(crate) fn env_parity_db() -> f32 {
+        let x = render(
+            "saw:110",
+            &slots(|v| {
+                v[2] = 10.0;
+                v[4] = 300.0;
+                v[16] = 4.0;
+                v[18] = 0.2;
+            }),
+            0.4,
+        );
+        db(high_band(win(&x, 0.005, 0.025)) / high_band(win(&x, 0.3, 0.32)))
+    }
+
+    pub(crate) const ENV_PARITY_DB: f32 = 30.36;
+
+    #[test]
+    fn filter_envelope_opens_and_closes() {
+        let r = env_parity_db();
+        println!("ENV_PARITY_DB = {r}");
+        assert!(r >= 10.0, "early/late high band {r} dB");
+    }
+
+    #[test]
+    fn filter_envelope_parity_pinned() {
+        let r = env_parity_db();
+        assert!(
+            (r - ENV_PARITY_DB).abs() <= 0.5,
+            "{r} dB, pinned {ENV_PARITY_DB} dB"
+        );
+    }
+
+    #[test]
+    fn filter_release_starts_at_the_gate() {
+        let x = render(
+            "saw:110",
+            &slots(|v| {
+                v[2] = 10.0;
+                v[4] = 300.0;
+                v[15] = 0.25; // gate
+                v[16] = 4.0;
+                v[19] = 1.0; // lp-sustain
+                v[20] = 0.05; // lp-release
+            }),
+            0.5,
+        );
+        let held = high_band(win(&x, 0.1, 0.2));
+        let released = high_band(win(&x, 0.35, 0.45));
+        assert!(db(held / released) >= 10.0, "{} dB", db(held / released));
+    }
+
+    #[test]
+    fn hp_and_bp_envelopes_move_their_filter() {
+        // hpf 2000 with a negative envelope opens the low end at the start.
+        let x = render(
+            "saw:110",
+            &slots(|v| {
+                v[2] = 10.0;
+                v[6] = 2000.0;
+                v[21] = -4.0;
+                v[23] = 0.2;
+            }),
+            0.4,
+        );
+        let early = goertzel(win(&x, 0.005, 0.025), 220.0);
+        let late = goertzel(win(&x, 0.3, 0.32), 220.0);
+        assert!(db(early / late) >= 10.0, "hp {} dB", db(early / late));
+        let y = render(
+            "saw:110",
+            &slots(|v| {
+                v[2] = 10.0;
+                v[8] = 300.0;
+                v[9] = 4.0;
+                v[26] = 3.0;
+                v[28] = 0.2;
+            }),
+            0.4,
+        );
+        let early = high_band(win(&y, 0.005, 0.025));
+        let late = high_band(win(&y, 0.3, 0.32));
+        assert!(db(early / late) >= 10.0, "bp {} dB", db(early / late));
+    }
+
+    #[test]
+    fn pitch_envelope_falls_an_octave() {
+        let x = render(
+            "440",
+            &slots(|v| {
+                v[2] = 10.0;
+                v[31] = 12.0;
+                v[33] = 0.5;
+            }),
+            0.7,
+        );
+        let early = win(&x, 0.0, 0.02);
+        let late = win(&x, 0.6, 0.7);
+        assert!(db(goertzel(early, 880.0) / goertzel(early, 440.0)) >= 10.0);
+        assert!(db(goertzel(late, 440.0) / goertzel(late, 880.0)) >= 10.0);
+    }
+
+    /// Instantaneous frequencies from successive interpolated upward zero crossings.
+    fn crossing_freqs(x: &[f32]) -> Vec<f32> {
+        let mut ts = vec![];
+        for i in 1..x.len() {
+            if x[i - 1] < 0.0 && x[i] >= 0.0 {
+                ts.push((i - 1) as f32 + x[i - 1] / (x[i - 1] - x[i]));
+            }
+        }
+        ts.windows(2).map(|w| SR / (w[1] - w[0])).collect()
+    }
+
+    #[test]
+    fn vibrato_swings_a_semitone() {
+        let x = render(
+            "440",
+            &slots(|v| {
+                v[2] = 10.0;
+                v[36] = 5.0;
+                v[37] = 1.0;
+            }),
+            1.0,
+        );
+        let f = crossing_freqs(&x);
+        let lo = f.iter().cloned().fold(f32::MAX, f32::min);
+        let hi = f.iter().cloned().fold(f32::MIN, f32::max);
+        assert!(lo < 425.0 && hi > 455.0, "range {lo}–{hi} Hz");
+        assert!(
+            lo > 400.0 && hi < 480.0,
+            "no more than ~1 semitone: {lo}–{hi} Hz"
+        );
+    }
+
+    #[test]
+    fn pitch_mods_leave_drums_unchanged() {
+        let plain = render("bd", &base_slots(), 0.3);
+        let modded = render("bd", &slots(|v| v[36] = 6.0), 0.3);
+        assert_eq!(plain, modded);
+    }
+
+    #[test]
+    fn vowel_a_and_i_differ_at_their_formants() {
+        let v = |idx: f32| {
+            render(
+                "saw:110",
+                &slots(|s| {
+                    s[2] = 10.0;
+                    s[38] = idx;
+                }),
+                0.5,
+            )
+        };
+        let (a, i) = (v(1.0), v(3.0));
+        let (a, i) = (win(&a, 0.1, 0.5), win(&i, 0.1, 0.5));
+        // a: F2 1040 Hz (nearest harmonic 1100); i: F1 250 Hz (nearest 220).
+        let at = |x: &[f32], f: f32| goertzel(x, f);
+        assert!(db(at(a, 1100.0) / at(i, 1100.0)) >= 6.0, "a over i at 1100");
+        assert!(db(at(i, 220.0) / at(a, 220.0)) >= 6.0, "i over a at 220");
+    }
+
+    #[test]
+    fn vowel_i_has_an_audible_second_formant() {
+        // i reads as "ee" only with energy at its F2 (1870 Hz = 17th harmonic of
+        // A2); the bass table's i (F2 −30 dB) was as dull as u there.
+        let v = |idx: f32| {
+            render(
+                "saw:110",
+                &slots(|s| {
+                    s[2] = 10.0;
+                    s[38] = idx;
+                }),
+                0.5,
+            )
+        };
+        let (i, u) = (v(3.0), v(5.0));
+        let (i, u) = (win(&i, 0.1, 0.5), win(&u, 0.1, 0.5));
+        let d = db(goertzel(i, 1870.0) / goertzel(u, 1870.0));
+        println!("i over u at 1870 Hz: {d} dB");
+        assert!(d >= 12.0, "i over u at 1870 Hz: {d} dB");
+    }
+
+    #[test]
+    fn coarse_8_aliases_a_1k_sine() {
+        let input: Vec<f32> = (0..(0.5 * SR) as usize)
+            .map(|i| 0.5 * (std::f32::consts::TAU * 1000.0 * i as f32 / SR).sin())
+            .collect();
+        let run = |coarse: u32| {
+            let t = Tl7cParams {
+                coarse,
+                ..Tl7cParams::OFF
+            };
+            let mut ins = Inserts::new(&InsertParams::OFF, &t, SR);
+            input.iter().map(|&x| ins.tick(x)).collect::<Vec<f32>>()
+        };
+        let image = SR / 8.0 - 1000.0;
+        let (on, off) = (run(8), run(1));
+        assert!(db(goertzel(&on, image) / goertzel(&off, image).max(1e-9)) >= 20.0);
+        assert_eq!(off, input, "coarse 1 is bypass");
+    }
+
+    #[test]
+    fn postgain_half_is_minus_6_db() {
+        let plain = render("saw:110", &base_slots(), 0.3);
+        let half = render("saw:110", &slots(|v| v[40] = 0.5), 0.3);
+        let d = db(rms(&half) / rms(&plain));
+        assert!((d + 6.02).abs() <= 0.1, "{d} dB");
     }
 }

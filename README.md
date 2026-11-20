@@ -51,10 +51,12 @@ and **when** — not **how** synthesis works internally.
 - **Expression:** `amp`, `attack`, `decay`, `pan`, … chained with `->>`
 - **Per-event effects:** filters, drive and crush on each note, patternable and
   signal-driven: `(->> (fast 8 (seq :hh)) (lpf (range 400 6000 sine)) (resonance 4))`;
-  also `hpf`, `bpf`, `shape`, `crush`, `gain`, `velocity`
+  also `hpf`, `bpf`, `shape`, `crush`, `gain`, `velocity`; filter and pitch envelopes,
+  vibrato and formants: `(->> (seq :c2 :eb2) (synth :saw) (lpf 300) (lp-env 4) (lp-decay 0.2))`,
+  `penv`, `vib`, `vowel`, `coarse`, `djf`, `postgain`, `nudge`
 - **Reverb & delay sends:** each note sends to a shared reverb and delay in one of four
   orbits: `(->> (seq :sd :_ :sd :_) (room 0.4) (delay 0.3) (delay-time 0.375) (orbit 1))`;
-  also `size`, `delay-feedback`
+  also `size`, `delay-feedback`, `delay-sync` (delay time in cycles)
 - **Inline sliders:** `(amp (slider 0.7 0 1))` evaluates to `0.7` and is drawn as a draggable
   bar in the editor; dragging rewrites the number in the code (`Cmd/Ctrl+K S` wraps/unwraps)
 - **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`, `(fx :cab :ir :4x12)`;

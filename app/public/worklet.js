@@ -56,7 +56,7 @@ class RepulseProcessor extends AudioWorkletProcessor {
         );
       }
     } else if (msg.type === 'trigger_v3') {
-      // Phase TL7a/TL7b: params is a Float32Array in the lib.rs trigger_v3 slot layout.
+      // Phase TL7a/TL7b/TL7c: params is a Float32Array in the lib.rs trigger_v3 slot layout.
       if (this.engine) this.engine.trigger_v3(msg.value, msg.time, msg.params);
     } else if (msg.type === 'stop') {
       if (this.engine) this.engine.stop_all();
