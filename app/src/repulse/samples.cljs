@@ -292,7 +292,9 @@
    pan        — -1.0–1.0 stereo position (default 0.0)
    extra      — map of event params (see playback-plan): :rate :begin :end :loop
                 :loop-begin :loop-end :unit :accelerate :legato :sustain :cut,
-                plus timing :dur / :cycle-dur in seconds when known.
+                plus timing :dur / :cycle-dur in seconds when known, and
+                :on-source — optional (fn [src t]) called once the
+                AudioBufferSourceNode exists (TL7c pitch modulation).
    dest       — AudioNode to connect to (default: ac.destination)
    Returns the Promise of the buffer fetch (offline export waits for it).
 
@@ -317,6 +319,7 @@
                           out    (or dest (.-destination ac))
                           pr     (.-playbackRate src)]
                       (set! (.-buffer src) (if reverse? (reversed-buffer ac buf) buf))
+                      (when-let [on-source (:on-source extra)] (on-source src t'))
                       (.setValueAtTime pr rate t')
                       (when accel-to
                         (.linearRampToValueAtTime pr accel-to

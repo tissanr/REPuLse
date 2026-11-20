@@ -4,15 +4,16 @@
 
 | Milestone | Delivered | Still open |
 |---|---|---|
-| **M1** Tidal-Lisp core | 10 / 14 | TL7c, KIT1, SYN6, FX1 — all 🤖👂, need a human listen |
+| **M1** Tidal-Lisp core | 11 / 14 | KIT1, SYN6, FX1 — all 🤖👂, need a human listen |
 | **M2** Full songs | 9 / 10 | WS6 |
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
 
 - **Next for the unattended pipeline:** WS6 — the last open 🤖 phase. After it, every
   remaining phase on the critical path needs a human (🤖👂 or 🧑).
-- **Next for a human session:** TL7c (spec is an outline, expand first), then KIT1,
-  SYN6, FX1; N1 opens M3.
+- **Next for a human session:** KIT1 (spec is an outline, expand first), SYN6 (Part C
+  is unblocked by TL7c), FX1; N1 opens M3. TL7c's listen check runs in the next release
+  test round.
 - **Side track open:** DOC1, TEST2, UI1, R3, PLUG1, O2, PL1.
 
 The *Status* column in the [implementation order](#implementation-order) table shows
@@ -68,7 +69,7 @@ without a human:
 | 7 | TL6 | ✅ | Sample slicing & playback control | 🤖👂 | full | opus |
 | 8 | TL7a | ✅ | Per-event filters, shape & crush | 🤖👂 | full | opus |
 | 8b | TL7b | ✅ | Reverb & delay sends per orbit | 🤖👂 | full | opus |
-| 8c | TL7c | 📋 | Vowel, envelopes & modulators | 🤖👂 | outline | opus |
+| 8c | TL7c | ✅ | Vowel, envelopes & modulators | 🤖👂 | full | opus |
 | 9 | KIT1 | 📋 | High-quality drum kits | 🤖👂 | outline | sonnet |
 | 9a | SYN6 | 📋 | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | full | opus |
 | 9b | FX1 | 📋 | Mixing, space & modulation effects | 🤖👂 | full | sonnet |
@@ -2277,7 +2278,7 @@ See full spec: [PROMPTS/PHASE-TL7b.md](PROMPTS/PHASE-TL7b.md)
 
 ---
 
-## Phase TL7c — Vowel, Envelopes & Modulators 📋 *planned*
+## Phase TL7c — Vowel, Envelopes & Modulators ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
@@ -2285,9 +2286,32 @@ The rest of the per-event control set: movement within a note and the effects na
 nodes can't express.
 
 **Key additions:**
-- `coarse`, `vowel`, per-event `distort`, `postgain`, `nudge`
-- Filter envelopes (`lp-env` …), pitch envelope (`penv` …), `vib`, `adsr` shorthands
-- `delay-sync`; decide `duck`, per-event `tremolo`/`phaser`, FM controls
+- Filter envelopes `lp-env` … `bp-release`, pitch envelope `penv` …, `vib`/`vib-mod`
+- `vowel`, `coarse` (synth voices only), `djf`, `postgain`, `nudge`, `delay-sync`
+- Deferred with reasons: ADSR/`sustain`-level/`hold`, per-event `distort`/`tremolo`/
+  `phaser`/`chorus`/`compressor`, `duck`, `room-lp`…, FM controls (SYN6)
+
+**Delivered:**
+- 28 control fns in `repulse.params`, registered per Rule 3; core does not clamp
+- `repulse.inserts`: envelope model (`env-value`, `env-points`, `effective-depth`), shared
+  with lib.rs; `pitch-params`, vowel table, `djf` folded into `lpf`/`hpf`, `nudge`,
+  `trigger_v3` slots 15–40 (gate, three filter envelopes, pitch envelope, vib, vowel,
+  coarse, postgain)
+- WASM: `EnvSpec`, control-rate (16 samples) cutoff and pitch modulation with
+  `Biquad::set_coeffs`, `VowelBank` (inline array), `coarse` sample-and-hold, `postgain`;
+  `Voice::tick` takes a pitch multiplier; the unmodulated path stays bit-identical
+- JS path: envelopes as `AudioParam` automation (exponential ramps on `frequency`,
+  linear ramps on `detune`), vowel as a five-band-pass sub-graph, vibrato LFO on
+  `detune` (oscillators and sample sources via a new `:on-source` hook), one console
+  warning for `coarse`
+- `delay-sync` in `orbits/orbit-settings` (cycles × cycle length, overrides `delay-time`)
+- Tests: Rust `tl7c_tests` (envelope breakpoints, filter/pitch envelopes, release at the
+  gate, vibrato range, vowel formants, coarse aliasing, postgain, bit-identity, pinned
+  `ENV_PARITY_DB`), `inserts_test`, `orbits_test`, `params_test`,
+  `e2e/tl7c-envelopes.spec.ts` (JS↔WASM envelope parity within 3 dB, release, `penv` on
+  a voice and a sample, vowel, `djf`, `postgain`, `nudge`, `delay-sync`)
+- Marked delivered on merge at the project owner's request; the listen check runs in the
+  next release test round (PR #208 test protocol, tests 1–9)
 
 See full spec: [PROMPTS/PHASE-TL7c.md](PROMPTS/PHASE-TL7c.md)
 

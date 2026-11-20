@@ -91,17 +91,24 @@
 
 (defn orbit-settings
   "The orbit settings present in event value v, clamped, or nil.
+   cycle-dur (seconds, optional) lets delay-sync (TL7c, cycles) set
+   :delay-time = delay-sync × cycle-dur, overriding :delay-time.
    → {:size 0–1 :delay-time 0.01–4 :delay-feedback 0–0.95} (present keys only)"
-  [v]
-  (when (map? v)
-    (let [m (cond-> {}
-              (some? (->num (:size v)))
-              (assoc :size (clamp 0.0 1.0 (->num (:size v))))
-              (some? (->num (:delay-time v)))
-              (assoc :delay-time (clamp 0.01 max-delay-time (->num (:delay-time v))))
-              (some? (->num (:delay-feedback v)))
-              (assoc :delay-feedback (clamp 0.0 0.95 (->num (:delay-feedback v)))))]
-      (not-empty m))))
+  ([v] (orbit-settings v nil))
+  ([v cycle-dur]
+   (when (map? v)
+     (let [sync (some-> (->num (:delay-sync v)) (->> (clamp (/ 1 64) 16)))
+           dt   (if (and sync cycle-dur (pos? cycle-dur))
+                  (* sync cycle-dur)
+                  (->num (:delay-time v)))
+           m    (cond-> {}
+                  (some? (->num (:size v)))
+                  (assoc :size (clamp 0.0 1.0 (->num (:size v))))
+                  (some? dt)
+                  (assoc :delay-time (clamp 0.01 max-delay-time dt))
+                  (some? (->num (:delay-feedback v)))
+                  (assoc :delay-feedback (clamp 0.0 0.95 (->num (:delay-feedback v)))))]
+       (not-empty m)))))
 
 (defn size-step
   "Reverb size rounded to steps of 0.05 → integer 0–20 (the IR cache key)."
@@ -263,13 +270,15 @@
 
 (defn apply-orbit-settings!
   "Record the orbit settings of event value v (size / delay-time /
-   delay-feedback, when present) for orbit i at audio time t. An existing bus
+   delay-feedback, when present; delay-sync with cycle-dur, TL7c) for orbit i
+   at audio time t. An existing bus
    follows at t; a bus created later starts with them."
-  [ac i t v]
-  (when-let [m (orbit-settings v)]
+  ([ac i t v] (apply-orbit-settings! ac i t v nil))
+  ([ac i t v cycle-dur]
+  (when-let [m (orbit-settings v cycle-dur)]
     (swap! (state ac) update-in [:settings i] merge m)
     (when-let [bus (get-in @(state ac) [:buses i])]
-      (apply-to-bus! ac bus m t))))
+      (apply-to-bus! ac bus m t)))))
 
 (defn send!
   "Connect node (the event's output, after inserts and pan) to the room/delay

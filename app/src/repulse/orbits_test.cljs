@@ -42,6 +42,16 @@
          (orbits/orbit-settings {:delay-time 0 :delay-feedback 2})))
   (is (= {:delay-time 4.0} (orbits/orbit-settings {:delay-time 10}))))
 
+(deftest orbit-settings-delay-sync
+  (is (= {:delay-time 0.5} (orbits/orbit-settings {:delay-sync 0.25} 2.0)))
+  (is (= {:delay-time 0.375} (orbits/orbit-settings {:delay-sync [3 16]} 2.0)))
+  (is (= {:delay-time 0.5} (orbits/orbit-settings {:delay-sync 0.25 :delay-time 3} 2.0))
+      "delay-sync overrides delay-time")
+  (is (= {:delay-time 3.0} (orbits/orbit-settings {:delay-sync 0.25 :delay-time 3}))
+      "no cycle length: delay-time stays")
+  (is (nil? (orbits/orbit-settings {:delay-sync 0.25})))
+  (is (= {:delay-time 4.0} (orbits/orbit-settings {:delay-sync 16} 2.0)) "clamped to 4 s"))
+
 (deftest size-steps-and-ir-length
   (is (= 0 (orbits/size-step 0)))
   (is (= 2 (orbits/size-step 0.1)))
