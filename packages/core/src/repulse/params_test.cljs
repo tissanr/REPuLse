@@ -567,3 +567,28 @@
     (is (= {:note :c2 :lpf 300 :lp-env 4 :lp-decay 0.2 :penv 12 :vib 6 :vowel :a
             :postgain 0.5 :nudge 0.01 :delay-sync [3 16]}
            (:value (first (core/query p one-cycle)))))))
+
+;;; ── Phase SYN6 ───────────────────────────────────────────────────────
+
+(def ^:private syn6-controls
+  [[params/unison :unison] [params/detune :detune] [params/spread :spread]
+   [params/sub-osc :sub-osc] [params/pw :pw] [params/pw-rate :pw-rate]
+   [params/pw-depth :pw-depth] [params/sync :sync] [params/tune :tune]
+   [params/tone :tone] [params/glide :glide] [params/accent :accent]
+   [params/lp-rate :lp-rate] [params/lp-depth :lp-depth]])
+
+(deftest syn6-controls-set-their-key
+  (is (= 14 (count syn6-controls)))
+  (doseq [[f kw] syn6-controls]
+    (testing (name kw)
+      (is (= {:note :c4 kw 3} (:value (first (core/query (f 3 (core/pure :c4)) one-cycle)))))
+      (is (= {:note :hh kw 0.5}
+             (:value (first (core/query ((f 0.5) (core/pure :hh)) one-cycle))))
+          "transformer arity")
+      (is (= [0 7] (mapv (comp kw :value)
+                         (core/query (f (core/seq* [0 7]) (core/seq* [:lt :lt])) one-cycle)))
+          "patterned")
+      (is (= [0 0.25 0.5 0.75]
+             (mapv (comp kw :value)
+                   (core/query (f core/saw (core/seq* [:hh :hh :hh :hh])) one-cycle)))
+          "signal sampled at onset"))))

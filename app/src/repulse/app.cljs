@@ -3,6 +3,7 @@
             [repulse.fx :as fx]
             [repulse.midi :as midi]
             [repulse.samples :as samples]
+            [repulse.voices :as voices]
             [repulse.plugins :as plugins]
             [repulse.session :as session]
             [repulse.plugins.compressor :as compressor-plugin]
@@ -36,7 +37,8 @@
             [repulse.snippets :as snippets]
             [repulse.ui.assistant-panel :as assistant-panel]
             [clojure.string :as str]
-            ["./lisp-lang/providers.js" :refer [setBankNamesProvider setFxNamesProvider]]
+            ["./lisp-lang/providers.js" :refer [setBankNamesProvider setFxNamesProvider
+                                                setVoiceNamesProvider setDrumNamesProvider]]
             ["@codemirror/commands" :refer [selectAll]]
             ["./lisp-lang/parser.js" :refer [parser]]
             ["@vercel/speed-insights" :refer [injectSpeedInsights]]))
@@ -260,6 +262,11 @@
   (assistant-panel/init!)
   (builtins/ensure-env!)
   (setBankNamesProvider (fn [] (clj->js (samples/bank-names))))
+  ;; SYN6: (synth :su… offers :supersaw / :sub-bass; :synth_bd for the kit.
+  (let [voice-names (clj->js (sort (map name voices/synth-voices)))
+        drum-names  (clj->js voices/drum-voices)]
+    (setVoiceNamesProvider (fn [] voice-names))
+    (setDrumNamesProvider (fn [] drum-names)))
   (setFxNamesProvider   (fn [] (clj->js (mapv :name @fx/chain))))
 
   ;; Register global mute-toggle for the track panel's button click handlers.
