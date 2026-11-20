@@ -1246,6 +1246,175 @@
               :examples ["(stack (->> (seq :bd :sd) (room 0.2) (orbit 0)) (->> (slow 2 (seq :c3 :g3)) (synth :saw) (room 0.7) (size 1) (orbit 1)))"]
               :see-also ["room" "delay" "size"]}
 
+ ;; ── Phase TL7c — envelopes, pitch modulation, vowel, coarse, djf, postgain ──
+ :lp-env {:category "param"
+         :returns "Pattern"
+         :side-effects []
+         :examples ["(->> (seq :c2 :c2 :eb2 :g1) (synth :saw) (lpf 300) (resonance 8) (lp-env 4) (lp-decay 0.2))"]
+         :see-also ["lpf" "lp-attack" "lp-decay" "lp-sustain" "lp-release"]}
+
+ :lp-attack {:category "param"
+            :returns "Pattern"
+            :side-effects []
+            :examples ["(->> (seq :c2 :c2 :eb2 :g1) (synth :saw) (lpf 300) (resonance 8) (lp-env 4) (lp-decay 0.2) (lp-attack 0.05))"]
+            :see-also ["lp-env" "lpf"]}
+
+ :lp-decay {:category "param"
+           :returns "Pattern"
+           :side-effects []
+           :examples ["(->> (seq :c2 :c2 :eb2 :g1) (synth :saw) (lpf 300) (resonance 8) (lp-env 4) (lp-decay 0.3))"]
+           :see-also ["lp-env" "lpf"]}
+
+ :lp-sustain {:category "param"
+             :returns "Pattern"
+             :side-effects []
+             :examples ["(->> (seq :c2 :c2 :eb2 :g1) (synth :saw) (lpf 300) (resonance 8) (lp-env 4) (lp-decay 0.2) (lp-sustain 0.5))"]
+             :see-also ["lp-env" "lpf"]}
+
+ :lp-release {:category "param"
+             :returns "Pattern"
+             :side-effects []
+             :examples ["(->> (seq :c2 :c2 :eb2 :g1) (synth :saw) (lpf 300) (resonance 8) (lp-env 4) (lp-decay 0.2) (lp-release 0.3))"]
+             :see-also ["lp-env" "lpf"]}
+
+ :hp-env {:category "param"
+         :returns "Pattern"
+         :side-effects []
+         :examples ["(->> (seq :c3 :g3) (synth :saw) (hpf 2000) (hp-env -4) (hp-decay 0.3))"]
+         :see-also ["hpf" "hp-attack" "hp-decay" "hp-sustain" "hp-release"]}
+
+ :hp-attack {:category "param"
+            :returns "Pattern"
+            :side-effects []
+            :examples ["(->> (seq :c3 :g3) (synth :saw) (hpf 2000) (hp-env -4) (hp-decay 0.3) (hp-attack 0.05))"]
+            :see-also ["hp-env" "hpf"]}
+
+ :hp-decay {:category "param"
+           :returns "Pattern"
+           :side-effects []
+           :examples ["(->> (seq :c3 :g3) (synth :saw) (hpf 2000) (hp-env -4) (hp-decay 0.3))"]
+           :see-also ["hp-env" "hpf"]}
+
+ :hp-sustain {:category "param"
+             :returns "Pattern"
+             :side-effects []
+             :examples ["(->> (seq :c3 :g3) (synth :saw) (hpf 2000) (hp-env -4) (hp-decay 0.3) (hp-sustain 0.5))"]
+             :see-also ["hp-env" "hpf"]}
+
+ :hp-release {:category "param"
+             :returns "Pattern"
+             :side-effects []
+             :examples ["(->> (seq :c3 :g3) (synth :saw) (hpf 2000) (hp-env -4) (hp-decay 0.3) (hp-release 0.3))"]
+             :see-also ["hp-env" "hpf"]}
+
+ :bp-env {:category "param"
+         :returns "Pattern"
+         :side-effects []
+         :examples ["(->> (fast 2 (seq :c3 :eb3)) (synth :saw) (bpf 400) (bpq 4) (bp-env 3) (bp-decay 0.25))"]
+         :see-also ["bpf" "bp-attack" "bp-decay" "bp-sustain" "bp-release"]}
+
+ :bp-attack {:category "param"
+            :returns "Pattern"
+            :side-effects []
+            :examples ["(->> (fast 2 (seq :c3 :eb3)) (synth :saw) (bpf 400) (bpq 4) (bp-env 3) (bp-decay 0.25) (bp-attack 0.05))"]
+            :see-also ["bp-env" "bpf"]}
+
+ :bp-decay {:category "param"
+           :returns "Pattern"
+           :side-effects []
+           :examples ["(->> (fast 2 (seq :c3 :eb3)) (synth :saw) (bpf 400) (bpq 4) (bp-env 3) (bp-decay 0.3))"]
+           :see-also ["bp-env" "bpf"]}
+
+ :bp-sustain {:category "param"
+             :returns "Pattern"
+             :side-effects []
+             :examples ["(->> (fast 2 (seq :c3 :eb3)) (synth :saw) (bpf 400) (bpq 4) (bp-env 3) (bp-decay 0.25) (bp-sustain 0.5))"]
+             :see-also ["bp-env" "bpf"]}
+
+ :bp-release {:category "param"
+             :returns "Pattern"
+             :side-effects []
+             :examples ["(->> (fast 2 (seq :c3 :eb3)) (synth :saw) (bpf 400) (bpq 4) (bp-env 3) (bp-decay 0.25) (bp-release 0.3))"]
+             :see-also ["bp-env" "bpf"]}
+
+ :penv {:category "param"
+       :returns "Pattern"
+       :side-effects []
+       :examples ["(->> (seq :c3 :c3) (synth :saw) (penv 12) (p-decay 0.08))"]
+       :see-also ["p-attack" "p-decay" "p-sustain" "p-release" "vib"]}
+
+ :p-attack {:category "param"
+           :returns "Pattern"
+           :side-effects []
+           :examples ["(->> (seq :c3 :c3) (synth :saw) (penv 12) (p-decay 0.08) (p-attack 0.02))"]
+           :see-also ["penv"]}
+
+ :p-decay {:category "param"
+          :returns "Pattern"
+          :side-effects []
+          :examples ["(->> (seq :c3 :c3) (synth :saw) (penv 12) (p-decay 0.3))"]
+          :see-also ["penv"]}
+
+ :p-sustain {:category "param"
+            :returns "Pattern"
+            :side-effects []
+            :examples ["(->> (seq :c3 :c3) (synth :saw) (penv 12) (p-decay 0.08) (p-sustain 0.5))"]
+            :see-also ["penv"]}
+
+ :p-release {:category "param"
+            :returns "Pattern"
+            :side-effects []
+            :examples ["(->> (seq :c3 :c3) (synth :saw) (penv 12) (p-decay 0.08) (p-release 0.3))"]
+            :see-also ["penv"]}
+
+ :vib {:category "param"
+      :returns "Pattern"
+      :side-effects []
+      :examples ["(->> (seq :a4) (synth :square) (vib 6) (vib-mod 0.3))"]
+      :see-also ["vib-mod" "penv"]}
+
+ :vib-mod {:category "param"
+          :returns "Pattern"
+          :side-effects []
+          :examples ["(->> (seq :a4) (synth :square) (vib 6) (vib-mod 0.3))"]
+          :see-also ["vib"]}
+
+ :vowel {:category "param"
+        :returns "Pattern"
+        :side-effects []
+        :examples ["(->> (seq :a2 :a2 :a2 :a2 :a2) (synth :saw) (decay 0.4) (vowel (seq :a :e :i :o :u)))"]
+        :see-also ["bpf" "shape"]}
+
+ :coarse {:category "param"
+         :returns "Pattern"
+         :side-effects []
+         :examples ["(->> (fast 4 (seq :c5)) (synth :square) (coarse (seq 1 4 8 16)))"]
+         :see-also ["crush" "shape"]}
+
+ :djf {:category "param"
+      :returns "Pattern"
+      :side-effects []
+      :examples ["(->> (fast 8 (seq :hh :oh)) (djf (slow 4 sine)))"]
+      :see-also ["lpf" "hpf"]}
+
+ :postgain {:category "param"
+           :returns "Pattern"
+           :side-effects []
+           :examples ["(->> (seq :c3 :e3) (synth :saw) (shape 0.8) (postgain 0.5))"]
+           :see-also ["gain" "shape"]}
+
+ :nudge {:category "param"
+        :returns "Pattern"
+        :side-effects []
+        :examples ["(->> (fast 4 (seq :hh)) (nudge (seq 0 0.02)))"]
+        :see-also ["late" "early"]}
+
+ :delay-sync {:category "param"
+             :returns "Pattern"
+             :side-effects []
+             :examples ["(->> (seq :sd :_ :_ :_) (delay 0.5) (delay-sync 3/16))"]
+             :see-also ["delay" "delay-time"]}
+
  ;; ── UGens (inside defsynth) ─────────────────────────────────────────────────
  :sin        {:category "ugen"
               :returns "UGen"

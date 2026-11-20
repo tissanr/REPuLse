@@ -296,7 +296,7 @@ from the voice's first sample) is taken and held for `n` samples. `n = 1` is byp
 
 ### Registration (CLAUDE.md Rule 3)
 
-All 30 names: `lp-env lp-attack lp-decay lp-sustain lp-release hp-env hp-attack
+All 28 names: `lp-env lp-attack lp-decay lp-sustain lp-release hp-env hp-attack
 hp-decay hp-sustain hp-release bp-env bp-attack bp-decay bp-sustain bp-release penv
 p-attack p-decay p-sustain p-release vib vib-mod vowel coarse djf postgain nudge
 delay-sync`. Grammar → `npm run gen:grammar`; `completions.js`; `builtin_meta.edn`
@@ -320,8 +320,8 @@ delay-sync`. Grammar → `npm run gen:grammar`; `completions.js`; `builtin_meta.
 
 | File | Change |
 |---|---|
-| `packages/core/src/repulse/params.cljs` (+ `_test`) | 30 control fns + tests |
-| `packages/lisp/src/repulse/lisp/builtins/params.cljs` | register 30 names |
+| `packages/core/src/repulse/params.cljs` (+ `_test`) | 28 control fns + tests |
+| `packages/lisp/src/repulse/lisp/builtins/params.cljs` | register 28 names |
 | `app/src/repulse/inserts.cljs` (+ `_test`) | env, pitch, vowel, coarse, djf, postgain, slots 15–40 |
 | `app/src/repulse/orbits.cljs` (+ `_test`) | `delay-sync` in `orbit-settings` |
 | `app/src/repulse/audio.cljs` | stage list, envelopes, vowel graph, pitch mods, nudge, postgain, coarse warning, slots |
@@ -338,13 +338,16 @@ Rust (`cargo test`):
 - [ ] `EnvSpec::value` matches the formula at `0, A/2, A, A+D/2, A+D, G, G+R/2, G+R` for a
   gate before and after `A+D`.
 - [ ] Filter envelope: saw 110 Hz, `lpf 300`, `lp-env 4`, `lp-decay 0.2`: energy at the
-  harmonics in 1–3 kHz in the window 5–25 ms is ≥ 10 dB above the window 300–320 ms.
+  harmonics in 1–3 kHz (Hann-windowed Goertzel; a rectangular window leaks the strong
+  low harmonics into these bins) in the window 5–25 ms is ≥ 10 dB above the window
+  300–320 ms. Use `decay 10` so the amplitude envelope barely moves.
 - [ ] Pitch envelope: `Tone` 440 Hz with `penv 12`, `p-decay 0.5`: Goertzel in the first
   20 ms is ≥ 10 dB stronger at 880 Hz than at 440 Hz, and in 0.6–0.7 s the reverse.
 - [ ] Vibrato: `Tone` 440 Hz, `vib 5`, `vib-mod 1`: the zero-crossing frequency measured
   over successive 25 ms windows spans at least 425–455 Hz over one second.
-- [ ] `vowel :a` vs `vowel :i` on the same saw (110 Hz): at 1040 Hz (`a`'s F2) `a` is
-  ≥ 6 dB above `i`; at 1760 Hz (`i`'s F2, nearest harmonic) `i` is ≥ 6 dB above `a`.
+- [ ] `vowel :a` vs `vowel :i` on the same saw (110 Hz): at 1100 Hz (harmonic nearest
+  `a`'s F2, 1040 Hz) `a` is ≥ 6 dB above `i`; at 220 Hz (nearest `i`'s F1, 250 Hz) `i`
+  is ≥ 6 dB above `a`. (`i`'s F2 is −30 dB in this table, too weak to discriminate.)
 - [ ] `coarse 8` on a 1 kHz sine: Goertzel at `sr/8 − 1000` Hz is ≥ 20 dB above the same
   bin without `coarse`.
 - [ ] `postgain 0.5` lowers RMS by 6 dB ± 0.1.
@@ -376,7 +379,7 @@ Everywhere:
 - [ ] Every new parameter accepts patterns and signals (core tests).
 - [ ] Render loop allocation-free: new Rust state is inline (`Copy` structs, fixed
   arrays); code review item.
-- [ ] Rule 3 registration for all 30 names; no grammar/AI-docs drift.
+- [ ] Rule 3 registration for all 28 names; no grammar/AI-docs drift.
 - [ ] USAGE and parity docs updated; ROADMAP delivered entry.
 - [ ] `npm run test:all` and `npx shadow-cljs compile app` pass.
 - [ ] Human listen check recorded in the PR (below). The PR ends with `## Test protocol`.

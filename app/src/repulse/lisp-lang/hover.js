@@ -979,6 +979,146 @@ const DOCS = {
     description: "Feedback of the orbit's delay, 0\u20130.95 (default 0.5): how much of each echo comes back. Last event wins per orbit; (stop) resets it.",
     example: "(->> (seq :sd :_ :_ :_) (delay 0.5) (delay-feedback 0.7))",
   },
+  "lp-env": {
+    signature: "(lp-env oct pat) or (lp-env oct)",
+    description: "Depth of the per-event low-pass filter envelope in octaves: the cutoff moves from lpf to lpf·2^depth and back, a straight line in octaves. Negative depths move it down. Needs lpf on the same event. Times: lp-attack, lp-decay, lp-sustain, lp-release.",
+    example: "(->> (seq :c2 :c2 :eb2 :g1) (synth :saw) (lpf 300) (resonance 8) (lp-env 4) (lp-decay 0.2))",
+  },
+  "lp-attack": {
+    signature: "(lp-attack secs pat) or (lp-attack secs)",
+    description: "Low-pass filter envelope attack time (default 0.001 s). No effect without lp-env and lpf.",
+    example: "(->> (seq :c2 :c2 :eb2 :g1) (synth :saw) (lpf 300) (resonance 8) (lp-env 4) (lp-decay 0.2) (lp-attack 0.05))",
+  },
+  "lp-decay": {
+    signature: "(lp-decay secs pat) or (lp-decay secs)",
+    description: "Low-pass filter envelope decay time from the peak to the sustain level (default 0.2 s). No effect without lp-env and lpf.",
+    example: "(->> (seq :c2 :c2 :eb2 :g1) (synth :saw) (lpf 300) (resonance 8) (lp-env 4) (lp-decay 0.3))",
+  },
+  "lp-sustain": {
+    signature: "(lp-sustain level pat) or (lp-sustain level)",
+    description: "Low-pass filter envelope sustain level as a fraction of the depth, 0–1 (default 0). No effect without lp-env and lpf.",
+    example: "(->> (seq :c2 :c2 :eb2 :g1) (synth :saw) (lpf 300) (resonance 8) (lp-env 4) (lp-decay 0.2) (lp-sustain 0.5))",
+  },
+  "lp-release": {
+    signature: "(lp-release secs pat) or (lp-release secs)",
+    description: "Low-pass filter envelope release time after the event ends (default 0.1 s). No effect without lp-env and lpf. The release starts when the event ends (its duration is the gate).",
+    example: "(->> (seq :c2 :c2 :eb2 :g1) (synth :saw) (lpf 300) (resonance 8) (lp-env 4) (lp-decay 0.2) (lp-release 0.3))",
+  },
+  "hp-env": {
+    signature: "(hp-env oct pat) or (hp-env oct)",
+    description: "Depth of the per-event high-pass filter envelope in octaves: the cutoff moves from hpf to hpf·2^depth and back, a straight line in octaves. Negative depths move it down. Needs hpf on the same event. Times: hp-attack, hp-decay, hp-sustain, hp-release.",
+    example: "(->> (seq :c3 :g3) (synth :saw) (hpf 2000) (hp-env -4) (hp-decay 0.3))",
+  },
+  "hp-attack": {
+    signature: "(hp-attack secs pat) or (hp-attack secs)",
+    description: "High-pass filter envelope attack time (default 0.001 s). No effect without hp-env and hpf.",
+    example: "(->> (seq :c3 :g3) (synth :saw) (hpf 2000) (hp-env -4) (hp-decay 0.3) (hp-attack 0.05))",
+  },
+  "hp-decay": {
+    signature: "(hp-decay secs pat) or (hp-decay secs)",
+    description: "High-pass filter envelope decay time from the peak to the sustain level (default 0.2 s). No effect without hp-env and hpf.",
+    example: "(->> (seq :c3 :g3) (synth :saw) (hpf 2000) (hp-env -4) (hp-decay 0.3))",
+  },
+  "hp-sustain": {
+    signature: "(hp-sustain level pat) or (hp-sustain level)",
+    description: "High-pass filter envelope sustain level as a fraction of the depth, 0–1 (default 0). No effect without hp-env and hpf.",
+    example: "(->> (seq :c3 :g3) (synth :saw) (hpf 2000) (hp-env -4) (hp-decay 0.3) (hp-sustain 0.5))",
+  },
+  "hp-release": {
+    signature: "(hp-release secs pat) or (hp-release secs)",
+    description: "High-pass filter envelope release time after the event ends (default 0.1 s). No effect without hp-env and hpf. The release starts when the event ends (its duration is the gate).",
+    example: "(->> (seq :c3 :g3) (synth :saw) (hpf 2000) (hp-env -4) (hp-decay 0.3) (hp-release 0.3))",
+  },
+  "bp-env": {
+    signature: "(bp-env oct pat) or (bp-env oct)",
+    description: "Depth of the per-event band-pass filter envelope in octaves: the cutoff moves from bpf to bpf·2^depth and back, a straight line in octaves. Negative depths move it down. Needs bpf on the same event. Times: bp-attack, bp-decay, bp-sustain, bp-release.",
+    example: "(->> (fast 2 (seq :c3 :eb3)) (synth :saw) (bpf 400) (bpq 4) (bp-env 3) (bp-decay 0.25))",
+  },
+  "bp-attack": {
+    signature: "(bp-attack secs pat) or (bp-attack secs)",
+    description: "Band-pass filter envelope attack time (default 0.001 s). No effect without bp-env and bpf.",
+    example: "(->> (fast 2 (seq :c3 :eb3)) (synth :saw) (bpf 400) (bpq 4) (bp-env 3) (bp-decay 0.25) (bp-attack 0.05))",
+  },
+  "bp-decay": {
+    signature: "(bp-decay secs pat) or (bp-decay secs)",
+    description: "Band-pass filter envelope decay time from the peak to the sustain level (default 0.2 s). No effect without bp-env and bpf.",
+    example: "(->> (fast 2 (seq :c3 :eb3)) (synth :saw) (bpf 400) (bpq 4) (bp-env 3) (bp-decay 0.3))",
+  },
+  "bp-sustain": {
+    signature: "(bp-sustain level pat) or (bp-sustain level)",
+    description: "Band-pass filter envelope sustain level as a fraction of the depth, 0–1 (default 0). No effect without bp-env and bpf.",
+    example: "(->> (fast 2 (seq :c3 :eb3)) (synth :saw) (bpf 400) (bpq 4) (bp-env 3) (bp-decay 0.25) (bp-sustain 0.5))",
+  },
+  "bp-release": {
+    signature: "(bp-release secs pat) or (bp-release secs)",
+    description: "Band-pass filter envelope release time after the event ends (default 0.1 s). No effect without bp-env and bpf. The release starts when the event ends (its duration is the gate).",
+    example: "(->> (fast 2 (seq :c3 :eb3)) (synth :saw) (bpf 400) (bpq 4) (bp-env 3) (bp-decay 0.25) (bp-release 0.3))",
+  },
+  "penv": {
+    signature: "(penv st pat) or (penv st)",
+    description: "Depth of the per-event pitch envelope in semitones: the pitch moves from the note to note + depth and back. With the default 1 ms attack a note starts depth semitones up and falls. Works on tonal synth voices (sine, saw, square, fm and its presets) and samples; drums, noise, plucked (ks) and defsynth voices ignore it.",
+    example: "(->> (seq :c3 :c3) (synth :saw) (penv 12) (p-decay 0.08))",
+  },
+  "p-attack": {
+    signature: "(p-attack secs pat) or (p-attack secs)",
+    description: "Pitch envelope attack time (default 0.001 s). No effect without penv.",
+    example: "(->> (seq :c3 :c3) (synth :saw) (penv 12) (p-decay 0.08) (p-attack 0.02))",
+  },
+  "p-decay": {
+    signature: "(p-decay secs pat) or (p-decay secs)",
+    description: "Pitch envelope decay time back towards the sustain level (default 0.2 s). No effect without penv.",
+    example: "(->> (seq :c3 :c3) (synth :saw) (penv 12) (p-decay 0.3))",
+  },
+  "p-sustain": {
+    signature: "(p-sustain level pat) or (p-sustain level)",
+    description: "Pitch envelope sustain level as a fraction of the depth, 0–1 (default 0). No effect without penv.",
+    example: "(->> (seq :c3 :c3) (synth :saw) (penv 12) (p-decay 0.08) (p-sustain 0.5))",
+  },
+  "p-release": {
+    signature: "(p-release secs pat) or (p-release secs)",
+    description: "Pitch envelope release time after the event ends (default 0.1 s). No effect without penv.",
+    example: "(->> (seq :c3 :c3) (synth :saw) (penv 12) (p-decay 0.08) (p-release 0.3))",
+  },
+  "vib": {
+    signature: "(vib hz pat) or (vib hz)",
+    description: "Per-event vibrato rate in Hz. Depth: vib-mod (semitones, default 0.5). Works on tonal synth voices and samples (not drums, noise, ks or defsynth).",
+    example: "(->> (seq :a4) (synth :square) (vib 6) (vib-mod 0.3))",
+  },
+  "vib-mod": {
+    signature: "(vib-mod st pat) or (vib-mod st)",
+    description: "Vibrato depth in semitones (peak deviation, default 0.5). No effect without vib.",
+    example: "(->> (seq :a4) (synth :square) (vib 6) (vib-mod 0.3))",
+  },
+  "vowel": {
+    signature: "(vowel v pat) or (vowel v)",
+    description: "Per-event formant filter: five band-passes tuned to the vowel's formants (:a :e :i :o :u, or strings). Unknown vowels are ignored. Brightest on buzzy sources (saw, square).",
+    example: "(->> (seq :a2 :a2 :a2 :a2 :a2) (synth :saw) (decay 0.4) (vowel (seq :a :e :i :o :u)))",
+  },
+  "coarse": {
+    signature: "(coarse n pat) or (coarse n)",
+    description: "Per-event sample-rate reduction: every n-th sample is held for n samples (1 = off). Works on the WASM synth voices only; samples, defsynth voices and tracks with an fx chain ignore it (warned once in the console).",
+    example: "(->> (fast 4 (seq :c5)) (synth :square) (coarse (seq 1 4 8 16)))",
+  },
+  "djf": {
+    signature: "(djf x pat) or (djf x)",
+    description: "One-knob DJ filter: below 0.5 a low-pass closes towards 20 Hz at 0, above 0.5 a high-pass opens towards 20 kHz at 1; 0.5 is off. An explicit lpf/hpf on the same event wins.",
+    example: "(->> (fast 8 (seq :hh :oh)) (djf (slow 4 sine)))",
+  },
+  "postgain": {
+    signature: "(postgain g pat) or (postgain g)",
+    description: "Linear gain applied after the per-event insert chain (filters, vowel, crush, shape), before pan and sends. Use it to tame or boost a shaped or filtered sound.",
+    example: "(->> (seq :c3 :e3) (synth :saw) (shape 0.8) (postgain 0.5))",
+  },
+  "nudge": {
+    signature: "(nudge secs pat) or (nudge secs)",
+    description: "Shifts each event's onset by secs seconds (positive = later). The editor flash and MIDI out are not nudged.",
+    example: "(->> (fast 4 (seq :hh)) (nudge (seq 0 0.02)))",
+  },
+  "delay-sync": {
+    signature: "(delay-sync cycles pat) or (delay-sync cycles)",
+    description: "Delay time of the event's orbit in cycles, so echoes stay locked to the tempo; overrides delay-time on the same event (clamped to 4 s). Last event wins per orbit.",
+    example: "(->> (seq :sd :_ :_ :_) (delay 0.5) (delay-sync 3/16))",
+  },
   "orbit": {
     signature: "(orbit n pat) or (orbit n)",
     description: "Which orbit (0\u20133, default 0) the event's room and delay sends go to. Each orbit has its own reverb and delay with their own settings. Out-of-range values are clamped with a warning.",
