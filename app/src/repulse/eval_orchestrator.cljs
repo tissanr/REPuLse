@@ -16,6 +16,7 @@
             [repulse.audio :as audio]
             [repulse.samples :as samples]
             [repulse.sound-check :as sound-check]
+            [repulse.voices :as voices]
             [repulse.orbits :as orbits]
             [repulse.synth :as synth]
             [repulse.fx :as fx]
@@ -142,13 +143,23 @@
        (when (= gen @eval-generation)
          (let [tracks   (:tracks @audio/scheduler-state)
                pats     (keep #(get tracks %) track-names)
-               unknown  (sound-check/unknown-sounds
-                         pats
-                         #(or (synth/lookup-synth %)
-                              (samples/has-bank? (samples/resolve-keyword %)))
-                         (samples/bank-names))]
+               unknown  (concat
+                         (sound-check/unknown-sounds
+                          pats
+                          #(or (synth/lookup-synth %)
+                               (samples/has-bank? (samples/resolve-keyword %)))
+                          (samples/bank-names))
+                         ;; SYN6 D2: unknown (synth …) voices play a sine.
+                         (map #(assoc % :voice? true)
+                              (sound-check/unknown-voices
+                               pats
+                               #(or (contains? voices/synth-voices %)
+                                    (synth/lookup-synth %)))))]
            (when (seq unknown)
-             (let [msgs (map sound-check/warning-message unknown)]
+             (let [msgs (map #(if (:voice? %)
+                                (sound-check/voice-warning-message %)
+                                (sound-check/warning-message %))
+                             unknown)]
                (set-output! (str (when base-msg (str base-msg " — "))
                                  "Warning: " (cstr/join "; " msgs))
                             :warning)

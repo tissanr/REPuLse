@@ -1,4 +1,5 @@
 (ns repulse.params
+  (:refer-clojure :exclude [spread])
   (:require [repulse.core :as core]))
 
 ;;; ── Value map helpers ────────────────────────────────────────────────
@@ -691,3 +692,90 @@
    (delay-sync 3/16 pat)"
   ([v]     (fn [pat] (delay-sync v pat)))
   ([v pat] (apply-param :delay-sync v pat)))
+
+;;; ── Phase SYN6: oscillator, drum-kit and instrument parameters ──────
+;;; Core does not clamp; the audio layer does (ranges in the docstrings).
+
+(defn unison
+  "Number of oscillators of a synth voice (1–7).
+   (unison 3 pat) · (unison 3) → transformer"
+  ([v]     (fn [pat] (unison v pat)))
+  ([v pat] (apply-param :unison v pat)))
+
+(defn detune
+  "Total width of the unison stack in cents (0–200; 20 when unison > 1).
+   (detune 12 pat)"
+  ([v]     (fn [pat] (detune v pat)))
+  ([v pat] (apply-param :detune v pat)))
+
+(defn spread
+  "Stereo width of the unison stack (0–1; supersaw 0.7).
+   (spread 0.8 pat)"
+  ([v]     (fn [pat] (spread v pat)))
+  ([v pat] (apply-param :spread v pat)))
+
+(defn sub-osc
+  "Sine one octave below the note (0–1; 0.5 = 6 dB below the fundamental).
+   (sub-osc 0.5 pat)"
+  ([v]     (fn [pat] (sub-osc v pat)))
+  ([v pat] (apply-param :sub-osc v pat)))
+
+(defn pw
+  "Pulse width of :square / :pulse (0.01–0.99, default 0.5).
+   (pw 0.25 pat)"
+  ([v]     (fn [pat] (pw v pat)))
+  ([v pat] (apply-param :pw v pat)))
+
+(defn pw-rate
+  "Pulse-width LFO rate in Hz (0–20). WASM voices only.
+   (pw-rate 1 pat)"
+  ([v]     (fn [pat] (pw-rate v pat)))
+  ([v pat] (apply-param :pw-rate v pat)))
+
+(defn pw-depth
+  "Pulse-width LFO depth (0–0.49). WASM voices only.
+   (pw-depth 0.4 pat)"
+  ([v]     (fn [pat] (pw-depth v pat)))
+  ([v pat] (apply-param :pw-depth v pat)))
+
+(defn sync
+  "Hard-sync ratio slave/master (1–16) of :saw / :pulse. WASM voices only.
+   (sync 4.5 pat)"
+  ([v]     (fn [pat] (sync v pat)))
+  ([v pat] (apply-param :sync v pat)))
+
+(defn tune
+  "Pitch of a synthesized drum in semitones (−48…48).
+   (tune -5 pat)"
+  ([v]     (fn [pat] (tune v pat)))
+  ([v pat] (apply-param :tune v pat)))
+
+(defn tone
+  "Brightness / body–noise balance of a synthesized drum (0–1).
+   (tone 0.8 pat)"
+  ([v]     (fn [pat] (tone v pat)))
+  ([v pat] (apply-param :tone v pat)))
+
+(defn glide
+  "Portamento time in seconds from the previous note of the track (0–5).
+   (glide 0.06 pat)"
+  ([v]     (fn [pat] (glide v pat)))
+  ([v pat] (apply-param :glide v pat)))
+
+(defn accent
+  "Accent 0–1: louder, and with a filter envelope opens further and closes faster.
+   (accent (seq 0 1 0 0) pat)"
+  ([v]     (fn [pat] (accent v pat)))
+  ([v pat] (apply-param :accent v pat)))
+
+(defn lp-rate
+  "Cutoff LFO rate of the low-pass in periods per cycle (0–64).
+   (lp-rate 4 pat)"
+  ([v]     (fn [pat] (lp-rate v pat)))
+  ([v pat] (apply-param :lp-rate v pat)))
+
+(defn lp-depth
+  "Cutoff LFO depth of the low-pass in octaves (0–4).
+   (lp-depth 2 pat)"
+  ([v]     (fn [pat] (lp-depth v pat)))
+  ([v pat] (apply-param :lp-depth v pat)))

@@ -26,7 +26,14 @@ confirmed them on 2026-11-14; they are not open.
    (`(sub [mode] amt pat)`, grammar line 43, `completions.js` line 101), so the
    outline's `(sub 0.5)` cannot be registered. `ROADMAP.md` still says `sub` in the
    SYN6 bullets; the delivery commit corrects it.
-3. **Two kicks for one name.** The four legacy engine voices stay bit-identical as the
+3. **Superseded on 2026-11-21 — the synth kit is the default kit.** After hearing the
+   kit, the owner decided that bare kit names play the synth kit even when sample banks
+   of those names have loaded; `(bank :dirt)` restores the Dirt-Samples drums (the
+   previous default), drum-machine banks work as before, and the four legacy engine
+   voices are no longer reachable from patterns (kept in `lib.rs` for old trigger
+   strings). Routing rules: `drum-route` in `app/src/repulse/voices.cljs`. The original
+   decision, kept for the record:
+   **Two kicks for one name.** The four legacy engine voices stay bit-identical as the
    no-sample fallback for bare `:bd :sd :hh :oh`, and the new kit is reached through
    `(bank :synth)` / `:synth_*`. Consequence: without samples, `(seq :bd)` and
    `(bank :synth) (seq :bd)` sound different. Retiring the legacy voices was the

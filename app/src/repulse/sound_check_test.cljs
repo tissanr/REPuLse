@@ -78,3 +78,27 @@
     (is (not (sc/has-analog-events? (core/seq* [:bd :sd])))))
   (testing "message explains the fix"
     (is (re-find #"signal needs structure" (sc/structure-warning-message :_)))))
+
+;;; ── Phase SYN6 ───────────────────────────────────────────────────────
+
+(deftest syn6-kit-names-are-known
+  (testing ":cp and :synth_bd never warn, even without sample banks"
+    (is (empty? (sc/unknown-sounds [(core/seq* [:cp :rim :zap :synth_bd :synth_cp])]
+                                   (constantly false) []))))
+  (testing ":synth_<not a drum> still warns"
+    (is (= [:synth_foo] (mapv :name (sc/unknown-sounds [(core/pure :synth_foo)]
+                                                       (constantly false) [])))))
+  (is (= 18 (count sc/builtin-drums))))
+
+(defn- voice-pat [v] (core/pure {:note :c4 :synth v}))
+
+(deftest syn6-unknown-voices
+  (let [known? #(contains? #{:tri :saw :my-pad} %)]
+    (is (= [{:name :trii :suggestion :tri}]
+           (sc/unknown-voices [(voice-pat :trii)] known?)))
+    (is (= "unknown synth voice :trii — did you mean :tri?"
+           (sc/voice-warning-message (first (sc/unknown-voices [(voice-pat :trii)] known?)))))
+    (is (= "unknown synth voice :xylophone — plays a sine"
+           (sc/voice-warning-message {:name :xylophone :suggestion nil})))
+    (is (empty? (sc/unknown-voices [(voice-pat :my-pad)] known?)) "a defsynth name")
+    (is (empty? (sc/unknown-voices [(core/seq* [:bd :c4])] known?)) "no synth maps")))

@@ -142,12 +142,44 @@ impl Biquad {
     }
 }
 
+/// `console.warn` in the browser, stderr in native tests (the wasm-bindgen
+/// import panics outside wasm32).
+fn engine_warn(msg: &str) {
+    #[cfg(target_arch = "wasm32")]
+    warn(msg);
+    #[cfg(not(target_arch = "wasm32"))]
+    eprintln!("{msg}");
+}
+
 // ── LCG noise ──────────────────────────────────────────────────────────────
 
 fn lcg_next(state: &mut u32) -> f32 {
     *state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
     (*state as f32 / u32::MAX as f32).mul_add(2.0, -1.0)
 }
+
+/// FM preset names. Mirrors `fm-presets` in app/src/repulse/voices.cljs.
+#[cfg_attr(not(test), allow(dead_code))]
+const FM_PRESETS: [&str; 12] = [
+    "sax",
+    "trumpet",
+    "trumpet-muted",
+    "trumpet-cup",
+    "trombone",
+    "synth-brass",
+    "harmon-out",
+    "harmon-in",
+    "epiano",
+    "bell",
+    "marimba",
+    "flute",
+];
+
+/// Karplus-Strong preset names. Mirrors `string-presets` in voices.cljs.
+#[cfg_attr(not(test), allow(dead_code))]
+const KS_PRESETS: [&str; 8] = [
+    "western", "nylon", "guitar", "harp", "koto", "pizz", "lute", "mandolin",
+];
 
 fn fm_preset(name: &str) -> (f32, f64, f32, f32, f32, f32) {
     // Returns (index, ratio, attack_time, decay_time, sustain, release_time)
@@ -157,6 +189,7 @@ fn fm_preset(name: &str) -> (f32, f64, f32, f32, f32, f32) {
         "sax" => (5.0, 1.0, 0.020, 0.10, 0.70, 0.15),
         "trumpet" => (5.5, 1.0, 0.010, 0.05, 0.80, 0.10),
         "trumpet-muted" => (4.0, 1.0, 0.015, 0.08, 0.70, 0.12),
+        "trumpet-cup" => (4.5, 1.0, 0.012, 0.06, 0.75, 0.11),
         "trombone" => (3.5, 1.0, 0.120, 0.08, 0.75, 0.20),
         "synth-brass" => (7.0, 1.414, 0.010, 0.04, 0.60, 0.08),
         "harmon-out" => (3.5, 1.0, 0.015, 0.06, 0.75, 0.15),
@@ -188,6 +221,11 @@ fn fm_body_filters(name: &str, sr: f32) -> Vec<Biquad> {
             Biquad::peaking_eq(1700.0, 7.0, 2.5, sr), // nasal mid peak
             Biquad::highshelf(4000.0, -8.0, sr),      // mute cuts highs
         ],
+        "trumpet-cup" => vec![
+            Biquad::highpass(180.0, 0.7, sr), // cup blocks the lowest lows
+            Biquad::peaking_eq(1400.0, 4.0, 2.0, sr), // softer, rounder mid peak
+            Biquad::highshelf(3200.0, -6.0, sr), // gentle hi-cut
+        ],
         "trombone" => vec![
             Biquad::peaking_eq(350.0, 4.0, 2.0, sr), // fundamental warmth
             Biquad::peaking_eq(1100.0, 3.0, 1.5, sr), // mid body
@@ -214,6 +252,7 @@ fn fm_noise_amp(name: &str) -> f32 {
         "sax" => 0.025,     // subtle reed hiss
         "trumpet" => 0.040, // air through bell
         "trumpet-muted" => 0.030,
+        "trumpet-cup" => 0.030,
         "trombone" => 0.010,
         "harmon-out" => 0.030,
         "harmon-in" => 0.040,
@@ -290,6 +329,907 @@ fn decay_rate(dur_secs: f32, sr: f32) -> f32 {
     (1e-5_f32).powf(1.0 / n)
 }
 
+// ── Trigger string fields (Phase SYN6) ─────────────────────────────────────
+// "<voice>[:<positional>]…[:<key>=<value>]…" — named fields in any order,
+// absent = default, unknown keys ignored. Parsing walks `split(':')`: no
+// allocation.
+
+/// Named field as a string, e.g. arg_str("440:color=pink", "color") == Some("pink").
+fn arg_str<'a>(rest: &'a str, key: &str) -> Option<&'a str> {
+    rest.split(':').find_map(|f| match f.split_once('=') {
+        Some((k, v)) if k == key => Some(v),
+        _ => None,
+    })
+}
+
+/// Named numeric field, e.g. arg("440:unison=3", "unison") == Some(3.0).
+/// Non-finite values count as absent.
+fn arg(rest: &str, key: &str) -> Option<f32> {
+    arg_str(rest, key)
+        .and_then(|v| v.parse::<f32>().ok())
+        .filter(|x| x.is_finite())
+}
+
+/// n-th field without '='.
+fn positional(rest: &str, n: usize) -> Option<&str> {
+    rest.split(':').filter(|f| !f.contains('=')).nth(n)
+}
+
+// ── Band-limited waveforms (Phase SYN6, part A) ────────────────────────────
+// t = phase in [0, 1), dt = freq / sr. 2-point PolyBLEP / PolyBLAMP.
+
+fn poly_blep(t: f64, dt: f64) -> f64 {
+    if t < dt {
+        let x = t / dt;
+        x + x - x * x - 1.0
+    } else if t > 1.0 - dt {
+        let x = (t - 1.0) / dt;
+        x * x + x + x + 1.0
+    } else {
+        0.0
+    }
+}
+
+fn poly_blamp(t: f64, dt: f64) -> f64 {
+    if t < dt {
+        let x = t / dt - 1.0;
+        -x * x * x / 3.0
+    } else if t > 1.0 - dt {
+        let x = (t - 1.0) / dt + 1.0;
+        x * x * x / 3.0
+    } else {
+        0.0
+    }
+}
+
+#[inline]
+fn frac(x: f64) -> f64 {
+    x - x.floor()
+}
+
+fn saw_wave(t: f64, dt: f64) -> f64 {
+    2.0 * t - 1.0 - poly_blep(t, dt)
+}
+
+/// Pulse with duty cycle pw, DC removed.
+fn pulse_wave(t: f64, dt: f64, pw: f64) -> f64 {
+    let naive = if t < pw { 1.0 } else { -1.0 };
+    naive + poly_blep(t, dt) - poly_blep(frac(t + 1.0 - pw), dt) - (2.0 * pw - 1.0)
+}
+
+/// Triangle starting at 0, peak at t = 0.25, corners rounded by PolyBLAMP.
+fn tri_wave(t: f64, dt: f64) -> f64 {
+    let mut y = 4.0 * t;
+    if y >= 3.0 {
+        y -= 4.0;
+    } else if y > 1.0 {
+        y = 2.0 - y;
+    }
+    y + 4.0 * dt * (poly_blamp(frac(t + 0.25), dt) - poly_blamp(frac(t + 0.75), dt))
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Wave {
+    Saw,
+    Pulse,
+    Tri,
+    Sine,
+}
+
+impl Wave {
+    /// Amplitude of the fundamental of a unit waveform (sub-osc reference).
+    fn fundamental(self) -> f32 {
+        use std::f32::consts::{FRAC_2_PI, PI};
+        match self {
+            Wave::Saw => FRAC_2_PI,         // 2/π
+            Wave::Pulse => 2.0 * FRAC_2_PI, // 4/π
+            Wave::Tri => 8.0 / (PI * PI),   // 8/π²
+            Wave::Sine => 1.0,
+        }
+    }
+}
+
+const MAX_UNISON: usize = 7;
+
+/// Unison layout of oscillator i of n (SYN6 A3): (cents, start phase, pan q).
+/// Mirrors `unison-layout` in app/src/repulse/voices.cljs.
+fn unison_layout(i: usize, n: usize, detune: f64, spread: f64) -> (f64, f64, f64) {
+    let phase = frac(i as f64 * 0.618_034);
+    if n <= 1 {
+        return (0.0, phase, 0.0);
+    }
+    let h = (n as f64 - 1.0) / 2.0;
+    let k = i as f64 - h;
+    let u = k / h;
+    let cents = detune / 2.0 * u.signum() * u.abs().powf(1.5);
+    let q = if k == 0.0 {
+        0.0
+    } else {
+        let alt = if (k.abs().ceil() as i64 + 1) % 2 == 0 {
+            1.0
+        } else {
+            -1.0
+        };
+        spread * u.abs() * k.signum() * alt
+    };
+    (cents, phase, q)
+}
+
+/// Oscillator voice: saw / pulse / triangle / sine with unison, spread,
+/// sub-oscillator, PWM, hard sync and glide. All state inline (no heap).
+struct OscVoice {
+    wave: Wave,
+    n: usize,
+    phase: [f64; MAX_UNISON],
+    ratio: [f64; MAX_UNISON],
+    wl: [f32; MAX_UNISON],
+    wr: [f32; MAX_UNISON],
+    norm: f32,
+    stereo: bool,
+    freq: f64,
+    target: f64,
+    glide_mul: f64,
+    glide_left: u32,
+    pw: f32,
+    pw_rate: f32,
+    pw_depth: f32,
+    lfo_phase: f32,
+    sync: f64,
+    master: [f64; MAX_UNISON],
+    sync_sw: [f32; MAX_UNISON],
+    sub_phase: f64,
+    sub_gain: f32,
+    amp: f32,
+    gain: f32,
+    gain_decay: f32,
+    attack_inc: f32,
+    in_attack: bool,
+}
+
+impl OscVoice {
+    /// Build from the fields after "<wave>:" (frequency first; for square
+    /// the second positional field is the legacy pulse width).
+    fn new(wave: Wave, rest: &str, amp: f32, attack: f32, decay: f32, sr: f32) -> OscVoice {
+        let target = positional(rest, 0)
+            .and_then(|s| s.parse::<f64>().ok())
+            .filter(|x| x.is_finite() && *x > 0.0)
+            .unwrap_or(440.0);
+        let n = arg(rest, "unison")
+            .map(|u| u.round().clamp(1.0, MAX_UNISON as f32) as usize)
+            .unwrap_or(1);
+        let detune = arg(rest, "detune")
+            .map(|d| d.clamp(0.0, 200.0))
+            .unwrap_or(if n > 1 { 20.0 } else { 0.0 }) as f64;
+        let spread = arg(rest, "spread")
+            .map(|s| s.clamp(0.0, 1.0))
+            .unwrap_or(0.0) as f64;
+        let pw = arg(rest, "pw")
+            .or_else(|| positional(rest, 1).and_then(|s| s.parse::<f32>().ok()))
+            .filter(|x| x.is_finite())
+            .unwrap_or(0.5)
+            .clamp(0.01, 0.99);
+        let sync = match wave {
+            Wave::Saw | Wave::Pulse => arg(rest, "sync")
+                .map(|s| s.clamp(1.0, 16.0) as f64)
+                .unwrap_or(0.0),
+            _ => 0.0,
+        };
+        let sub = arg(rest, "sub-osc")
+            .map(|s| s.clamp(0.0, 1.0))
+            .unwrap_or(0.0);
+
+        let mut phase = [0.0; MAX_UNISON];
+        let mut ratio = [1.0; MAX_UNISON];
+        let mut wl = [0.0f32; MAX_UNISON];
+        let mut wr = [0.0f32; MAX_UNISON];
+        let mut stereo = false;
+        for i in 0..n {
+            let (cents, ph, q) = unison_layout(i, n, detune, spread);
+            phase[i] = ph;
+            ratio[i] = 2.0_f64.powf(cents / 1200.0);
+            if q == 0.0 {
+                wl[i] = 1.0;
+                wr[i] = 1.0;
+            } else {
+                let a = (q + 1.0) * std::f64::consts::FRAC_PI_4;
+                wl[i] = (std::f64::consts::SQRT_2 * a.cos()) as f32;
+                wr[i] = (std::f64::consts::SQRT_2 * a.sin()) as f32;
+                stereo = true;
+            }
+        }
+        // Glide: start at glide-from, reach the target on a straight line in pitch.
+        let glide = arg(rest, "glide").map(|g| g.clamp(0.0, 5.0)).unwrap_or(0.0);
+        let from = arg(rest, "glide-from")
+            .filter(|f| *f > 0.0)
+            .map(|f| f as f64);
+        let (freq, glide_left, glide_mul) = match from {
+            Some(f0) if glide > 0.0 && (f0 - target).abs() > 1e-9 => {
+                let left = ((glide * sr).round() as u32).max(1);
+                (f0, left, (target / f0).powf(1.0 / left as f64))
+            }
+            _ => (target, 0, 1.0),
+        };
+        let peak = amp * 0.5;
+        let attack_samples = (attack * sr).max(1.0);
+        OscVoice {
+            wave,
+            n,
+            master: phase,
+            // With sync the slave starts where a free-running slave would be.
+            phase: if sync > 0.0 {
+                phase.map(|m| frac(m * sync))
+            } else {
+                phase
+            },
+            ratio,
+            wl,
+            wr,
+            norm: 1.0 / (n as f32).sqrt(),
+            stereo,
+            freq,
+            target,
+            glide_mul,
+            glide_left,
+            pw,
+            pw_rate: arg(rest, "pw-rate")
+                .map(|r| r.clamp(0.0, 20.0))
+                .unwrap_or(0.0),
+            pw_depth: arg(rest, "pw-depth")
+                .map(|d| d.clamp(0.0, 0.49))
+                .unwrap_or(0.0),
+            lfo_phase: 0.0,
+            sync,
+            sync_sw: [1.0; MAX_UNISON],
+            sub_phase: 0.0,
+            sub_gain: sub * wave.fundamental(),
+            amp: peak,
+            gain: 0.0,
+            gain_decay: decay_rate(decay, sr),
+            attack_inc: peak / attack_samples,
+            in_attack: true,
+        }
+    }
+
+    /// One synced slave sample of oscillator i (SYN6 A6).
+    fn synced(&mut self, i: usize, dtm: f64, pw: f64) -> f64 {
+        let dts = dtm * self.sync;
+        let m = self.master[i];
+        let s = self.phase[i];
+        let pulse = self.wave == Wave::Pulse;
+        let mut y = if pulse {
+            pulse_wave(s, dts, pw)
+        } else {
+            saw_wave(s, dts)
+        };
+        if m > 1.0 - dtm {
+            // The master wraps before the next sample: the slave resets from s_w.
+            let sw = frac(s + dts * (1.0 - m) / dtm);
+            self.sync_sw[i] = sw as f32;
+            let b = poly_blep(m, dtm);
+            y += if pulse {
+                if sw >= pw {
+                    b
+                } else {
+                    0.0
+                }
+            } else {
+                -sw * b
+            };
+        } else if m < dtm {
+            // Just after the reset. The waveform's own edge correction
+            // assumed a full step; replace it by the step that happened.
+            let sw = self.sync_sw[i] as f64;
+            let b = poly_blep(m, dtm);
+            y += if pulse {
+                if sw >= pw {
+                    0.0
+                } else {
+                    -b
+                }
+            } else {
+                (1.0 - sw) * b
+            };
+        }
+        let mn = m + dtm;
+        if mn >= 1.0 {
+            let mn = mn - 1.0;
+            self.master[i] = mn;
+            self.phase[i] = dts * (mn / dtm);
+        } else {
+            self.master[i] = mn;
+            self.phase[i] = frac(s + dts);
+        }
+        y
+    }
+
+    fn tick2(&mut self, sr: f32, pitch: f64) -> (f32, f32) {
+        use std::f64::consts::TAU;
+        if self.in_attack {
+            self.gain += self.attack_inc;
+            if self.gain >= self.amp {
+                self.gain = self.amp;
+                self.in_attack = false;
+            }
+        } else {
+            self.gain *= self.gain_decay;
+        }
+        if self.glide_left > 0 {
+            self.freq *= self.glide_mul;
+            self.glide_left -= 1;
+            if self.glide_left == 0 {
+                self.freq = self.target;
+            }
+        }
+        let base = self.freq * pitch / sr as f64;
+        let pw = if self.pw_depth > 0.0 {
+            let p = (self.pw + self.pw_depth * (std::f32::consts::TAU * self.lfo_phase).sin())
+                .clamp(0.01, 0.99);
+            self.lfo_phase += self.pw_rate / sr;
+            if self.lfo_phase >= 1.0 {
+                self.lfo_phase -= 1.0;
+            }
+            p as f64
+        } else {
+            self.pw as f64
+        };
+        let (mut a, mut b) = (0.0f64, 0.0f64);
+        for i in 0..self.n {
+            let dt = base * self.ratio[i];
+            let y = if self.sync > 0.0 {
+                self.synced(i, dt, pw)
+            } else {
+                let t = self.phase[i];
+                let y = match self.wave {
+                    Wave::Saw => saw_wave(t, dt),
+                    Wave::Pulse => pulse_wave(t, dt, pw),
+                    Wave::Tri => tri_wave(t, dt),
+                    Wave::Sine => (t * TAU).sin(),
+                };
+                self.phase[i] = frac(t + dt);
+                y
+            };
+            a += y * self.wl[i] as f64;
+            b += y * self.wr[i] as f64;
+        }
+        let mut sub = 0.0;
+        if self.sub_gain > 0.0 {
+            sub = (self.sub_phase * TAU).sin() * self.sub_gain as f64;
+            self.sub_phase = frac(self.sub_phase + base * 0.5);
+        }
+        let g = self.gain as f64;
+        let nrm = self.norm as f64;
+        (((a * nrm + sub) * g) as f32, ((b * nrm + sub) * g) as f32)
+    }
+
+    fn is_silent(&self) -> bool {
+        !self.in_attack && self.gain < 1e-5
+    }
+}
+
+// ── Noise colours (Phase SYN6, part A) ─────────────────────────────────────
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum NoiseColor {
+    White,
+    Pink,
+    Brown,
+    Dust,
+    Lfsr,
+}
+
+struct NoiseVoice {
+    color: NoiseColor,
+    state: u32,
+    gain: f32,
+    gain_decay: f32,
+    scale: f32,
+    pink: [f32; 7],
+    brown_a: f32,
+    brown_y: f32,
+    dust_p: f32,
+    lfsr: u32,
+    clock_inc: f32,
+    clock_phase: f32,
+    hold: f32,
+}
+
+impl NoiseVoice {
+    /// rest = fields after "noise:" ("" for plain "noise").
+    fn new(rest: &str, amp: f32, decay: f32, seed: u32, sr: f32) -> NoiseVoice {
+        let color = match arg_str(rest, "color") {
+            Some("pink") => NoiseColor::Pink,
+            Some("brown") => NoiseColor::Brown,
+            Some("dust") => NoiseColor::Dust,
+            Some("lfsr") => NoiseColor::Lfsr,
+            _ => NoiseColor::White,
+        };
+        let brown_a = (-std::f32::consts::TAU * 20.0 / sr).exp();
+        let scale = match color {
+            NoiseColor::Pink => 0.11,
+            NoiseColor::Brown => ((1.0 + brown_a) / (1.0 - brown_a)).sqrt(),
+            _ => 1.0,
+        };
+        let density = arg(rest, "density")
+            .map(|d| d.clamp(1.0, 2000.0))
+            .unwrap_or(20.0);
+        let clock = arg(rest, "freq")
+            .filter(|f| *f > 0.0)
+            .map(|f| (f * 16.0).min(sr / 2.0))
+            .unwrap_or(8000.0_f32.min(sr / 2.0));
+        NoiseVoice {
+            color,
+            state: seed,
+            gain: if color == NoiseColor::Dust {
+                amp
+            } else {
+                amp * 0.3
+            },
+            gain_decay: decay_rate(decay, sr),
+            scale,
+            pink: [0.0; 7],
+            brown_a,
+            brown_y: 0.0,
+            dust_p: density / sr,
+            lfsr: (seed & 0x7fff) | 1,
+            clock_inc: clock / sr,
+            clock_phase: 1.0, // clock the first sample
+            hold: 0.0,
+        }
+    }
+
+    fn tick(&mut self) -> f32 {
+        let s = match self.color {
+            NoiseColor::White => lcg_next(&mut self.state),
+            NoiseColor::Pink => {
+                let w = lcg_next(&mut self.state);
+                let b = &mut self.pink;
+                b[0] = 0.99886 * b[0] + w * 0.055_517_9;
+                b[1] = 0.99332 * b[1] + w * 0.075_075_9;
+                b[2] = 0.96900 * b[2] + w * 0.153_852;
+                b[3] = 0.86650 * b[3] + w * 0.310_485_6;
+                b[4] = 0.55000 * b[4] + w * 0.532_952_2;
+                b[5] = -0.7616 * b[5] - w * 0.016_898;
+                let out = b[0] + b[1] + b[2] + b[3] + b[4] + b[5] + b[6] + w * 0.5362;
+                b[6] = w * 0.115_926;
+                out * self.scale
+            }
+            NoiseColor::Brown => {
+                let w = lcg_next(&mut self.state);
+                self.brown_y = self.brown_a * self.brown_y + (1.0 - self.brown_a) * w;
+                self.brown_y * self.scale
+            }
+            NoiseColor::Dust => {
+                let u = (lcg_next(&mut self.state) + 1.0) * 0.5;
+                let h = lcg_next(&mut self.state);
+                if u < self.dust_p {
+                    h
+                } else {
+                    0.0
+                }
+            }
+            NoiseColor::Lfsr => {
+                self.clock_phase += self.clock_inc;
+                while self.clock_phase >= 1.0 {
+                    self.clock_phase -= 1.0;
+                    let r = self.lfsr;
+                    let bit = (r ^ (r >> 1)) & 1;
+                    self.lfsr = (r >> 1) | (bit << 14);
+                    self.hold = if self.lfsr & 1 == 1 { 1.0 } else { -1.0 };
+                }
+                self.hold
+            }
+        };
+        let out = s * self.gain;
+        self.gain *= self.gain_decay;
+        out
+    }
+}
+
+// ── Synthesized drum kit (Phase SYN6, part B) ──────────────────────────────
+// Eighteen voices on four models. Frequencies are chosen for this kit, not
+// taken from a particular drum machine. All state inline; filters are built
+// in `drum_voice` (trigger time), never in `tick`.
+
+/// The kit's voice names. Mirrors `drum-voices` in app/src/repulse/voices.cljs
+/// (drift-guarded by app/src/repulse/voices_test.cljs).
+#[cfg_attr(not(test), allow(dead_code))]
+const DRUM_VOICES: [&str; 18] = [
+    "bd", "sd", "hh", "oh", "cp", "rim", "lt", "mt", "ht", "cb", "cr", "rd", "sh", "tb", "cl",
+    "cg", "zap", "click",
+];
+
+/// Six-oscillator metal set (Hz).
+const M6: [f64; 6] = [330.0, 443.0, 509.0, 633.0, 746.0, 912.0];
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum DrumModel {
+    Membrane,
+    Snare,
+    Metal,
+    NoiseBurst,
+}
+
+struct DrumVoice {
+    model: DrumModel,
+    n_osc: usize,
+    phase: [f64; 6],
+    freq: [f64; 6],
+    /// Pitch sweep: f = freq · (1 + excess), excess decays by excess_mul.
+    excess: f64,
+    excess_mul: f64,
+    noise_state: u32,
+    body_gain: f32,
+    body_decay: f32,
+    noise_gain: f32,
+    noise_decay: f32,
+    click_gain: f32,
+    click_decay: f32,
+    body_mix: f32,
+    noise_mix: f32,
+    f1: Option<Biquad>,
+    f2: Option<Biquad>,
+    f3: Option<Biquad>,
+    /// Clap: restarts still pending, samples between restarts, counter.
+    burst_left: u8,
+    burst_len: u32,
+    burst_pos: u32,
+    last_decay: f32,
+    peak: f32,
+    attack_inc: f32,
+    in_attack: bool,
+    /// 0 = none, 1 = hat group (hh, oh).
+    choke: u8,
+}
+
+#[inline]
+fn lerp(lo: f32, hi: f32, t: f32) -> f32 {
+    lo + (hi - lo) * t
+}
+
+/// Build a kit voice. tone 0–1 (None = the voice's default), tune in
+/// semitones, decay in seconds to −100 dB (None = the preset's). None for an
+/// unknown name.
+fn drum_voice(
+    name: &str,
+    tone: Option<f32>,
+    tune: f32,
+    decay: Option<f32>,
+    amp: f32,
+    seed: u32,
+    sr: f32,
+) -> Option<DrumVoice> {
+    let mul = 2.0_f64.powf(tune.clamp(-48.0, 48.0) as f64 / 12.0);
+    let nyq = sr * 0.49;
+    let fq = |f: f32| f.clamp(20.0, nyq);
+    let tone_or = |d: f32| tone.map(|t| t.clamp(0.0, 1.0)).unwrap_or(d);
+    let mut v = DrumVoice {
+        model: DrumModel::Membrane,
+        n_osc: 0,
+        phase: [0.0; 6],
+        freq: [0.0; 6],
+        excess: 0.0,
+        excess_mul: 1.0,
+        noise_state: seed,
+        body_gain: 0.0,
+        body_decay: 1.0,
+        noise_gain: 0.0,
+        noise_decay: 1.0,
+        click_gain: 0.0,
+        click_decay: 1.0,
+        body_mix: 1.0,
+        noise_mix: 0.0,
+        f1: None,
+        f2: None,
+        f3: None,
+        burst_left: 0,
+        burst_len: 1,
+        burst_pos: 0,
+        last_decay: 1.0,
+        peak: 0.0,
+        attack_inc: 0.0,
+        in_attack: false,
+        choke: 0,
+    };
+    match name {
+        // Membrane: (f_end, ratio, τ ms, decay, click, level)
+        "bd" | "lt" | "mt" | "ht" | "cg" | "cl" | "zap" => {
+            let (mut f_end, mut ratio, mut tau, dec, mut click, level) = match name {
+                "bd" => (48.0, 4.0, 18.0, 0.5, 0.25, 1.0),
+                "lt" => (82.0, 1.6, 30.0, 0.55, 0.10, 0.8),
+                "mt" => (123.0, 1.6, 25.0, 0.45, 0.10, 0.8),
+                "ht" => (185.0, 1.6, 20.0, 0.35, 0.10, 0.8),
+                "cg" => (220.0, 1.25, 12.0, 0.30, 0.15, 0.7),
+                "cl" => (2500.0, 1.0, 10.0, 0.06, 0.0, 0.6),
+                _ => (60.0, 40.0, 25.0, 0.25, 0.0, 0.7), // zap
+            };
+            match name {
+                "bd" => {
+                    let t = tone_or(0.5);
+                    ratio = lerp(2.5, 5.5, t);
+                    click = lerp(0.0, 0.5, t);
+                }
+                "lt" | "mt" | "ht" => ratio = lerp(1.2, 2.0, tone_or(0.5)),
+                "cg" => click = lerp(0.0, 0.3, tone_or(0.5)),
+                "cl" => f_end = lerp(1800.0, 3200.0, tone_or(0.5)),
+                _ => tau = lerp(10.0, 60.0, tone_or(0.3)),
+            }
+            let d = decay.unwrap_or(dec).clamp(0.005, 10.0);
+            v.model = DrumModel::Membrane;
+            v.n_osc = 1;
+            v.freq[0] = f_end as f64 * mul;
+            v.excess = (ratio - 1.0) as f64;
+            v.excess_mul = (-1.0 / (tau as f64 * 0.001 * sr as f64)).exp();
+            v.body_gain = level * amp;
+            v.body_decay = decay_rate(d, sr);
+            v.click_gain = click * level * amp;
+            v.click_decay = decay_rate(0.004 * d / dec, sr);
+        }
+        // Snare: two swept sines + high-passed noise.
+        "sd" | "rim" => {
+            let (fa, fb, body_d, hp, noise_d, level, t0) = if name == "sd" {
+                (180.0, 330.0, 0.12, 1200.0, 0.22, 0.9, 0.5)
+            } else {
+                (480.0, 1150.0, 0.03, 3000.0, 0.015, 0.7, 0.3)
+            };
+            let t = tone_or(t0);
+            let d = decay.unwrap_or(noise_d).clamp(0.005, 10.0);
+            v.model = DrumModel::Snare;
+            v.n_osc = 2;
+            v.freq[0] = fa * mul;
+            v.freq[1] = fb * mul;
+            v.excess = 0.3;
+            v.excess_mul = (-1.0 / (0.010 * sr as f64)).exp();
+            v.body_gain = level * amp;
+            v.body_decay = decay_rate(body_d * d / noise_d, sr);
+            v.noise_gain = level * amp;
+            v.noise_decay = decay_rate(d, sr);
+            v.body_mix = 1.0 - 0.8 * t;
+            v.noise_mix = 0.3 + 0.7 * t;
+            v.f1 = Some(Biquad::highpass(fq(hp), 0.7, sr));
+        }
+        // Metal: band-limited squares (+ noise) → band-pass → 2× high-pass.
+        "hh" | "oh" | "cr" | "rd" | "cb" | "tb" => {
+            let t = tone;
+            let (oscs, bp, mut bq, mut hp, dec, mut nmix, level): (
+                &[f64],
+                f32,
+                f32,
+                f32,
+                f32,
+                f32,
+                f32,
+            ) = match name {
+                "hh" => (&M6, 9000.0, 1.0, 7000.0, 0.05, 0.0, 0.6),
+                "oh" => (&M6, 9000.0, 1.0, 7000.0, 0.6, 0.0, 0.5),
+                "cr" => (&M6, 6000.0, 0.6, 3500.0, 1.8, 0.3, 0.5),
+                "rd" => (&M6, 7500.0, 2.0, 4500.0, 1.4, 0.1, 0.4),
+                "cb" => (&[555.0, 835.0], 700.0, 3.0, 0.0, 0.35, 0.0, 0.6),
+                _ => (&M6, 8500.0, 1.5, 6000.0, 0.18, 0.5, 0.5), // tb
+            };
+            let mut bp = bp;
+            match name {
+                // tone moves the high-pass and, by the squared ratio, the band-pass
+                // (the high-pass alone barely changes a 9 kHz band).
+                "hh" | "oh" => {
+                    let k = t.unwrap_or(0.5).clamp(0.0, 1.0);
+                    hp = lerp(5000.0, 9000.0, k);
+                    bp *= (hp / 7000.0).powi(2);
+                }
+                "cr" => hp = lerp(2500.0, 5000.0, t.unwrap_or(0.4).clamp(0.0, 1.0)),
+                "rd" => bq = lerp(1.0, 3.0, t.unwrap_or(0.5).clamp(0.0, 1.0)),
+                "cb" => bp = lerp(500.0, 1000.0, t.unwrap_or(0.4).clamp(0.0, 1.0)),
+                _ => nmix = lerp(0.2, 0.8, t.unwrap_or(0.5).clamp(0.0, 1.0)),
+            }
+            let rmul = if name == "rd" { 1.23 } else { 1.0 };
+            v.model = DrumModel::Metal;
+            v.n_osc = oscs.len();
+            // Start phases from the hit's seed: like the free-running
+            // oscillators of an analog drum machine, each hit starts at other
+            // phases, so repeated hats (which have little or no noise) differ.
+            let mut ph_state = seed ^ 0x9E37_79B9;
+            for (i, f) in oscs.iter().enumerate() {
+                v.freq[i] = f * rmul * mul;
+                v.phase[i] =
+                    frac(i as f64 * 0.618_034 + 0.5 * (lcg_next(&mut ph_state) as f64 + 1.0));
+            }
+            v.noise_mix = nmix;
+            v.f1 = Some(Biquad::bandpass(fq(bp), bq, sr));
+            if hp > 0.0 {
+                v.f2 = Some(Biquad::highpass(fq(hp), 0.707, sr));
+                v.f3 = Some(Biquad::highpass(fq(hp), 0.707, sr));
+            }
+            let d = decay.unwrap_or(dec).clamp(0.005, 10.0);
+            // Make-up only where the high-passes thin the squares out.
+            v.peak = level * amp * if hp > 0.0 { METAL_MAKEUP } else { 1.0 };
+            v.body_decay = decay_rate(d, sr);
+            if name == "tb" {
+                v.in_attack = true;
+                v.attack_inc = v.peak / (0.004 * sr).max(1.0);
+            } else {
+                v.body_gain = v.peak;
+            }
+            if name == "hh" || name == "oh" {
+                v.choke = 1;
+            }
+        }
+        // NoiseBurst: filtered noise through an envelope.
+        "cp" | "sh" | "click" => {
+            v.model = DrumModel::NoiseBurst;
+            match name {
+                "cp" => {
+                    let d = decay.unwrap_or(0.18).clamp(0.005, 10.0);
+                    v.f1 = Some(Biquad::bandpass(
+                        fq(lerp(700.0, 1500.0, tone_or(0.5))),
+                        1.4,
+                        sr,
+                    ));
+                    v.peak = 0.9 * amp;
+                    v.body_gain = v.peak;
+                    v.body_decay = decay_rate(0.03, sr);
+                    v.burst_left = 3;
+                    v.burst_len = (0.011 * sr).round().max(1.0) as u32;
+                    v.last_decay = decay_rate(d, sr);
+                }
+                "sh" => {
+                    let d = decay.unwrap_or(0.08).clamp(0.005, 10.0);
+                    v.f1 = Some(Biquad::highpass(
+                        fq(lerp(4000.0, 8000.0, tone_or(0.5))),
+                        0.7,
+                        sr,
+                    ));
+                    v.peak = 0.5 * amp;
+                    v.in_attack = true;
+                    v.attack_inc = v.peak / (0.012 * sr).max(1.0);
+                    v.body_decay = decay_rate(d, sr);
+                }
+                _ => {
+                    let d = decay.unwrap_or(0.008).clamp(0.002, 10.0);
+                    v.f1 = Some(Biquad::bandpass(
+                        fq(lerp(1000.0, 5000.0, tone_or(0.5))),
+                        2.0,
+                        sr,
+                    ));
+                    v.peak = 0.8 * amp;
+                    v.body_gain = v.peak;
+                    v.body_decay = decay_rate(d, sr);
+                }
+            }
+        }
+        _ => return None,
+    }
+    Some(v)
+}
+
+/// Noise seed of one kit hit: FNV-1a of the drum name mixed with the onset
+/// time (splitmix64 finaliser over its bits). Depends only on the event
+/// itself, never on other voices (see the comment in `activate`).
+fn drum_noise_seed(name: &str, time: f64) -> u32 {
+    let mut h = name.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+        (h ^ b as u64).wrapping_mul(0x0000_0100_0000_01b3)
+    });
+    h ^= time.to_bits();
+    h = (h ^ (h >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    h = (h ^ (h >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    h ^= h >> 31;
+    (h ^ (h >> 32)) as u32
+}
+
+/// Gain after the metal filter chain: the band-pass and the two high-passes
+/// keep only the upper harmonics of the squares.
+const METAL_MAKEUP: f32 = 4.0;
+
+impl DrumVoice {
+    fn tick(&mut self, sr: f32) -> f32 {
+        use std::f64::consts::TAU;
+        let srd = sr as f64;
+        match self.model {
+            DrumModel::Membrane => {
+                let f = self.freq[0] * (1.0 + self.excess);
+                self.excess *= self.excess_mul;
+                let s = (self.phase[0] * TAU).sin() as f32;
+                self.phase[0] = frac(self.phase[0] + f / srd);
+                let mut out = s * self.body_gain;
+                self.body_gain *= self.body_decay;
+                if self.click_gain > 1e-6 {
+                    out += lcg_next(&mut self.noise_state) * self.click_gain;
+                    self.click_gain *= self.click_decay;
+                }
+                out
+            }
+            DrumModel::Snare => {
+                let k = 1.0 + self.excess;
+                self.excess *= self.excess_mul;
+                let mut body = 0.0f64;
+                for i in 0..2 {
+                    body += (self.phase[i] * TAU).sin();
+                    self.phase[i] = frac(self.phase[i] + self.freq[i] * k / srd);
+                }
+                let body = 0.5 * body as f32 * self.body_gain;
+                self.body_gain *= self.body_decay;
+                let w = lcg_next(&mut self.noise_state);
+                let noise = match self.f1.as_mut() {
+                    Some(f) => f.tick(w),
+                    None => w,
+                } * self.noise_gain;
+                self.noise_gain *= self.noise_decay;
+                body * self.body_mix + noise * self.noise_mix
+            }
+            DrumModel::Metal => {
+                let mut x = 0.0f64;
+                for i in 0..self.n_osc {
+                    let dt = self.freq[i] / srd;
+                    x += pulse_wave(self.phase[i], dt, 0.5);
+                    self.phase[i] = frac(self.phase[i] + dt);
+                }
+                let mut y = (x / self.n_osc as f64) as f32;
+                if self.noise_mix > 0.0 {
+                    y += self.noise_mix * lcg_next(&mut self.noise_state);
+                }
+                for f in [&mut self.f1, &mut self.f2, &mut self.f3]
+                    .into_iter()
+                    .flatten()
+                {
+                    y = f.tick(y);
+                }
+                self.envelope();
+                y * self.body_gain
+            }
+            DrumModel::NoiseBurst => {
+                let w = lcg_next(&mut self.noise_state);
+                let y = match self.f1.as_mut() {
+                    Some(f) => f.tick(w),
+                    None => w,
+                };
+                if self.burst_left > 0 {
+                    self.burst_pos += 1;
+                    if self.burst_pos >= self.burst_len {
+                        self.burst_pos = 0;
+                        self.burst_left -= 1;
+                        self.body_gain = self.peak;
+                        if self.burst_left == 0 {
+                            self.body_decay = self.last_decay;
+                        }
+                    }
+                }
+                self.envelope();
+                y * self.body_gain
+            }
+        }
+    }
+
+    /// Linear attack to peak, then exponential decay.
+    #[inline]
+    fn envelope(&mut self) {
+        if self.in_attack {
+            self.body_gain += self.attack_inc;
+            if self.body_gain >= self.peak {
+                self.body_gain = self.peak;
+                self.in_attack = false;
+            }
+        } else {
+            self.body_gain *= self.body_decay;
+        }
+    }
+
+    /// Hat choke: fade to −100 dB within 15 ms.
+    fn choke(&mut self, sr: f32) {
+        let d = decay_rate(0.015, sr);
+        self.in_attack = false;
+        self.body_decay = d;
+        self.noise_decay = d;
+        self.click_decay = d;
+        self.burst_left = 0;
+    }
+
+    fn is_silent(&self) -> bool {
+        !self.in_attack
+            && self.burst_left == 0
+            && self.body_gain < 1e-5
+            && self.noise_gain < 1e-5
+            && self.click_gain < 1e-5
+    }
+}
+
 // ── Active voices ──────────────────────────────────────────────────────────
 
 enum Voice {
@@ -326,30 +1266,12 @@ enum Voice {
         attack_inc: f32,
         in_attack: bool,
     },
-    Saw {
-        phase: f64,
-        freq: f64,
-        amp: f32,
-        gain: f32,
-        gain_decay: f32,
-        attack_inc: f32,
-        in_attack: bool,
-    },
-    Square {
-        phase: f64,
-        freq: f64,
-        amp: f32,
-        gain: f32,
-        gain_decay: f32,
-        attack_inc: f32,
-        in_attack: bool,
-        pulse_width: f32, // 0.0–1.0, default 0.5
-    },
-    Noise {
-        state: u32,
-        gain: f32,
-        gain_decay: f32,
-    },
+    /// SYN6: band-limited saw / pulse / triangle / sine with unison (stereo).
+    Osc(OscVoice),
+    /// SYN6: white, pink, brown, dust and LFSR noise.
+    Noise(NoiseVoice),
+    /// SYN6: the synthesized drum kit ("drum:<name>").
+    Drum(DrumVoice),
     FM {
         carrier_phase: f64,
         mod_phase: f64,
@@ -453,63 +1375,13 @@ impl Voice {
                 *phase += *freq * pitch / sr as f64;
                 s * *gain
             }
-            Voice::Saw {
-                phase,
-                freq,
-                amp,
-                gain,
-                gain_decay,
-                attack_inc,
-                in_attack,
-            } => {
-                if *in_attack {
-                    *gain += *attack_inc;
-                    if *gain >= *amp {
-                        *gain = *amp;
-                        *in_attack = false;
-                    }
-                } else {
-                    *gain *= *gain_decay;
-                }
-                // Sawtooth: ramp from -1 to +1 over one period
-                let s = (2.0 * (*phase % 1.0) - 1.0) as f32;
-                *phase += *freq * pitch / sr as f64;
-                s * *gain
+            // Stereo voices are ticked through tick2; a mono read sums the buses.
+            Voice::Osc(o) => {
+                let (a, b) = o.tick2(sr, pitch);
+                0.5 * (a + b)
             }
-            Voice::Square {
-                phase,
-                freq,
-                amp,
-                gain,
-                gain_decay,
-                attack_inc,
-                in_attack,
-                pulse_width,
-            } => {
-                if *in_attack {
-                    *gain += *attack_inc;
-                    if *gain >= *amp {
-                        *gain = *amp;
-                        *in_attack = false;
-                    }
-                } else {
-                    *gain *= *gain_decay;
-                }
-                let p = *phase % 1.0;
-                let s: f32 = if p < *pulse_width as f64 { 1.0 } else { -1.0 };
-                *phase += *freq * pitch / sr as f64;
-                s * *gain
-            }
-            Voice::Noise {
-                state,
-                gain,
-                gain_decay,
-            } => {
-                let s = lcg_next(state);
-                let out = s * *gain;
-                *gain *= *gain_decay;
-                out
-            }
+            Voice::Noise(n) => n.tick(),
+            Voice::Drum(d) => d.tick(sr),
             Voice::FM {
                 carrier_phase,
                 mod_phase,
@@ -583,27 +1455,40 @@ impl Voice {
         }
     }
 
+    /// Stereo tick (SYN6). Mono voices return the same sample twice, so the
+    /// engine's `l += a·cos; r += b·sin` is the old arithmetic for them.
+    fn tick2(&mut self, sr: f32, pitch: f64) -> (f32, f32) {
+        match self {
+            Voice::Osc(o) => o.tick2(sr, pitch),
+            _ => {
+                let s = self.tick(sr, pitch);
+                (s, s)
+            }
+        }
+    }
+
+    /// True when tick2 can return two different buses.
+    fn is_stereo(&self) -> bool {
+        matches!(self, Voice::Osc(o) if o.stereo)
+    }
+
     fn is_silent(&self) -> bool {
         match self {
             Voice::Tone {
                 gain, in_attack, ..
-            }
-            | Voice::Saw {
-                gain, in_attack, ..
-            }
-            | Voice::Square {
-                gain, in_attack, ..
             } => !*in_attack && *gain < 1e-5,
+            Voice::Osc(o) => o.is_silent(),
+            Voice::Drum(d) => d.is_silent(),
+            Voice::Noise(n) => n.gain < 1e-5,
             Voice::FM {
                 gain,
                 env_phase,
                 attack_time,
                 ..
             } => *env_phase > *attack_time && *gain < 1e-4,
-            Voice::Kick { gain, .. }
-            | Voice::Snare { gain, .. }
-            | Voice::Hihat { gain, .. }
-            | Voice::Noise { gain, .. } => *gain < 1e-5,
+            Voice::Kick { gain, .. } | Voice::Snare { gain, .. } | Voice::Hihat { gain, .. } => {
+                *gain < 1e-5
+            }
             Voice::KarplusStrong { gain, .. } => *gain < 1e-4,
         }
     }
@@ -716,6 +1601,11 @@ struct Tl7cParams {
     vowel: usize, // 0 off, 1–5 = a e i o u
     coarse: u32,  // 1 = off
     postgain: f32,
+    /// SYN6 C3: cutoff LFO of the low-pass (slots 41–43): rate in Hz, start
+    /// phase 0–1, depth in octaves (0 = off).
+    lp_rate: f32,
+    lp_phase: f32,
+    lp_depth: f32,
 }
 
 impl Tl7cParams {
@@ -730,6 +1620,9 @@ impl Tl7cParams {
         vowel: 0,
         coarse: 1,
         postgain: 1.0,
+        lp_rate: 0.0,
+        lp_phase: 0.0,
+        lp_depth: 0.0,
     };
 
     fn from_slots(slot: impl Fn(usize, f32) -> f32) -> Tl7cParams {
@@ -756,6 +1649,9 @@ impl Tl7cParams {
             vowel: finite_or(slot(38, 0.0), 0.0).round().clamp(0.0, 5.0) as usize,
             coarse: finite_or(slot(39, 1.0), 1.0).round().clamp(1.0, 64.0) as u32,
             postgain: finite_or(slot(40, 1.0), 1.0).clamp(0.0, 4.0),
+            lp_rate: finite_or(slot(41, 0.0), 0.0).clamp(0.0, 1000.0),
+            lp_phase: frac(finite_or(slot(42, 0.0), 0.0) as f64) as f32,
+            lp_depth: finite_or(slot(43, 0.0), 0.0).clamp(0.0, 4.0),
         }
     }
 }
@@ -855,12 +1751,16 @@ struct FilterEnv {
     depth: f32, // effective depth in octaves (peak clamped to 20 Hz … min(20 kHz, 0.49·sr))
 }
 
+#[derive(Clone)]
 struct Inserts {
     lpf: Option<Biquad>,
     hpf: Option<Biquad>,
     bpf: Option<Biquad>,
     /// TL7c: envelopes of lpf, hpf, bpf (index 0–2).
     envs: [Option<FilterEnv>; 3],
+    /// SYN6 C3: low-pass (base, q) and its cutoff LFO (rate Hz, phase, octaves).
+    lp_base: Option<(f32, f32)>,
+    lp_lfo: Option<(f32, f32, f32)>,
     vowel: Option<VowelBank>,
     coarse_n: u32, // 1 = bypass
     coarse_count: u32,
@@ -922,6 +1822,12 @@ impl Inserts {
                 fenv(hp, t.hp_env, FilterKind::High),
                 fenv(bp, t.bp_env, FilterKind::Band),
             ],
+            lp_base: lp,
+            lp_lfo: if lp.is_some() && t.lp_depth > 0.0 {
+                Some((t.lp_rate, t.lp_phase, t.lp_depth))
+            } else {
+                None
+            },
             vowel: VowelBank::new(t.vowel, sr),
             coarse_n: t.coarse.max(1),
             coarse_count: 0,
@@ -936,8 +1842,9 @@ impl Inserts {
         }
     }
 
+    /// True when a cutoff moves (TL7c envelope or SYN6 cutoff LFO).
     fn has_envelope(&self) -> bool {
-        self.envs.iter().any(|e| e.is_some())
+        self.envs.iter().any(|e| e.is_some()) || self.lp_lfo.is_some()
     }
 
     /// Recompute the coefficients of the enveloped stages for t seconds after
@@ -945,17 +1852,32 @@ impl Inserts {
     fn modulate(&mut self, t: f32, gate: f32, sr: f32) {
         let nyq = sr * 0.49;
         for i in 0..3 {
-            if let Some(fe) = self.envs[i] {
-                let f = (fe.base * 2.0_f32.powf(fe.depth * fe.env.value(gate, t)))
-                    .clamp(20.0, 20_000.0_f32.min(nyq));
-                let target = match i {
-                    0 => self.lpf.as_mut(),
-                    1 => self.hpf.as_mut(),
-                    _ => self.bpf.as_mut(),
-                };
-                if let Some(bq) = target {
-                    bq.set_coeffs(&fe.kind.make(f, fe.q, sr));
-                }
+            let env = self.envs[i].map(|fe| fe.depth * fe.env.value(gate, t));
+            // SYN6 C3: the low-pass LFO adds its octaves to the envelope's.
+            let lfo = if i == 0 {
+                self.lp_lfo.map(|(rate, ph, depth)| {
+                    depth * (std::f32::consts::TAU * (ph + rate * t)).sin()
+                })
+            } else {
+                None
+            };
+            if env.is_none() && lfo.is_none() {
+                continue;
+            }
+            let (base, q, kind) = match (self.envs[i], self.lp_base) {
+                (Some(fe), _) => (fe.base, fe.q, fe.kind),
+                (None, Some((b, q))) => (b, q, FilterKind::Low),
+                _ => continue,
+            };
+            let f = (base * 2.0_f32.powf(env.unwrap_or(0.0) + lfo.unwrap_or(0.0)))
+                .clamp(20.0, 20_000.0_f32.min(nyq));
+            let target = match i {
+                0 => self.lpf.as_mut(),
+                1 => self.hpf.as_mut(),
+                _ => self.bpf.as_mut(),
+            };
+            if let Some(bq) = target {
+                bq.set_coeffs(&kind.make(f, q, sr));
             }
         }
     }
@@ -1049,6 +1971,8 @@ struct ActiveVoice {
     voice: Voice,
     pan: f32, // -1.0 (left) … 0.0 (centre) … 1.0 (right)
     inserts: Inserts,
+    /// SYN6: insert chain of bus B for stereo (unison) voices; None = mono.
+    inserts_b: Option<Inserts>,
     sends: Sends,
     mods: Mods,
 }
@@ -1299,6 +2223,8 @@ impl AudioEngine {
     /// 0 amp · 1 attack · 2 decay · 3 pan · 4 lpf · 5 resonance · 6 hpf · 7 hpq
     /// 8 bpf · 9 bpq · 10 shape · 11 crush        (filter slots: 0.0 = off)
     /// 12 room · 13 delay · 14 orbit              (Phase TL7b sends)
+    /// 15–40                                     (Phase TL7c, see Tl7cParams)
+    /// 41 lp LFO rate Hz · 42 start phase · 43 depth octaves (Phase SYN6)
     ///
     /// A missing trailing slot means its default.
     pub fn trigger_v3(&mut self, value: &str, time: f64, params: &[f32]) {
@@ -1458,15 +2384,23 @@ impl AudioEngine {
                     let t = m.age as f32 / sr;
                     if m.filter_env {
                         av.inserts.modulate(t, m.gate, sr);
+                        if let Some(ib) = av.inserts_b.as_mut() {
+                            ib.modulate(t, m.gate, sr);
+                        }
                     }
                     if m.penv.is_some() || m.vib > 0.0 {
                         m.pitch = 2.0_f64.powf(m.semitones(t) as f64 / 12.0);
                     }
                 }
                 m.age = m.age.wrapping_add(1);
-                let s = av.inserts.tick(av.voice.tick(sr, m.pitch));
+                let (a, b) = av.voice.tick2(sr, m.pitch);
+                let sa = av.inserts.tick(a);
+                let sb = match av.inserts_b.as_mut() {
+                    Some(ib) => ib.tick(b),
+                    None => sa,
+                };
                 let angle = (av.pan + 1.0) / 2.0 * std::f32::consts::FRAC_PI_2;
-                let (vl, vr) = (s * angle.cos(), s * angle.sin());
+                let (vl, vr) = (sa * angle.cos(), sb * angle.sin());
                 l += vl;
                 r += vr;
                 if sends {
@@ -1520,44 +2454,53 @@ impl AudioEngine {
         let mods = Mods::new(&p.tl7c, inserts.has_envelope());
         let value = p.value.trim_start_matches(':');
 
+        let osc = |wave: Wave, rest: &str| {
+            Voice::Osc(OscVoice::new(wave, rest, amp, p.attack, p.decay, sr))
+        };
         let voice = if let Some(rest) = value.strip_prefix("saw:") {
-            let freq = rest.parse::<f64>().unwrap_or(440.0);
-            let peak = amp * 0.5;
-            let attack_samples = (p.attack * sr).max(1.0);
-            Voice::Saw {
-                phase: 0.0,
-                freq,
-                amp: peak,
-                gain: 0.0,
-                gain_decay: decay_rate(p.decay, sr),
-                attack_inc: peak / attack_samples,
-                in_attack: true,
-            }
+            osc(Wave::Saw, rest)
         } else if let Some(rest) = value.strip_prefix("square:") {
-            let parts: Vec<&str> = rest.splitn(2, ':').collect();
-            let freq = parts[0].parse::<f64>().unwrap_or(440.0);
-            let pw = if parts.len() > 1 {
-                parts[1].parse::<f32>().unwrap_or(0.5)
-            } else {
-                0.5
-            };
-            let peak = amp * 0.5;
-            let attack_samples = (p.attack * sr).max(1.0);
-            Voice::Square {
-                phase: 0.0,
-                freq,
-                amp: peak,
-                gain: 0.0,
-                gain_decay: decay_rate(p.decay, sr),
-                attack_inc: peak / attack_samples,
-                in_attack: true,
-                pulse_width: pw.clamp(0.01, 0.99),
-            }
-        } else if value == "noise" {
-            Voice::Noise {
-                state: seed,
-                gain: amp * 0.3,
-                gain_decay: decay_rate(p.decay, sr),
+            osc(Wave::Pulse, rest)
+        } else if let Some(rest) = value.strip_prefix("tri:") {
+            osc(Wave::Tri, rest)
+        } else if let Some(rest) = value.strip_prefix("sine:") {
+            osc(Wave::Sine, rest)
+        } else if value == "noise" || value.starts_with("noise:") {
+            let rest = value.strip_prefix("noise").unwrap_or("");
+            Voice::Noise(NoiseVoice::new(rest, amp, p.decay, seed, sr))
+        } else if let Some(rest) = value.strip_prefix("drum:") {
+            let name = positional(rest, 0).unwrap_or("");
+            // Noise seed from the drum name and the hit's onset time — not the
+            // engine's running seed, which depends on how many other voices
+            // started before. So every hit sounds slightly different (like the
+            // old running seed), yet a track renders bit-identically alone
+            // (stem export) and in the mix, and exports are reproducible.
+            let drum_seed = drum_noise_seed(name, p.time);
+            match drum_voice(
+                name,
+                arg(rest, "tone"),
+                arg(rest, "tune").unwrap_or(0.0),
+                arg(rest, "decay").filter(|d| *d > 0.0),
+                amp,
+                drum_seed,
+                sr,
+            ) {
+                Some(d) => {
+                    if d.choke != 0 {
+                        for av in self.voices.iter_mut() {
+                            if let Voice::Drum(o) = &mut av.voice {
+                                if o.choke == d.choke {
+                                    o.choke(sr);
+                                }
+                            }
+                        }
+                    }
+                    Voice::Drum(d)
+                }
+                None => {
+                    engine_warn(&format!("[REPuLse WASM] unknown drum voice: {}", name));
+                    return;
+                }
             }
         } else if let Some(rest) = value.strip_prefix("fm:") {
             let first_char = rest.chars().next().unwrap_or('0');
@@ -1648,11 +2591,17 @@ impl AudioEngine {
                 },
                 pan: p.pan.clamp(-1.0, 1.0),
                 inserts,
+                inserts_b: None,
                 sends: p.sends,
                 mods,
             });
             return;
         } else {
+            // The four original drum voices. Since the default-kit decision
+            // (2026-11-21, see drum-route in app/src/repulse/voices.cljs) no
+            // pattern reaches them: bare :bd :sd :hh :oh play the synth kit
+            // ("drum:<name>") and (bank :dirt) plays the Dirt-Samples. They stay
+            // so old trigger strings still play; remove in a cleanup phase.
             match value {
                 "bd" => {
                     let sweep_samples = 0.06 * sr as f64;
@@ -1702,10 +2651,16 @@ impl AudioEngine {
                 }
             }
         };
+        let inserts_b = if voice.is_stereo() {
+            Some(inserts.clone())
+        } else {
+            None
+        };
         self.voices.push(ActiveVoice {
             voice,
             pan: p.pan.clamp(-1.0, 1.0),
             inserts,
+            inserts_b,
             sends: p.sends,
             mods,
         });
@@ -2225,12 +3180,16 @@ mod tl7a_insert_tests {
     }
 
     /// Fingerprint of a fixed trigger_v2 render. GOLDEN was recorded on the engine
-    /// before Phase TL7a: the no-insert path must stay bit-identical.
+    /// before Phase TL7a: the no-insert path must stay bit-identical. SYN6
+    /// replaced the naive saw and square by band-limited oscillators (decision 3),
+    /// so they left the list; the other voices keep their original onsets and
+    /// GOLDEN was re-recorded on the pre-SYN6 engine. Only voices without f32
+    /// libm calls fall inside the 0.116 s window (the hat's Biquad coefficients
+    /// differ in the last bit between glibc and Apple's libm); the legacy hats
+    /// are checked against a reference model in syn6_tests::a9_old_strings.
     fn v2_fingerprint(v3: bool) -> u64 {
         let mut e = AudioEngine::new_for_test(SR);
         let voices = [
-            "saw:261.63",
-            "square:220:0.3",
             "bd",
             "sd",
             "hh",
@@ -2240,7 +3199,7 @@ mod tl7a_insert_tests {
             "noise",
         ];
         for (i, v) in voices.iter().enumerate() {
-            let t = i as f64 * 0.05;
+            let t = (i + 2) as f64 * 0.05;
             if v3 {
                 e.trigger_v3(v, t, &[0.8, 0.01, 0.3, 0.25]);
             } else {
@@ -2258,7 +3217,7 @@ mod tl7a_insert_tests {
         h
     }
 
-    const GOLDEN: u64 = 0xfd60_f3d5_f69d_e5e7;
+    const GOLDEN: u64 = 0xa621_466a_7a51_2714;
 
     #[test]
     fn trigger_v2_render_is_bit_identical_to_pre_tl7a() {
@@ -2267,6 +3226,7 @@ mod tl7a_insert_tests {
 
     #[test]
     fn trigger_v3_without_inserts_matches_v2() {
+        assert_eq!(v2_fingerprint(true), v2_fingerprint(false));
         assert_eq!(v2_fingerprint(true), GOLDEN);
     }
 
@@ -2835,5 +3795,839 @@ mod tl7c_tests {
         let half = render("saw:110", &slots(|v| v[40] = 0.5), 0.3);
         let d = db(rms(&half) / rms(&plain));
         assert!((d + 6.02).abs() <= 0.1, "{d} dB");
+    }
+}
+
+#[cfg(test)]
+mod syn6_tests {
+    use super::*;
+
+    const SR: f32 = 44100.0;
+
+    // ── helpers ─────────────────────────────────────────────────────────────
+
+    /// In-place radix-2 FFT (re, im), n a power of two.
+    fn fft(re: &mut [f64], im: &mut [f64]) {
+        let n = re.len();
+        let mut j = 0;
+        for i in 1..n {
+            let mut bit = n >> 1;
+            while j & bit != 0 {
+                j ^= bit;
+                bit >>= 1;
+            }
+            j |= bit;
+            if i < j {
+                re.swap(i, j);
+                im.swap(i, j);
+            }
+        }
+        let mut len = 2;
+        while len <= n {
+            let ang = -2.0 * std::f64::consts::PI / len as f64;
+            for start in (0..n).step_by(len) {
+                for k in 0..len / 2 {
+                    let (wr, wi) = ((ang * k as f64).cos(), (ang * k as f64).sin());
+                    let (a, b) = (start + k, start + k + len / 2);
+                    let (xr, xi) = (re[b] * wr - im[b] * wi, re[b] * wi + im[b] * wr);
+                    re[b] = re[a] - xr;
+                    im[b] = im[a] - xi;
+                    re[a] += xr;
+                    im[a] += xi;
+                }
+            }
+            len <<= 1;
+        }
+    }
+
+    /// Power spectrum |X[k]|², k = 0 … n/2.
+    fn power(x: &[f64]) -> Vec<f64> {
+        let mut re = x.to_vec();
+        let mut im = vec![0.0; x.len()];
+        fft(&mut re, &mut im);
+        (0..=x.len() / 2)
+            .map(|k| re[k] * re[k] + im[k] * im[k])
+            .collect()
+    }
+
+    fn goertzel(buf: &[f32], freq: f32) -> f32 {
+        let w = 2.0 * std::f64::consts::PI * freq as f64 / SR as f64;
+        let coeff = 2.0 * w.cos();
+        let (mut s1, mut s2) = (0.0f64, 0.0f64);
+        for &x in buf {
+            let s0 = x as f64 + coeff * s1 - s2;
+            s2 = s1;
+            s1 = s0;
+        }
+        ((s1 * s1 + s2 * s2 - coeff * s1 * s2).max(0.0)).sqrt() as f32
+    }
+
+    fn hann(x: &[f32]) -> Vec<f32> {
+        let n = x.len() as f32;
+        x.iter()
+            .enumerate()
+            .map(|(i, s)| s * 0.5 * (1.0 - (std::f32::consts::TAU * i as f32 / n).cos()))
+            .collect()
+    }
+
+    fn db(r: f64) -> f64 {
+        10.0 * r.max(1e-30).log10()
+    }
+
+    fn rms(x: &[f32]) -> f32 {
+        if x.is_empty() {
+            return 0.0;
+        }
+        (x.iter().map(|s| s * s).sum::<f32>() / x.len() as f32).sqrt()
+    }
+
+    fn rms_db(x: &[f32]) -> f32 {
+        let r = rms(x);
+        if r <= 0.0 {
+            -200.0
+        } else {
+            20.0 * r.log10()
+        }
+    }
+
+    /// Stereo render of one trigger_v2 event at 0 → (left, right).
+    fn render2(value: &str, amp: f32, decay: f32, secs: f32) -> (Vec<f32>, Vec<f32>) {
+        let mut e = AudioEngine::new_for_test(SR);
+        e.trigger_raw_v2(value, 0.0, amp, 0.001, decay, 0.0);
+        let b = e.process_block_raw((secs * SR) as u32, 0.0);
+        (
+            b.iter().step_by(2).copied().collect(),
+            b.iter().skip(1).step_by(2).copied().collect(),
+        )
+    }
+
+    /// Mono (left channel) render.
+    fn render(value: &str, decay: f32, secs: f32) -> Vec<f32> {
+        render2(value, 1.0, decay, secs).0
+    }
+
+    fn win(x: &[f32], from: f32, to: f32) -> &[f32] {
+        &x[(from * SR) as usize..((to * SR) as usize).min(x.len())]
+    }
+
+    /// Frequency in lo…hi (step Hz) with the strongest Goertzel response.
+    fn peak_freq(x: &[f32], lo: f32, hi: f32, step: f32) -> f32 {
+        let w = hann(x);
+        let mut best = (lo, 0.0);
+        let mut f = lo;
+        while f <= hi {
+            let g = goertzel(&w, f);
+            if g > best.1 {
+                best = (f, g);
+            }
+            f += step;
+        }
+        best.0
+    }
+
+    fn naive_saw(t: f64) -> f64 {
+        2.0 * t - 1.0
+    }
+
+    fn naive_pulse(t: f64, pw: f64) -> f64 {
+        (if t < pw { 1.0 } else { -1.0 }) - (2.0 * pw - 1.0)
+    }
+
+    /// 32768 samples of a waveform function at bin-centred frequency `bin`.
+    fn wave_buf(bin: usize, f: impl Fn(f64, f64) -> f64) -> Vec<f64> {
+        let n = 32768;
+        let dt = bin as f64 / n as f64;
+        let mut t = 0.0;
+        (0..n)
+            .map(|_| {
+                let y = f(t, dt);
+                t = frac(t + dt);
+                y
+            })
+            .collect()
+    }
+
+    /// Power of the non-harmonic bins (±1 bin of a harmonic excluded) in lo…hi Hz.
+    fn alias_power(p: &[f64], bin: usize, lo: f64, hi: f64) -> f64 {
+        let n = (p.len() - 1) * 2;
+        let hz = SR as f64 / n as f64;
+        (0..p.len())
+            .filter(|&k| {
+                let f = k as f64 * hz;
+                let near = (k + 1) % bin <= 2 && k + 1 >= bin;
+                f >= lo && f <= hi && !near
+            })
+            .map(|k| p[k])
+            .sum()
+    }
+
+    // ── Part A ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn a1_aliasing() {
+        let bin = 2616; // 3520.7 Hz
+        type Wf = Box<dyn Fn(f64, f64) -> f64>;
+        let cases: [(&str, Wf, Wf); 3] = [
+            ("saw", Box::new(saw_wave), Box::new(|t, _| naive_saw(t))),
+            (
+                "pulse 0.5",
+                Box::new(|t, dt| pulse_wave(t, dt, 0.5)),
+                Box::new(|t, _| naive_pulse(t, 0.5)),
+            ),
+            (
+                "pulse 0.25",
+                Box::new(|t, dt| pulse_wave(t, dt, 0.25)),
+                Box::new(|t, _| naive_pulse(t, 0.25)),
+            ),
+        ];
+        for (name, new, old) in cases.iter() {
+            let pn = power(&wave_buf(bin, new));
+            let po = power(&wave_buf(bin, old));
+            let below =
+                db(alias_power(&po, bin, 20.0, 3400.0) / alias_power(&pn, bin, 20.0, 3400.0));
+            let band =
+                db(alias_power(&po, bin, 20.0, 10_000.0) / alias_power(&pn, bin, 20.0, 10_000.0));
+            println!("A1 {name}: below fundamental {below:.1} dB, 20 Hz–10 kHz {band:.1} dB");
+            assert!(below >= 30.0, "{name}: {below} dB below the fundamental");
+            assert!(band >= 12.0, "{name}: {band} dB in 20 Hz–10 kHz");
+        }
+    }
+
+    #[test]
+    fn a2_triangle_harmonics() {
+        let bin = 327; // 440.08 Hz
+        let p = power(&wave_buf(bin, tri_wave));
+        let h = |k: usize| p[bin * k];
+        let third = db(h(1) / h(3));
+        println!(
+            "A2 tri: 3rd {third:.1} dB below, 2nd {:.1}, 4th {:.1}",
+            db(h(1) / h(2)),
+            db(h(1) / h(4))
+        );
+        assert!((third - 19.0).abs() <= 2.0, "3rd harmonic {third} dB below");
+        assert!(db(h(1) / h(2)) >= 40.0 && db(h(1) / h(4)) >= 40.0);
+    }
+
+    #[test]
+    fn a3_detune_three_peaks() {
+        let x = render("saw:440:unison=3:detune=20", 100.0, 4.0);
+        let w = hann(&x);
+        let mut f = 430.0;
+        let mut spec = vec![];
+        while f <= 450.0 {
+            spec.push((f, goertzel(&w, f)));
+            f += 0.25;
+        }
+        let top = spec.iter().map(|s| s.1).fold(0.0, f32::max);
+        let peaks: Vec<f32> = (1..spec.len() - 1)
+            .filter(|&i| spec[i].1 > spec[i - 1].1 && spec[i].1 >= spec[i + 1].1)
+            .filter(|&i| spec[i].1 >= top * 10f32.powf(-12.0 / 20.0))
+            .map(|i| spec[i].0)
+            .collect();
+        println!("A3 peaks {peaks:?}");
+        assert_eq!(peaks.len(), 3, "{peaks:?}");
+        for (p, want) in peaks.iter().zip([437.5, 440.0, 442.5]) {
+            assert!((p - want).abs() <= 0.5, "{p} vs {want}");
+        }
+    }
+
+    fn correlation(l: &[f32], r: &[f32]) -> f32 {
+        let (mut lr, mut ll, mut rr) = (0.0f64, 0.0f64, 0.0f64);
+        for (a, b) in l.iter().zip(r) {
+            lr += (a * b) as f64;
+            ll += (a * a) as f64;
+            rr += (b * b) as f64;
+        }
+        (lr / (ll * rr).sqrt()) as f32
+    }
+
+    #[test]
+    fn a4_spread() {
+        let (l, r) = render2("saw:220:unison=7:detune=20:spread=1", 1.0, 1.5, 1.0);
+        let c = correlation(&l, &r);
+        println!("A4 correlation spread 1: {c}");
+        assert!(c < 0.9, "correlation {c}");
+        let (l, r) = render2("saw:220:unison=7:detune=20:spread=0", 1.0, 1.5, 1.0);
+        assert_eq!(l, r);
+    }
+
+    #[test]
+    fn a5_sub_oscillator() {
+        let x = render("saw:440:sub-osc=0.5", 100.0, 1.0);
+        let w = hann(&x);
+        let d = 20.0 * (goertzel(&w, 440.0) / goertzel(&w, 220.0)).log10();
+        println!("A5 sub {d:.2} dB below the note");
+        assert!((d - 6.0).abs() <= 2.0, "{d} dB");
+    }
+
+    #[test]
+    fn a6_rms_change_against_naive() {
+        for f in [110.0, 440.0, 1760.0, 3520.0] {
+            let dt = f / SR as f64;
+            let n = SR as usize;
+            let run = |g: &dyn Fn(f64) -> f64| {
+                let mut t = 0.0;
+                let mut s = 0.0;
+                for _ in 0..n {
+                    let y = g(t);
+                    s += y * y;
+                    t = frac(t + dt);
+                }
+                (s / n as f64).sqrt()
+            };
+            let saw_d = 20.0 * (run(&|t| saw_wave(t, dt)) / run(&naive_saw)).log10();
+            let pul_d =
+                20.0 * (run(&|t| pulse_wave(t, dt, 0.5)) / run(&|t| naive_pulse(t, 0.5))).log10();
+            println!("A6 {f} Hz: saw {saw_d:+.3} dB, pulse {pul_d:+.3} dB");
+            if f <= 440.0 {
+                assert!(saw_d.abs() <= 0.5 && pul_d.abs() <= 0.5);
+            }
+        }
+    }
+
+    /// Octave-band PSD (dB) at 125 … 8000 Hz of 10 s of a noise colour.
+    fn noise_bands(color: &str) -> Vec<f64> {
+        let mut v = NoiseVoice::new(&format!(":color={color}"), 1.0, 1.0, 0x1234_5678, SR);
+        v.gain = 1.0;
+        v.gain_decay = 1.0;
+        let x: Vec<f64> = (0..(10.0 * SR) as usize).map(|_| v.tick() as f64).collect();
+        let n = 65536;
+        let mut acc = vec![0.0; n / 2 + 1];
+        let mut segs = 0;
+        let mut start = 0;
+        while start + n <= x.len() {
+            let seg: Vec<f64> = x[start..start + n]
+                .iter()
+                .enumerate()
+                .map(|(i, s)| s * 0.5 * (1.0 - (std::f64::consts::TAU * i as f64 / n as f64).cos()))
+                .collect();
+            for (a, p) in acc.iter_mut().zip(power(&seg)) {
+                *a += p;
+            }
+            segs += 1;
+            start += n / 2;
+        }
+        let hz = SR as f64 / n as f64;
+        [125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0]
+            .iter()
+            .map(|fc: &f64| {
+                let (lo, hi) = (fc / 2f64.sqrt(), fc * 2f64.sqrt());
+                let ks: Vec<usize> = (0..acc.len())
+                    .filter(|&k| k as f64 * hz >= lo && (k as f64 * hz) < hi)
+                    .collect();
+                let band: f64 = ks.iter().map(|&k| acc[k]).sum::<f64>() / segs as f64;
+                db(band / (hi - lo))
+            })
+            .collect()
+    }
+
+    /// Least-squares slope in dB per octave.
+    fn slope(b: &[f64]) -> f64 {
+        let n = b.len() as f64;
+        let mx = (n - 1.0) / 2.0;
+        let my = b.iter().sum::<f64>() / n;
+        let num: f64 = b
+            .iter()
+            .enumerate()
+            .map(|(i, y)| (i as f64 - mx) * (y - my))
+            .sum();
+        let den: f64 = (0..b.len()).map(|i| (i as f64 - mx).powi(2)).sum();
+        num / den
+    }
+
+    #[test]
+    fn a7_noise_colours() {
+        let white = noise_bands("white");
+        let mean = white.iter().sum::<f64>() / white.len() as f64;
+        println!("A7 white {white:?}");
+        assert!(white.iter().all(|b| (b - mean).abs() <= 1.0));
+        let pink = slope(&noise_bands("pink"));
+        let brown = slope(&noise_bands("brown"));
+        println!("A7 pink {pink:.2} dB/oct, brown {brown:.2} dB/oct");
+        assert!((pink + 3.0).abs() <= 1.0, "pink {pink}");
+        assert!((brown + 6.0).abs() <= 1.5, "brown {brown}");
+
+        let mut d = NoiseVoice::new(":color=dust:density=100", 1.0, 1.0, 0xBEEF, SR);
+        d.gain_decay = 1.0;
+        let nz = (0..(10.0 * SR) as usize)
+            .filter(|_| d.tick() != 0.0)
+            .count();
+        println!("A7 dust {nz} impulses");
+        assert!((800..=1200).contains(&nz), "{nz}");
+
+        let mut l = NoiseVoice::new(":color=lfsr:freq=440", 1.0, 1.0, 0xBEEF, SR);
+        l.gain_decay = 1.0;
+        let xs: Vec<f32> = (0..SR as usize).map(|_| l.tick()).collect();
+        let flips = xs
+            .windows(2)
+            .filter(|w| w[0].signum() != w[1].signum())
+            .count();
+        println!("A7 lfsr {flips} sign changes");
+        assert!((2800..=4200).contains(&flips), "{flips}");
+    }
+
+    #[test]
+    fn a8_unison_is_deterministic() {
+        let run = || {
+            let mut e = AudioEngine::new_for_test(SR);
+            for (i, v) in [
+                "saw:110:unison=7:spread=0.7",
+                "square:220:unison=3:detune=30",
+                "tri:330:unison=5:spread=1",
+                "saw:55:unison=2:sub-osc=0.5:sync=3",
+            ]
+            .iter()
+            .enumerate()
+            {
+                e.trigger_raw_v2(v, i as f64 * 0.01, 0.7, 0.01, 1.0, 0.0);
+            }
+            e.process_block_raw(8192, 0.0)
+        };
+        assert_eq!(run(), run());
+    }
+
+    /// FNV-1a over the first 8192 frames of trigger_raw_v2(v, 0, 0.8, 0.01, 0.5, 0.3).
+    fn legacy_hash(v: &str) -> u64 {
+        let mut e = AudioEngine::new_for_test(SR);
+        e.trigger_raw_v2(v, 0.0, 0.8, 0.01, 0.5, 0.3);
+        let mut h: u64 = 0xcbf29ce484222325;
+        for s in e.process_block_raw(8192, 0.0) {
+            h = (h ^ s.to_bits() as u64).wrapping_mul(0x100000001b3);
+        }
+        h
+    }
+
+    /// The pre-SYN6 hat voice, step for step: LCG noise → high-pass 8 kHz →
+    /// exponential decay, panned like the engine. Uses the same Biquad, so it
+    /// matches on every libm (the hats' f32 coefficients differ between glibc and
+    /// Apple's libm in the last bit, which a stored hash cannot cover).
+    fn legacy_hat(gain_scale: f32, dur: f32) -> Vec<f32> {
+        let (amp, pan) = (0.8f32, 0.3f32);
+        let mut state = 0xDEAD_BEEFu32
+            .wrapping_mul(1_664_525)
+            .wrapping_add(1_013_904_223);
+        let mut hpf = Biquad::highpass(8000.0, 0.7, SR);
+        let mut gain = gain_scale * amp;
+        let decay = decay_rate(dur, SR);
+        let angle = (pan + 1.0) / 2.0 * std::f32::consts::FRAC_PI_2;
+        let mut out = Vec::with_capacity(16384);
+        for _ in 0..8192 {
+            let s = hpf.tick(lcg_next(&mut state)) * gain;
+            gain *= decay;
+            out.push((0.0 + s * angle.cos()).clamp(-1.0, 1.0));
+            out.push((0.0 + s * angle.sin()).clamp(-1.0, 1.0));
+        }
+        out
+    }
+
+    #[test]
+    fn a9_old_strings() {
+        // Captured on the engine before SYN6 (voices without f32 libm calls,
+        // identical on macOS and Linux).
+        for (v, want) in [
+            ("440", 0x4a9f_4c4c_7510_e149u64),
+            ("261.63", 0x1a2c_24f2_458d_8862),
+            ("bd", 0x7d36_a131_fdfd_80d4),
+            ("sd", 0xcdbc_bd2f_ffcc_de33),
+            ("noise", 0x5f3d_afae_9c2c_194c),
+        ] {
+            assert_eq!(legacy_hash(v), want, "{v} changed");
+        }
+        for (v, gain, dur) in [("hh", 0.5, 0.045), ("oh", 0.4, 1.0)] {
+            let mut e = AudioEngine::new_for_test(SR);
+            e.trigger_raw_v2(v, 0.0, 0.8, 0.01, 0.5, 0.3);
+            let got = e.process_block_raw(8192, 0.0);
+            assert!(got == legacy_hat(gain, dur), "{v} changed");
+        }
+        for v in ["saw:440", "square:440:0.25"] {
+            assert!(rms(&render(v, 1.0, 0.2)) > 0.001, "{v}");
+        }
+    }
+
+    fn duty(x: &[f32]) -> f32 {
+        let (lo, hi) = x
+            .iter()
+            .fold((f32::MAX, f32::MIN), |(a, b), &s| (a.min(s), b.max(s)));
+        let mid = (lo + hi) / 2.0;
+        x.iter().filter(|&&s| s > mid).count() as f32 / x.len() as f32
+    }
+
+    #[test]
+    fn a10_pwm() {
+        let x = render("square:220:pw=0.5:pw-rate=0.5:pw-depth=0.4", 100.0, 4.0);
+        let w = (0.05 * SR) as usize;
+        let d: Vec<f32> = x.chunks(w).filter(|c| c.len() == w).map(duty).collect();
+        let (lo, hi) = d
+            .iter()
+            .fold((1.0f32, 0.0f32), |(a, b), &v| (a.min(v), b.max(v)));
+        println!("A10 duty {lo:.2}…{hi:.2}");
+        assert!(lo < 0.2 && hi > 0.8);
+        let x = render("square:220:pw=0.5:pw-depth=0", 100.0, 1.0);
+        assert!(x
+            .chunks(w)
+            .filter(|c| c.len() == w)
+            .map(duty)
+            .all(|v| (v - 0.5).abs() <= 0.05));
+    }
+
+    fn strongest_harmonic(x: &[f32], f0: f32) -> usize {
+        let w = hann(x);
+        (1..=12)
+            .max_by(|a, b| {
+                goertzel(&w, f0 * *a as f32)
+                    .partial_cmp(&goertzel(&w, f0 * *b as f32))
+                    .unwrap()
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn a11_hard_sync() {
+        let h = strongest_harmonic(&render("saw:220:sync=4.5", 100.0, 1.0), 220.0);
+        println!("A11 synced strongest harmonic {h}");
+        assert!(h == 4 || h == 5, "{h}");
+        assert_eq!(strongest_harmonic(&render("saw:220", 100.0, 1.0), 220.0), 1);
+    }
+
+    #[test]
+    #[ignore]
+    fn bench_supersaw() {
+        let mut e = AudioEngine::new_for_test(SR);
+        for i in 0..16 {
+            e.trigger_raw_v2(
+                &format!("saw:{}:unison=7:spread=0.7", 110.0 + i as f32 * 13.0),
+                0.0,
+                0.5,
+                0.01,
+                100.0,
+                0.0,
+            );
+        }
+        let secs = 10.0;
+        let t0 = std::time::Instant::now();
+        let blocks = (secs * SR / 128.0) as usize;
+        for b in 0..blocks {
+            e.process_block_raw(128, b as f64 * 128.0 / SR as f64);
+        }
+        let rtf = secs as f64 / t0.elapsed().as_secs_f64();
+        println!("A12 real-time factor: {rtf:.1}x (16 voices × unison 7)");
+        assert!(rtf >= 20.0, "{rtf}");
+    }
+
+    // ── Part B ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn b1_every_drum_sounds_and_stays_below_the_clamp() {
+        for d in DRUM_VOICES {
+            let (l, r) = render2(&format!("drum:{d}"), 1.0, 1.5, 2.0);
+            let r100 = rms(&l[..(0.1 * SR) as usize]);
+            let peak = l.iter().chain(r.iter()).fold(0.0f32, |m, s| m.max(s.abs()));
+            println!("B1 {d:>5}: rms100 {r100:.4} peak {peak:.3}");
+            assert!(r100 > 0.001, "{d} rms {r100}");
+            assert!(peak < 0.99, "{d} peak {peak}");
+        }
+    }
+
+    #[test]
+    fn b2_kick_tune() {
+        let a = peak_freq(
+            win(&render("drum:bd:decay=2", 1.5, 0.8), 0.2, 0.7),
+            30.0,
+            130.0,
+            0.5,
+        );
+        let b = peak_freq(
+            win(&render("drum:bd:decay=2:tune=12", 1.5, 0.8), 0.2, 0.7),
+            30.0,
+            130.0,
+            0.5,
+        );
+        println!("B2 {a} Hz, tuned {b} Hz");
+        assert!((a / 48.0 - 1.0).abs() <= 0.05 && (b / 96.0 - 1.0).abs() <= 0.05);
+    }
+
+    #[test]
+    fn b3_kick_decay() {
+        let long = rms_db(win(&render("drum:bd:decay=0.8", 1.5, 0.5), 0.3, 0.4));
+        let short = rms_db(win(&render("drum:bd:decay=0.2", 1.5, 0.5), 0.3, 0.4));
+        println!("B3 {long:.1} vs {short:.1} dB");
+        assert!(long - short >= 20.0);
+    }
+
+    /// Share of energy above / below a frequency (FFT of the first 8192 samples).
+    fn energy_share(x: &[f32], split: f64, above: bool) -> f64 {
+        let n = 8192;
+        let mut buf: Vec<f64> = x.iter().take(n).map(|s| *s as f64).collect();
+        buf.resize(n, 0.0);
+        let p = power(&buf);
+        let hz = SR as f64 / n as f64;
+        let total: f64 = p.iter().sum();
+        let part: f64 = p
+            .iter()
+            .enumerate()
+            .filter(|(k, _)| (*k as f64 * hz >= split) == above)
+            .map(|(_, v)| v)
+            .sum();
+        part / total
+    }
+
+    #[test]
+    fn b4_spectral_balance() {
+        let hh = energy_share(&render("drum:hh", 1.5, 0.2), 5000.0, true);
+        let bd = energy_share(&render("drum:bd", 1.5, 0.2), 200.0, false);
+        println!("B4 hh above 5k {hh:.3}, bd below 200 {bd:.3}");
+        assert!(hh >= 0.8 && bd >= 0.8);
+    }
+
+    #[test]
+    fn b5_clap_bursts() {
+        let x = render("drum:cp", 1.5, 0.05);
+        let w = (0.002 * SR) as usize;
+        let env: Vec<f32> = x[..(0.04 * SR) as usize].chunks(w).map(rms_db).collect();
+        // Count rises followed by a ≥ 6 dB dip.
+        let (mut peaks, mut hi, mut lo, mut rising) = (0, f32::MIN, f32::MAX, true);
+        for &e in &env {
+            if rising {
+                hi = hi.max(e);
+                if e <= hi - 6.0 {
+                    peaks += 1;
+                    rising = false;
+                    lo = e;
+                }
+            } else {
+                lo = lo.min(e);
+                if e >= lo + 6.0 {
+                    rising = true;
+                    hi = e;
+                }
+            }
+        }
+        println!("B5 clap envelope {env:?} → {peaks} peaks");
+        assert!(peaks >= 3, "{peaks}");
+    }
+
+    #[test]
+    fn b6_tom_tune_and_hat_tone() {
+        let a = peak_freq(
+            win(&render("drum:lt:decay=2", 1.5, 0.8), 0.2, 0.7),
+            60.0,
+            160.0,
+            0.5,
+        );
+        let b = peak_freq(
+            win(&render("drum:lt:decay=2:tune=7", 1.5, 0.8), 0.2, 0.7),
+            60.0,
+            160.0,
+            0.5,
+        );
+        println!("B6 lt {a} Hz, +7 st {b} Hz");
+        assert!((a / 82.0 - 1.0).abs() <= 0.05 && (b / 123.0 - 1.0).abs() <= 0.05);
+        let dark = energy_share(&render("drum:hh:tone=0.1", 1.5, 0.2), 8000.0, true);
+        let bright = energy_share(&render("drum:hh:tone=0.9", 1.5, 0.2), 8000.0, true);
+        println!("B6 hh share above 8k: {dark:.3} vs {bright:.3}");
+        assert!(db(bright / dark) >= 3.0);
+    }
+
+    #[test]
+    fn b7_choke() {
+        let mut e = AudioEngine::new_for_test(SR);
+        e.trigger_raw_v2("drum:oh", 0.0, 1.0, 0.001, 1.5, 0.0);
+        let alone: Vec<f32> = e
+            .process_block_raw(4410, 0.0)
+            .iter()
+            .step_by(2)
+            .copied()
+            .collect();
+        let mut e = AudioEngine::new_for_test(SR);
+        e.trigger_raw_v2("drum:oh", 0.0, 1.0, 0.001, 1.5, 0.0);
+        e.trigger_raw_v2("drum:hh", 0.05, 0.0, 0.001, 1.5, 0.0);
+        let choked: Vec<f32> = e
+            .process_block_raw(4410, 0.0)
+            .iter()
+            .step_by(2)
+            .copied()
+            .collect();
+        let d = rms_db(win(&alone, 0.06, 0.07)) - rms_db(win(&choked, 0.06, 0.07));
+        println!("B7 choke {d:.1} dB");
+        assert!(d >= 40.0, "{d}");
+    }
+
+    /// One hit of `drum` at time t (alone, or after other voices at amp 0,
+    /// which consume the engine's running seed but add only silence).
+    fn drum_hit(drum: &str, t: f64, with_others: bool) -> Vec<f32> {
+        let mut e = AudioEngine::new_for_test(SR);
+        if with_others {
+            for (i, v) in [
+                "saw:110:unison=7",
+                "noise",
+                "drum:hh",
+                "fm:sax:220",
+                "drum:cp",
+                "sd",
+            ]
+            .iter()
+            .enumerate()
+            {
+                e.trigger_raw_v2(v, t * i as f64 / 7.0, 0.0, 0.001, 0.5, 0.0);
+            }
+        }
+        e.trigger_raw_v2(&format!("drum:{drum}"), t, 0.8, 0.001, 1.5, 0.0);
+        let start = (t * SR as f64) as usize;
+        let b = e.process_block_raw(start as u32 + 4410, 0.0);
+        b[start * 2..].to_vec()
+    }
+
+    #[test]
+    fn b9_drum_noise_varies_from_hit_to_hit() {
+        for d in ["sd", "hh", "cp", "sh"] {
+            let a = drum_hit(d, 0.25, false);
+            let b = drum_hit(d, 0.5, false);
+            assert!(rms(&a) > 0.001 && rms(&b) > 0.001, "{d} silent");
+            assert_ne!(a, b, "{d}: two hits at different times are identical");
+        }
+    }
+
+    #[test]
+    fn b10_drum_hit_ignores_other_voices() {
+        // Stems sum to the mix: a hit renders the same alone and after other
+        // voices have started (with the engine's running seed it would not).
+        for d in ["bd", "sd", "hh", "cp", "tb"] {
+            assert_eq!(drum_hit(d, 0.3, false), drum_hit(d, 0.3, true), "{d}");
+        }
+    }
+
+    #[test]
+    fn b8_unknown_drum_adds_no_voice() {
+        let mut e = AudioEngine::new_for_test(SR);
+        e.trigger_raw("drum:nope", 0.0);
+        e.process_block_raw(128, 0.0);
+        assert!(e.voices.is_empty());
+    }
+
+    // ── Parts C and D ───────────────────────────────────────────────────────
+
+    /// Frequency from upward zero crossings (linearly interpolated) in x.
+    fn crossing_freq(x: &[f32]) -> f32 {
+        let ts: Vec<f32> = x
+            .windows(2)
+            .enumerate()
+            .filter(|(_, w)| w[0] < 0.0 && w[1] >= 0.0)
+            .map(|(i, w)| i as f32 + w[0] / (w[0] - w[1]))
+            .collect();
+        (ts.len() - 1) as f32 * SR / (ts[ts.len() - 1] - ts[0])
+    }
+
+    #[test]
+    fn c_r2_glide() {
+        let x = render("saw:261.63:glide-from=130.81:glide=0.1", 100.0, 0.3);
+        let early = crossing_freq(win(&x, 0.04, 0.06));
+        let late = crossing_freq(win(&x, 0.15, 0.25));
+        println!("C-R2 glide {early:.1} Hz → {late:.2} Hz");
+        assert!((150.0..=230.0).contains(&early), "{early}");
+        assert!((late / 261.63 - 1.0).abs() <= 0.01, "{late}");
+    }
+
+    #[test]
+    fn c_r1_cutoff_lfo() {
+        let mut sl = vec![
+            1.0, 0.001, 100.0, 0.0, 400.0, 0.707, 0.0, 0.707, 0.0, 1.0, 0.0, 16.0,
+        ];
+        sl.extend_from_slice(&[0.0; 3]); // sends
+        sl.push(0.0); // gate
+        for _ in 0..4 {
+            sl.extend_from_slice(&[0.0, 0.001, 0.2, 0.0, 0.1]);
+        }
+        sl.extend_from_slice(&[0.0, 0.5, 0.0, 1.0, 1.0]);
+        sl.extend_from_slice(&[2.0, 0.0, 2.0]); // 2 Hz, phase 0, 2 octaves
+        let mut e = AudioEngine::new_for_test(SR);
+        e.trigger_v3("saw:110", 0.0, &sl);
+        let x: Vec<f32> = e
+            .process_block_raw(SR as u32, 0.0)
+            .iter()
+            .step_by(2)
+            .copied()
+            .collect();
+        let w = (0.05 * SR) as usize;
+        let lv: Vec<f32> = x
+            .chunks(w)
+            .map(|c| 20.0 * goertzel(&hann(c), 1100.0).max(1e-9).log10())
+            .collect();
+        let (lo, hi) = lv
+            .iter()
+            .fold((f32::MAX, f32::MIN), |(a, b), &v| (a.min(v), b.max(v)));
+        let peaks = (1..lv.len() - 1)
+            .filter(|&i| lv[i] > lv[i - 1] && lv[i] >= lv[i + 1] && lv[i] > (lo + hi) / 2.0)
+            .count();
+        println!("C-R1 1100 Hz level {lo:.1}…{hi:.1} dB, {peaks} peaks: {lv:?}");
+        assert!(hi - lo >= 12.0, "swing {}", hi - lo);
+        assert_eq!(peaks, 2);
+    }
+
+    #[test]
+    fn d_r1_every_fm_and_string_preset_sounds() {
+        for p in FM_PRESETS {
+            assert!(
+                rms(&render(&format!("fm:{p}:440"), 1.5, 0.1)) > 0.001,
+                "fm {p}"
+            );
+        }
+        for p in KS_PRESETS {
+            assert!(
+                rms(&render(&format!("ks:{p}:440"), 1.5, 0.1)) > 0.001,
+                "ks {p}"
+            );
+        }
+    }
+
+    #[test]
+    fn trigger_fields_parse() {
+        assert_eq!(arg("440:unison=3", "unison"), Some(3.0));
+        assert_eq!(arg("440:unison=3", "detune"), None);
+        assert_eq!(arg("440:detune=nan", "detune"), None);
+        assert_eq!(arg_str(":color=pink:density=4", "color"), Some("pink"));
+        assert_eq!(positional("220:pw=0.3:0.25", 1), Some("0.25"));
+        assert_eq!(positional("bd:tune=-5", 0), Some("bd"));
+    }
+
+    #[test]
+    fn unison_layout_matches_worked_rows() {
+        let row = |n: usize| -> Vec<(f64, f64)> {
+            (0..n)
+                .map(|i| unison_layout(i, n, 20.0, 1.0))
+                .map(|(c, _, q)| (c, q))
+                .collect()
+        };
+        let close = |a: &[(f64, f64)], b: &[(f64, f64)]| {
+            a.iter()
+                .zip(b)
+                .all(|(x, y)| (x.0 - y.0).abs() < 0.01 && (x.1 - y.1).abs() < 0.01)
+        };
+        assert!(close(&row(2), &[(-10.0, -1.0), (10.0, 1.0)]));
+        assert!(close(&row(3), &[(-10.0, -1.0), (0.0, 0.0), (10.0, 1.0)]));
+        assert!(close(
+            &row(7),
+            &[
+                (-10.0, -1.0),
+                (-5.44, 0.6667),
+                (-1.92, -0.3333),
+                (0.0, 0.0),
+                (1.92, 0.3333),
+                (5.44, -0.6667),
+                (10.0, 1.0)
+            ]
+        ));
+    }
+
+    #[test]
+    fn new_voices_render() {
+        for v in [
+            "tri:440",
+            "sine:440",
+            "square:440:pw=0.3",
+            "saw:440:unison=7:spread=0.7",
+            "noise:color=pink",
+        ] {
+            assert!(rms(&render(v, 1.0, 0.2)) > 0.001, "{v}");
+        }
     }
 }

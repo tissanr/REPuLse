@@ -6,16 +6,26 @@
    easy to mistake for silence.
    Pure — sample-bank lookups are injected by the caller.
    Also detects continuous signals with no rhythm, which never sound.
+   Also detects unknown (synth …) voice names (Phase SYN6), which play a sine.
    Exports: builtin-drums, sound-keywords, suggest, unknown-sounds, warning-message,
+            synth-voice-names, unknown-voices, voice-warning-message,
             keyword-ranges, has-analog-events?, structure-warning-message"
   (:require [repulse.core :as core]
             [repulse.theory :as theory]
+            [repulse.voices :as voices]
             [repulse.lisp.eval :as leval]
             [clojure.string :as str]))
 
 (def builtin-drums
-  "Drum sounds synthesised by the audio engine without any sample bank."
-  #{:bd :sd :hh :oh})
+  "Drum sounds synthesised by the audio engine without any sample bank: the
+   SYN6 kit (repulse.voices/drum-voices)."
+  (set (map keyword voices/drum-voices)))
+
+(defn- synth-drum-kw?
+  "True for :synth_<drum> — a kit voice addressed inside any bank (SYN6)."
+  [kw]
+  (let [n (name kw)]
+    (and (str/starts-with? n "synth_") (voices/drum-name? (subs n 6)))))
 
 (def ^:private aliases
   "Common drum names from other tools, mapped to the REPuLse built-in."
@@ -76,8 +86,44 @@
   (->> patterns
        (mapcat #(try (sound-keywords %) (catch :default _ nil)))
        distinct
-       (remove #(or (contains? builtin-drums %) (known-bank? %)))
+       (remove #(or (contains? builtin-drums %) (synth-drum-kw? %) (known-bank? %)))
        (mapv (fn [kw] {:name kw :suggestion (suggest kw bank-names)}))))
+
+;;; Unknown synth voices (Phase SYN6, D2)
+
+(defn synth-voice-names
+  "Distinct (:synth value) keywords a pattern plays over the first n cycles."
+  ([pat] (synth-voice-names pat 4))
+  ([pat n]
+   (->> (range n)
+        (mapcat #(core/query pat (core/cycle-span %)))
+        (keep (fn [{:keys [value]}]
+                (when (and (map? value) (keyword? (:synth value)))
+                  (:synth value))))
+        distinct)))
+
+(defn unknown-voices
+  "Unknown (synth …) voices across patterns, each as {:name kw :suggestion kw-or-nil}.
+   known-voice? — (fn [kw]) true for a built-in voice or a defsynth name."
+  [patterns known-voice?]
+  (->> patterns
+       (mapcat #(try (synth-voice-names %) (catch :default _ nil)))
+       distinct
+       (remove known-voice?)
+       (mapv (fn [kw]
+               (let [n    (name kw)
+                     best (leval/typo-hint n (map name voices/synth-voices))]
+                 {:name       kw
+                  :suggestion (when (and best (< (leval/levenshtein n best) (count n)))
+                                (keyword best))})))))
+
+(defn voice-warning-message
+  "Human-readable warning for one unknown voice {:name :suggestion}."
+  [{:keys [name suggestion]}]
+  (str "unknown synth voice :" (cljs.core/name name)
+       (if suggestion
+         (str " — did you mean :" (cljs.core/name suggestion) "?")
+         " — plays a sine")))
 
 (defn warning-message
   "Human-readable warning for one {:name :suggestion} entry."

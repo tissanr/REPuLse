@@ -102,6 +102,25 @@ const CHAIN_CATEGORIES = [
     ],
   },
   {
+    title: "Synth voice",
+    items: [
+      withBuiltinDetail("unison", "(unison \u00a63)"),
+      withBuiltinDetail("detune", "(detune \u00a612)"),
+      withBuiltinDetail("spread", "(spread \u00a60.8)"),
+      withBuiltinDetail("sub-osc", "(sub-osc \u00a60.5)"),
+      withBuiltinDetail("pw", "(pw \u00a60.25)"),
+      withBuiltinDetail("pw-rate", "(pw-rate \u00a61)"),
+      withBuiltinDetail("pw-depth", "(pw-depth \u00a60.4)"),
+      withBuiltinDetail("sync", "(sync \u00a64.5)"),
+      withBuiltinDetail("tune", "(tune \u00a6-5)"),
+      withBuiltinDetail("tone", "(tone \u00a60.7)"),
+      withBuiltinDetail("glide", "(glide \u00a60.06)"),
+      withBuiltinDetail("accent", "(accent \u00a61)"),
+      withBuiltinDetail("lp-rate", "(lp-rate \u00a64)"),
+      withBuiltinDetail("lp-depth", "(lp-depth \u00a62)"),
+    ],
+  },
+  {
     title: "Sends",
     items: [
       withBuiltinDetail("room", "(room ¦0.4)"),

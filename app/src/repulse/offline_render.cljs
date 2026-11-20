@@ -8,7 +8,8 @@
             [repulse.fx :as fx]
             [repulse.bus :as bus]
             [repulse.core :as core]
-            [repulse.song :as song]))
+            [repulse.song :as song]
+            [repulse.voices :as voices]))
 
 ;; Silent pre-roll trimmed from the result, so parameter glides (filter
 ;; setTargetAtTime, cab ramps) settle before bar 0 (decision E4).
@@ -282,13 +283,13 @@
                        ;; fetched (samples/play! returns that promise): wait for
                        ;; all of them, so no sample is created after rendering starts.
                        pending  (into []
-                                      (keep (fn [{:keys [track event t]}]
+                                      (keep (fn [{:keys [track event t value]}]
                                               (let [t'    (+ pre-roll-secs t)
                                                     w     (:whole event)
                                                     dur   (* (core/rat->float (core/rat- (:end w) (:start w)))
                                                              cycle-dur)
                                                     value (audio/resolve-tweens
-                                                           (:value event) (get tween-st track)
+                                                           value (get tween-st track)
                                                            t' cycle-dur)
                                                     ret   (when (or (nil? stem) (= track stem))
                                                             (audio/play-event offline t' value track
@@ -296,7 +297,10 @@
                                                 (fx/notify-plugins! plugins value t')
                                                 (when (thenable? ret)
                                                   (.catch ret (fn [_] nil))))))
-                                      (job-events job))]
+                                      ;; SYN6 C4: glide like playback.
+                                      (voices/glide-all
+                                        (map #(assoc % :value (:value (:event %)))
+                                             (job-events job))))]
                    (-> (js/Promise.all (into-array pending))
                        (.then (fn [_] (audio/sync-worklet! node)))))))
               (.then (fn [_] (.startRendering offline)))
