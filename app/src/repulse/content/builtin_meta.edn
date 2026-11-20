@@ -1406,7 +1406,7 @@
  :nudge {:category "param"
         :returns "Pattern"
         :side-effects []
-        :examples ["(->> (fast 4 (seq :hh)) (nudge (seq 0 0.02)))"]
+        :examples ["(->> (fast 4 (seq :hh)) (nudge (seq 0 0.02 0 0.02)))"]
         :see-also ["late" "early"]}
 
  :delay-sync {:category "param"

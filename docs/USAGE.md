@@ -2489,7 +2489,7 @@ and its presets such as `:epiano`) and on samples. The synthesized drums (`:bd :
 
 ```lisp
 (->> (seq :c3 :e3) (synth :saw) (shape 0.8) (postgain 0.5))   ; drive hard, then tame
-(->> (fast 4 (seq :hh)) (nudge (seq 0 0.02)))                 ; push every second hat 20 ms late
+(->> (fast 4 (seq :hh)) (nudge (seq 0 0.02 0 0.02)))                 ; push every second hat 20 ms late
 ```
 
 `gain` changes the level going *into* the chain (it drives `shape` harder), `postgain`

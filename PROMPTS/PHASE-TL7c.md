@@ -33,7 +33,7 @@ reduction (`coarse`), a one-knob DJ filter (`djf`), an output gain after the cha
 (->> (seq :c3) (synth :saw) (penv 12) (p-decay 0.08))       ; pitch drop
 (->> (fast 8 (seq :hh)) (djf (slow 4 sine)))
 (->> (seq :sd :_ :sd :_) (delay 0.4) (delay-sync 3/16))
-(->> (fast 4 (seq :hh)) (nudge (seq 0 0.02)))               ; swing the off-beats
+(->> (fast 4 (seq :hh)) (nudge (seq 0 0.02 0 0.02)))               ; swing the off-beats
 ```
 
 ## Decisions

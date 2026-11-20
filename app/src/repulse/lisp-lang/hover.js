@@ -1112,7 +1112,7 @@ const DOCS = {
   "nudge": {
     signature: "(nudge secs pat) or (nudge secs)",
     description: "Shifts each event's onset by secs seconds (positive = later). The editor flash and MIDI out are not nudged.",
-    example: "(->> (fast 4 (seq :hh)) (nudge (seq 0 0.02)))",
+    example: "(->> (fast 4 (seq :hh)) (nudge (seq 0 0.02 0 0.02)))",
   },
   "delay-sync": {
     signature: "(delay-sync cycles pat) or (delay-sync cycles)",
