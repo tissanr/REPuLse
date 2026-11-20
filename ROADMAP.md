@@ -9,12 +9,14 @@
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
 
-- **Next for the unattended pipeline:** WS6 — the last open 🤖 phase. After it, every
-  remaining phase on the critical path needs a human (🤖👂 or 🧑).
+- **Next for the unattended pipeline:** QA1 → QA2 → QA3 → QA4 (quality track, added
+  2026-11-20 from a code review), then WS6. After them, every remaining phase on the
+  critical path needs a human (🤖👂 or 🧑).
 - **Next for a human session:** KIT1 (spec is an outline, expand first), SYN6 (Part C
   is unblocked by TL7c), FX1; N1 opens M3. TL7c's listen check runs in the next release
   test round.
-- **Side track open:** DOC1, TEST2, UI1, R3, PLUG1, O2, PL1.
+- **Side track open:** DOC1, TEST2, UI1, R3, PLUG1, O2, PL1; quality track QA5 (🧑),
+  QA6 (🤖👂), QA7 (🧑).
 
 The *Status* column in the [implementation order](#implementation-order) table shows
 every phase at a glance. Keep this box and that column current whenever a phase is
@@ -58,6 +60,14 @@ without a human:
 |---|---|---|---|---|---|---|
 | **Tooling** | | | **Test coverage (no milestone, runs first)** | | | |
 | 0 | TEST3 | ✅ | Release-protocol automation: UI workflows & measured sound | 🤖 | full | sonnet |
+| **Quality** | | | **Quality track (no milestone, from the 2026-11-20 review)** | | | |
+| 0a | QA1 | 📋 | Robust language & pattern engine | 🤖 | full | opus |
+| 0b | QA2 | 📋 | Hardened, allocation-free audio engine | 🤖 | full | opus |
+| 0c | QA3 | 📋 | App robustness & keyboard accessibility | 🤖 | full | opus |
+| 0d | QA4 | 📋 | One source for builtins, strict lint, shared helpers | 🤖 | full | sonnet |
+| 0e | QA5 | 📋 | Security & backend hardening | 🧑 | outline | opus |
+| 0f | QA6 | 📋 | Audio & MIDI timing quality | 🤖👂 | outline | opus |
+| 0g | QA7 | 📋 | CI, tooling & code structure | 🧑 | outline | sonnet |
 | **M1** | | | **Tidal-Lisp core** | | | |
 | 1 | TL1 | ✅ | Patterned arguments & pattern arithmetic | 🤖 | full | opus |
 | 2 | TL2 | ✅ | Continuous signals | 🤖 | full | sonnet |
@@ -106,6 +116,14 @@ green, the phase is escalated to Opus. Haiku isn't used for phases.
 **Outline** specs settle goal, scope, open questions and acceptance criteria. Expand an
 outline into a full spec (exact code paths, step-by-step implementation, files to change)
 before implementing it. Dependencies are listed at the top of each spec.
+
+**Quality track** (added 2026-11-20): a code review of all layers found ~100 issues,
+bundled into seven phases. QA1–QA4 are 🤖 and sit above M1 so the pipeline takes them
+next: a query error stalling all playback, NaN voices and allocation in the audio render
+callback, tempo changes breaking timing, and builtin lists drifting apart are the issues
+most likely to hurt a live set. QA5 (security, needs deployed previews and the live
+database), QA6 (needs ears and MIDI hardware) and QA7 (changes the pipeline's own CI gate)
+stay with a human.
 
 **Side track** (not on the critical path, can run any time): DOC1, TEST2, UI1, R3,
 PLUG1, O2, PL1 (🧑, development tooling; the auto-phase pipeline never picks it).
@@ -1444,6 +1462,132 @@ ears, hardware, login or the deployment, by automating deterministic UI and meas
 - Test-only hooks: `__REPULSE_APP__.playing()` (app.cljs) and `window.__REPULSE_EMBED_OUTPUT__` (embed.cljs)
 
 See full spec: [PROMPTS/PHASE-TEST3.md](PROMPTS/PHASE-TEST3.md)
+
+---
+
+## Phase QA1 — Robust Language & Pattern Engine 📋 *planned*
+
+> **Quality track** · **Automation:** 🤖 auto
+
+A bad pattern, a huge count or a malformed mini-notation string never stalls playback or
+hangs the tab; every such mistake becomes a clear eval error with a position.
+
+**Key additions:**
+- Per-track error isolation in `schedule-cycle!` plus an eval-time probe query of cycle 0;
+  count caps for `run`, `euclidean`, `ply`, `apply-n`, `echo`, mini `!`
+- Mini-notation: trailing tokens are errors, fractional `*`/`@`, no `parseFloat` prefixes
+- Evaluator/reader: `->`/`->>` on the shared call path, arity errors and `& rest`, no
+  leaked `recur` sentinel; theory names with fuzzy hints; rational `arrange`; tests for
+  untested core functions
+
+See full spec: [PROMPTS/PHASE-QA1.md](PROMPTS/PHASE-QA1.md)
+
+---
+
+## Phase QA2 — Hardened, Allocation-Free Audio Engine 📋 *planned*
+
+> **Quality track** · **Automation:** 🤖 auto
+
+The WASM engine survives any input value and allocates nothing in the render callback;
+valid input sounds sample-identical to before.
+
+**Key additions:**
+- `finite_or` sanitising of every incoming param; NaN/inf frequencies and times dropped;
+  FM release divide-by-zero fixed; non-finite voices killed
+- Voices built at trigger time, pre-reserved pending queue and voice pool, reused output
+  buffers; KS buffer sized from the sample rate
+- Hard caps (256 voices, 8192 pending); counting-allocator and golden-render tests
+
+See full spec: [PROMPTS/PHASE-QA2.md](PROMPTS/PHASE-QA2.md)
+
+---
+
+## Phase QA3 — App Robustness & Keyboard Accessibility 📋 *planned*
+
+> **Quality track** · **Automation:** 🤖 auto
+
+Tempo changes keep time, previews can't touch user data, and every control works from the
+keyboard.
+
+**Key additions:**
+- Tempo anchor in the scheduler (no silence/dropped cycles on BPM change); timeline shows
+  the audible bar; throttled autosave; no FX reset on failed evals; sample negative cache
+- Snippet preview sandbox as an allow-list derived from `builtin_meta.edn` `:side-effects`
+- Dialogs with focus trap, correct Enter/Escape and ARIA; global shortcuts stay out of
+  inputs; focusable rows and buttons, keyboard insert menu, `aria-live` output; snippet
+  panel keeps focus and ignores stale responses
+
+See full spec: [PROMPTS/PHASE-QA3.md](PROMPTS/PHASE-QA3.md)
+
+---
+
+## Phase QA4 — One Source for Builtins, Strict Lint, Shared Helpers 📋 *planned*
+
+> **Quality track** · **Automation:** 🤖 auto
+
+Adding a builtin means editing `builtin_meta.edn` and the implementation; completions,
+hover docs and grammar highlighting are generated and can't drift.
+
+**Key additions:**
+- `gen:ai-docs` also generates completion and hover data and the grammar's `BuiltinName`
+  region; a test checks env ↔ meta; CI drift check covers all generated files
+- clj-kondo at 0 warnings and failing CI on warnings; pinned installer
+- One shared implementation each for `xf`, number→float, Levenshtein, `shift-event`;
+  dead code removed; CLAUDE.md library rule amended for `clojure.string`/`cljs.spec`
+
+See full spec: [PROMPTS/PHASE-QA4.md](PROMPTS/PHASE-QA4.md)
+
+---
+
+## Phase QA5 — Security & Backend Hardening 📋 *planned*
+
+> **Quality track** · **Automation:** 🧑 human-in-loop
+
+CSP without a wildcard, AI proxies that can't be used as a free relay, community
+endpoints that can't be gamed, and a Supabase schema that passes the linter.
+
+**Key additions:**
+- `script-src` host list; origin gate without the foreign-project regex or production
+  localhost; proxy timeouts, size caps, real streaming, rate limits
+- Snippets API validation, correct trending/top-rated, star upsert, deduped `use`,
+  generic error bodies; `api/` unit tests in CI
+- `supabase/migrations/`, `search_path` on definer functions, private star rows,
+  constraints and indexes; pinned JDK in the Vercel build
+
+See full spec: [PROMPTS/PHASE-QA5.md](PROMPTS/PHASE-QA5.md)
+
+---
+
+## Phase QA6 — Audio & MIDI Timing Quality 📋 *planned*
+
+> **Quality track** · **Automation:** 🤖👂 auto + human check
+
+MIDI sync and CC mapping work together, clock out is sample-timed, and a full voice pool
+steals voices without clicks.
+
+**Key additions:**
+- One MIDI input dispatcher; `(midi-sync! false)` really stops following
+- MIDI clock out scheduled with timestamps instead of `setInterval`; clock-in from event
+  timestamps
+- Voice stealing with a short fade on top of QA2's cap; denormal flushing
+
+See full spec: [PROMPTS/PHASE-QA6.md](PROMPTS/PHASE-QA6.md)
+
+---
+
+## Phase QA7 — CI, Tooling & Code Structure 📋 *planned*
+
+> **Quality track** · **Automation:** 🧑 human-in-loop
+
+Faster, stricter CI on a current Node, and files small enough to review.
+
+**Key additions:**
+- Node 24 with `.nvmrc`/`engines`; composite setup action; prebuilt `wasm-pack`; no
+  duplicate `cargo test`; CI on pushes to `dev`; coverage summaries
+- Split `lib.rs`, `core.cljs`, `audio.cljs` and the assistant's Markdown renderer
+- Archive delivered phases out of `ROADMAP.md`; `AGENTS.md`/`GEMINI.md` point to CLAUDE.md
+
+See full spec: [PROMPTS/PHASE-QA7.md](PROMPTS/PHASE-QA7.md)
 
 ---
 
