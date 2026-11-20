@@ -1216,8 +1216,17 @@
       (swap! scheduler-state assoc :interval-id id))
     (tick!)))
 
+;; Phase WS5: {track-kw timeout-id} of tracks whose GainNode is ramping out
+;; before it is disconnected (retire-track!).
+(defonce ^:private retiring (atom {}))
+
+(defn- cancel-retire-timers! []
+  (doseq [[_ id] @retiring] (js/clearTimeout id))
+  (reset! retiring {}))
+
 (defn stop! []
   (cancel-capture!)
+  (cancel-retire-timers!)
   (when-let [node @worklet-node]
     (.. node -port (postMessage #js {:type "stop"})))
   ;; TL7b: every orbit back to its default size / delay-time / feedback
@@ -1251,6 +1260,73 @@
   (swap! scheduler-state update :tween-state assoc track-name
          (tween-state-for pattern (.-currentTime ac))))
 
+(def retire-ramp-start-secs
+  "Phase WS5: a retired track's gain ramp starts this far after the
+   evaluation, so the events about to play start into the ramp."
+  0.05)
+
+(def retire-ramp-secs
+  "Phase WS5: length of the click-free gain ramp to 0 of a retired track."
+  0.03)
+
+(defn- ramp-gain!
+  "Ramp GainNode g from its current value to `to` over [t0, t1]."
+  [^js g to t0 t1]
+  (let [p (.-gain g)]
+    (.cancelScheduledValues p 0)
+    (.setValueAtTime p (.-value p) t0)
+    (.linearRampToValueAtTime p to t1)))
+
+(defn- revive-retiring!
+  "A track re-declared while its retire ramp runs: cancel the pending
+   disconnect and ramp its gain back to 1."
+  [ac track-name]
+  (when-let [id (get @retiring track-name)]
+    (js/clearTimeout id)
+    (swap! retiring dissoc track-name)
+    (when-let [g (get-in @track-nodes [track-name :gain-node])]
+      (let [now (.-currentTime ac)]
+        (ramp-gain! g 1.0 now (+ now retire-ramp-secs))))))
+
+(defn retire-track!
+  "Phase WS5: remove a track the code no longer declares, click-free. It
+   leaves :tracks and :muted now (no new events are scheduled), its GainNode
+   ramps to 0 (retire-ramp-start-secs → + retire-ramp-secs), then the node is
+   disconnected and its FX destroyed. stop! runs when no track is left by
+   then. play-track! for the same name inside the ramp revives it."
+  [track-name]
+  (swap! scheduler-state (fn [s] (-> s
+                                     (update :tracks dissoc track-name)
+                                     (update :muted disj track-name)
+                                     (update :tween-state dissoc track-name))))
+  (let [ac @ctx
+        tn (get @track-nodes track-name)
+        finish! (fn []
+                  (when (and (empty? (:tracks @scheduler-state))
+                             (:playing? @scheduler-state))
+                    (stop!)))]
+    (if (and ac tn)
+      (let [g       (:gain-node tn)
+            now     (.-currentTime ac)
+            t0      (+ now retire-ramp-start-secs)
+            t1      (+ t0 retire-ramp-secs)
+            wait-ms (+ (* 1000 (+ retire-ramp-start-secs retire-ramp-secs)) 50)]
+        (ramp-gain! g 0.0 t0 t1)
+        (when-let [old (get @retiring track-name)] (js/clearTimeout old))
+        (swap! retiring assoc track-name
+               (js/setTimeout
+                (fn []
+                  (swap! retiring dissoc track-name)
+                  (try (.disconnect g) (catch :default _))
+                  (doseq [{:keys [plugin]} (:fx-chain tn)]
+                    (try (.destroy ^js plugin) (catch :default _)))
+                  ;; Only drop the entry when it still is this node.
+                  (when (identical? g (get-in @track-nodes [track-name :gain-node]))
+                    (swap! track-nodes dissoc track-name))
+                  (finish!))
+                wait-ms)))
+      (finish!))))
+
 (defn play-track!
   "Add or replace a named track. Creates a per-track GainNode if needed.
    Starts the scheduler if not already running."
@@ -1259,6 +1335,7 @@
     ;; ensure-track-node!, arm-transitions!, and the state swap do not require a
     ;; running context — they just create/connect nodes and update atoms.  Only
     ;; ensure-running! must wait for .resume() so the scheduler clock is live.
+    (revive-retiring! ac track-name)
     (ensure-track-node! ac track-name)
     (arm-transitions! track-name pattern ac)
     (swap! scheduler-state update :tracks assoc track-name pattern)
@@ -1273,17 +1350,14 @@
     (-> (.resume ac)
         (.then (fn [] (ensure-running! ac on-beat-fn on-event-fn))))))
 
-(defn mute-track! [track-name]
-  (swap! scheduler-state update :muted conj track-name))
-
-(defn unmute-track! [track-name]
-  (swap! scheduler-state update :muted disj track-name))
-
-(defn solo-track! [track-name]
-  (let [others (remove #{track-name} (keys (:tracks @scheduler-state)))]
-    (swap! scheduler-state assoc :muted (set others))))
+;; Phase WS5: mute-track! / unmute-track! / solo-track! are gone — the muted
+;; set is derived from the code's :mute / :solo flags on every reconciling
+;; evaluation (repulse.eval-orchestrator) and never edited directly.
 
 (defn clear-track! [track-name]
+  (when-let [id (get @retiring track-name)]
+    (js/clearTimeout id)
+    (swap! retiring dissoc track-name))
   ;; Disconnect and remove per-track node and its FX chain
   (when-let [tn (get @track-nodes track-name)]
     (try (.disconnect (:gain-node tn)) (catch :default _))

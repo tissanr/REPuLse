@@ -255,20 +255,24 @@ test('section, def and fx inspectors', async ({ page }) => {
 });
 
 test('M in the inspector mutes the track and marks the outline row', async ({ page }) => {
+  // Phase WS5: M/S write :mute / :solo into the code; the muted set follows.
   await load(page);
   await evalW(page);
   await row(page, 'track::bass').click();
   await page.locator('#inspector .ins-m[data-track="bass"]').click();
+  expect(await doc(page)).toContain('(track :bass (->> (seq :c2 :eb2) (synth :saw) (amp 0.6) (decay 0.25)) :mute)');
   expect(await page.evaluate(() => window.__REPULSE_APP__.muted())).toEqual(['bass']);
   await expect(row(page, 'track::bass')).toHaveClass(/ol-muted/);
   await expect(page.locator('#inspector .ins-status')).toHaveText('muted');
   await page.locator('#inspector .ins-m[data-track="bass"]').click();
+  expect(await doc(page)).toBe(W);
   expect(await page.evaluate(() => window.__REPULSE_APP__.muted())).toEqual([]);
   await page.locator('#inspector .ins-s[data-track="bass"]').click();
   expect(await page.evaluate(() => window.__REPULSE_APP__.muted())).toEqual(['drums']);
   await expect(page.locator('#inspector .ins-status')).toHaveText('solo');
   await page.locator('#inspector .ins-s[data-track="bass"]').click();
   expect(await page.evaluate(() => window.__REPULSE_APP__.muted())).toEqual([]);
+  expect(await doc(page)).toBe(W);
 });
 
 test('inspector width is clamped and persists across reloads', async ({ page }) => {

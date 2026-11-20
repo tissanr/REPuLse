@@ -123,6 +123,8 @@ you heard, including mutes.
    the command bar, tap button, `upd` and `evaluate-ref` callers do **not**: the command bar
    is for one-off commands and must not tear down the set. Implemented as an option:
    `(evaluate* code {:project p :reconcile? true})`; embed passes `{:reconcile? true}`.
+   *Amended (PR #190):* `upd` (Ctrl+. / F9) in a **single-buffer** project evaluates the whole
+   program and reconciles too; in a multi-buffer project it still does not.
 2. **The declared set.** A successful reconciling evaluation declares:
    - every track collected by `track` (`pending-tracks`), across all buffers of the project;
    - `:_` when the final value is a pattern or an event map;
@@ -382,8 +384,8 @@ one undo step, then calls `schedule-slider-eval!`. It returns false when the for
 
 ## What NOT to do
 
-- Don't reconcile on command-bar, tap, `upd` or snippet evaluations. Only whole-code
-  evaluations define the set.
+- Don't reconcile on command-bar, tap, snippet or multi-buffer `upd` evaluations. Only
+  whole-code evaluations (including `upd` in a single-buffer project) define the set.
 - Don't add a `#_` discard reader macro or comment-based muting. Commented-out code is
   *removed*, and that's what retiring handles. Muting keeps the track and its FX chain alive.
 - Don't add mute/solo for the anonymous `:_` track, per-section mutes, or mute automation

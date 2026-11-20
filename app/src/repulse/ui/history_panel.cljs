@@ -3,7 +3,7 @@
    Lists snapshots and evaluations, previews a read-only line diff against the
    current project, restores, copies share links, renames and deletes.
    Must not require repulse.eval-orchestrator or repulse.env.builtins
-   (builtins require this ns); the mute setter is injected via init!.
+   (builtins require this ns).
    Exports: init!, open!, close!, toggle!, render!, restore!, apply-state!, visible?"
   (:require [repulse.history :as history]
             [repulse.history-store :as hs]
@@ -27,21 +27,21 @@
 ;; ── applying a state (K10) ───────────────────────────────────────────────────
 
 (defn apply-state!
-  "Apply a restored project state: buffers, BPM, bank, sample sources, mutes.
+  "Apply a restored project state: buffers, BPM, bank, sample sources.
+   A legacy :muted list becomes :mute flags in the buffers (Phase WS5).
    Does not evaluate, stop playback or touch MIDI mappings."
   [state]
-  (buffers/replace-project! {:main    (:main state)
-                             :active  (:main state)
-                             :buffers (:buffers state)})
-  (audio/set-bpm! (audio/coerce-bpm (:bpm state)))
-  (samples/set-bank-prefix! (:bank state))
-  (let [loaded (set (map :id @samples/loaded-sources))]
-    (doseq [{:keys [type id]} (:sources state)]
-      (when (and id (= "github" (str type)) (not (contains? loaded id)))
-        (samples/load-external! (str "github:" id)))))
-  (when-let [f (:set-pending-mutes! @cbs)]
-    (f (set (map keyword (:muted state)))))
-  (session/schedule-save!))
+  (let [state (session/migrate-session-muted state)]
+    (buffers/replace-project! {:main    (:main state)
+                               :active  (:main state)
+                               :buffers (:buffers state)})
+    (audio/set-bpm! (audio/coerce-bpm (:bpm state)))
+    (samples/set-bank-prefix! (:bank state))
+    (let [loaded (set (map :id @samples/loaded-sources))]
+      (doseq [{:keys [type id]} (:sources state)]
+        (when (and id (= "github" (str type)) (not (contains? loaded id)))
+          (samples/load-external! (str "github:" id)))))
+    (session/schedule-save!)))
 
 (defn restore!
   "Restore a snapshot name or history id now (panel path)."
@@ -235,8 +235,8 @@
           ent  (do (reset! selected [:entry ent]) (render!))))
       (catch :default ex (err! ex)))))
 
-(defn init! [{:keys [set-output! set-pending-mutes!]}]
-  (reset! cbs {:set-output! set-output! :set-pending-mutes! set-pending-mutes!})
+(defn init! [{:keys [set-output!]}]
+  (reset! cbs {:set-output! set-output!})
   (when-let [p (el "history-panel")]
     (.addEventListener p "click" on-click))
   (add-watch hs/store ::render (fn [_ _ _ _] (when @visible? (render!))))

@@ -110,7 +110,11 @@
           (when-let [^js view @view-atom]
             (when-let [ov (.querySelector wrap ".embed-play-overlay")] (.remove ov))
             (reset! editor/editor-view view)
-            (eo/evaluate! (.. view -state -doc toString))))))))
+            (eo/evaluate-whole! (.. view -state -doc toString))))))))
+
+;; Phase WS5: Alt+Enter / play in the embed is a whole-code evaluation and
+;; reconciles the tracks; (upd) stays a one-off command.
+(defn- embed-upd! [] (eo/evaluate! "(upd)"))
 
 ;;; Attribute-driven connection logic
 
@@ -135,14 +139,14 @@
               (fn []
                 (if-let [s (snippets/by-id snippet-attr)]
                   (let [code     (:code s)
-                        view     (editor/make-editor wrap code eo/evaluate!)
+                        view     (editor/make-editor wrap code eo/evaluate-whole! embed-upd!)
                         view-atm (atom view)]
                     (reset! editor/editor-view view)
                     (add-transport-btn! wrap view-atm)
                     (when autoplay?
-                      (add-play-overlay! wrap view-atm #(eo/evaluate! code))))
+                      (add-play-overlay! wrap view-atm #(eo/evaluate-whole! code))))
                   ;; Snippet not found — mount empty editor
-                  (let [view (editor/make-editor wrap (or code-attr "") eo/evaluate!)]
+                  (let [view (editor/make-editor wrap (or code-attr "") eo/evaluate-whole! embed-upd!)]
                     (reset! editor/editor-view view)
                     (add-transport-btn! wrap (atom view)))))]
           (if @snippets/loaded?
@@ -153,12 +157,12 @@
                 (seed-from-library!))))))
       ;; ── Code-attribute mode ────────────────────────────────────────────────
       (let [code     (or code-attr "")
-            view     (editor/make-editor wrap code eo/evaluate!)
+            view     (editor/make-editor wrap code eo/evaluate-whole! embed-upd!)
             view-atm (atom view)]
         (reset! editor/editor-view view)
         (add-transport-btn! wrap view-atm)
         (when (and autoplay? (seq code))
-          (add-play-overlay! wrap view-atm #(eo/evaluate! code)))))))
+          (add-play-overlay! wrap view-atm #(eo/evaluate-whole! code)))))))
 
 ;;; Custom element class — use js* to emit a raw ES6 class expression
 ;; js/class is not a valid CLJS form; js* lets us splice connect! as a JS value.
