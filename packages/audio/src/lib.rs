@@ -1023,9 +1023,14 @@ fn drum_voice(
             let rmul = if name == "rd" { 1.23 } else { 1.0 };
             v.model = DrumModel::Metal;
             v.n_osc = oscs.len();
+            // Start phases from the hit's seed: like the free-running
+            // oscillators of an analog drum machine, each hit starts at other
+            // phases, so repeated hats (which have little or no noise) differ.
+            let mut ph_state = seed ^ 0x9E37_79B9;
             for (i, f) in oscs.iter().enumerate() {
                 v.freq[i] = f * rmul * mul;
-                v.phase[i] = frac(i as f64 * 0.618_034);
+                v.phase[i] =
+                    frac(i as f64 * 0.618_034 + 0.5 * (lcg_next(&mut ph_state) as f64 + 1.0));
             }
             v.noise_mix = nmix;
             v.f1 = Some(Biquad::bandpass(fq(bp), bq, sr));
@@ -1093,6 +1098,20 @@ fn drum_voice(
         _ => return None,
     }
     Some(v)
+}
+
+/// Noise seed of one kit hit: FNV-1a of the drum name mixed with the onset
+/// time (splitmix64 finaliser over its bits). Depends only on the event
+/// itself, never on other voices (see the comment in `activate`).
+fn drum_noise_seed(name: &str, time: f64) -> u32 {
+    let mut h = name.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+        (h ^ b as u64).wrapping_mul(0x0000_0100_0000_01b3)
+    });
+    h ^= time.to_bits();
+    h = (h ^ (h >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    h = (h ^ (h >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    h ^= h >> 31;
+    (h ^ (h >> 32)) as u32
 }
 
 /// Gain after the metal filter chain: the band-pass and the two high-passes
@@ -2451,12 +2470,12 @@ impl AudioEngine {
             Voice::Noise(NoiseVoice::new(rest, amp, p.decay, seed, sr))
         } else if let Some(rest) = value.strip_prefix("drum:") {
             let name = positional(rest, 0).unwrap_or("");
-            // A fixed noise seed per drum (not the engine's running seed): every
-            // hit of a voice is identical, so a track renders the same alone
-            // (stem export) as in the mix, whatever other voices started before.
-            let drum_seed = name.bytes().fold(0x811C_9DC5u32, |h, b| {
-                (h ^ b as u32).wrapping_mul(0x0100_0193)
-            });
+            // Noise seed from the drum name and the hit's onset time — not the
+            // engine's running seed, which depends on how many other voices
+            // started before. So every hit sounds slightly different (like the
+            // old running seed), yet a track renders bit-identically alone
+            // (stem export) and in the mix, and exports are reproducible.
+            let drum_seed = drum_noise_seed(name, p.time);
             match drum_voice(
                 name,
                 arg(rest, "tone"),
@@ -4431,6 +4450,50 @@ mod syn6_tests {
         let d = rms_db(win(&alone, 0.06, 0.07)) - rms_db(win(&choked, 0.06, 0.07));
         println!("B7 choke {d:.1} dB");
         assert!(d >= 40.0, "{d}");
+    }
+
+    /// One hit of `drum` at time t (alone, or after other voices at amp 0,
+    /// which consume the engine's running seed but add only silence).
+    fn drum_hit(drum: &str, t: f64, with_others: bool) -> Vec<f32> {
+        let mut e = AudioEngine::new_for_test(SR);
+        if with_others {
+            for (i, v) in [
+                "saw:110:unison=7",
+                "noise",
+                "drum:hh",
+                "fm:sax:220",
+                "drum:cp",
+                "sd",
+            ]
+            .iter()
+            .enumerate()
+            {
+                e.trigger_raw_v2(v, t * i as f64 / 7.0, 0.0, 0.001, 0.5, 0.0);
+            }
+        }
+        e.trigger_raw_v2(&format!("drum:{drum}"), t, 0.8, 0.001, 1.5, 0.0);
+        let start = (t * SR as f64) as usize;
+        let b = e.process_block_raw(start as u32 + 4410, 0.0);
+        b[start * 2..].to_vec()
+    }
+
+    #[test]
+    fn b9_drum_noise_varies_from_hit_to_hit() {
+        for d in ["sd", "hh", "cp", "sh"] {
+            let a = drum_hit(d, 0.25, false);
+            let b = drum_hit(d, 0.5, false);
+            assert!(rms(&a) > 0.001 && rms(&b) > 0.001, "{d} silent");
+            assert_ne!(a, b, "{d}: two hits at different times are identical");
+        }
+    }
+
+    #[test]
+    fn b10_drum_hit_ignores_other_voices() {
+        // Stems sum to the mix: a hit renders the same alone and after other
+        // voices have started (with the engine's running seed it would not).
+        for d in ["bd", "sd", "hh", "cp", "tb"] {
+            assert_eq!(drum_hit(d, 0.3, false), drum_hit(d, 0.3, true), "{d}");
+        }
     }
 
     #[test]
