@@ -3152,8 +3152,11 @@ mod tl7a_insert_tests {
     /// Fingerprint of a fixed trigger_v2 render. GOLDEN was recorded on the engine
     /// before Phase TL7a: the no-insert path must stay bit-identical. SYN6
     /// replaced the naive saw and square by band-limited oscillators (decision 3),
-    /// so they left the list; GOLDEN was re-recorded on the pre-SYN6 engine
-    /// without them.
+    /// so they left the list; the other voices keep their original onsets and
+    /// GOLDEN was re-recorded on the pre-SYN6 engine. Only voices without f32
+    /// libm calls fall inside the 0.116 s window (the hat's Biquad coefficients
+    /// differ in the last bit between glibc and Apple's libm); the legacy hats
+    /// are checked against a reference model in syn6_tests::a9_old_strings.
     fn v2_fingerprint(v3: bool) -> u64 {
         let mut e = AudioEngine::new_for_test(SR);
         let voices = [
@@ -3166,7 +3169,7 @@ mod tl7a_insert_tests {
             "noise",
         ];
         for (i, v) in voices.iter().enumerate() {
-            let t = i as f64 * 0.05;
+            let t = (i + 2) as f64 * 0.05;
             if v3 {
                 e.trigger_v3(v, t, &[0.8, 0.01, 0.3, 0.25]);
             } else {
@@ -3184,7 +3187,7 @@ mod tl7a_insert_tests {
         h
     }
 
-    const GOLDEN: u64 = 0x1340_a1d8_d082_f371;
+    const GOLDEN: u64 = 0xa621_466a_7a51_2714;
 
     #[test]
     fn trigger_v2_render_is_bit_identical_to_pre_tl7a() {
@@ -3193,6 +3196,7 @@ mod tl7a_insert_tests {
 
     #[test]
     fn trigger_v3_without_inserts_matches_v2() {
+        assert_eq!(v2_fingerprint(true), v2_fingerprint(false));
         assert_eq!(v2_fingerprint(true), GOLDEN);
     }
 
@@ -4163,19 +4167,47 @@ mod syn6_tests {
         h
     }
 
+    /// The pre-SYN6 hat voice, step for step: LCG noise → high-pass 8 kHz →
+    /// exponential decay, panned like the engine. Uses the same Biquad, so it
+    /// matches on every libm (the hats' f32 coefficients differ between glibc and
+    /// Apple's libm in the last bit, which a stored hash cannot cover).
+    fn legacy_hat(gain_scale: f32, dur: f32) -> Vec<f32> {
+        let (amp, pan) = (0.8f32, 0.3f32);
+        let mut state = 0xDEAD_BEEFu32
+            .wrapping_mul(1_664_525)
+            .wrapping_add(1_013_904_223);
+        let mut hpf = Biquad::highpass(8000.0, 0.7, SR);
+        let mut gain = gain_scale * amp;
+        let decay = decay_rate(dur, SR);
+        let angle = (pan + 1.0) / 2.0 * std::f32::consts::FRAC_PI_2;
+        let mut out = Vec::with_capacity(16384);
+        for _ in 0..8192 {
+            let s = hpf.tick(lcg_next(&mut state)) * gain;
+            gain *= decay;
+            out.push((0.0 + s * angle.cos()).clamp(-1.0, 1.0));
+            out.push((0.0 + s * angle.sin()).clamp(-1.0, 1.0));
+        }
+        out
+    }
+
     #[test]
     fn a9_old_strings() {
-        // Captured on the engine before SYN6.
+        // Captured on the engine before SYN6 (voices without f32 libm calls,
+        // identical on macOS and Linux).
         for (v, want) in [
             ("440", 0x4a9f_4c4c_7510_e149u64),
             ("261.63", 0x1a2c_24f2_458d_8862),
             ("bd", 0x7d36_a131_fdfd_80d4),
             ("sd", 0xcdbc_bd2f_ffcc_de33),
-            ("hh", 0xd8ab_16ba_2e85_ae42),
-            ("oh", 0x9089_cea2_24b5_a7b6),
             ("noise", 0x5f3d_afae_9c2c_194c),
         ] {
             assert_eq!(legacy_hash(v), want, "{v} changed");
+        }
+        for (v, gain, dur) in [("hh", 0.5, 0.045), ("oh", 0.4, 1.0)] {
+            let mut e = AudioEngine::new_for_test(SR);
+            e.trigger_raw_v2(v, 0.0, 0.8, 0.01, 0.5, 0.3);
+            let got = e.process_block_raw(8192, 0.0);
+            assert!(got == legacy_hat(gain, dur), "{v} changed");
         }
         for v in ["saw:440", "square:440:0.25"] {
             assert!(rms(&render(v, 1.0, 0.2)) > 0.001, "{v}");
