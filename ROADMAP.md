@@ -1,15 +1,15 @@
 # REPuLse — Roadmap
 
-## Where we stand (updated 2026-11-19)
+## Where we stand (updated 2026-11-20)
 
 | Milestone | Delivered | Still open |
 |---|---|---|
 | **M1** Tidal-Lisp core | 10 / 14 | TL7c, KIT1, SYN6, FX1 — all 🤖👂, need a human listen |
-| **M2** Full songs | 8 / 9 | WS5 |
+| **M2** Full songs | 9 / 10 | WS6 |
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
 
-- **Next for the unattended pipeline:** WS5 — the last open 🤖 phase. After it, every
+- **Next for the unattended pipeline:** WS6 — the last open 🤖 phase. After it, every
   remaining phase on the critical path needs a human (🤖👂 or 🧑).
 - **Next for a human session:** TL7c (spec is an outline, expand first), then KIT1,
   SYN6, FX1; N1 opens M3.
@@ -81,7 +81,8 @@ without a human:
 | 13b | WS2 | ✅ | `(master …)` form & master fx outline group | 🤖 | full | sonnet |
 | 13c | WS3 | ✅ | Inline sliders in code: `(slider v min max)` | 🤖 | full | opus |
 | 13d | WS4 | ✅ | AI assistant rail | 🤖 | outline | sonnet |
-| 13e | WS5 | 📋 | Code is the source of truth: track reconciliation, `:mute`/`:solo` in code | 🤖 | full | opus |
+| 13e | WS5 | ✅ | Code is the source of truth: track reconciliation, `:mute`/`:solo` in code | 🤖 | full | opus |
+| 13f | WS6 | 📋 | Runtime-aware outline: run state per track, running group | 🤖 | full | sonnet |
 | **M3** | | | **Plays with others** | | | |
 | 14 | N1 | 📋 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
 | 15 | LIVE1 | 📋 | Companion bridge: Ableton Link & OSC | 🧑 | outline | opus |
@@ -2628,6 +2629,26 @@ and mute/solo live in the code instead of hidden dashboard state.
   what the code says", "Mute and solo live in the code", README feature line.
 
 See full spec: [PROMPTS/PHASE-WS5.md](PROMPTS/PHASE-WS5.md)
+
+---
+
+## Phase WS6 — Runtime-Aware Outline: What You Hear Is What You See 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖 auto
+
+The outline shows the union of the code and the scheduler: every track row carries its run
+state, and audible tracks that the active buffer doesn't declare get their own rows. The code
+is never changed.
+
+**Key additions:**
+- Track rows outside a song show `•` playing, `■` muted or dimmed `ol-off` "not running", so
+  `(clear!)`, `(clear! :a)` and `(stop)` are visible instead of leaving the outline unchanged
+- A *running* group after the master group lists command-bar tracks (`not in code`), the
+  anonymous `:_` (`anonymous`) and tracks of other project buffers (buffer name, click jumps there)
+- New pure `repulse.ui.outline-model` (`track-state`, `running-rows`) with unit tests;
+  `outline-panel` render + `goto/goto-entry-in-buffer!`; no new built-ins
+
+See full spec: [PROMPTS/PHASE-WS6.md](PROMPTS/PHASE-WS6.md)
 
 ---
 
