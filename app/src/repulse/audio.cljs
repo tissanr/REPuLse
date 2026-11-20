@@ -413,13 +413,15 @@
                    (do (.setValueAtTime (.-frequency o) from t)
                        (.exponentialRampToValueAtTime (.-frequency o) f (+ t (min 5 gl))))
                    (.setValueAtTime (.-frequency o) f t)))
-        start! (fn [^js o node]
+        ;; Native oscillators all start at phase 0; the unison start phases of
+        ;; the layout become a start offset of phase/hz (≤ one period).
+        start! (fn [^js o node phase]
                  (.connect o node)
                  (on-osc o)
-                 (.start o t)
+                 (.start o (+ t (/ phase hz)))
                  (.stop o stop-t)
                  o)
-        oscs   (mapv (fn [{:keys [cents pan]}]
+        oscs   (mapv (fn [{:keys [cents pan phase]}]
                        (let [o  (.createOscillator ac)
                              g  (.createGain ac)
                              sp (.createStereoPanner ac)]
@@ -436,7 +438,7 @@
                          (.setValueAtTime (.-pan sp) pan t)
                          (.connect g sp)
                          (.connect sp gain)
-                         (start! o g)))
+                         (start! o g (if (> n 1) phase 0))))
                      layout)]
     (when-let [sub (:sub-osc value)]
       (when (pos? sub)
@@ -451,7 +453,7 @@
               (.exponentialRampToValueAtTime (.-frequency o) (/ hz 2) (+ t (min 5 gl)))))
           (.setValueAtTime (.-gain g) (* (min 1 sub) c) t)
           (.connect g gain)
-          (start! o g))))
+          (start! o g 0))))
     (.setValueAtTime (.-gain gain) 0.0001 t)
     (.linearRampToValueAtTime (.-gain gain) peak (+ t atk))
     (.exponentialRampToValueAtTime (.-gain gain) 0.0001 stop-t)

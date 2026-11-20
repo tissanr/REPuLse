@@ -2,10 +2,13 @@ import { expect, type Page, test } from '@playwright/test';
 import {
   assertFinitePcm,
   countOnsets,
+  estimatePitch,
+  goertzel,
   mixMono,
   rms,
   rmsStereo,
   tailRms,
+  toDb,
 } from './helpers/audio-analysis';
 
 type RenderResult = {
@@ -297,4 +300,104 @@ test('defsynth: a note scheduled 1 s ahead still sounds', async ({ page }) => {
     return max;
   });
   expect(peak).toBeGreaterThan(0.05);
+});
+
+// ── Phase SYN6 (JS fallback: native oscillators and the kit fallback table) ──
+
+const seg1 = (x: number[], rate: number, from: number, to: number) =>
+  x.slice(Math.round(from * rate), Math.round(to * rate));
+
+function correlation(l: number[], r: number[]): number {
+  let lr = 0;
+  let ll = 0;
+  let rr = 0;
+  for (let i = 0; i < l.length; i += 1) {
+    lr += l[i] * r[i];
+    ll += l[i] * l[i];
+    rr += r[i] * r[i];
+  }
+  return lr / Math.sqrt(ll * rr);
+}
+
+test('SYN6 triangle voice: four onsets, 3rd harmonic 15–23 dB down', async ({ page }) => {
+  const res = await render(page, '(->> (seq :c4 :c4 :c4 :c4) (synth :tri) (decay 0.3))');
+  const x = mixMono(res.left, res.right);
+  expect(countOnsets(x, res.sampleRate, { minGapSeconds: 0.45 })).toBe(4);
+  const w = seg1(x, res.sampleRate, 0.05, 0.45);
+  const d = toDb(goertzel(w, res.sampleRate, 261.63) / goertzel(w, res.sampleRate, 784.88));
+  console.log('tri 3rd harmonic dB below', d);
+  expect(d).toBeGreaterThanOrEqual(15);
+  expect(d).toBeLessThanOrEqual(23);
+});
+
+test('SYN6 supersaw is wide; spread 0 is mono', async ({ page }) => {
+  const wide = await render(page, '(->> (seq :a3) (synth :supersaw))');
+  const cw = correlation(seg1(wide.left, wide.sampleRate, 0.05, 1), seg1(wide.right, wide.sampleRate, 0.05, 1));
+  const mono = await render(page, '(->> (seq :a3) (synth :supersaw) (spread 0))');
+  const cm = correlation(seg1(mono.left, mono.sampleRate, 0.05, 1), seg1(mono.right, mono.sampleRate, 0.05, 1));
+  console.log('supersaw L/R correlation', cw, cm);
+  expect(cw).toBeLessThan(0.95);
+  expect(cm).toBeGreaterThan(0.999);
+});
+
+test('SYN6 (synth :noise pat) plays noise on notes, nothing on rests', async ({ page }) => {
+  const res = await render(page, '(->> (seq :c4 :_ :c4 :_) (synth :noise))');
+  const x = mixMono(res.left, res.right);
+  expect(countOnsets(x, res.sampleRate, { minGapSeconds: 0.45 })).toBe(2);
+  const w = seg1(x, res.sampleRate, 0, 0.1);
+  let diff = 0;
+  let pow = 0;
+  for (let i = 1; i < w.length; i += 1) {
+    diff += (w[i] - w[i - 1]) ** 2;
+    pow += w[i] ** 2;
+  }
+  console.log('noise diff ratio', diff / pow);
+  expect(diff / pow).toBeGreaterThan(1);
+});
+
+test('SYN6 kit voices without samples: four non-silent onsets', async ({ page }) => {
+  const res = await render(page, '(seq :bd :cp :lt :hh)');
+  const x = mixMono(res.left, res.right);
+  // Steps are 0.5 s apart; the toms ring 0.55 s.
+  expect(countOnsets(x, res.sampleRate, { minGapSeconds: 0.45 })).toBe(4);
+  expect(rms(x)).toBeGreaterThan(NON_SILENT_RMS);
+});
+
+test('SYN6 (bank :synth) and :synth_bd skip the bd sample', async ({ page }) => {
+  await page.evaluate(() =>
+    (window.__REPULSE_TEST__ as unknown as { registerTestSample(b: string, k: string): string })
+      .registerTestSample('bd', 'tone'));
+  const analyse = async (code: string) => {
+    const res = await render(page, code);
+    const w = seg1(mixMono(res.left, res.right), res.sampleRate, 0, 0.4);
+    const lowPeak = Math.max(...[40, 50, 60, 80, 100, 150].map((f) => goertzel(w, res.sampleRate, f)));
+    return { low: lowPeak, a440: goertzel(w, res.sampleRate, 440) };
+  };
+  const sample = await analyse('(seq :bd)');
+  console.log('bd sample', sample);
+  expect(sample.a440).toBeGreaterThan(sample.low);
+  await page.evaluate(() =>
+    (window.__REPULSE_TEST__ as unknown as { setBankPrefix(p: string | null): boolean }).setBankPrefix('synth'));
+  const kit = await analyse('(seq :bd)');
+  await page.evaluate(() =>
+    (window.__REPULSE_TEST__ as unknown as { setBankPrefix(p: string | null): boolean }).setBankPrefix(null));
+  const direct = await analyse('(seq :synth_bd)');
+  console.log('bd under (bank :synth)', kit, ':synth_bd', direct);
+  for (const r of [kit, direct]) {
+    expect(r.low).toBeGreaterThan(r.a440);
+    expect(toDb(sample.a440 / r.a440)).toBeGreaterThanOrEqual(20);
+  }
+});
+
+test('SYN6 glide slides from the previous note', async ({ page }) => {
+  const pitchAt = async (code: string, from: number, to: number) => {
+    const res = await render(page, code);
+    return estimatePitch(seg1(mixMono(res.left, res.right), res.sampleRate, from, to), res.sampleRate, 100, 400);
+  };
+  const gl = await pitchAt('(->> (seq :c3 :c4) (synth :saw) (decay 0.3) (glide 0.1))', 1.04, 1.06);
+  const none = await pitchAt('(->> (seq :c3 :c4) (synth :saw) (decay 0.3) (glide 0))', 1.04, 1.1);
+  console.log('glide pitch 50 ms after onset', gl, 'without glide', none);
+  expect(gl).toBeGreaterThan(131);
+  expect(gl).toBeLessThan(262);
+  expect(Math.abs(none / 261.63 - 1)).toBeLessThanOrEqual(0.01);
 });

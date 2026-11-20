@@ -160,6 +160,7 @@
 (defn- reset-test-state! []
   (when (:interval-id @audio/scheduler-state)
     (audio/stop!))
+  (samples/set-bank-prefix! nil)
   (bus/cleanup-all!)
   (song-transport/reset-pending!)
   (cljs.core/reset! song-transport/song-buffer nil)
@@ -286,5 +287,7 @@
              :songEvents song-events
              :audioReady audio-ready
              :captureSong capture-song
-             :registerTestSample register-test-sample!})
+             :registerTestSample register-test-sample!
+             ;; SYN6: (bank …) is an app built-in, not in the harness env.
+             :setBankPrefix (fn [p] (samples/set-bank-prefix! p) true)})
   (set! (.-__REPULSE_TEST_READY__ js/window) true))

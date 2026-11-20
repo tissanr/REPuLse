@@ -4,16 +4,16 @@
 
 | Milestone | Delivered | Still open |
 |---|---|---|
-| **M1** Tidal-Lisp core | 11 / 14 | KIT1, SYN6, FX1 — all 🤖👂, need a human listen |
+| **M1** Tidal-Lisp core | 11 / 14 | KIT1, SYN6 (implemented, listen check open), FX1 — all 🤖👂 |
 | **M2** Full songs | 9 / 10 | WS6 |
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
 
 - **Next for the unattended pipeline:** WS6 — the last open 🤖 phase. After it, every
   remaining phase on the critical path needs a human (🤖👂 or 🧑).
-- **Next for a human session:** KIT1 (spec is an outline, expand first), SYN6 (Part C
-  is unblocked by TL7c), FX1; N1 opens M3. TL7c's listen check runs in the next release
-  test round.
+- **Next for a human session:** the SYN6 listen check (all four parts implemented, PR on
+  `dev`), then FX1 (three owner questions open) and KIT1 (spec is an outline, expand
+  first); N1 opens M3. TL7c's listen check runs in the next release test round.
 - **Side track open:** DOC1, TEST2, UI1, R3, PLUG1, O2, PL1.
 
 The *Status* column in the [implementation order](#implementation-order) table shows
@@ -1166,10 +1166,30 @@ See full spec: [PROMPTS/PHASE-SYN5.md](PROMPTS/PHASE-SYN5.md)
 Everything a song needs from the built-in synthesizer, in one phase.
 
 **Key additions:**
-- Oscillator core: band-limited (PolyBLEP) saw, pulse and triangle in the WASM engine (the current ones alias on high notes, and a filter cannot remove that); voices `:tri` `:sine` `:pulse` `:supersaw`; `unison`, `detune`, `spread`, `sub`, PWM, hard sync; `(synth :noise :color :pink|:brown|:dust|:lfsr)`
+- Oscillator core: band-limited (PolyBLEP) saw, pulse and triangle in the WASM engine (the current ones alias on high notes, and a filter cannot remove that); voices `:tri` `:sine` `:pulse` `:supersaw`; `unison`, `detune`, `spread`, `sub-osc`, PWM, hard sync; `(synth :noise :color :pink|:brown|:dust|:lfsr)`
 - Synth drum kit as its own bank: `(bank :synth)` selects it even when sample banks are loaded; voices `:bd :sd :hh :oh :cp :rim :lt :mt :ht :cb :cl :cr :rd :sh :tb :cg`, tunable with `tune`, `tone`, `decay`; hat choke
 - Synth instruments (after TL7a and TL7c): `:acid` `:reese` `:sub-bass` `:fm-bass` `:wobble` `:lead` `:sync-lead` `:pluck` `:theremin` `:reed` `:pad` `:strings` `:sweep-pad` `:brass-pad`; `(glide secs pat)`; explicit parameters override preset values
 - Housekeeping: warning for unknown `(synth :name)` voices (today they play a plain sine without a message), `:trumpet-cup` (documented, not implemented), one shared voice list
+
+**Implemented (2026-11-20) — not delivered until the listen check (🤖👂) has passed:**
+- Rust: PolyBLEP saw/pulse and PolyBLAMP triangle in one `Voice::Osc` (replaces `Saw` /
+  `Square`) with up to 7 unison oscillators (fixed start phases, stereo via `tick2` and a
+  second insert chain), `sub-osc`, PWM, hard sync and glide; noise colours white, pink,
+  brown, dust, LFSR; `Voice::Drum` with 18 voices on four models and the hat choke;
+  `:trumpet-cup`; cutoff LFO in trigger_v3 slots 41–43. Named trigger-string fields
+  (`"saw:440:unison=3"`). Measured: aliasing below the fundamental 57–60 dB lower than the
+  naive saw/pulse; supersaw benchmark 72× real time (16 voices × 7). Bare `"440"` and the
+  legacy `bd sd hh oh` stay bit-identical.
+- `repulse.voices`: one voice list (drift-guarded against `lib.rs`, completions and
+  builtin_meta), trigger strings, `drum-route`, `unison-layout`, `expand-preset`,
+  `assign-glide`, the JS kit fallback. `play-event` dispatches through it;
+  `(synth :noise pat)` now plays noise; `(bank :synth)` / `:synth_bd` select the kit.
+- 14 parameter functions (`unison detune spread sub-osc pw pw-rate pw-depth sync tune tone
+  glide accent lp-rate lp-depth`), 14 instruments (`:acid` … `:brass-pad`) as parameter
+  presets that explicit parameters override, glide state per track in the scheduler,
+  export and harness. Unknown voices warn: `unknown synth voice :trii — did you mean :tri?`.
+- Tests: 26 Rust tests (A1–A12, B1–B8, C-R1/2, D-R1), `voices_test`, params and
+  sound-check tests, 6 TEST1 and 5 WASM-export Playwright tests.
 
 See full spec: [PROMPTS/PHASE-SYN6.md](PROMPTS/PHASE-SYN6.md)
 

@@ -43,6 +43,10 @@ and **when** — not **how** synthesis works internally.
 
 - **Sounds:** sample keywords (`:bd`, `:sd`), note keywords (`:c4`), frequencies (`440`), or
   synth voices (`(synth :saw)`, `(synth :fm :index 4)`, `(synth :guitar)`)
+- **Synthesizer without samples:** band-limited oscillators with unison
+  (`(->> (chord :minor :a3) (synth :supersaw))`), instruments like `:acid`, `:reese`, `:pad`,
+  `:strings` with `glide` and `accent`, and an 18-voice synth drum kit: `(bank :synth)`,
+  then `(seq :bd :cp :bd [:cp :rim])`, shaped with `tune`, `tone`, `decay`
 - **Rhythm and structure:** `seq`, `stack`, `fast`, `slow`, `every`, `euclidean`, `struct`,
   `ply`, `chunk`, and Tidal-style mini-notation: `(~ "bd [sd hh] bd sd")`
 - **Patterns everywhere:** arguments can themselves be patterns (`(fast "<1 2 4>" pat)`),

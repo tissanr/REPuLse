@@ -1570,8 +1570,11 @@ per-track `(fx …)` chains and the global / `(master …)` chain all sound exac
   `(->> (seq :c4) (synth :epiano) (fx :reverb 0.4))` the e-piano is a plain tone through the
   reverb. To keep the FM e-piano and still add reverb, put the effect on the master:
   `(master (fx :reverb 0.4))`. Built-in drums and `(synth :saw)` / `:square` also use their JS
-  voices on an FX track (samples are unaffected). Routing WASM voices through per-track FX is
-  planned for a later phase.
+  voices on an FX track (samples are unaffected). On such a track the SYN6 features that
+  only exist in WASM are missing: hard `sync`, `pw-rate` / `pw-depth` movement, the hi-hat
+  choke and the drum models (the kit uses simplified voices); unison, `spread`, `sub-osc`,
+  `glide` and the cutoff LFO work. Routing WASM voices through per-track FX is planned for a
+  later phase.
 - One export at a time: `Error: an export is already running — (stop) cancels it`.
   `:realtime` only applies to the song: `(export 4 :realtime)` →
   `Error: :realtime only applies to (export :song)`. `(export 0)` →
@@ -1928,6 +1931,10 @@ Set a global prefix so bare keywords resolve to a named drum machine bank:
 (bank :RolandTR808)
 (seq :bd :sd :cp)
 
+; The synthesized kit (see "Synth drum kit"):
+(bank :synth)
+(seq :bd :cp :bd [:cp :rim])
+
 ; Clear — bare keywords use the default lookup:
 (bank nil)
 ```
@@ -1940,17 +1947,60 @@ The prefix is a session setting, like `bpm`: it persists across evaluations and 
 reloads until you change it or call `(bank nil)`. Removing a `(bank …)` line from the
 buffer does not clear it.
 
-### Built-in synthesis fallback
+### Synth drum kit
 
-These keywords always work even if samples haven't loaded yet — they are synthesized
-by the Rust/WASM engine (or the JS fallback if WASM is unavailable):
+REPuLse has a full synthesized drum kit, so a song needs no samples. Eighteen voices,
+named like the Tidal drum-machine samples so one pattern can switch between a sampled
+and the synthesized kit:
 
-| Keyword | Synthesis |
-|---|---|
-| `:bd` | Sine sweep kick (150 → 40 Hz) |
-| `:sd` | Bandpass-filtered noise + sine crack |
-| `:hh` | Highpass-filtered noise, 45 ms (closed) |
-| `:oh` | Highpass-filtered noise, 350 ms (open) |
+| Name | Voice | Name | Voice |
+|---|---|---|---|
+| `:bd` | kick | `:cb` | cowbell |
+| `:sd` | snare | `:cr` | crash |
+| `:hh` | closed hi-hat | `:rd` | ride |
+| `:oh` | open hi-hat | `:sh` | shaker |
+| `:cp` | clap | `:tb` | tambourine |
+| `:rim` | rimshot | `:cl` | claves |
+| `:lt` `:mt` `:ht` | low / mid / high tom | `:cg` | conga |
+| `:zap` | laser zap | `:click` | click |
+
+**Selecting the kit:**
+
+```lisp
+(bank :synth)                     ; bare drum names use the synthesized kit
+(seq :bd :cp :bd [:cp :rim])
+
+(bank :RolandTR808)               ; a sampled kit …
+(seq :bd :synth_cp)               ; … with one synthesized clap
+```
+
+- `(bank :synth)` makes the 18 names skip the sample lookup, even when a sample bank
+  of that name has loaded. `(bank nil)` clears it like any other bank.
+- `:synth_bd`, `:synth_cp`, … play one synthesized voice whatever bank is active.
+- Without `(bank :synth)`, samples win when they have loaded. Before they have,
+  `:bd :sd :hh :oh` play the four original engine voices (a sine-sweep kick, noise
+  snare and hats — unchanged, so older sessions sound the same), and the other 14 names
+  play the synthesized kit. `(sound :bd 2)` always plays a sample.
+
+**Shaping the drums** — `tune`, `tone` and `decay` act on the synthesized kit (samples
+and the four original voices ignore them). Each takes a number, a pattern or a signal:
+
+| Function | Range | Meaning |
+|---|---|---|
+| `tune` | −48…48 semitones | pitch of the drum |
+| `tone` | 0–1 | brightness: kick sweep and click, snare body ↔ noise, hat and cymbal high-pass, clap band, tambourine jingle; absent = the voice's default |
+| `decay` | seconds | length to silence (replaces the voice's own) |
+
+```lisp
+(bank :synth)
+(->> (seq :bd :bd :bd :bd) (tune (seq 0 0 -5 0)) (decay 0.8))
+(->> (fast 4 (seq :hh :hh :oh :hh)) (tone (range 0.2 0.9 sine)))
+(->> (seq :lt :mt :ht :lt) (tune 3))
+```
+
+**Hi-hat choke:** a closed or open hi-hat cuts a ringing open hat within about 15 ms,
+also across tracks. On a track with its own `(fx …)` the kit plays simplified JS
+voices (no choke, `tone` ignored).
 
 ### Loading external samples
 
@@ -2110,9 +2160,10 @@ putting the pattern last:
 ```
 
 > **Note:** `decay`, `attack`, and `release` only affect **synthesised** sounds (note
-> keywords like `:c4`, `saw`, `square`, `sine`, `noise`). They are silently ignored for
-> **sample-based** sounds (drum keywords like `:bd`, `:sd`, `:hh`, or any `(bank …)`
-> pattern). To shorten a sample, use the `:end` key via `(->> pat (params {:end 0.5}))`
+> keywords like `:c4`, `saw`, `square`, `sine`, `noise`; `decay` also the
+> [synth drum kit](#synth-drum-kit)). They are silently ignored for
+> **sample-based** sounds (drum keywords like `:bd`, `:sd`, `:hh` when samples play, or
+> any sampled `(bank …)` pattern). To shorten a sample, use the `:end` key via `(->> pat (params {:end 0.5}))`
 > instead.
 
 ### `release` — release time in seconds
@@ -2147,8 +2198,8 @@ one word:
      (synth :fm :index 4 :ratio 2)
      (amp 0.5) (attack 0.05) (decay 1.2))
 
-(->> (seq :_ :_ :_ :_)           ; timing/rest pattern drives noise hits
-     (synth :noise)
+(->> (seq :c4 :_ :c4 :c4)        ; every note is a noise burst, rests stay silent
+     (synth :noise :color :pink)
      (amp 0.5) (decay 0.08))
 ```
 
@@ -2156,10 +2207,14 @@ Available voices:
 
 | Voice                | Keyword      | Options                                                                           |
 |----------------------|--------------|-----------------------------------------------------------------------------------|
-| Sawtooth             | `:saw`       | —                                                                                 |
-| Pulse/square         | `:square`    | `:pw` 0.0–1.0 — duty cycle (default `0.5` = square wave)                        |
+| Sawtooth             | `:saw`       | Band-limited (no aliasing on high notes); [unison and oscillator parameters](#unison-and-oscillator-parameters) |
+| Pulse/square         | `:square`    | `:pw` 0.01–0.99 — duty cycle (default `0.5` = square wave); `pw-rate` / `pw-depth` move it |
+| Pulse (alias)        | `:pulse`     | Same voice as `:square`                                                           |
+| Triangle             | `:tri`       | Band-limited triangle — soft, flute-like                                          |
+| Sine                 | `:sine`      | Pure sine; takes the oscillator parameters (unison, sub-osc, glide)               |
+| Supersaw             | `:supersaw`  | `:saw` with `unison 7`, `detune 20`, `spread 0.7` — each overridable             |
 | FM synthesis         | `:fm`        | `:index` modulation depth (default `1.0`), `:ratio` mod/carrier ratio (default `2.0`) |
-| White noise          | `:noise`     | —                                                                                 |
+| Noise                | `:noise`     | `:color` `:white` (default) `:pink` `:brown` `:dust` `:lfsr`; `:density` dust impulses per second (1–2000, default 20). Every note plays noise; `:lfsr` takes its clock from the note's pitch |
 | Steel-string guitar  | `:western`   | Karplus-Strong; hard pick attack, dreadnought body resonances                     |
 | Classical guitar     | `:nylon`     | Soft fingertip attack, darker timbre, treble rolloff above 3.5 kHz                |
 | Guitar (alias)       | `:guitar`    | Alias for `:western`                                                              |
@@ -2181,6 +2236,9 @@ tuning needed — just name the instrument:
 | Muted trumpet        | `:trumpet-muted` | Inharmonic ratio (√2), high index — lo-fi nasal grit                             |
 | Cup-muted trumpet    | `:trumpet-cup`   | Darker than open, brighter than harmon                                            |
 | Trombone             | `:trombone`      | Warm brass with slower 40ms attack                                                |
+| Synth brass          | `:synth-brass`   | Synthetic lo-fi brass, inharmonic ratio for grit                                  |
+| Harmon mute, stem out| `:harmon-out`    | Nasal peak around 1.1 kHz, heavy hi-cut                                           |
+| Harmon mute, stem in | `:harmon-in`     | More closed and buzzy than stem-out                                               |
 | Electric piano       | `:epiano`        | Rhodes-style; mod ratio 14×, metallic shimmer, fades naturally                   |
 | Bell                 | `:bell`          | Inharmonic ring (√2 ratio), 1.2s decay to silence                                |
 | Marimba              | `:marimba`       | Percussive; mod ratio 3.5×, 0.35s ring                                            |
@@ -2235,6 +2293,118 @@ The per-note forms `(fm :c4 :index 4)` and `(noise)` remain available when you n
 different voices on individual steps within the same `seq`. Pulse width of the square
 voice goes through `synth`: `(synth :square :pw 0.25 pat)`. (`saw` and `square` on their
 own are [signals](#signals--sine-saw-rand-perlin-segment-range); `(saw :c4)` is an error.)
+`(noise :color :pink)` takes the same options as `(synth :noise …)`.
+
+### Unison and oscillator parameters
+
+The oscillator voices (`:saw :square :pulse :tri :sine :supersaw`) take these per-event
+parameters. Like `amp`, each accepts a number, a pattern or a signal (sampled at the
+onset), and `(f v)` returns a transformer.
+
+| Function | Range | Default | Meaning |
+|---|---|---|---|
+| `unison` | 1–7 | 1 | number of oscillators; loudness stays about the same |
+| `detune` | 0–200 cents | 20 when `unison` > 1 | total width of the unison stack |
+| `spread` | 0–1 | 0 (supersaw 0.7) | stereo width of the stack; `0` = mono |
+| `sub-osc` | 0–1 | 0 | sine one octave below; `0.5` sits 6 dB under the note's fundamental |
+| `pw` | 0.01–0.99 | 0.5 | pulse width of `:square` / `:pulse` |
+| `pw-rate` | 0–20 Hz | 0 | pulse-width LFO rate |
+| `pw-depth` | 0–0.49 | 0 | pulse-width LFO depth |
+| `sync` | 1–16 | off | hard sync of `:saw` / `:pulse`: brighter formant, same pitch |
+| `glide` | 0–5 s | 0 | slide from the previous note of the track (see [Synth instruments](#synth-instruments)) |
+
+```lisp
+;; Wide supersaw chord
+(->> (chord :minor :a3) (synth :supersaw) (detune 18) (spread 0.8))
+
+;; Fat bass: three saws plus a sub-oscillator
+(->> (seq :a1 :a1 :c2 :e1) (synth :saw) (unison 3) (detune 12) (sub-osc 0.5))
+
+;; Pulse-width modulation, one sweep per second
+(->> (seq :c3) (synth :pulse) (pw 0.5) (pw-rate 1) (pw-depth 0.4) (decay 4))
+
+;; Hard sync: same pitch, each note brighter
+(->> (seq :c3 :c3 :c3 :c3) (synth :saw) (sync (seq 2 3 4.5 6)))
+```
+
+`sub-osc` is the sub-oscillator; `sub` stays the arithmetic function
+(`(sub 12 (seq :c4 :e4))`). Unison start phases are fixed, so every note of a unison bass
+has the same weight and offline renders are identical. `sync`, `pw-rate` and `pw-depth`
+need the WASM engine: on a track with its own `(fx …)` the voice plays its JS fallback
+with a static pulse width and no sync.
+
+### Synth instruments
+
+Named instruments built from the oscillator voices, the per-event filter and the
+envelopes. Each one is a set of ordinary parameters; any parameter you write yourself
+wins over the preset, e.g. `(->> (chord :major :f3) (synth :pad) (lpf 900))` uses 900 Hz.
+
+| Voice | Base | Character | Example |
+|---|---|---|---|
+| `:acid` | saw | squelchy resonant bass, fast filter envelope; reacts to `accent` | `(->> (seq :c2 :c2 :eb2 :g1) (synth :acid))` |
+| `:reese` | 2 saws, 30 cents | dark, beating bass | `(->> (seq :c2 :eb2 :g1 :bb1) (synth :reese))` |
+| `:sub-bass` | sine | clean sub with light saturation | `(->> (seq :c1 :_ :g1 :_) (synth :sub-bass))` |
+| `:fm-bass` | FM | plucky FM bass | `(->> (seq :c2 :c2 :eb2 :f2) (synth :fm-bass))` |
+| `:wobble` | 2 saws | cutoff LFO, 4 wobbles per cycle | `(->> (seq :a1) (synth :wobble) (decay 2))` |
+| `:lead` | saw | bright lead with vibrato | `(->> (seq :c4 :eb4 :g4 :bb4) (synth :lead))` |
+| `:sync-lead` | saw, sync 4.5 | hard-synced, bright and torn | `(->> (seq :c4 :g4) (synth :sync-lead))` |
+| `:pluck` | saw | short pluck, snappy filter envelope | `(->> (scale :minor :c4 (seq 0 2 4 7)) (synth :pluck))` |
+| `:theremin` | sine | portamento and wide vibrato | `(->> (seq :c4 :g4 :e4 :c5) (synth :theremin))` |
+| `:reed` | 2 pulses | nasal, band-passed | `(->> (seq :c4 :d4 :e4) (synth :reed))` |
+| `:pad` | 3 saws | slow attack, soft low-pass | `(->> (chord :major :f3) (synth :pad))` |
+| `:strings` | 5 saws | slow attack, string ensemble | `(->> (chord :minor7 :d3) (synth :strings))` |
+| `:sweep-pad` | 7 saws | slow filter sweep | `(->> (chord :minor :a2) (synth :sweep-pad))` |
+| `:brass-pad` | 3 saws | short filter swell, brassy | `(->> (chord :major :bb2) (synth :brass-pad))` |
+
+The preset values:
+
+| Voice | Oscillator | Filter | Filter envelope / LFO | Amp | Other |
+|---|---|---|---|---|---|
+| `:acid` | — | `lpf 400` `resonance 12` | `lp-env 3.5` `lp-attack 0.003` `lp-decay 0.18` | `attack 0.003` `decay 0.35` | — |
+| `:reese` | `unison 2` `detune 30` `spread 0.3` | `lpf 500` `resonance 1.5` | — | `attack 0.01` `decay 2.5` | — |
+| `:sub-bass` | — | — | — | `attack 0.005` `decay 0.8` | `shape 0.3` |
+| `:fm-bass` | `:index 3` `:ratio 1` | `lpf 300` `resonance 1` | `lp-env 3` `lp-attack 0.002` `lp-decay 0.12` | `attack 0.002` `decay 0.5` | — |
+| `:wobble` | `unison 2` `detune 15` | `lpf 400` `resonance 6` | `lp-rate 4` `lp-depth 2` | `attack 0.01` `decay 2.0` | — |
+| `:lead` | — | `lpf 2800` `resonance 2` | — | `attack 0.01` `decay 0.8` | `vib 5.5` `vib-mod 0.15` |
+| `:sync-lead` | `sync 4.5` | `lpf 6000` `resonance 1` | — | `attack 0.005` `decay 0.8` | — |
+| `:pluck` | — | `lpf 500` `resonance 1.2` | `lp-env 4` `lp-attack 0.001` `lp-decay 0.12` | `attack 0.001` `decay 0.4` | — |
+| `:theremin` | — | — | — | `attack 0.06` `decay 1.5` | `glide 0.08` `vib 5` `vib-mod 0.25` |
+| `:reed` | `pw 0.3` `unison 2` `detune 14` `spread 0.2` | `bpf 1100` `bpq 0.8` | — | `attack 0.03` `decay 1.2` | — |
+| `:pad` | `unison 3` `detune 18` `spread 0.6` | `lpf 1400` `resonance 0.8` | — | `attack 0.35` `decay 4.0` | — |
+| `:strings` | `unison 5` `detune 22` `spread 0.8` | `lpf 3200` `hpf 180` | — | `attack 0.3` `decay 4.0` | — |
+| `:sweep-pad` | `unison 7` `detune 20` `spread 0.9` | `lpf 300` `resonance 3` | `lp-env 4` `lp-attack 1.2` `lp-decay 2.0` | `attack 0.4` `decay 6.0` | — |
+| `:brass-pad` | `unison 3` `detune 10` `spread 0.4` | `lpf 500` `resonance 1` | `lp-env 2.5` `lp-attack 0.08` `lp-decay 0.6` | `attack 0.06` `decay 3.0` | — |
+
+`decay` is the time to silence, hence the long pad values.
+
+**`glide`** — portamento in seconds. A note slides from the previous note of the same
+track; in a chord, each voice slides from the nearest note of the previous chord.
+`(stop)` resets it, so the first note after a restart does not slide. Glide works on the
+oscillator voices and the instruments built on them (not on FM, string, drum or sample
+voices). `:theremin` glides by default; `(glide 0)` turns it off.
+
+```lisp
+;; Only the third note slides (C2 → E♭2)
+(->> (seq :c2 :c2 :eb2 :g1) (synth :acid) (glide (seq 0 0 0.06 0)))
+```
+
+**`accent`** — 0–1, for any voice: `amp × (1 + 0.5·accent)`; with a filter envelope the
+filter also opens further (`lp-env + 1.5·accent`) and closes faster.
+
+```lisp
+(->> (seq :c2 :c2 :c2 :c2) (synth :acid) (accent (seq 0 1 0 0)))
+```
+
+**`lp-rate` / `lp-depth`** — a cutoff LFO on the low-pass: `lp-rate` periods per cycle
+(0–64), `lp-depth` octaves (0–4). It is locked to the cycle, so a wobble stays in time
+across notes. Needs `lpf`.
+
+```lisp
+(->> (seq :a1 :a1) (synth :saw) (lpf 400) (resonance 6) (lp-rate 4) (lp-depth 2) (decay 2))
+```
+
+An unknown voice name still plays a sine, with a warning in the output line:
+`(->> (seq :c4) (synth :trii))` → `Warning: unknown synth voice :trii — did you mean :tri?`.
 
 ### Named voice presets
 
