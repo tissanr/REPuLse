@@ -2284,9 +2284,30 @@ The rest of the per-event control set: movement within a note and the effects na
 nodes can't express.
 
 **Key additions:**
-- `coarse`, `vowel`, per-event `distort`, `postgain`, `nudge`
-- Filter envelopes (`lp-env` …), pitch envelope (`penv` …), `vib`, `adsr` shorthands
-- `delay-sync`; decide `duck`, per-event `tremolo`/`phaser`, FM controls
+- Filter envelopes `lp-env` … `bp-release`, pitch envelope `penv` …, `vib`/`vib-mod`
+- `vowel`, `coarse` (synth voices only), `djf`, `postgain`, `nudge`, `delay-sync`
+- Deferred with reasons: ADSR/`sustain`-level/`hold`, per-event `distort`/`tremolo`/
+  `phaser`/`chorus`/`compressor`, `duck`, `room-lp`…, FM controls (SYN6)
+
+**Implemented (awaiting the listen check before ✅):**
+- 28 control fns in `repulse.params`, registered per Rule 3; core does not clamp
+- `repulse.inserts`: envelope model (`env-value`, `env-points`, `effective-depth`), shared
+  with lib.rs; `pitch-params`, vowel table, `djf` folded into `lpf`/`hpf`, `nudge`,
+  `trigger_v3` slots 15–40 (gate, three filter envelopes, pitch envelope, vib, vowel,
+  coarse, postgain)
+- WASM: `EnvSpec`, control-rate (16 samples) cutoff and pitch modulation with
+  `Biquad::set_coeffs`, `VowelBank` (inline array), `coarse` sample-and-hold, `postgain`;
+  `Voice::tick` takes a pitch multiplier; the unmodulated path stays bit-identical
+- JS path: envelopes as `AudioParam` automation (exponential ramps on `frequency`,
+  linear ramps on `detune`), vowel as a five-band-pass sub-graph, vibrato LFO on
+  `detune` (oscillators and sample sources via a new `:on-source` hook), one console
+  warning for `coarse`
+- `delay-sync` in `orbits/orbit-settings` (cycles × cycle length, overrides `delay-time`)
+- Tests: Rust `tl7c_tests` (envelope breakpoints, filter/pitch envelopes, release at the
+  gate, vibrato range, vowel formants, coarse aliasing, postgain, bit-identity, pinned
+  `ENV_PARITY_DB`), `inserts_test`, `orbits_test`, `params_test`,
+  `e2e/tl7c-envelopes.spec.ts` (JS↔WASM envelope parity within 3 dB, release, `penv` on
+  a voice and a sample, vowel, `djf`, `postgain`, `nudge`, `delay-sync`)
 
 See full spec: [PROMPTS/PHASE-TL7c.md](PROMPTS/PHASE-TL7c.md)
 

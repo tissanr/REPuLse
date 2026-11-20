@@ -68,9 +68,9 @@ Rows that group several names (e.g. "toms lo/mid/hi") count once.
 | Oscillator hard sync | Tearing sync leads | 🆕 | SYN6 | |
 | White noise | Hats, snares, sweeps | ✅ | — | `(synth :noise)`; LCG generator in Rust |
 | Coloured noise (pink, brown), dust/crackle, LFSR chip noise | Wind, surf, vinyl, chiptune drums | 🆕 | SYN6 | |
-| Subtractive voice (oscillator → filter → amp, each with an envelope) | The classic analog synth sound | 🟡 | TL7a, TL7c, SYN6 | Built-in voices have no filter. `defsynth` has `lpf`/`hpf`/`bpf`. TL7a adds a per-event filter, TL7c its envelope, SYN6 ready-made instruments |
+| Subtractive voice (oscillator → filter → amp, each with an envelope) | The classic analog synth sound | 🟡 | TL7a, TL7c, SYN6 | Per-event filter (TL7a) with its own envelope (TL7c: `lp-env` …) on any voice; SYN6 adds ready-made instruments |
 | FM / phase modulation, 2 operators | Bells, electric pianos, brass, reeds | ✅ | — | `(synth :fm :index … :ratio …)` plus 11 presets |
-| FM, 4–6 operators with algorithms and feedback | DX-style keys, basses, evolving timbres | 💤 | — | Large engine and UI surface; 2-operator presets cover the common cases. Per-event FM controls are a TL7c decision |
+| FM, 4–6 operators with algorithms and feedback | DX-style keys, basses, evolving timbres | 💤 | — | Large engine and UI surface; 2-operator presets cover the common cases. Per-event FM controls were deferred by TL7c to SYN6 |
 | Karplus-Strong plucked string | Guitar, harp, koto, pizzicato | ✅ | — | `Voice::KarplusStrong`, 7 presets + alias, body EQ per instrument |
 | Bowed-string waveguide | Violin, viola, cello, arco bass | ⏸ | SYN3 | Full spec exists |
 | Wind waveguides (bore + reed/jet model) | Physically modelled flute, clarinet, brass | 💤 | — | FM presets cover winds and brass (SYN2, SYN7); backlog row in FUTURE-FEATURES.md |
@@ -89,10 +89,10 @@ Rows that group several names (e.g. "toms lo/mid/hi") count once.
 |---|---|---|---|
 | Amplitude envelope: attack, decay, release | ✅ | — | `attack`, `decay`, `release` per event; ADSR inside the FM presets |
 | Multi-segment envelope with curves | ✅ | — | `env` + `env-gen` inside `defsynth` |
-| `adsr` shorthands, `sustain`/`hold` for synth voices | 📋 | TL7c | |
-| Filter envelope | 📋 | TL7c | `lp-env`, `lp-attack`, … |
-| Pitch envelope | 📋 | TL7c | `penv` …; drum voices get their own sweeps in SYN6 |
-| Vibrato | 📋 | TL7c | `vib`, `vib-mod`; koto and mandolin presets have fixed vibrato |
+| `adsr` shorthands, `sustain`/`hold` for synth voices | ❓ | — | Deferred by TL7c: `sustain` already means sample length (TL6), and synth voices have no gate |
+| Filter envelope | ✅ | TL7c | `lp-env`, `lp-attack`, … (also `hp-*`, `bp-*`); gate = event length |
+| Pitch envelope | ✅ | TL7c | `penv`, `p-attack` …; tonal voices and samples; drum voices get their own sweeps in SYN6 |
+| Vibrato | ✅ | TL7c | `vib`, `vib-mod`; koto and mandolin presets have fixed vibrato |
 | Velocity | 📋 | TL7a, KIT1 | |
 | LFO on a synth parameter | 🟡 | — | Only through a control bus in `defsynth` |
 | Pattern-rate modulation (one value per event) | 🟡 | TL7a | Signals (`sine`, `saw`, `perlin`, …) drive `amp`, `pan`, `rate` today; filters follow in TL7a |
@@ -264,9 +264,9 @@ effect plugins (`(fx …)`, global chain or per track) and no per-event effects 
 |---|---|---|---|
 | Low-/high-/band-pass, notch (track) | ✅ | — | `(fx :filter :type …)`, 12 dB/oct biquad |
 | Low-/high-/band-pass per event | 📋 | TL7a | `lpf` `hpf` `bpf` + resonance |
-| Filter envelope per event | 📋 | TL7c | |
-| DJ filter (one knob LP↔HP) | 📋 | TL7c | `djf` |
-| Vowel / formant filter | 📋 | TL7c | `vowel` |
+| Filter envelope per event | ✅ | TL7c | `lp-env` … `bp-release` |
+| DJ filter (one knob LP↔HP) | ✅ | TL7c | `djf` |
+| Vowel / formant filter | ✅ | TL7c | `vowel` (`:a :e :i :o :u`) |
 | Shelving, peaking, all-pass types on `filter` | 🆕 | FX1 | Native `BiquadFilterNode` types, not exposed |
 | Ladder filter (24 dB/oct, self-oscillating) | ⏸ | FX2 | |
 | Comb filter | ⏸ | FX2 | |
@@ -280,7 +280,7 @@ effect plugins (`(fx …)`, global chain or per track) and no per-event effects 
 |---|---|---|---|
 | Compressor | ✅ | — | `(fx :compressor …)`, `DynamicsCompressorNode` |
 | Sidechain ducking | ✅ | — | `(fx :sidechain :trigger :bd …)`, pattern-triggered |
-| Per-orbit ducking | 📋 | TL7c | `duck`, undecided there |
+| Per-orbit ducking | ❓ | — | `duck`: deferred by TL7c; `(fx :sidechain …)` covers track ducking |
 | Limiter (output ceiling) | 🆕 | FX1 | The engine hard-clips at ±1 today |
 | Noise gate / expander | 🆕 | FX1 | |
 | Transient shaper | ⏸ | FX2 | |
@@ -298,7 +298,8 @@ effect plugins (`(fx …)`, global chain or per track) and no per-event effects 
 | Speaker cabinet | ✅ | — | `(fx :cab …)` |
 | Bit crusher | ✅ | — | `(fx :bitcrusher :bits … :rate …)` |
 | Per-event `shape`, `crush` | 📋 | TL7a | |
-| Per-event `coarse`, `distort` | 📋 | TL7c | |
+| Per-event `coarse` | ✅ | TL7c | Synth voices (WASM) only; samples ignore it |
+| Per-event `distort` | 🔁 | — | Per-event `shape` + `postgain`, or track-level `(fx :distort …)` |
 | Wavefolder | ⏸ | FX2 | FUTURE-FEATURES backlog row |
 | Tape saturation, wow & flutter, hiss | ⏸ | FX2 | |
 | Vinyl (crackle, rumble, band limit) | ⏸ | FX2 | |
@@ -338,7 +339,7 @@ effect plugins (`(fx …)`, global chain or per track) and no per-event effects 
 |---|---|---|---|
 | Feedback delay | 🟡 | FX1 | `(fx :delay …)`: time in seconds only, mono feedback path |
 | Delay send per event | 📋 | TL7b | `delay`, `delay-time`, `delay-feedback` |
-| Tempo-synced delay time | 🟡 | TL7c, FX1 | `delay-sync` per event (TL7c); `:sync` on the track effect (FX1) |
+| Tempo-synced delay time | 🟡 | TL7c, FX1 | `delay-sync` per event ✅ (TL7c); `:sync` on the track effect (FX1) |
 | Ping-pong delay | 🆕 | FX1 | |
 | Multi-tap delay | 🆕 | FX1 | |
 | Tape delay (filtered, saturating, wobbling repeats) | ⏸ | FX2 | |

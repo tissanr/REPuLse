@@ -2386,8 +2386,9 @@ string or a signal, and returns a transformer when called without the pattern:
 ```
 
 - **Sampled at the onset.** A pattern or signal gives each event the value at its start,
-  as with `pan`. The filter does not move during a note (filter envelopes come in TL7c).
-- **Processing order** per voice: source → `lpf` → `hpf` → `bpf` → `crush` → `shape` → pan.
+  as with `pan`. To move the filter within a note, use a filter envelope (below).
+- **Processing order** per voice: source (pitch: `penv`, `vib`) → `lpf` → `hpf` → `bpf`
+  → `vowel` → `coarse` → `crush` → `shape` → `postgain` → pan → sends.
   Only the stages an event uses are built. An event without these keys costs nothing extra.
 - **Gain model:** voice level = `amp × gain × velocity`. All three are linear, so
   `(velocity 0.5 (gain 2 pat))` sounds like `pat`. `amp` keeps its meaning.
@@ -2410,6 +2411,90 @@ note by note:
 **Inside `defsynth`** the names `lpf`, `hpf`, `bpf` and `gain` keep their UGen meaning
 (`(lpf 2000 (saw freq))`). Outside a `defsynth` body they are these per-event controls.
 
+#### Envelopes & modulation
+
+**Filter envelopes** move a filter's cutoff within a note. The depth is in octaves above
+the cutoff; the curve is a straight line in octaves (an exponential sweep in Hz):
+
+| Function | Range (clamped) | Default | Meaning |
+|---|---|---|---|
+| `lp-env` | −10…10 octaves | 0 (off) | depth: the cutoff moves from `lpf` to `lpf · 2^depth` and back |
+| `lp-attack` | 0–10 s | 0.001 | time to reach the peak |
+| `lp-decay` | 0–10 s | 0.2 | time from the peak to the sustain level |
+| `lp-sustain` | 0–1 | 0 | sustain level, as a fraction of the depth |
+| `lp-release` | 0–10 s | 0.1 | time back to `lpf` after the event ends |
+| `hp-env` … `hp-release` | same | same | the same envelope on `hpf` |
+| `bp-env` … `bp-release` | same | same | the same envelope on `bpf` |
+
+```lisp
+;; Acid-style pluck: each note opens to 300·2^4 = 4.8 kHz and closes in 0.2 s
+(->> (seq :c2 :c2 :eb2 :g1) (synth :saw)
+     (lpf 300) (resonance 8) (lp-env 4) (lp-decay 0.2))
+
+;; Hold the filter open while the note lasts, close it in 0.3 s after
+(->> (slow 2 (seq :c3 :g2)) (synth :saw) (decay 3)
+     (lpf 400) (lp-env 3) (lp-sustain 1) (lp-release 0.3))
+```
+
+- The envelope needs its filter on the same event (`lp-env` without `lpf` does nothing)
+  and a non-zero depth. Negative depths sweep down.
+- The **gate** is the event's length: the release starts when the event ends, e.g. after
+  half a cycle for each step of a two-step `seq`. The voice's own volume envelope
+  (`attack`, `decay`) is unchanged.
+
+**Pitch envelope and vibrato:**
+
+| Function | Range (clamped) | Default | Meaning |
+|---|---|---|---|
+| `penv` | −48…48 semitones | 0 (off) | pitch envelope depth: the note starts `penv` semitones away and returns |
+| `p-attack` `p-decay` `p-sustain` `p-release` | as for filters | 0.001 · 0.2 · 0 · 0.1 | its times and level |
+| `vib` | 0–40 Hz | 0 (off) | vibrato rate |
+| `vib-mod` | 0–12 semitones | 0.5 | vibrato depth (peak deviation) |
+
+```lisp
+(->> (seq :c3 :c3) (synth :saw) (penv 12) (p-decay 0.08))   ; each note drops an octave
+(->> (seq :a4) (synth :square) (vib 6) (vib-mod 0.3))       ; 6 Hz vibrato, ±0.3 semitone
+```
+
+Pitch modulation works on the tonal synth voices (`:sine` notes, `:saw`, `:square`, `:fm`
+and its presets such as `:epiano`) and on samples. The synthesized drums (`:bd :sd :hh :oh`),
+`:noise`, the plucked voices (`:guitar`, `:nylon`, …) and `defsynth` voices ignore it.
+
+**Vowel, coarse, DJ filter:**
+
+| Function | Range (clamped) | Default | Meaning |
+|---|---|---|---|
+| `vowel` | `:a :e :i :o :u` | off | formant filter (five band-passes); unknown vowels are ignored |
+| `coarse` | 1–64 | 1 (off) | sample-and-hold every *n* samples (lo-fi aliasing) |
+| `djf` | 0–1 | 0.5 (off) | one-knob DJ filter: < 0.5 low-pass (20 Hz at 0), > 0.5 high-pass (20 kHz at 1) |
+
+```lisp
+(->> (seq :a2 :a2 :a2 :a2 :a2) (synth :saw) (decay 0.4) (vowel (seq :a :e :i :o :u)))
+(->> (fast 4 (seq :c5)) (synth :square) (coarse (seq 1 4 8 16)))
+(->> (fast 8 (seq :hh :oh)) (djf (slow 4 sine)))
+```
+
+- `coarse` works on the **synth voices only** (it runs in the WASM engine). Samples,
+  `defsynth` voices and tracks with an `fx` chain ignore it, and the browser console warns
+  once. Use `crush` for a lo-fi sound that works everywhere.
+- `djf` sets `lpf` or `hpf`; an explicit `lpf`/`hpf` on the same event wins.
+- `vowel` is brightest on buzzy sources (saw, square, noisy samples).
+
+**Output gain and timing:**
+
+| Function | Range (clamped) | Default | Meaning |
+|---|---|---|---|
+| `postgain` | 0–4 | 1 | linear gain after the insert chain (after `shape`), before pan and sends |
+| `nudge` | −1…1 s | 0 | moves each event's onset in time (positive = later) |
+
+```lisp
+(->> (seq :c3 :e3) (synth :saw) (shape 0.8) (postgain 0.5))   ; drive hard, then tame
+(->> (fast 4 (seq :hh)) (nudge (seq 0 0.02)))                 ; push every second hat 20 ms late
+```
+
+`gain` changes the level going *into* the chain (it drives `shape` harder), `postgain`
+the level coming out. The editor flash and MIDI out are not nudged.
+
 #### Sends & orbits
 
 Events can also send part of their signal to a shared **reverb** and a shared **delay**,
@@ -2424,6 +2509,7 @@ settings, so a drum part and a pad can use different reverb sizes.
 | `delay` | 0–1 | 0 | delay send level of the event |
 | `delay-time` | 0.01–4 s | 0.25 | delay time of the event's orbit, in seconds |
 | `delay-feedback` | 0–0.95 | 0.5 | how much of each echo comes back |
+| `delay-sync` | 1/64–16 cycles | — | delay time of the event's orbit in **cycles**; overrides `delay-time` (max 4 s) |
 | `orbit` | 0–3 (integer) | 0 | which orbit's reverb and delay the event sends into |
 
 ```lisp
@@ -2432,6 +2518,9 @@ settings, so a drum part and a pad can use different reverb sizes.
 
 ;; Dotted-eighth echoes on the snare at 120 BPM
 (->> (seq :sd :_ :sd :_) (delay 0.4) (delay-time 0.375) (delay-feedback 0.5))
+
+;; The same, locked to the tempo at any BPM: 3/16 of a cycle
+(->> (seq :sd :_ :sd :_) (delay 0.4) (delay-sync 3/16) (delay-feedback 0.5))
 
 ;; Two orbits: a short room on the drums, a long one on the pad
 (stack (->> (seq :bd :sd) (room 0.2) (orbit 0))
@@ -2447,7 +2536,7 @@ event → per-event inserts (lpf … shape) → pan ─┬→ track fx (track-fx
 
 - **Per event:** `room` and `delay` are send levels; they are patternable and accept
   signals, sampled at the onset like `pan`. An event with both at 0 builds nothing.
-- **Per orbit:** `size`, `delay-time` and `delay-feedback` set the orbit, not the event.
+- **Per orbit:** `size`, `delay-time` (or `delay-sync`) and `delay-feedback` set the orbit, not the event.
   The **last event wins** (SuperDirt behaviour): an event that carries one of them sets
   that orbit's reverb or delay at its start time; events without them leave it as it is.
   `(stop)` puts every orbit back to the defaults above. Tails already ringing play out.

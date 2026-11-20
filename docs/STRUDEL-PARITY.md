@@ -46,11 +46,11 @@ Method-chaining (`s("bd").fast(2)`) maps to Lisp application or threading:
 | Randomness & conditionals | TL4/TL4b | 33 | 0 | 0 | 8 | 1 | 2 | 44 |
 | Layering, pitch & harmony | TL5 | 18 | 1 | 0 | 5 | 0 | 2 | 26 |
 | Sample manipulation | TL6 | 15 | 0 | 0 | 2 | 1 | 2 | 20 |
-| Control parameters & effects | TL7a–c | 17 | 10 | 14 | 3 | 7 | 9 | 60 |
+| Control parameters & effects | TL7a–c | 26 | 4 | 2 | 9 | 7 | 12 | 60 |
 | Mini-notation | TL1/TL3/TL4 | 15 | 0 | 2 | 0 | 0 | 0 | 17 |
 | Tidal-only functions | TL3–TL5 | 8 | 0 | 0 | 3 | 0 | 2 | 13 |
 | Visuals, I/O & JS-specific | — | 4 | 2 | 1 | 1 | 13 | 3 | 24 |
-| **Total** | | **200** | **15** | **34** | **41** | **29** | **36** | **355** |
+| **Total** | | **209** | **9** | **22** | **47** | **29** | **39** | **355** |
 
 Rows grouped in one line (e.g. `sine2 / cosine2 / …`) count once.
 
@@ -363,7 +363,9 @@ The `pick` family, `inhabit` and Tidal `fix` followed in **TL4b**.
 ## Control parameters & effects — TL7
 
 REPuLse's `fx` effects are **per track**: `(fx :filter 800)` filters a whole track.
-Since TL7a, filters, `shape`, `crush`, `gain` and `velocity` also exist **per event**. Strudel controls (`lpf`, `room`, `delay`, …) are per event and
+Since TL7a, filters, `shape`, `crush`, `gain` and `velocity` also exist **per event**;
+TL7c added filter and pitch envelopes, vibrato, `vowel`, `coarse`, `djf`, `postgain`,
+`nudge` and `delay-sync`. Strudel controls (`lpf`, `room`, `delay`, …) are per event and
 patternable. TL7 is split in three: **TL7a** per-event filters, `shape`, `crush`,
 `gain`, `velocity`; **TL7b** `room`/`delay` sends per `orbit`; **TL7c** vowel,
 envelopes, modulators and the rest. They apply to WASM synth voices and to the JS path
@@ -372,16 +374,16 @@ envelopes, modulators and the rest. They apply to WASM synth voices and to the J
 | Strudel | REPuLse | Status | Phase | Notes |
 |---|---|---|---|---|
 | `s` / `sound` | keywords, `sound` | ✅ | — | `:bd` or `(sound :bd 2)` |
-| `bank` | `bank` | 🟡 | TL7c | REPuLse `bank` is a global session prefix; Strudel `bank` is a patternable per-event control |
-| `note` | note keywords, `{:note …}` | 🟡 | TL7c | No `note` function that sets the control on a pattern |
+| `bank` | `bank` | 🟡 | — | REPuLse `bank` is a global session prefix; Strudel `bank` is a patternable per-event control (not taken up by TL7c) |
+| `note` | note keywords, `{:note …}` | 🟡 | — | No `note` function that sets the control on a pattern (not taken up by TL7c) |
 | `freq` | Hz numbers | 🔁 | — | |
 | `gain` | `gain` | ✅ | TL7a | Linear 0–2, multiplies `amp` (Strudel's `gain` uses a curve); `amp` stays linear |
 | `amp` | `amp` | ✅ | — | |
 | `velocity` | `velocity` | ✅ | TL7a | Linear 0–1, multiplies `amp`; MIDI capture will write it (SK3) |
-| `postgain` | `postgain` | 📋 | TL7c | |
+| `postgain` | `postgain` | ✅ | TL7c | Linear 0–4, after `shape`, before pan and sends |
 | `attack` / `decay` / `release` | same | ✅ | — | |
-| `sustain` / `hold` | `sustain`, `hold` | 📋 | TL7c | |
-| `adsr` / `ad` / `ar` / `ds` | `adsr` | 📋 | TL7c | Shorthands |
+| `sustain` / `hold` | `sustain`, `hold` | ❓ | — | Deferred by TL7c: REPuLse `sustain` is the sample length in seconds (TL6, Tidal); synth voices have no gate yet |
+| `adsr` / `ad` / `ar` / `ds` | `adsr` | ❓ | — | Shorthands; deferred with `sustain`/`hold` (TL7c decision 3) |
 | `pan` | `pan` | ✅ | — | |
 | `panspan` / `pansplay` / `panwidth` / `panorient` | — | ⛔ | — | Multichannel SuperDirt panning |
 | `lpf` / `cutoff` / `ctf` / `lp` | `lpf`, `cutoff` | ✅ | TL7a | Per event, 12 dB/oct; inside `defsynth` `lpf` stays the UGen |
@@ -389,38 +391,38 @@ envelopes, modulators and the rest. They apply to WASM synth voices and to the J
 | `resonance` / `lpq` | `resonance` | ✅ | TL7a | Linear Q 0.1–30; no `lpq` alias |
 | `hpf` / `hp` / `hcutoff`, `hresonance` / `hpq` | `hpf`, `hpq` | ✅ | TL7a | |
 | `bpf` / `bandf` / `bp`, `bandq` / `bpq` | `bpf`, `bpq` | ✅ | TL7a | Constant 0 dB peak gain |
-| `djf` | `djf` | 📋 | TL7c | DJ filter (one knob LP↔HP) |
+| `djf` | `djf` | ✅ | TL7c | DJ filter: < 0.5 low-pass, > 0.5 high-pass; sets `lpf`/`hpf` |
 | `ftype` / `fanchor` | — | ❓ | — | Filter model selection |
-| Filter envelopes `lpenv` `lpattack` `lpdecay` `lpsustain` `lprelease` (and `hp*`, `bp*`) | `lp-env` … | 📋 | TL7c | |
+| Filter envelopes `lpenv` `lpattack` `lpdecay` `lpsustain` `lprelease` (and `hp*`, `bp*`) | `lp-env` … `bp-release` | ✅ | TL7c | Depth in octaves, linear in octaves; gate = event length |
 | Filter LFOs `lprate` `lpdepth` `lpshape` … | — | ❓ | — | Overlaps generic `lfo` modulator |
-| `vowel` | `vowel` | 📋 | TL7c | Formant filter |
+| `vowel` | `vowel` | ✅ | TL7c | `:a :e :i :o :u`, five formant band-passes |
 | `room` | `room` | ✅ | TL7b | Per-event reverb send 0–1 into the event's orbit; track-level `(fx :reverb …)` stays |
 | `roomsize` / `size` / `sz` | `size` | ✅ | TL7b | Orbit reverb size 0–1 → IR length 0.3 + 5.7·size s; last event wins per orbit. Strudel's `roomsize` is a length-like factor with no fixed scale; REPuLse keeps 0–1 (documented in USAGE) |
-| `roomlp`, `roomdim`, `roomfade` | — | 📋 | TL7c | Reverb tone and fade controls |
+| `roomlp`, `roomdim`, `roomfade` | — | ❓ | — | Reverb tone and fade controls; deferred by TL7c |
 | `ir` / `irspeed` / `irbegin` | — | ❓ | — | Custom impulse responses; `(fx :cab :ir …)` covers cabinets |
 | `delay` | `delay` | ✅ | TL7b | Per-event delay send 0–1 into the event's orbit; track-level `(fx :delay …)` stays |
 | `delaytime` / `delayfeedback` | `delay-time`, `delay-feedback` | ✅ | TL7b | Seconds (0.01–4) and 0–0.95; last event wins per orbit |
-| `delaysync` | `delay-sync` | 📋 | TL7c | Cycle-synced delay time |
+| `delaysync` | `delay-sync` | ✅ | TL7c | Delay time in cycles; overrides `delay-time` |
 | `crush` | `crush` | ✅ | TL7a | Per event, 1–16 bits; track-level `bitcrush` remains |
-| `coarse` | `coarse` | 📋 | TL7c | Sample-rate reduction |
+| `coarse` | `coarse` | ✅ | TL7c | Sample-and-hold 1–64; synth voices (WASM) only, samples ignore it |
 | `shape` | `shape` | ✅ | TL7a | Soft shaper, k = 2a/(1−a) |
-| `distort` / `distortvol` / `distorttype` | `distort` | 🟡 | TL7c | Track-level DST effects exist |
+| `distort` / `distortvol` / `distorttype` | `shape` + `postgain`, `(fx :distort …)` | 🔁 | — | Per note: `shape` then `postgain`; per track: `(fx :distort …)` (TL7c decision 4) |
 | `drive`, `triode`, `krush`, `squiz`, `fold`/`sinefold`, `soft`/`hard`/`cubic`/`diode`/`asym` | — | ❓ | — | Waveshaper variants; DST1–6 covers most at track level |
-| `chebyshev` | `chebyshev` | 🟡 | TL7c | Track-level only |
-| `compressor` (+ ratio/knee/attack/release) | `(fx :compressor …)` | 🟡 | TL7c | Track-level only |
-| `phaser` / `phaserrate` / `phaserdepth` / … | `phaser` | 🟡 | TL7c | Track-level `(fx :phaser …)` plugin exists (Phase A); per-event planned |
-| `tremolo` (+ sync/depth/shape) | `tremolo` | 🟡 | TL7c | Track-level `(fx :tremolo …)` plugin exists (Phase A); per-event planned |
-| `chorus` / `leslie` | `(fx :chorus …)` | 🟡 | TL7c | Track-level chorus exists (Phase A); `leslie` undecided |
-| `vib` / `vibmod` | `vib` | 📋 | TL7c | |
-| Pitch envelope `penv` `pattack` `pdecay` `psustain` `prelease` `pcurve` `panchor` | `penv` … | 📋 | TL7c | |
+| `chebyshev` | `(fx :chebyshev …)` | 🔁 | — | Track-level only (TL7c decision 4) |
+| `compressor` (+ ratio/knee/attack/release) | `(fx :compressor …)` | 🔁 | — | Track-level only (TL7c decision 4) |
+| `phaser` / `phaserrate` / `phaserdepth` / … | `(fx :phaser …)` | 🔁 | — | Track-level plugin (Phase A); not per event (TL7c decision 4) |
+| `tremolo` (+ sync/depth/shape) | `(fx :tremolo …)` | 🔁 | — | Track-level plugin (Phase A); not per event (TL7c decision 4) |
+| `chorus` / `leslie` | `(fx :chorus …)` | 🔁 | — | Track-level chorus (Phase A); no `leslie` (TL7c decision 4) |
+| `vib` / `vibmod` | `vib`, `vib-mod` | ✅ | TL7c | Rate in Hz, depth in semitones; tonal voices and samples |
+| Pitch envelope `penv` `pattack` `pdecay` `psustain` `prelease` `pcurve` `panchor` | `penv`, `p-attack` … `p-release` | ✅ | TL7c | Semitones, linear; no `pcurve`/`panchor`; tonal voices and samples |
 | `detune` / `unison` / `spread` (supersaw) | — | ❓ | — | Synth-design scope; see SYN phases |
-| `fm` / `fmh` / `fmenv` / `fmattack` … (8 operators, matrix) | `(synth :fm :index …)` | 🟡 | TL7c | 2-operator FM exists; per-event FM controls missing |
+| `fm` / `fmh` / `fmenv` / `fmattack` … (8 operators, matrix) | `(synth :fm :index …)` | 🟡 | SYN6 | 2-operator FM exists; per-event FM controls deferred by TL7c |
 | Wavetable `wt*` / `warp*` | — | ⛔ | — | Synth-design scope, out of Milestone 1 |
 | ZZFX `z*` / `zzfx` | — | ⛔ | — | Strudel-specific chiptune engine |
 | Spectral `freeze` `xsdelay` `tsdelay` `real` `imag` `enhance` `comb` `smear` `scram` `binshift` `hbrick` `lbrick` `waveloss` `ring*` `fshift*` `octer*` | — | ⛔ | — | SuperDirt-only effects |
 | `orbit` / `o`, `bus`, `busgain` | `orbit`, `track` | ✅ | TL7b | `orbit` 0–3 selects the send group (reverb + delay); tracks still route the dry signal (Phase L), `bus` in `defsynth` (Phase P) |
-| `duckorbit` / `duckdepth` / `duckattack` | `duck` | ❓ | — | Sidechain ducking — musically valuable, decide in TL7c |
-| `nudge` | `nudge` | 📋 | TL7c | Per-event timing offset (also used by MIDI capture) |
+| `duckorbit` / `duckdepth` / `duckattack` | `duck` | ❓ | — | Sidechain ducking per orbit; deferred by TL7c (track-level `(fx :sidechain …)` exists) |
+| `nudge` | `nudge` | ✅ | TL7c | Seconds, −1…1 (also used by MIDI capture) |
 | `cps` | `bpm` | 🔁 | — | |
 | `channel` / `channels` | — | ❓ | — | Multi-output; Milestone 3 |
 | `lfo` / `env` / `bmod` modulators | — | ❓ | — | Generic modulation; T1 `tween` covers ramps |
