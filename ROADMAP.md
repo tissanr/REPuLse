@@ -68,7 +68,7 @@ without a human:
 | 7 | TL6 | ✅ | Sample slicing & playback control | 🤖👂 | full | opus |
 | 8 | TL7a | ✅ | Per-event filters, shape & crush | 🤖👂 | full | opus |
 | 8b | TL7b | ✅ | Reverb & delay sends per orbit | 🤖👂 | full | opus |
-| 8c | TL7c | 📋 | Vowel, envelopes & modulators | 🤖👂 | outline | opus |
+| 8c | TL7c | 📋 | Vowel, envelopes & modulators | 🤖👂 | full | opus |
 | 9 | KIT1 | 📋 | High-quality drum kits | 🤖👂 | outline | sonnet |
 | 9a | SYN6 | 📋 | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | full | opus |
 | 9b | FX1 | 📋 | Mixing, space & modulation effects | 🤖👂 | full | sonnet |
