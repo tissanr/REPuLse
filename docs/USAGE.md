@@ -1933,7 +1933,7 @@ Set a global prefix so bare keywords resolve to a named drum machine bank:
 
 ; The synthesized kit (see "Synth drum kit"):
 (bank :synth)
-(seq :bd :cp :bd [:cp :rim])
+(~ "bd cp bd [cp rim]")
 
 ; Clear — bare keywords use the default lookup:
 (bank nil)
@@ -1968,7 +1968,7 @@ and the synthesized kit:
 
 ```lisp
 (bank :synth)                     ; bare drum names use the synthesized kit
-(seq :bd :cp :bd [:cp :rim])
+(~ "bd cp bd [cp rim]")
 
 (bank :RolandTR808)               ; a sampled kit …
 (seq :bd :synth_cp)               ; … with one synthesized clap
