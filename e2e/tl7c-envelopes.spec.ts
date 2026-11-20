@@ -152,6 +152,8 @@ test('vowel :a and :i differ at their formants', async ({ page }) => {
   const i = await v(':i');
   expect(db(goertzel(a.w, a.sr, 1100) / goertzel(i.w, i.sr, 1100)), 'a over i at 1100 Hz').toBeGreaterThanOrEqual(6);
   expect(db(goertzel(i.w, i.sr, 220) / goertzel(a.w, a.sr, 220)), 'i over a at 220 Hz').toBeGreaterThanOrEqual(6);
+  const u = await v(':u');
+  expect(db(goertzel(i.w, i.sr, 1870) / goertzel(u.w, u.sr, 1870)), 'i over u at its F2, 1870 Hz').toBeGreaterThanOrEqual(12);
 });
 
 test('djf: 0.1 cuts the highs, 0.9 cuts the lows, 0.5 is off', async ({ page }) => {

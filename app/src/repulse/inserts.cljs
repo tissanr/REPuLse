@@ -56,11 +56,12 @@
        :release (param v (k "release") 0.0 10.0 (:release env-defaults))})))
 
 (def vowel-table
-  "Formants (Csound bass table): per vowel [freqs-hz gains-db bandwidths-hz].
-   lib.rs VOWELS mirrors it."
+  "Formants (Csound bass table; i from the tenor table, whose F2 at −15 dB
+   makes it read as \"ee\" — the bass i's F2 at −30 dB sounds like \"u\"):
+   per vowel [freqs-hz gains-db bandwidths-hz]. lib.rs VOWELS mirrors it."
   {:a [[600 1040 2250 2450 2750] [0 -7 -9 -9 -20]   [60 70 110 120 130]]
    :e [[400 1620 2400 2800 3100] [0 -12 -9 -12 -18] [40 80 100 120 120]]
-   :i [[250 1750 2600 3050 3340] [0 -30 -16 -22 -28] [60 90 100 120 120]]
+   :i [[290 1870 2800 3250 3540] [0 -15 -18 -20 -30] [40 90 100 120 120]] ; tenor
    :o [[400 750 2400 2600 2900]  [0 -11 -21 -20 -40] [40 80 100 120 120]]
    :u [[350 600 2400 2675 2950]  [0 -20 -32 -28 -36] [40 80 100 120 120]]})
 

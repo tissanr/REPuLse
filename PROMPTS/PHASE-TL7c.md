@@ -142,13 +142,14 @@ multiplier `2^(semitones/12)`. Web Audio: `detune` in cents = `100 · semitones`
 
 **vowel:** five parallel band-passes (Audio EQ Cookbook, constant 0 dB peak gain), each
 scaled by its formant gain, summed, times a make-up gain of **2.0**. Q = frequency /
-bandwidth. Table (Csound bass formants):
+bandwidth. Table (Csound bass formants; `i` from the tenor table — the bass `i` has its
+F2 at −30 dB and reads as "u"):
 
 | Vowel | F1–F5 (Hz) | Gains (dB) | Bandwidths (Hz) |
 |---|---|---|---|
 | `a` | 600 1040 2250 2450 2750 | 0 −7 −9 −9 −20 | 60 70 110 120 130 |
 | `e` | 400 1620 2400 2800 3100 | 0 −12 −9 −12 −18 | 40 80 100 120 120 |
-| `i` | 250 1750 2600 3050 3340 | 0 −30 −16 −22 −28 | 60 90 100 120 120 |
+| `i` | 290 1870 2800 3250 3540 | 0 −15 −18 −20 −30 | 40 90 100 120 120 |
 | `o` | 400 750 2400 2600 2900 | 0 −11 −21 −20 −40 | 40 80 100 120 120 |
 | `u` | 350 600 2400 2675 2950 | 0 −20 −32 −28 −36 | 40 80 100 120 120 |
 
@@ -346,8 +347,8 @@ Rust (`cargo test`):
 - [ ] Vibrato: `Tone` 440 Hz, `vib 5`, `vib-mod 1`: the zero-crossing frequency measured
   over successive 25 ms windows spans at least 425–455 Hz over one second.
 - [ ] `vowel :a` vs `vowel :i` on the same saw (110 Hz): at 1100 Hz (harmonic nearest
-  `a`'s F2, 1040 Hz) `a` is ≥ 6 dB above `i`; at 220 Hz (nearest `i`'s F1, 250 Hz) `i`
-  is ≥ 6 dB above `a`. (`i`'s F2 is −30 dB in this table, too weak to discriminate.)
+  `a`'s F2, 1040 Hz) `a` is ≥ 6 dB above `i`; at 220 Hz (near `i`'s F1, 290 Hz) `i`
+  is ≥ 6 dB above `a`; at 1870 Hz (`i`'s F2) `i` is ≥ 12 dB above `u`.
 - [ ] `coarse 8` on a 1 kHz sine: Goertzel at `sr/8 − 1000` Hz is ≥ 20 dB above the same
   bin without `coarse`.
 - [ ] `postgain 0.5` lowers RMS by 6 dB ± 0.1.

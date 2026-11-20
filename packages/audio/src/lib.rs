@@ -761,7 +761,8 @@ impl Tl7cParams {
 }
 
 /// Formants per vowel a e i o u: (freqs Hz, gains dB, bandwidths Hz).
-/// Mirrors `vowel-table` in inserts.cljs (Csound bass formants).
+/// Mirrors `vowel-table` in inserts.cljs (Csound bass formants; `i` from the
+/// tenor table).
 const VOWELS: [([f32; 5], [f32; 5], [f32; 5]); 5] = [
     (
         [600.0, 1040.0, 2250.0, 2450.0, 2750.0],
@@ -773,10 +774,11 @@ const VOWELS: [([f32; 5], [f32; 5], [f32; 5]); 5] = [
         [0.0, -12.0, -9.0, -12.0, -18.0],
         [40.0, 80.0, 100.0, 120.0, 120.0],
     ),
+    // i: Csound tenor formants (the bass table's F2 at −30 dB sounds like "u").
     (
-        [250.0, 1750.0, 2600.0, 3050.0, 3340.0],
-        [0.0, -30.0, -16.0, -22.0, -28.0],
-        [60.0, 90.0, 100.0, 120.0, 120.0],
+        [290.0, 1870.0, 2800.0, 3250.0, 3540.0],
+        [0.0, -15.0, -18.0, -20.0, -30.0],
+        [40.0, 90.0, 100.0, 120.0, 120.0],
     ),
     (
         [400.0, 750.0, 2400.0, 2600.0, 2900.0],
@@ -2785,6 +2787,27 @@ mod tl7c_tests {
         let at = |x: &[f32], f: f32| goertzel(x, f);
         assert!(db(at(a, 1100.0) / at(i, 1100.0)) >= 6.0, "a over i at 1100");
         assert!(db(at(i, 220.0) / at(a, 220.0)) >= 6.0, "i over a at 220");
+    }
+
+    #[test]
+    fn vowel_i_has_an_audible_second_formant() {
+        // i reads as "ee" only with energy at its F2 (1870 Hz = 17th harmonic of
+        // A2); the bass table's i (F2 −30 dB) was as dull as u there.
+        let v = |idx: f32| {
+            render(
+                "saw:110",
+                &slots(|s| {
+                    s[2] = 10.0;
+                    s[38] = idx;
+                }),
+                0.5,
+            )
+        };
+        let (i, u) = (v(3.0), v(5.0));
+        let (i, u) = (win(&i, 0.1, 0.5), win(&u, 0.1, 0.5));
+        let d = db(goertzel(i, 1870.0) / goertzel(u, 1870.0));
+        println!("i over u at 1870 Hz: {d} dB");
+        assert!(d >= 12.0, "i over u at 1870 Hz: {d} dB");
     }
 
     #[test]
