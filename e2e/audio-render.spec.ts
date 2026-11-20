@@ -363,27 +363,32 @@ test('SYN6 kit voices without samples: four non-silent onsets', async ({ page })
   expect(rms(x)).toBeGreaterThan(NON_SILENT_RMS);
 });
 
-test('SYN6 (bank :synth) and :synth_bd skip the bd sample', async ({ page }) => {
+// Default-kit decision (2026-11-21): bare kit names play the synth kit even
+// when a sample bank of that name exists; (bank :dirt) restores the sample.
+test('SYN6 synth kit is the default; (bank :dirt) plays the bd sample', async ({ page }) => {
   await page.evaluate(() =>
     (window.__REPULSE_TEST__ as unknown as { registerTestSample(b: string, k: string): string })
       .registerTestSample('bd', 'tone'));
+  const setBank = (p: string | null) =>
+    page.evaluate((x) =>
+      (window.__REPULSE_TEST__ as unknown as { setBankPrefix(p: string | null): boolean }).setBankPrefix(x), p);
   const analyse = async (code: string) => {
     const res = await render(page, code);
     const w = seg1(mixMono(res.left, res.right), res.sampleRate, 0, 0.4);
     const lowPeak = Math.max(...[40, 50, 60, 80, 100, 150].map((f) => goertzel(w, res.sampleRate, f)));
     return { low: lowPeak, a440: goertzel(w, res.sampleRate, 440) };
   };
+  await setBank('dirt');
   const sample = await analyse('(seq :bd)');
-  console.log('bd sample', sample);
-  expect(sample.a440).toBeGreaterThan(sample.low);
-  await page.evaluate(() =>
-    (window.__REPULSE_TEST__ as unknown as { setBankPrefix(p: string | null): boolean }).setBankPrefix('synth'));
-  const kit = await analyse('(seq :bd)');
-  await page.evaluate(() =>
-    (window.__REPULSE_TEST__ as unknown as { setBankPrefix(p: string | null): boolean }).setBankPrefix(null));
   const direct = await analyse('(seq :synth_bd)');
-  console.log('bd under (bank :synth)', kit, ':synth_bd', direct);
-  for (const r of [kit, direct]) {
+  await setBank(null);
+  const kit = await analyse('(seq :bd)');
+  await setBank('synth');
+  const explicit = await analyse('(seq :bd)');
+  await setBank(null);
+  console.log('bd under (bank :dirt)', sample, 'default', kit, '(bank :synth)', explicit, ':synth_bd', direct);
+  expect(sample.a440).toBeGreaterThan(sample.low);
+  for (const r of [kit, explicit, direct]) {
     expect(r.low).toBeGreaterThan(r.a440);
     expect(toDb(sample.a440 / r.a440)).toBeGreaterThanOrEqual(20);
   }

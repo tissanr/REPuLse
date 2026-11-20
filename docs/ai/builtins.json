@@ -2910,9 +2910,9 @@
       "audio"
     ],
     "examples": [
+      "(bank :dirt)",
       "(bank :AkaiLinn)",
       "(bank :RolandTR808)",
-      "(bank :synth)",
       "(bank nil)"
     ],
     "see-also": [
@@ -2920,8 +2920,8 @@
       "sound",
       "samples!"
     ],
-    "detail": "(bank :prefix) — resolve bare drum keywords to a drum-machine bank; (bank :synth) = the synthesized kit; (bank nil) clears",
-    "description": "Set a default bank prefix for all subsequent keyword lookups."
+    "detail": "(bank :prefix) — kit for bare drum names: default = synth kit; (bank :dirt) = Dirt-Samples drums; (bank :RolandTR808) = a drum machine; (bank nil) clears",
+    "description": "Choose the drum kit for bare drum names (:bd :sd :hh …). Default (no bank, (bank nil), (bank :synth)): REPuLse's synth kit. (bank :dirt): the Dirt-Samples drums. (bank :AkaiLinn) etc.: that drum machine's samples."
   },
   "distort": {
     "category": "effect",

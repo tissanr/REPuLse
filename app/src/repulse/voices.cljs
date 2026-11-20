@@ -144,36 +144,61 @@
     (if (empty? v) "noise" (voice-string "noise" [] v [:color :density :freq]))))
 
 ;;; ── Drum routing (Part B) ────────────────────────────────────────────
+;;
+;; DEFAULT KIT DECISION (project owner, 2026-11-21 — replaces SYN6 owner
+;; decision 3): the synthesized kit is REPuLse's default drum kit. A bare kit
+;; name (:bd :sd :hh :oh :cp … — the 18 names in drum-voices) plays the synth
+;; kit, even when a sample bank of that name has loaded.
+;;   (bank :dirt)          — back to the Dirt-Samples drums for bare names
+;;                           (the default before 2026-11-21)
+;;   (bank :RolandTR808) … — a drum-machine sample bank, as before
+;;   (bank :synth)         — explicit synth kit (same as no bank)
+;;   :synth_bd             — one synth hit under any bank
+;;   (sound :bd 2)         — always a sample
+;; The four original engine voices ("bd" "sd" "hh" "oh" in lib.rs, the
+;; no-sample fallback before SYN6) are no longer reachable from patterns; the
+;; engine keeps them only so old trigger strings still play.
+
+(def dirt-prefix
+  "Bank prefix that restores the Dirt-Samples drums for bare kit names."
+  "dirt")
 
 (defn drum-route
   "Pure. kw — a non-note keyword. prefix — active bank prefix (string or nil).
    has-bank? — (fn [kw]) → bool.
    → {:kind :synth-drum :name \"bd\"}     engine kit voice (\"drum:bd…\")
      {:kind :sample :bank kw}             play this sample bank
-     {:kind :legacy-drum :name \"bd\"}    one of the four old engine voices
-     {:kind :unknown}                     440 Hz sine, as before"
+     {:kind :unknown}                     440 Hz sine, as before
+   Rules, in order (see the default-kit decision above):
+   1. :synth_<drum> → the kit voice, whatever bank is active.
+   2. A drum-machine prefix (not \"synth\" or \"dirt\") whose <prefix>_<name>
+      bank is registered → that sample.
+   3. (bank :dirt) and a registered bank of the bare name → that sample.
+   4. One of the 18 kit names → the kit voice (the default kit; also the
+      fallback while samples are still loading or missing).
+   5. Any other registered bank → that sample; else :unknown."
   [kw prefix has-bank?]
-  (let [n (name kw)]
+  (let [n    (name kw)
+        cand (when (and prefix (not= prefix "synth") (not= prefix dirt-prefix))
+               (keyword (str prefix "_" n)))]
     (cond
       (and (str/starts-with? n "synth_") (drum-name? (subs n 6)))
       {:kind :synth-drum :name (subs n 6)}
 
-      (and (= prefix "synth") (drum-name? n))
-      {:kind :synth-drum :name n}
-
-      :else
-      (let [cand     (when prefix (keyword (str prefix "_" n)))
-            resolved (if (and cand (has-bank? cand)) cand kw)]
-        (cond
-          (has-bank? resolved)          {:kind :sample :bank resolved}
-          (#{"bd" "sd" "hh" "oh"} n)    {:kind :legacy-drum :name n}
-          (drum-name? n)                {:kind :synth-drum :name n}
-          :else                         {:kind :unknown})))))
+      (and cand (has-bank? cand))                    {:kind :sample :bank cand}
+      (and (= prefix dirt-prefix) (has-bank? kw))    {:kind :sample :bank kw}
+      (drum-name? n)                                 {:kind :synth-drum :name n}
+      (has-bank? kw)                                 {:kind :sample :bank kw}
+      :else                                          {:kind :unknown})))
 
 (def ^:private js-drums
   "JS fallback (TEST1 harness, tracks with an fx chain): each kit voice as the
-   nearest existing JS voice. The real models are WASM-only (decision 6)."
-  {"bd"    {:kind :kick :f-start 192 :f-end 48 :sweep 0.05 :dur 0.5}
+   nearest existing JS voice. The real models are WASM-only (decision 6).
+   bd sd hh oh use the constants of the original JS drums (150 → 40 Hz kick,
+   0.4 s; 45 ms / 1 s hats at 8 kHz): since the synth kit became the default
+   (2026-11-21) they are what bare drum names play on the JS path, and the
+   harness tests count onsets on them."
+  {"bd"    {:kind :kick :f-start 150 :f-end 40 :sweep 0.06 :dur 0.4}
    "lt"    {:kind :kick :f-start 131 :f-end 82 :sweep 0.06 :dur 0.55}
    "mt"    {:kind :kick :f-start 197 :f-end 123 :sweep 0.06 :dur 0.45}
    "ht"    {:kind :kick :f-start 296 :f-end 185 :sweep 0.06 :dur 0.35}
@@ -184,10 +209,10 @@
    "rim"   {:kind :snare :dur 0.03}
    "cp"    {:kind :snare :dur 0.18}
    "click" {:kind :snare :dur 0.03}
-   "hh"    {:kind :hihat :dur 0.05 :gain 0.5 :hpf 7000}
+   "hh"    {:kind :hihat :dur 0.045 :gain 0.5 :hpf 8000}
    "sh"    {:kind :hihat :dur 0.08 :gain 0.5 :hpf 6000}
    "tb"    {:kind :hihat :dur 0.18 :gain 0.5 :hpf 6000}
-   "oh"    {:kind :hihat :dur 0.6 :gain 0.4 :hpf 7000}
+   "oh"    {:kind :hihat :dur 1.0 :gain 0.4 :hpf 8000}
    "cr"    {:kind :hihat :dur 1.8 :gain 0.4 :hpf 3500}
    "rd"    {:kind :hihat :dur 1.4 :gain 0.4 :hpf 4500}
    "cb"    {:kind :square :freq 555 :dur 0.35}})

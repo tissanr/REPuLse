@@ -1208,6 +1208,11 @@ Everything a song needs from the built-in synthesizer, in one phase.
   export and harness. Unknown voices warn: `unknown synth voice :trii — did you mean :tri?`.
 - Tests: 26 Rust tests (A1–A12, B1–B8, C-R1/2, D-R1), `voices_test`, params and
   sound-check tests, 6 TEST1 and 5 WASM-export Playwright tests.
+- **Default kit (owner decision 2026-11-21, replaces spec decision 3):** the synth kit is
+  REPuLse's default drum kit — bare `:bd :sd :hh …` play it even with sample banks
+  loaded. `(bank :dirt)` restores the Dirt-Samples drums (the old default); drum-machine
+  banks and `(sound :bd n)` are unchanged. The four legacy engine drums are no longer
+  reachable from patterns.
 
 See full spec: [PROMPTS/PHASE-SYN6.md](PROMPTS/PHASE-SYN6.md)
 

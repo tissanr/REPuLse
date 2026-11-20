@@ -1634,9 +1634,9 @@
  :bank       {:category "sample"
               :returns "string"
               :side-effects ["audio"]
-              :examples ["(bank :AkaiLinn)"
+              :examples ["(bank :dirt)"
+                         "(bank :AkaiLinn)"
                          "(bank :RolandTR808)"
-                         "(bank :synth)"
                          "(bank nil)"]
               :see-also ["sample-banks" "sound" "samples!"]}
 

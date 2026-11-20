@@ -2451,13 +2451,19 @@ impl AudioEngine {
             Voice::Noise(NoiseVoice::new(rest, amp, p.decay, seed, sr))
         } else if let Some(rest) = value.strip_prefix("drum:") {
             let name = positional(rest, 0).unwrap_or("");
+            // A fixed noise seed per drum (not the engine's running seed): every
+            // hit of a voice is identical, so a track renders the same alone
+            // (stem export) as in the mix, whatever other voices started before.
+            let drum_seed = name.bytes().fold(0x811C_9DC5u32, |h, b| {
+                (h ^ b as u32).wrapping_mul(0x0100_0193)
+            });
             match drum_voice(
                 name,
                 arg(rest, "tone"),
                 arg(rest, "tune").unwrap_or(0.0),
                 arg(rest, "decay").filter(|d| *d > 0.0),
                 amp,
-                seed,
+                drum_seed,
                 sr,
             ) {
                 Some(d) => {
@@ -2572,6 +2578,11 @@ impl AudioEngine {
             });
             return;
         } else {
+            // The four original drum voices. Since the default-kit decision
+            // (2026-11-21, see drum-route in app/src/repulse/voices.cljs) no
+            // pattern reaches them: bare :bd :sd :hh :oh play the synth kit
+            // ("drum:<name>") and (bank :dirt) plays the Dirt-Samples. They stay
+            // so old trigger strings still play; remove in a cleanup phase.
             match value {
                 "bd" => {
                     let sweep_samples = 0.06 * sr as f64;

@@ -1309,8 +1309,8 @@ const DOCS = {
   },
   "bank": {
     signature: "(bank :prefix)",
-    description: "Set a default bank prefix for all subsequent keyword lookups.",
-    example: "(bank :AkaiLinn)",
+    description: "Choose the drum kit for bare drum names (:bd :sd :hh …). Default (no bank, (bank nil), (bank :synth)): REPuLse's synth kit. (bank :dirt): the Dirt-Samples drums. (bank :AkaiLinn) etc.: that drum machine's samples.",
+    example: "(bank :dirt)",
   },
   "sound": {
     signature: "(sound bank n)",

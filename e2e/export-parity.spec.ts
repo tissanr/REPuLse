@@ -259,7 +259,10 @@ test('plugin worklets render offline (bitcrusher bits, dattorro reverb)', async 
   expect(h(c1.wav)).toBeGreaterThanOrEqual(0.05);
   expect(h(c0.wav)).toBeLessThanOrEqual(0.005);
 
-  const plate = (m: string) => `(bpm 240)\n(track :t (seq :hh :_ :_ :_))${m}\n(export 2)`;
+  // A snare, not a hat: since the synth kit is the default (2026-11-21) bare
+  // :hh is the synth hat, quieter than the old noise hat, and its reverb tail
+  // sat just below the 1e-3 bound. The snare also dies out before 0.3 s.
+  const plate = (m: string) => `(bpm 240)\n(track :t (seq :sd :_ :_ :_))${m}\n(export 2)`;
   const d1 = await exportBuffer(page, plate('\n(master (fx :dattorro-reverb 0.5))'));
   await expect(output(page)).toHaveText('exported all tracks — 2 cycles (offline)');
   const d0 = await exportBuffer(page, plate(''));

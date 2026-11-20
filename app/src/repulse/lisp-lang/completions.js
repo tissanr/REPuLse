@@ -323,7 +323,7 @@ export const BUILTINS = [
   // --- Samples ---
   { label: "samples!",     type: "function", detail: "(samples! url) — load external sample bank" },
   { label: "sample-banks", type: "function", detail: "(sample-banks) — list all registered bank names" },
-  { label: "bank",         type: "function", detail: "(bank :prefix) — resolve bare drum keywords to a drum-machine bank; (bank :synth) = the synthesized kit; (bank nil) clears" },
+  { label: "bank",         type: "function", detail: "(bank :prefix) — kit for bare drum names: default = synth kit; (bank :dirt) = Dirt-Samples drums; (bank :RolandTR808) = a drum machine; (bank nil) clears" },
   // --- Effects ---
   { label: "fx",          type: "function", detail: "(fx :name param) — global effect; inside ->>: (fx :name param pat) — per-track effect on this track only" },
   { label: "master",      type: "keyword",  detail: "(master (fx …) …) — global effect chain block; only (fx …) forms inside, at most one per buffer" },

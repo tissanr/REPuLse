@@ -1865,12 +1865,15 @@ automatically from Strudel's CDN when the app starts. Samples are fetched and ca
 
 ### Keywords as sounds
 
-Any keyword is looked up as a sample bank name:
+The 18 drum names (`:bd :sd :hh :oh :cp :rim :lt :mt :ht :cb :cr :rd :sh :tb :cl :cg :zap
+:click`) play REPuLse's own [synth drum kit](#synth-drum-kit), the default kit. Any other
+keyword is looked up as a sample bank name:
 
 ```lisp
-(seq :bd :sd :hh :cp)     ; kick, snare, hi-hat, clap
-(seq :arpy :arpy :arpy)   ; arpeggio synth
-(seq :bass)               ; bass
+(seq :bd :sd :hh :cp)     ; kick, snare, hi-hat, clap — the synth kit
+(seq :arpy :arpy :arpy)   ; arpeggio synth (sample)
+(seq :bass)               ; bass (sample)
+(bank :dirt)              ; bare drum names play the Dirt-Samples drums instead
 ```
 
 If the sample bank doesn't exist, REPuLse falls back to the synthesis engine (a sine tone at 440 Hz).
@@ -1883,7 +1886,7 @@ sound name shows a warning in the output line and a yellow underline on each occ
 ;;    unknown sound :snare — did you mean :sd?
 ```
 
-The built-in drums are `:bd :sd :hh :oh`; common names from other tools (`:kick`, `:snare`,
+The built-in drums are the 18 names of the synth kit; common names from other tools (`:kick`, `:snare`,
 `:hat`/`:hihat`, `:openhat`) are suggested as their REPuLse equivalent, and other typos are
 matched against the loaded sample banks (`(sample-banks)` lists them). The check runs once per
 evaluation over the first four cycles of each track, and waits for sample manifests that are
@@ -1911,7 +1914,7 @@ Numbers are treated as Hz and played as a sine tone:
 Most sample banks contain multiple variations (different kit sounds). Use `sound` to pick one:
 
 ```lisp
-(sound :bd 0)     ; first bd sample (same as :bd alone)
+(sound :bd 0)     ; first bd sample (same as :bd under (bank :dirt))
 (sound :bd 3)     ; fourth bd sample
 (sound :arpy 5)   ; sixth arpy sample
 
@@ -1931,16 +1934,17 @@ Set a global prefix so bare keywords resolve to a named drum machine bank:
 (bank :RolandTR808)
 (seq :bd :sd :cp)
 
-; The synthesized kit (see "Synth drum kit"):
-(bank :synth)
-(~ "bd cp bd [cp rim]")
+; The Dirt-Samples drums (the default before 2026-11-21):
+(bank :dirt)
+(seq :bd :sd :hh :sd)
 
-; Clear — bare keywords use the default lookup:
+; Clear — bare drum names play the synth kit (see "Synth drum kit"):
 (bank nil)
 ```
 
 If the prefixed bank doesn't exist (e.g. a machine has no hi-hat), the keyword resolves
-via the standard fallback with no error. The active bank is shown as a badge in the status head
+via the standard fallback with no error: the synth kit for a drum name, else the plain
+sample bank. The active bank is shown as a badge in the status head
 (top of the outline column).
 
 The prefix is a session setting, like `bpm`: it persists across evaluations and page
@@ -1964,26 +1968,41 @@ and the synthesized kit:
 | `:lt` `:mt` `:ht` | low / mid / high tom | `:cg` | conga |
 | `:zap` | laser zap | `:click` | click |
 
-**Selecting the kit:**
+> **The synth kit is the default drum kit** (since 2026-11-21). Bare drum names play it
+> without any `(bank …)`, even when sample banks of the same names have loaded, so drums
+> sound immediately, offline and identically in every export. Before this change, bare
+> `:bd :sd :hh …` played the Dirt-Samples drums once they had loaded; to get that sound
+> back, write `(bank :dirt)`.
+
+**Selecting a kit:**
 
 ```lisp
-(bank :synth)                     ; bare drum names use the synthesized kit
-(~ "bd cp bd [cp rim]")
+(~ "bd cp bd [cp rim]")           ; the synth kit — no bank needed
 
-(bank :RolandTR808)               ; a sampled kit …
+(bank :dirt)                      ; the Dirt-Samples drums (the old default)
+(seq :bd :sd :hh :sd)
+
+(bank :RolandTR808)               ; a drum-machine sample kit …
 (seq :bd :synth_cp)               ; … with one synthesized clap
+
+(bank nil)                        ; back to the synth kit
 ```
 
-- `(bank :synth)` makes the 18 names skip the sample lookup, even when a sample bank
-  of that name has loaded. `(bank nil)` clears it like any other bank.
+| Form | Bare `:bd :sd :hh …` play |
+|---|---|
+| no `(bank …)`, `(bank nil)` or `(bank :synth)` | the synth kit |
+| `(bank :dirt)` | the Dirt-Samples bank of the same name (the synth kit while it is still loading) |
+| `(bank :RolandTR808)`, `(bank :AkaiLinn)`, … | that machine's sample; the synth kit for a drum the machine lacks |
+
 - `:synth_bd`, `:synth_cp`, … play one synthesized voice whatever bank is active.
-- Without `(bank :synth)`, samples win when they have loaded. Before they have,
-  `:bd :sd :hh :oh` play the four original engine voices (a sine-sweep kick, noise
-  snare and hats — unchanged, so older sessions sound the same), and the other 14 names
-  play the synthesized kit. `(sound :bd 2)` always plays a sample.
+- `(sound :bd 2)` always plays a sample (here the third Dirt-Samples kick).
+- Keywords that are not drum names (`:arpy`, `:tabla`, `:sn`, …) play their sample bank
+  under every bank setting.
+- The four original engine drums (a sine-sweep kick, noise snare and hats — the
+  no-sample fallback before the synth kit existed) are no longer played by any pattern.
 
 **Shaping the drums** — `tune`, `tone` and `decay` act on the synthesized kit (samples
-and the four original voices ignore them). Each takes a number, a pattern or a signal:
+ignore them). Each takes a number, a pattern or a signal:
 
 | Function | Range | Meaning |
 |---|---|---|
@@ -2059,7 +2078,9 @@ plus anything loaded via `samples!`):
 ## Available sample banks
 
 Sample banks are loaded from the **Dirt-Samples** and **Tidal Drum Machines** collections.
-They are available after a short initial network fetch.
+They are available after a short initial network fetch. The Dirt-Samples banks that share
+a name with the [synth kit](#synth-drum-kit) (`:bd :sd :hh :oh :cp :cr :cb :lt :mt :ht …`)
+play under `(bank :dirt)` or with `(sound :bd n)`; bare, those names play the synth kit.
 
 ### Dirt-Samples (classic TidalCycles sounds)
 
@@ -2162,8 +2183,8 @@ putting the pattern last:
 > **Note:** `decay`, `attack`, and `release` only affect **synthesised** sounds (note
 > keywords like `:c4`, `saw`, `square`, `sine`, `noise`; `decay` also the
 > [synth drum kit](#synth-drum-kit)). They are silently ignored for
-> **sample-based** sounds (drum keywords like `:bd`, `:sd`, `:hh` when samples play, or
-> any sampled `(bank …)` pattern). To shorten a sample, use the `:end` key via `(->> pat (params {:end 0.5}))`
+> **sample-based** sounds (drum keywords under `(bank :dirt)` or a drum-machine `(bank …)`,
+> and other sample keywords). To shorten a sample, use the `:end` key via `(->> pat (params {:end 0.5}))`
 > instead.
 
 ### `release` — release time in seconds
@@ -2455,7 +2476,7 @@ is `begin`–`end`:
 ### Sample slicing
 
 Cut, rearrange and time-fit samples the Tidal way. These work on **samples only**
-(`(sound :bank n)`, sample keywords such as `:bd` when a bank is loaded); synth voices
+(`(sound :bank n)`, sample keywords such as `:arpy`, or `:bd` under `(bank :dirt)`); synth voices
 ignore them.
 
 | Function | What it does | Event keys |
@@ -2632,7 +2653,7 @@ the cutoff; the curve is a straight line in octaves (an exponential sweep in Hz)
 ```
 
 Pitch modulation works on the tonal synth voices (`:sine` notes, `:saw`, `:square`, `:fm`
-and its presets such as `:epiano`) and on samples. The synthesized drums (`:bd :sd :hh :oh`),
+and its presets such as `:epiano`) and on samples. The synth kit drums (`:bd :sd :hh …`; use `tune`),
 `:noise`, the plucked voices (`:guitar`, `:nylon`, …) and `defsynth` voices ignore it.
 
 **Vowel, coarse, DJ filter:**

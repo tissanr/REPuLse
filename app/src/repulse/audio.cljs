@@ -776,20 +776,11 @@
         (.then (fn [buf] (:length (samples/playback-plan extra (.-duration buf)))))
         (.catch (fn [_] nil)))))
 
-(defn- js-synth
-  "JS synthesis fallback — used when AudioWorklet is unavailable."
-  ([ac t value dest] (js-synth ac t value 1.0 0.0 dest))
-  ([ac t value amp pan dest]
-   (case value
-     :bd (make-kick ac t amp pan dest)
-     :sd (make-snare ac t amp pan dest)
-     :hh (make-hihat ac t amp pan dest)
-     :oh (make-hihat ac t amp pan dest 1.0 0.4 8000)
-     (make-sine ac t 440 1.5 amp 0.001 pan dest))))
-
 (defn- js-kit
   "JS fallback of a synthesized kit voice (SYN6 B4): the nearest JS voice
-   from voices/js-drum. No choke, tone ignored."
+   from voices/js-drum. No choke, tone ignored. Since the default-kit decision
+   (2026-11-21) this is also what bare :bd :sd :hh :oh … play on the JS path;
+   the old fixed JS drums (js-synth) are gone."
   [ac t drum value amp pan dest]
   (let [p (voices/js-drum drum value)]
     (case (:kind p)
@@ -942,12 +933,15 @@
                        extra (sample-extra value timing pitch! pm)]
                    (samples/play! ac t bank 0 amp-v pan-v extra
                                   (js-dest (when ins (sample-length ac bank 0 extra)))))
-                 ;; SYN6 kit voice: tune / tone / decay travel in the string.
+                 ;; SYN6 kit voice — the default drum kit (decision 2026-11-21,
+                 ;; see voices/drum-route): tune / tone / decay travel in the string.
                  :synth-drum
                  (or (when-not offline? (wasm! (voices/drum-string (:name route) value)))
                      (js-kit ac t (:name route) value amp-v pan-v (js-dest 2.0)))
+                 ;; :unknown — a quiet 440 Hz sine (the engine plays any
+                 ;; unparsable string as 440 Hz); sound-check warns.
                  (or (when-not offline? (wasm! (name note)))
-                     (js-synth ac t note amp-v pan-v (js-dest 1.5))))))
+                     (make-sine ac t 440 1.5 amp-v 0.001 pan-v (js-dest 1.5))))))
 
            (number? note)
            (or (when-not offline? (wasm! (str note)))
@@ -981,10 +975,11 @@
              :synth-drum (or (when-not offline?
                                (worklet-trigger! wt (voices/drum-string (:name route) nil) t dest))
                              (js-kit ac t (:name route) nil 1.0 0.0 dest))
+             ;; :unknown — 440 Hz sine
              (if offline?
-               (js-synth ac t value dest)
+               (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)
                (or (worklet-trigger! wt (name value) t dest)
-                   (js-synth ac t value dest))))))
+                   (make-sine ac t 440 1.5 1.0 0.001 0.0 dest))))))
 
        ;; Map with :synth :noise — no :note key
        (and (map? value) (= (:synth value) :noise))

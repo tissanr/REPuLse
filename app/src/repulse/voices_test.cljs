@@ -50,21 +50,31 @@
 ;;; ── Drum routing ─────────────────────────────────────────────────────
 
 (deftest drum-route-rules
+  ;; Default-kit decision 2026-11-21: bare kit names play the synth kit.
   (let [banks (fn [& ks] (fn [k] (contains? (set ks) k)))]
-    (is (= {:kind :synth-drum :name "bd"} (voices/drum-route :bd "synth" (banks :bd)))
-        "(bank :synth) beats a loaded bd bank")
-    (is (= {:kind :sample :bank :bd} (voices/drum-route :bd nil (banks :bd))))
-    (is (= {:kind :legacy-drum :name "bd"} (voices/drum-route :bd nil (banks))))
-    (is (= {:kind :synth-drum :name "cp"} (voices/drum-route :cp nil (banks))))
+    (is (= {:kind :synth-drum :name "bd"} (voices/drum-route :bd nil (banks :bd)))
+        "the synth kit is the default, even with a bd sample bank loaded")
+    (is (= {:kind :synth-drum :name "bd"} (voices/drum-route :bd nil (banks))))
+    (is (= {:kind :synth-drum :name "bd"} (voices/drum-route :bd "synth" (banks :bd))))
+    (is (= {:kind :synth-drum :name "cp"} (voices/drum-route :cp nil (banks :cp))))
+    (is (= {:kind :sample :bank :bd} (voices/drum-route :bd "dirt" (banks :bd)))
+        "(bank :dirt) restores the Dirt-Samples drums")
+    (is (= {:kind :synth-drum :name "bd"} (voices/drum-route :bd "dirt" (banks)))
+        "(bank :dirt) before the samples have loaded")
+    (is (= {:kind :sample :bank :RolandTR808_bd}
+           (voices/drum-route :bd "RolandTR808" (banks :RolandTR808_bd :bd))))
+    (is (= {:kind :synth-drum :name "hh"}
+           (voices/drum-route :hh "RolandTR808" (banks :RolandTR808_bd :hh)))
+        "a machine without that drum falls back to the default kit")
     (is (= {:kind :synth-drum :name "bd"}
            (voices/drum-route :synth_bd "RolandTR808" (banks :RolandTR808_bd :synth_bd))))
     (is (= {:kind :sample :bank :tabla} (voices/drum-route :tabla "synth" (banks :tabla))))
-    (is (= {:kind :sample :bank :RolandTR808_bd}
-           (voices/drum-route :bd "RolandTR808" (banks :RolandTR808_bd :bd))))
+    (is (= {:kind :sample :bank :tabla} (voices/drum-route :tabla nil (banks :tabla))))
+    (is (= {:kind :sample :bank :tabla} (voices/drum-route :tabla "dirt" (banks :tabla))))
     (is (= {:kind :unknown} (voices/drum-route :foo nil (banks))))))
 
 (deftest js-drum-plan
-  (is (= {:kind :kick :f-start 192 :f-end 48 :sweep 0.05 :dur 0.5} (voices/js-drum "bd" nil)))
+  (is (= {:kind :kick :f-start 150 :f-end 40 :sweep 0.06 :dur 0.4} (voices/js-drum "bd" nil)))
   (let [p (voices/js-drum "lt" {:tune 12 :decay 2})]
     (is (close? 262 (:f-start p)))
     (is (close? 164 (:f-end p)))
