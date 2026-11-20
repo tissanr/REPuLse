@@ -4,15 +4,16 @@
 
 | Milestone | Delivered | Still open |
 |---|---|---|
-| **M1** Tidal-Lisp core | 10 / 14 | TL7c, KIT1, SYN6, FX1 — all 🤖👂, need a human listen |
+| **M1** Tidal-Lisp core | 11 / 14 | KIT1, SYN6, FX1 — all 🤖👂, need a human listen |
 | **M2** Full songs | 9 / 10 | WS6 |
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
 
 - **Next for the unattended pipeline:** WS6 — the last open 🤖 phase. After it, every
   remaining phase on the critical path needs a human (🤖👂 or 🧑).
-- **Next for a human session:** TL7c (spec is an outline, expand first), then KIT1,
-  SYN6, FX1; N1 opens M3.
+- **Next for a human session:** KIT1 (spec is an outline, expand first), SYN6 (Part C
+  is unblocked by TL7c), FX1; N1 opens M3. TL7c's listen check runs in the next release
+  test round.
 - **Side track open:** DOC1, TEST2, UI1, R3, PLUG1, O2, PL1.
 
 The *Status* column in the [implementation order](#implementation-order) table shows
@@ -68,7 +69,7 @@ without a human:
 | 7 | TL6 | ✅ | Sample slicing & playback control | 🤖👂 | full | opus |
 | 8 | TL7a | ✅ | Per-event filters, shape & crush | 🤖👂 | full | opus |
 | 8b | TL7b | ✅ | Reverb & delay sends per orbit | 🤖👂 | full | opus |
-| 8c | TL7c | 📋 | Vowel, envelopes & modulators | 🤖👂 | full | opus |
+| 8c | TL7c | ✅ | Vowel, envelopes & modulators | 🤖👂 | full | opus |
 | 9 | KIT1 | 📋 | High-quality drum kits | 🤖👂 | outline | sonnet |
 | 9a | SYN6 | 📋 | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | full | opus |
 | 9b | FX1 | 📋 | Mixing, space & modulation effects | 🤖👂 | full | sonnet |
@@ -2277,7 +2278,7 @@ See full spec: [PROMPTS/PHASE-TL7b.md](PROMPTS/PHASE-TL7b.md)
 
 ---
 
-## Phase TL7c — Vowel, Envelopes & Modulators 📋 *planned*
+## Phase TL7c — Vowel, Envelopes & Modulators ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
@@ -2290,7 +2291,7 @@ nodes can't express.
 - Deferred with reasons: ADSR/`sustain`-level/`hold`, per-event `distort`/`tremolo`/
   `phaser`/`chorus`/`compressor`, `duck`, `room-lp`…, FM controls (SYN6)
 
-**Implemented (awaiting the listen check before ✅):**
+**Delivered:**
 - 28 control fns in `repulse.params`, registered per Rule 3; core does not clamp
 - `repulse.inserts`: envelope model (`env-value`, `env-points`, `effective-depth`), shared
   with lib.rs; `pitch-params`, vowel table, `djf` folded into `lpf`/`hpf`, `nudge`,
@@ -2309,6 +2310,8 @@ nodes can't express.
   `ENV_PARITY_DB`), `inserts_test`, `orbits_test`, `params_test`,
   `e2e/tl7c-envelopes.spec.ts` (JS↔WASM envelope parity within 3 dB, release, `penv` on
   a voice and a sample, vowel, `djf`, `postgain`, `nudge`, `delay-sync`)
+- Marked delivered on merge at the project owner's request; the listen check runs in the
+  next release test round (PR #208 test protocol, tests 1–9)
 
 See full spec: [PROMPTS/PHASE-TL7c.md](PROMPTS/PHASE-TL7c.md)
 
