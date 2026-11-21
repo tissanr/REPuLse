@@ -102,3 +102,15 @@
            (sc/voice-warning-message {:name :xylophone :suggestion nil})))
     (is (empty? (sc/unknown-voices [(voice-pat :my-pad)] known?)) "a defsynth name")
     (is (empty? (sc/unknown-voices [(core/seq* [:bd :c4])] known?)) "no synth maps")))
+
+(deftest qa1-probe-error
+  (let [boom (core/pattern (fn [_] (throw (ex-info "boom" {}))))
+        lazy (core/pattern (fn [_] (map (fn [_] (throw (ex-info "late" {:from 3 :to 7}))) [1])))]
+    (testing "healthy tracks → nil"
+      (is (nil? (sc/probe-error [[:a (core/seq* [:bd :sd])]]))))
+    (testing "the first throwing track, with :from/:to only when the error has them"
+      (is (= {:track :b :message "boom"}
+             (sc/probe-error [[:a (core/pure :bd)] [:b boom] [:c lazy]]))))
+    (testing "lazy errors are realised inside the probe"
+      (is (= {:track :c :message "late" :from 3 :to 7}
+             (sc/probe-error [[:c lazy]]))))))

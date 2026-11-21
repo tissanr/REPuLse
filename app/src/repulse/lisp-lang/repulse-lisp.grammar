@@ -86,8 +86,8 @@ Map    { OpenBrace expr* CloseBrace }
 
   Symbol { identStart identChar* }
 
-  identStart { @asciiLetter | "-" | "_" | "!" | "?" | "+" | "*" | "/" | "=" | "<" | ">" | "." | "'" | "~" }
-  identChar  { @asciiLetter | @digit | "-" | "_" | "!" | "?" | "+" | "*" | "/" | "=" | "<" | ">" | "." | "'" | "~" }
+  identStart { @asciiLetter | "-" | "_" | "!" | "?" | "+" | "*" | "/" | "=" | "<" | ">" | "." | "'" | "~" | "&" }
+  identChar  { @asciiLetter | @digit | "-" | "_" | "!" | "?" | "+" | "*" | "/" | "=" | "<" | ">" | "." | "'" | "~" | "&" }
 
   @precedence { BuiltinName, Symbol }
 

@@ -310,6 +310,19 @@ structure with `segment` or use it inside `pan`, `amp`, `range` and friends.
 (->> (seq :bd :sd) (rate 0.5))
 ```
 
+### ❌ Expecting one broken track to stop everything
+
+A track that fails while it plays — for example a patterned argument that sometimes
+gives a non-number — is **skipped in the cycles where it fails** and reported once on
+the output line, e.g. `Error in track :hats: Expected a number, got :x`. The other tracks
+keep playing. A track that already fails in cycle 0 is an eval error
+(`track :hats fails at cycle 0: …`) and nothing changes.
+
+```clojure
+(track :kick (seq :bd :bd :bd :bd))
+(track :hats (fast "<1 1 x>" (seq :hh)))   ; x is not a number — cycles 2, 5, 8 … skip :hats
+```
+
 ---
 
 ## The editor
@@ -651,6 +664,26 @@ A function body may contain multiple expressions; the last one is the return val
 ```lisp
 (lambda [x] (* x 2))        ; same as (fn [x] (* x 2))
 ```
+
+`& rest` collects any further arguments as a list (`nil` when there are none):
+
+```lisp
+((fn [a & more] more) 1 2 3)   ; => (2 3)
+((fn [a & more] more) 1)       ; => nil
+```
+
+The number of arguments is checked. A call with too few or too many is an error that
+names the function (`defn` name, otherwise `fn`):
+
+```lisp
+(defn f [x] x)
+(f)                  ; Error: f expects 1 argument, got 0
+((fn [a] a) 1 2)     ; Error: fn expects 1 argument, got 2
+(defn g [a & r] a)
+(g)                  ; Error: g expects at least 1 argument, got 0
+```
+
+`recur` only works inside `loop`; anywhere else it is the error `recur outside loop`.
 
 ### Conditionals — `if`
 
@@ -1426,6 +1459,26 @@ most significant bit first, argument order `n` then `bits`, default 16 bits for 
 `sew`, `stitch`, `binary` and `binary-n` have no curried form. Numeric arguments of all
 the functions above accept patterns or mini-notation strings, e.g. `(zoom 0 "<1 1/2>" pat)`.
 
+### Count limits
+
+Step and layer counts have an upper limit, so a typo cannot hang the tab. A literal
+argument over the limit is an eval error; a patterned one is reported when the cycle
+that uses it plays (the track is skipped in that cycle).
+
+| Limit | Applies to | Example error |
+|---|---|---|
+| **1024** steps / repeats | `run`, `euclidean` / `euclid-legato` / `euclid-legato-rot` steps, `ply`, `ply-with`, `ply-for-each`, `segment`, `chunk` / `chunk-back` / `fast-chunk` / `chunk-into` / `chunk-back-into`, mini-notation `!n` | `run: n = 1025 exceeds the limit of 1024` |
+| **64** layers / iterations | `apply-n`, `echo` / `stut` times, `echo-with` / `stutter` n | `echo: times = 100 exceeds the limit of 64` |
+
+```lisp
+(run 1024)                     ; fine — 1024 steps in one cycle
+(euclidean 3 100000000 :bd)    ; Error: euclidean: n = 100000000 exceeds the limit of 1024
+(apply-n 65 rev (seq 1 2))     ; Error: apply-n: n = 65 exceeds the limit of 64
+```
+
+`every` and `first-of` need `n` of at least 1: `(every 0 rev pat)` is the error
+`every: n must be at least 1, got 0`. A rational `n` is truncated (`(every 5/2 …)` = every 2).
+
 ---
 
 ## Combining patterns
@@ -1497,6 +1550,31 @@ floats.
 
 Mini-notation strings are also accepted directly wherever an argument is patternable:
 `(fast "<1 2>" pat)` ≡ `(fast (~ "<1 2>") pat)` (see [Patterned arguments](#patterned-arguments)).
+
+### Numbers, fractions and errors
+
+`*` and `@` take fractions and rationals; `!n` and `:n` take whole numbers:
+
+```lisp
+(~ "hh*0.5")         ; one hat every two cycles (whole length 2)
+(~ "bd*1.5")         ; onsets at 0 and 2/3 of the cycle
+(~ "bd*3/2")         ; same, exact rational
+(~ "bd@1.5 sd")      ; bd takes 0.6 of the cycle, sd 0.4
+```
+
+A token is a number only if the **whole token** is one: `1`, `-2`, `0.5`, `.5` or `3/8`.
+Anything else is a sound name — `"808bd"` is `:808bd` and `"1e3"` is `:1e3`. A
+non-number after `*`, `@` or `%` is an error.
+
+Errors give their position, counted from 0 inside the string, and only the offending
+token is underlined in the editor:
+
+```lisp
+(~ "bd ] sd")        ; Error: Unexpected "]" in mini-notation at position 3
+(~ "bd [sd")         ; Error: Expected ] in mini-notation at position 6
+(~ ":bd")            ; Error: Unexpected ":" in mini-notation at position 0
+(~ "bd*x")           ; Error: Expected a number after * in mini-notation at position 3
+```
 
 ### Mini-notation inside Lisp
 
@@ -1681,6 +1759,15 @@ Available scales: `:major` (`:ionian`), `:minor` (`:aeolian`), `:dorian`, `:phry
 `:blues`, `:harmonic-minor`, `:melodic-minor`, `:whole-tone`, `:chromatic`, `:hirajoshi`,
 `:phrygian-dominant`, `:lydian-dominant`, `:altered`, `:diminished`, `:bebop-dominant`.
 
+An unknown scale name or root is an error with a suggestion where one is close
+(patterned names are checked when the cycle plays):
+
+```lisp
+(scale :majr :c4 (seq 0))    ; Error: scale: unknown scale :majr — did you mean :major?
+(scale :major :zz (seq 0))   ; Error: scale: unknown root :zz — expected a note like :c4, :eb3 or :fs
+(scale [] :c4 (seq 0))       ; Error: scale: the interval vector is empty
+```
+
 ### `chord` — stacked chord voicings
 
 Returns a `stack` of the chord tones as note names — all voices sound simultaneously for
@@ -1701,7 +1788,9 @@ octave 4):
 ```
 
 Keyword chords: `:major`, `:minor`, `:major7`, `:minor7`, `:dom7`, `:m7b5` (half-diminished),
-`:dim`, `:dim7`, `:aug`, `:aug7`, `:maj7s11`, `:sus2`, `:sus4`.
+`:dim`, `:dim7`, `:aug`, `:aug7`, `:maj7s11`, `:sus2`, `:sus4`. Any other keyword is an
+error — `(chord :majr :c4)` gives `chord: unknown chord :majr — did you mean :major?`
+(it used to play C major silently).
 
 **Chord symbols** are a root `A`–`G` with an optional `#` or `b`, a quality, and an optional
 slash bass (`"C/E"` puts the E below the chord). 34 qualities are understood:
@@ -2158,6 +2247,10 @@ putting the pattern last:
      (decay 0.5))
 ; ≡ (decay 0.5 (attack 0.02 (amp 0.7 (seq :c4 :e4 :g4))))
 ```
+
+The `≡` is literal: `->>` and `->` rewrite the code into nested calls before evaluating
+it, like Clojure. So an error in a step underlines that step's function, macros work as
+steps, and a keyword works as a lookup step: `(-> {:a 1} :a)` → `1`.
 
 ### `amp` — amplitude (0.0–1.0)
 
@@ -3007,6 +3100,13 @@ solo, remove the `:solo` from the form (or press **S** again).
 ```
 
 Each entry is `[pattern cycles]`. After the total duration the arrangement loops.
+Durations may be fractional (`3/2`, `1.5`): a section that ends mid-cycle is cut there
+and the next one starts at that point. A duration of 0 or less is an error
+(`arrange: duration must be positive, got 0`).
+
+```lisp
+(arrange [[(seq :a) 3/2] [(seq :b) 1/2]])   ; a for 1½ cycles, b for ½, loop every 2
+```
 
 ### `play-scenes` — one cycle per section
 

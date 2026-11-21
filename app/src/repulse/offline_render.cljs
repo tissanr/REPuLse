@@ -86,25 +86,32 @@
 (defn job-events
   "Pure. The export's onsets as [{:track kw :event ev :t secs}] with t relative
    to bar 0 (exports ignore mute, E12).
-   :cycles — cycles 0…n−1 of every track; :song — one pass of the song."
-  [{:keys [kind tracks n cycle-dur] s :song}]
-  (case kind
-    :cycles
-    (vec
-     (for [c         (range n)
-           [kw pat]  tracks
-           :when     pat
-           ev        (core/query-onsets pat {:start [c 1] :end [(inc c) 1]})
-           :let      [t (* (core/rat->float (:start (:whole ev))) cycle-dur)]
-           :when     (>= t 0)]
-       {:track kw :event ev :t t}))
+   :cycles — cycles 0…n−1 of every track; :song — one pass of the song.
+   With on-error (fn [track-kw error]), a track whose query throws is left out
+   of that cycle and reported; the export goes on (QA1 decision 4)."
+  ([job] (job-events job nil))
+  ([{:keys [kind tracks n cycle-dur] s :song} on-error]
+   (case kind
+     :cycles
+     (vec
+      (for [c         (range n)
+            [kw pat]  tracks
+            :when     pat
+            ev        (let [sp {:start [c 1] :end [(inc c) 1]}]
+                        (if on-error
+                          (try (vec (core/query-onsets pat sp))
+                               (catch :default e (on-error kw e) nil))
+                          (core/query-onsets pat sp)))
+            :let      [t (* (core/rat->float (:start (:whole ev))) cycle-dur)]
+            :when     (>= t 0)]
+        {:track kw :event ev :t t}))
 
-    :song
-    (vec
-     (for [bar (range (song/song-length s))
-           {:keys [track event]} (song/song-onsets s tracks #{} bar)]
-       {:track track :event event
-        :t (* (core/rat->float (:start (:whole event))) cycle-dur)}))))
+     :song
+     (vec
+      (for [bar (range (song/song-length s))
+            {:keys [track event]} (song/song-onsets s tracks #{} bar on-error)]
+        {:track track :event event
+         :t (* (core/rat->float (:start (:whole event))) cycle-dur)})))))
 
 ;;; ── Graph building ─────────────────────────────────────────────────────
 
@@ -300,7 +307,7 @@
                                       ;; SYN6 C4: glide like playback.
                                       (voices/glide-all
                                         (map #(assoc % :value (:value (:event %)))
-                                             (job-events job))))]
+                                             (job-events job audio/report-query-error!))))]
                    (-> (js/Promise.all (into-array pending))
                        (.then (fn [_] (audio/sync-worklet! node)))))))
               (.then (fn [_] (.startRendering offline)))

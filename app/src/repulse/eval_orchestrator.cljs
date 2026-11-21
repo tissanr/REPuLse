@@ -109,7 +109,10 @@
          (fn []
            (editor/clear-highlights!)
            (set-playing!-fn false)
-           (set-output!-fn "song finished" :idle))))
+           (set-output!-fn "song finished" :idle)))
+  ;; QA1: a track whose query throws while playing is reported once.
+  (swap! audio/scheduler-state assoc :on-query-error
+         (fn [msg] (set-output!-fn msg :error))))
 
 ;;; Diagnostics
 
@@ -204,7 +207,7 @@
   [track-names last-output set-output!]
   (let [tracks (:tracks @audio/scheduler-state)
         msgs   (orbits/orbit-warnings (keep #(get tracks %) track-names)
-                                      (fn [pat c] (core/query pat (core/cycle-span c)))
+                                      (fn [pat c] (vec (core/query pat (core/cycle-span c))))
                                       orbit-scan-cycles)]
     (when (seq msgs)
       (doseq [m msgs] (js/console.warn "[REPuLse]" m))
@@ -353,7 +356,28 @@
                                 (def-final? (if project (project/code-of project (:main project)) code)))
                            nil
                            :else v))
-              underscore? (volatile! false)]
+              underscore? (volatile! false)
+              ;; QA1 decision 3: query every new track (and a pattern result)
+              ;; for cycle 0 before anything starts. A throw is an eval error;
+              ;; nothing is activated or retired.
+              probe (sound-check/probe-error
+                     (cond-> @song-transport/pending-tracks
+                       (core/pattern? val) (conj [:_ val])
+                       (and (map? val) (not (core/pattern? val))
+                            (or (:note val) (:bank val) (:synth val)))
+                       (conj [:_ (core/pure val)])))]
+          (if probe
+            (let [{:keys [track message from to]} probe
+                  msg (if (= track :_)
+                        (str "pattern fails at cycle 0: " message)
+                        (str "track " track " fails at cycle 0: " message))
+                  src (if from
+                        {:from from :to to}
+                        (select-keys (get @song-transport/pending-track-srcs track) [:from :to]))]
+              (song-transport/reset-pending!)
+              (report-eval-error! {:message msg :source src} project set-output!)
+              {:ok? false :error msg})
+          (do
           (when project (reset! last-bases bases))
           ;; Clear stale diagnostics only when there is a real result.
           ;; A nil val means the command handled output itself (e.g. (upd), (stop))
@@ -472,7 +496,7 @@
                                     (or (project/code-of project (:active project)) "")
                                     code)
                                   @last-output set-output!)
-          {:ok? true})))))
+          {:ok? true})))))))
 
 (defn evaluate!
   "Evaluate a single code string (command bar, (upd), tap, demos, …).

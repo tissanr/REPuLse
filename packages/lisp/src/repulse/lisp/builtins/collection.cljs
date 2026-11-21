@@ -28,8 +28,8 @@
    "cons"    (fn [x coll] (cons (u/unwrap x) (u/unwrap coll)))
    "concat"  (fn [& colls] (apply concat (map u/unwrap colls)))
    "vec"     (fn [coll] (vec (u/unwrap coll)))
-   "map"     (fn [f coll] (map f (u/unwrap coll)))
-   "filter"  (fn [f coll] (filter f (u/unwrap coll)))
+   "map"     (fn [f coll] (doall (map f (u/unwrap coll))))
+   "filter"  (fn [f coll] (doall (filter f (u/unwrap coll))))
    "reduce"  (fn
                ([f coll]      (reduce f (u/unwrap coll)))
                ([f init coll] (reduce f (u/unwrap init) (u/unwrap coll))))
