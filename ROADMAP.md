@@ -4,7 +4,7 @@
 
 | Milestone | Delivered | Still open |
 |---|---|---|
-| **M1** Tidal-Lisp core | 11 / 14 | KIT1, SYN6 (implemented, listen check open), FX1 — all 🤖👂 |
+| **M1** Tidal-Lisp core | 12 / 14 | KIT1, FX1 — both 🤖👂 |
 | **M2** Full songs | 9 / 10 | WS6 |
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
@@ -12,9 +12,8 @@
 - **Next for the unattended pipeline:** QA2 → QA3 → QA4 (quality track, added
   2026-11-20 from a code review; QA1 delivered), then WS6. After them, every remaining phase on the
   critical path needs a human (🤖👂 or 🧑).
-- **Next for a human session:** the SYN6 listen check (all four parts implemented, PR on
-  `dev`), then FX1 (three owner questions open) and KIT1 (spec is an outline, expand
-  first); N1 opens M3. TL7c's listen check runs in the next release test round.
+- **Next for a human session:** FX1 (three owner questions open) and KIT1 (spec is an
+  outline, expand first); N1 opens M3. TL7c's listen check runs in the next release test round.
 - **Side track open:** DOC1, TEST2, UI1, R3, PLUG1, O2, PL1; quality track QA5 (🧑),
   QA6 (🤖👂), QA7 (🧑).
 
@@ -81,7 +80,7 @@ without a human:
 | 8b | TL7b | ✅ | Reverb & delay sends per orbit | 🤖👂 | full | opus |
 | 8c | TL7c | ✅ | Vowel, envelopes & modulators | 🤖👂 | full | opus |
 | 9 | KIT1 | 📋 | High-quality drum kits | 🤖👂 | outline | sonnet |
-| 9a | SYN6 | 📋 | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | full | opus |
+| 9a | SYN6 | ✅ | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | full | opus |
 | 9b | FX1 | 📋 | Mixing, space & modulation effects | 🤖👂 | full | sonnet |
 | **M2** | | | **Full songs** | | | |
 | 10 | SONG1 | ✅ | Sections, song form & full-song render | 🤖 | full | opus |
@@ -1177,7 +1176,7 @@ See full spec: [PROMPTS/PHASE-SYN5.md](PROMPTS/PHASE-SYN5.md)
 
 ---
 
-## Phase SYN6 — Synth Essentials: Oscillators, Drum Kit & Synth Instruments 📋 *planned*
+## Phase SYN6 — Synth Essentials: Oscillators, Drum Kit & Synth Instruments ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
@@ -1189,7 +1188,7 @@ Everything a song needs from the built-in synthesizer, in one phase.
 - Synth instruments (after TL7a and TL7c): `:acid` `:reese` `:sub-bass` `:fm-bass` `:wobble` `:lead` `:sync-lead` `:pluck` `:theremin` `:reed` `:pad` `:strings` `:sweep-pad` `:brass-pad`; `(glide secs pat)`; explicit parameters override preset values
 - Housekeeping: warning for unknown `(synth :name)` voices (today they play a plain sine without a message), `:trumpet-cup` (documented, not implemented), one shared voice list
 
-**Implemented (2026-11-20) — not delivered until the listen check (🤖👂) has passed:**
+**Delivered:**
 - Rust: PolyBLEP saw/pulse and PolyBLAMP triangle in one `Voice::Osc` (replaces `Saw` /
   `Square`) with up to 7 unison oscillators (fixed start phases, stereo via `tick2` and a
   second insert chain), `sub-osc`, PWM, hard sync and glide; noise colours white, pink,
@@ -1213,6 +1212,8 @@ Everything a song needs from the built-in synthesizer, in one phase.
   loaded. `(bank :dirt)` restores the Dirt-Samples drums (the old default); drum-machine
   banks and `(sound :bd n)` are unchanged. The four legacy engine drums are no longer
   reachable from patterns.
+- Listen check passed: the project owner worked through the PR #212 test protocol
+  before merging (2026-11-21)
 
 See full spec: [PROMPTS/PHASE-SYN6.md](PROMPTS/PHASE-SYN6.md)
 
