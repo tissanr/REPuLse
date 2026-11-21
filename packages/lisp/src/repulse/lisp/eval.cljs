@@ -24,29 +24,10 @@
 (def source-of util/source-of)
 (def ->num    util/->num)
 
-;;; Levenshtein / typo hints
+;;; Levenshtein / typo hints (moved to util so builtins can use them)
 
-(defn levenshtein [a b]
-  (let [m (count a) n (count b)
-        row (atom (vec (range (inc n))))]
-    (dotimes [i m]
-      (let [prev @row
-            cur  (atom [(inc i)])]
-        (dotimes [j n]
-          (swap! cur conj
-                 (if (= (nth a i) (nth b j))
-                   (nth prev j)
-                   (inc (min (nth prev (inc j))
-                             (last @cur)
-                             (nth prev j))))))
-        (reset! row @cur)))
-    (last @row)))
-
-(defn typo-hint [name known]
-  (when (seq known)
-    (let [best (apply min-key #(levenshtein name (str %)) known)]
-      (when (<= (levenshtein name (str best)) 3)
-        best))))
+(def levenshtein util/levenshtein)
+(def typo-hint util/typo-hint)
 
 (declare eval-form)
 
@@ -60,11 +41,52 @@
   (and (seq? child) (symbol? (first child)) (= "fx" (str (first child)))))
 
 
-(defn make-closure [params body env]
-  (fn [& args]
-    (let [bound (zipmap (map str params) args)
-          local (merge env bound)]
-      (last (map #(eval-form % local) body)))))
+(defn- arg-count-str [n] (str n " argument" (when (not= n 1) "s")))
+
+(defn bind-params
+  "Local bindings {\"name\" value} for params ([a b] or [a b & rest]) and args.
+   A wrong argument count throws: \"f expects 1 argument, got 0\",
+   \"f expects at least 1 argument, got 0\". Every parameter is always bound,
+   so a global of the same name is never read in its place. rest is nil when
+   no extra arguments were passed, else a seq."
+  [fname params args]
+  (let [names  (mapv str params)
+        amp    (.indexOf names "&")
+        fixed  (if (neg? amp) names (subvec names 0 amp))
+        rest-n (when-not (neg? amp) (get names (inc amp)))
+        nfix   (count fixed)
+        nargs  (count args)]
+    (when (if rest-n (< nargs nfix) (not= nargs nfix))
+      (throw (ex-info (str fname " expects " (when rest-n "at least ")
+                           (arg-count-str nfix) ", got " nargs)
+                      {:type :eval-error})))
+    (cond-> (zipmap fixed args)
+      rest-n (assoc rest-n (seq (drop nfix args))))))
+
+(defn make-closure
+  ([params body env] (make-closure params body env "fn"))
+  ([params body env fname]
+   ;; A fn body is not a recur target of an enclosing loop.
+   (let [env (dissoc env :*in-loop*)]
+     (fn [& args]
+       (let [local (merge env (bind-params fname params args))]
+         (last (map #(eval-form % local) body)))))))
+
+(defn- thread-form
+  "Rewrite (->> x s1 s2 …) / (-> x s1 s2 …) into nested calls: each step
+   (f a) becomes (f a acc) for :last or (f acc a) for :first; a bare step g
+   becomes (g acc). Steps keep their {:source …} metadata."
+  [kind [x & steps]]
+  (reduce (fn [acc step]
+            (if (seq? step)
+              (let [[h & args] step]
+                (with-meta (apply list h (if (= kind :last)
+                                           (concat args [acc])
+                                           (cons acc args)))
+                  (meta step)))
+              (with-meta (list step acc)
+                (when-let [src (source-of step)] {:source src}))))
+          x steps))
 
 ;;; loop/recur sentinel — a plain map, caught by `loop` iteration
 
@@ -124,7 +146,7 @@
       (str nm " is a pattern, not a function. Use it without parentheses, "
            "e.g. (segment 8 " nm ") or (pan " nm " pat)")
       :else
-      (str (pr-str head-form) " is not a function"))))
+      (str (form-str head-form) " is not a function"))))
 
 (defn- with-call-source
   "Tag a plain value map returned by a call — (sound :bd 0), (fm :c4) — with the
@@ -186,7 +208,7 @@
         "defn"
         ;; (defn name [params] body...) — sugar for (def name (fn [params] body...))
         (let [[name-sym params & body] tail
-              f (make-closure params body env)]
+              f (make-closure params body env (str name-sym))]
           (when-let [defs (:*defs* env)]
             (swap! defs assoc (str name-sym) f))
           f)
@@ -237,46 +259,14 @@
         "do"
         (last (map #(eval-form % env) tail))
 
-        "->>"
-        ;; Thread-last: pass accumulator as last arg to each subsequent call form.
-        (reduce
-          (fn [acc form]
-            (if (seq? form)
-              (let [[fhead & fargs] form
-                    f    (eval-form fhead env)
-                    args (mapv #(eval-form % env) fargs)]
-                (if (fn? f)
-                  (apply f (concat args [acc]))
-                  (throw (ex-info (not-a-function-msg fhead f)
-                                  {:type :eval-error}))))
-              ;; Bare symbol — call as unary function
-              (let [f (eval-form form env)]
-                (if (fn? f)
-                  (f acc)
-                  (throw (ex-info (not-a-function-msg form f)
-                                  {:type :eval-error}))))))
-          (eval-form (first tail) env)
-          (rest tail))
-
-        "->"
-        ;; Thread-first: pass accumulator as first arg to each subsequent call form.
-        (reduce
-          (fn [acc form]
-            (if (seq? form)
-              (let [[fhead & fargs] form
-                    f    (eval-form fhead env)
-                    args (mapv #(eval-form % env) fargs)]
-                (if (fn? f)
-                  (apply f acc args)
-                  (throw (ex-info (not-a-function-msg fhead f)
-                                  {:type :eval-error}))))
-              (let [f (eval-form form env)]
-                (if (fn? f)
-                  (f acc)
-                  (throw (ex-info (not-a-function-msg form f)
-                                  {:type :eval-error}))))))
-          (eval-form (first tail) env)
-          (rest tail))
+        ("->>" "->")
+        ;; Threading is a syntactic rewrite (QA1): (->> x (f a) g) evaluates
+        ;; (g (f a x)), so errors highlight, macros expand and keyword steps work.
+        (if (empty? tail)
+          (throw (ex-info (str head " needs at least one argument")
+                          (merge {:type :eval-error}
+                                 (select-keys (source-of form) [:from :to]))))
+          (eval-form (thread-form (if (= "->>" (str head)) :last :first) tail) env))
 
         "quasiquote"
         ;; Produced by the ` reader macro
@@ -287,8 +277,7 @@
         ;; Stores a macro function that receives unevaluated argument forms.
         (let [[name-sym params & body] tail
               macro-fn (fn [& args]
-                         (let [bound (zipmap (map str params) args)
-                               local (merge env bound)]
+                         (let [local (merge env (bind-params (str name-sym) params args))]
                            (last (map #(eval-form % local) body))))]
           (when-let [macros (:*macros* env)]
             (swap! macros assoc (str name-sym) macro-fn))
@@ -347,7 +336,7 @@
                                    " iterations")
                               {:type :eval-error})))
             (let [local (reduce (fn [e [n v]] (assoc e n v))
-                                env
+                                (assoc env :*in-loop* true)
                                 (map vector binding-names current-vals))
                   result (reduce (fn [_ form]
                                    (let [r (eval-form form local)]
@@ -361,7 +350,11 @@
 
         "recur"
         ;; (recur expr...) — jump to enclosing loop with new binding values
-        (recur-sentinel (mapv #(eval-form % env) tail))
+        (if (:*in-loop* env)
+          (recur-sentinel (mapv #(eval-form % env) tail))
+          (throw (ex-info "recur outside loop"
+                          (merge {:type :eval-error}
+                                 (select-keys (source-of form) [:from :to])))))
 
         ;; Function call — check macros first, then eval as function
         (let [head-name (when (symbol? head) (str head))

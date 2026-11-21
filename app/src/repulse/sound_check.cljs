@@ -84,7 +84,7 @@
    bank-names  — registered bank names (strings), used for suggestions."
   [patterns known-bank? bank-names]
   (->> patterns
-       (mapcat #(try (sound-keywords %) (catch :default _ nil)))
+       (mapcat #(try (vec (sound-keywords %)) (catch :default _ nil)))
        distinct
        (remove #(or (contains? builtin-drums %) (synth-drum-kw? %) (known-bank? %)))
        (mapv (fn [kw] {:name kw :suggestion (suggest kw bank-names)}))))
@@ -107,7 +107,7 @@
    known-voice? — (fn [kw]) true for a built-in voice or a defsynth name."
   [patterns known-voice?]
   (->> patterns
-       (mapcat #(try (synth-voice-names %) (catch :default _ nil)))
+       (mapcat #(try (vec (synth-voice-names %)) (catch :default _ nil)))
        distinct
        (remove known-voice?)
        (mapv (fn [kw]
@@ -145,6 +145,19 @@
       (if-let [m (.exec re code)]
         (recur (conj acc {:from (.-index m) :to (+ (.-index m) (count token))}))
         acc))))
+
+(defn probe-error
+  "Pure (QA1 decision 3). Query every track [[kw pat] …] for cycle 0 and
+   realise the events. nil when all succeed, else the first failure as
+   {:track kw :message msg} plus :from/:to when the error carries a position."
+  [tracks]
+  (some (fn [[kw pat]]
+          (try (dorun (core/query pat (core/cycle-span 0)))
+               (catch :default e
+                 (let [{:keys [from to]} (ex-data e)]
+                   (cond-> {:track kw :message (or (ex-message e) (str e))}
+                     (and from to) (assoc :from from :to to))))))
+        tracks))
 
 (defn has-analog-events?
   "True when pat yields any continuous (whole-less) event in cycle 0.

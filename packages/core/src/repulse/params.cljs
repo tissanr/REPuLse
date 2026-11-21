@@ -152,8 +152,9 @@
   [f v]
   (if (= v :_) v (update (to-map v) :amp #(* (or % 1.0) f))))
 
-(defn- echo* [times time feedback pat]
-  (let [n  (int (core/rat->float (core/->rat times)))
+(defn- echo* [fname times time feedback pat]
+  (let [n  (core/check-count! fname "times" (int (core/rat->float (core/->rat times)))
+                              core/max-layers)
         fb (core/rat->float (core/->rat feedback))
         t  (core/->rat time)]
     (core/stack* (mapv (fn [i]
@@ -164,12 +165,12 @@
 (defn echo
   "Strudel echo: times layers, each `time` later, amp × feedback^i."
   [times time feedback pat]
-  ((core/patternify3 echo*) times time feedback pat))
+  ((core/patternify3 (partial echo* "echo")) times time feedback pat))
 
 (defn stut
   "Strudel stut: echo with Tidal argument order (times feedback time)."
   [times feedback time pat]
-  (echo times time feedback pat))
+  ((core/patternify3 (partial echo* "stut")) times time feedback pat))
 
 (defn jux-flip-by
   "jux-by whose width alternates between w and −w every cycle."

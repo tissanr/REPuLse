@@ -335,6 +335,9 @@
                  ;; a track's GainNode (to watch the retire ramp).
                  :tracks     (fn [] (clj->js (sort (map name (keys (:tracks @audio/scheduler-state))))))
                  :cycle      (fn [] (:cycle @audio/scheduler-state))
+                 ;; Phase QA1 (e2e/robust-playback.spec.ts): onsets scheduled
+                 ;; for a track since the last stop.
+                 :onsetCount (fn [track] (get @audio/scheduled-counts (keyword track) 0))
                  :trackGainNode (fn [track] (get-in @audio/track-nodes [(keyword track) :gain-node]))
                  :audioTime  (fn [] (.-currentTime (audio/get-ctx)))
                  :selection  (fn [] (clj->js @outline-panel/selection))

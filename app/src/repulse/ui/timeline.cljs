@@ -29,7 +29,7 @@
 
 (defn track-events [track-name pattern cycle color muted?]
   (let [sp {:start [cycle 1] :end [(inc cycle) 1]}
-        evs (try (core/query pattern sp) (catch :default _ []))]
+        evs (try (vec (core/query pattern sp)) (catch :default _ []))]
     {:name track-name
      :cycle cycle
      :color color
