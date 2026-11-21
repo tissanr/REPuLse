@@ -1531,8 +1531,8 @@
 (deftest qa1-arrange-rational
   (let [a (c/pure :a) b (c/pure :b)
         expected [[:a [0 1] [0 1]]
-                  [:a [1 1.5] [1 2]]
-                  [:b [1.5 2] [1.5 2.5]]]]
+                  [:a [1 1.5] [1 1.5]]
+                  [:b [1.5 2] [1.5 2]]]]
     (testing "a section ending mid-cycle hands over to the next at that point"
       (is (= expected (qa1-events (c/arrange* [[a [3 2]] [b [1 2]]]) 0 2))))
     (testing "floats give the same result"
@@ -1542,6 +1542,9 @@
     (testing "integer durations are unchanged"
       (is (= [[:a [0 1] [0 1]] [:a [1 2] [1 2]] [:b [2 3] [2 3]] [:a [3 4] [3 4]]]
              (qa1-events (c/arrange* [[a 2] [b 1]]) 0 4)))))
+  (testing "a note never outlasts its section (onset kept, whole end clipped)"
+    (is (= [[:a [0 1] [0 1]] [:b [1 2] [1 2]]]
+           (qa1-events (c/arrange* [[(c/slow 2 (c/pure :a)) 1] [(c/pure :b) 1]]) 0 2))))
   (testing "durations must be positive"
     (is (= "arrange: duration must be positive, got 0" (qa1-msg #(c/arrange* [[(c/pure :a) 0]]))))
     (is (= "arrange: duration must be positive, got -1/2"
