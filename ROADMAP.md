@@ -1,6 +1,6 @@
 # REPuLse — Roadmap
 
-## Where we stand (updated 2026-11-20)
+## Where we stand (updated 2026-11-21)
 
 | Milestone | Delivered | Still open |
 |---|---|---|
@@ -9,8 +9,8 @@
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
 
-- **Next for the unattended pipeline:** QA1 → QA2 → QA3 → QA4 (quality track, added
-  2026-11-20 from a code review), then WS6. After them, every remaining phase on the
+- **Next for the unattended pipeline:** QA2 → QA3 → QA4 (quality track, added
+  2026-11-20 from a code review; QA1 delivered), then WS6. After them, every remaining phase on the
   critical path needs a human (🤖👂 or 🧑).
 - **Next for a human session:** the SYN6 listen check (all four parts implemented, PR on
   `dev`), then FX1 (three owner questions open) and KIT1 (spec is an outline, expand
@@ -61,7 +61,7 @@ without a human:
 | **Tooling** | | | **Test coverage (no milestone, runs first)** | | | |
 | 0 | TEST3 | ✅ | Release-protocol automation: UI workflows & measured sound | 🤖 | full | sonnet |
 | **Quality** | | | **Quality track (no milestone, from the 2026-11-20 review)** | | | |
-| 0a | QA1 | 📋 | Robust language & pattern engine | 🤖 | full | opus |
+| 0a | QA1 | ✅ | Robust language & pattern engine | 🤖 | full | opus |
 | 0b | QA2 | 📋 | Hardened, allocation-free audio engine | 🤖 | full | opus |
 | 0c | QA3 | 📋 | App robustness & keyboard accessibility | 🤖 | full | opus |
 | 0d | QA4 | 📋 | One source for builtins, strict lint, shared helpers | 🤖 | full | sonnet |
@@ -1490,7 +1490,7 @@ See full spec: [PROMPTS/PHASE-TEST3.md](PROMPTS/PHASE-TEST3.md)
 
 ---
 
-## Phase QA1 — Robust Language & Pattern Engine 📋 *planned*
+## Phase QA1 — Robust Language & Pattern Engine ✅ *delivered*
 
 > **Quality track** · **Automation:** 🤖 auto
 
@@ -1504,6 +1504,31 @@ hangs the tab; every such mistake becomes a clear eval error with a position.
 - Evaluator/reader: `->`/`->>` on the shared call path, arity errors and `& rest`, no
   leaked `recur` sentinel; theory names with fuzzy hints; rational `arrange`; tests for
   untested core functions
+
+**Delivered:**
+- Scheduler: each track's query runs in its own `try`; a failing track is skipped for
+  that cycle and reported once (`Error in track :hats: …`, `:on-query-error`), and the
+  cycle always advances. Song mode (`song-onsets` 5-arity), WAV/stem render
+  (`job-events`) and MIDI export use the same isolation. After eval, every new track and
+  a pattern result is probed at cycle 0 (`sound-check/probe-error`): a throw is an eval
+  error (`track :bad fails at cycle 0: …`) and nothing is activated or retired
+- Count limits (`core/check-count!`): 1024 steps for `run`, the euclid family, `ply*`,
+  `segment`, the `chunk` family and mini `!n`; 64 layers for `apply-n`, `echo`/`stut`,
+  `echo-with`/`stutter`. `every`/`first-of` need n ≥ 1; `every`, `last-of`, `chunk*`,
+  `chunk-into*` build their transformed patterns once. `arrange` takes rational
+  durations and cuts sections mid-cycle
+- Mini-notation: leftover tokens are errors, every error has a position (`Unexpected "]"
+  in mini-notation at position 3`, only the token underlined), fractional/rational `*`
+  and `@`, whole-token numbers (`"808bd"` → `:808bd`)
+- Evaluator/reader: `->`/`->>` are a syntactic rewrite (highlight, macros, keyword steps);
+  closures check arity and support `& rest` (`&` added to reader and editor grammar);
+  `recur outside loop`; `"a" is not a function`; eager `map`/`filter`; reader errors for
+  `1/0`, `1.2.3` and a trailing backslash. `levenshtein`/`typo-hint` moved to `util`
+- Theory: unknown scale/chord names and roots fail with a hint
+  (`scale: unknown scale :majr — did you mean :major?`), empty interval vectors fail
+- Tests: 13 previously untested core helpers, caps, `every`, rational `arrange`,
+  `song-onsets`/`job-events` isolation, `probe-error`, mini/eval/reader/theory messages;
+  `e2e/robust-playback.spec.ts` (scheduler counters via `__REPULSE_APP__.onsetCount`)
 
 See full spec: [PROMPTS/PHASE-QA1.md](PROMPTS/PHASE-QA1.md)
 

@@ -39,6 +39,28 @@
       (/ (first v) (second v))
       v)))
 
+(defn levenshtein [a b]
+  (let [m (count a) n (count b)
+        row (atom (vec (range (inc n))))]
+    (dotimes [i m]
+      (let [prev @row
+            cur  (atom [(inc i)])]
+        (dotimes [j n]
+          (swap! cur conj
+                 (if (= (nth a i) (nth b j))
+                   (nth prev j)
+                   (inc (min (nth prev (inc j))
+                             (last @cur)
+                             (nth prev j))))))
+        (reset! row @cur)))
+    (last @row)))
+
+(defn typo-hint [name known]
+  (when (seq known)
+    (let [best (apply min-key #(levenshtein name (str %)) known)]
+      (when (<= (levenshtein name (str best)) 3)
+        best))))
+
 (defn pat-arg
   "Unwrap a value that sits in a patternable argument position.
    Strings are parsed as mini-notation (with editor source offsets, so the

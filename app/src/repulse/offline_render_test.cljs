@@ -155,3 +155,29 @@
       (is (= 3 (song/song-length s)))
       (is (= :stop (:end s)))
       (is (= [:a :b] (:tracks (first (:sections s))))))))
+
+(deftest qa1-job-events-isolate-failing-track
+  (let [good (eval-pat "(seq :bd :hh)")
+        ;; fails in cycle 1 only: "<1 x>" makes fast see :x on odd cycles
+        bad  (eval-pat "(fast \"<1 x>\" (seq :sd))")
+        errs (atom [])
+        on-e (fn [t e] (swap! errs conj [t (ex-message e)]))]
+    (testing ":cycles — the failing track is left out of that cycle only"
+      (let [evs (offline-render/job-events {:kind :cycles :tracks {:a good :b bad}
+                                            :n 2 :cycle-dur 1.0}
+                                           on-e)]
+        (is (= [[:a :bd 0] [:a :hh 0.5] [:b :sd 0] [:a :bd 1] [:a :hh 1.5]]
+               (mapv (fn [{:keys [track event t]}] [track (:value event) t]) evs)))
+        (is (= [[:b "Expected a number, got :x"]] @errs))))
+    (testing ":song — same isolation"
+      (reset! errs [])
+      (let [s   (song/make-song [(song/make-section :s 2 [:a :b])] {:end :stop} [:a :b] nil)
+            evs (offline-render/job-events {:kind :song :song s :tracks {:a good :b bad}
+                                            :cycle-dur 1.0}
+                                           on-e)]
+        (is (= 5 (count evs)))
+        (is (= [[:b "Expected a number, got :x"]] @errs))))))
+
+(deftest qa1-query-error-message
+  (is (= "Error in track :hats: boom" (audio/query-error-message :hats "boom")))
+  (is (= "Error in pattern: boom" (audio/query-error-message :_ "boom"))))

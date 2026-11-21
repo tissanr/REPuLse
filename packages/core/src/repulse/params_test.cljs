@@ -592,3 +592,13 @@
              (mapv (comp kw :value)
                    (core/query (f core/saw (core/seq* [:hh :hh :hh :hh])) one-cycle)))
           "signal sampled at onset"))))
+
+;;; ── Phase QA1: echo / stut caps ─────────────────────────────────────
+
+(deftest qa1-echo-cap
+  (let [msg (fn [f] (try (f) nil (catch :default e (ex-message e))))]
+    (is (= 64 (count (core/query-onsets (params/echo 64 [1 8] 0.5 (core/pure :bd)) one-cycle))))
+    (is (= "echo: times = 100 exceeds the limit of 64"
+           (msg #(params/echo 100 [1 8] 0.5 (core/pure :bd)))))
+    (is (= "stut: times = 65 exceeds the limit of 64"
+           (msg #(params/stut 65 0.5 [1 8] (core/pure :bd)))))))

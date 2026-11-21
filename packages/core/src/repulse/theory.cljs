@@ -85,7 +85,9 @@
 (defn- resolve-intervals
   "Convert a vector of interval names to semitone offsets."
   [ivs]
-  (mapv #(get interval->semitones % 0) ivs))
+  (mapv #(or (get interval->semitones %)
+             (throw (ex-info (str "unknown interval " (pr-str %)) {:type :eval-error})))
+        ivs))
 
 ;;; ── Scale tables ─────────────────────────────────────────────────────
 
@@ -141,6 +143,49 @@
    :sus2     [1 2   5           ]   ; suspended 2nd
    :sus4     [1 4   5           ]}) ; suspended 4th
 
+;;; ── Name checks (QA1) ────────────────────────────────────────────────
+
+(defn chord-names
+  "Sorted list of known chord names for (chord :name root)."
+  []
+  (sort (keys chord-intervals)))
+
+(declare edit-distance)
+
+(defn- unknown-name-error
+  "\"scale: unknown scale :majr — did you mean :major?\", or with no close
+   match \" — known: <sorted list>\"."
+  [fname what v names]
+  (let [n    (if (keyword? v) (name v) (str v))
+        best (when (seq names)
+               (apply min-key #(edit-distance n (name %)) names))
+        hint (when (and best (<= (edit-distance n (name best)) 3)) best)]
+    (ex-info (str fname ": unknown " what " " (pr-str v)
+                  (if hint
+                    (str " — did you mean " hint "?")
+                    (str " — known: " (apply str (interpose " " names)))))
+             {:type :eval-error})))
+
+(defn check-root!
+  "Throw unless root is a note keyword (:c4, :eb3, :fs). Returns root."
+  [fname root]
+  (when-not (note-keyword? root)
+    (throw (ex-info (str fname ": unknown root " (pr-str root)
+                         " — expected a note like :c4, :eb3 or :fs")
+                    {:type :eval-error})))
+  root)
+
+(defn check-scale-name!
+  "Throw unless sc is a known scale keyword or a non-empty interval vector."
+  [fname sc]
+  (cond
+    (vector? sc) (when (empty? sc)
+                   (throw (ex-info (str fname ": the interval vector is empty")
+                                   {:type :eval-error})))
+    (contains? scale-intervals sc) nil
+    :else (throw (unknown-name-error fname "scale" sc (scale-names))))
+  sc)
+
 ;;; ── Helpers ──────────────────────────────────────────────────────────
 
 (defn- deg-val
@@ -172,10 +217,11 @@
 
 ;;; ── Scales ───────────────────────────────────────────────────────────
 
-(defn- scale-semis [name]
+(defn- scale-semis [fname name]
+  (check-scale-name! fname name)
   (if (vector? name)
     name
-    (resolve-intervals (get scale-intervals name [1 2 3 4 5 6 7]))))
+    (resolve-intervals (get scale-intervals name))))
 
 (defn- degree->midi [semis root-midi d]
   (let [n   (count semis)
@@ -184,8 +230,8 @@
     (+ root-midi (* 12 oct) (nth semis (- d (* oct n))))))
 
 (defn- scale* [name root pat]
-  (let [semis (scale-semis name)
-        r     (note->midi root)
+  (let [semis (scale-semis "scale" name)
+        r     (note->midi (check-root! "scale" root))
         f     (fn [v] (if-let [d (deg-val v)] (midi->note (degree->midi semis r d)) v))]
     (core/fmap #(if (and (map? %) (deg-val (:note %))) (update % :note f) (f %)) pat)))
 
@@ -202,7 +248,7 @@
 (defn- scale-transpose* [n sc pat]
   (let [[name root] (cond (and (vector? sc) (keyword? (first sc))) [(first sc) (or (second sc) :c)]
                           :else [sc :c])
-        semis (scale-semis name)
+        semis (scale-semis "scale-transpose" name)
         n     (int (js/Math.floor (deg-val n)))
         rpc   (mod (note->midi root) 12)
         step  (fn [m]
@@ -267,8 +313,10 @@
    (chord :major :c4)    ; C E G stacked"
   ([chord-kw root] (chord chord-kw root nil))
   ([chord-kw root source]
-   (let [root-midi (note->midi root)
-         semitones (resolve-intervals (get chord-intervals chord-kw [1 3 5]))]
+   (when-not (contains? chord-intervals chord-kw)
+     (throw (unknown-name-error "chord" "chord" chord-kw (chord-names))))
+   (let [root-midi (note->midi (check-root! "chord" root))
+         semitones (resolve-intervals (get chord-intervals chord-kw))]
      (core/stack* (mapv #(core/pure (midi->note (+ root-midi %)) source) semitones)))))
 
 (def chord-qualities

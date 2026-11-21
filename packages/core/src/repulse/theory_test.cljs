@@ -275,3 +275,29 @@
   (doseq [kw [:c3 :e3 :g5 :a4 :b0]]
     (is (= kw (theory/midi->note (theory/note->midi kw)))))
   (is (number? (theory/midi->note 60.5)) "non-integer MIDI has no name → Hz"))
+
+;;; ── Phase QA1: names fail loudly ────────────────────────────────────
+
+(defn- qa1-msg [f] (try (f) nil (catch :default e (ex-message e))))
+
+(deftest qa1-unknown-scale-chord-root
+  (is (= "scale: unknown scale :majr — did you mean :major?"
+         (qa1-msg #(theory/scale :majr :c4 (core/seq* [0])))))
+  (is (= "chord: unknown chord :majr — did you mean :major?"
+         (qa1-msg #(theory/chord :majr :c4))))
+  (is (= (str "chord: unknown chord :xxxxxxxxxx — known: "
+              (apply str (interpose " " (theory/chord-names))))
+         (qa1-msg #(theory/chord :xxxxxxxxxx :c4))))
+  (is (= "scale: unknown root :zz — expected a note like :c4, :eb3 or :fs"
+         (qa1-msg #(theory/scale :major :zz (core/seq* [0])))))
+  (is (= "chord: unknown root :zz — expected a note like :c4, :eb3 or :fs"
+         (qa1-msg #(theory/chord :major :zz))))
+  (is (= "scale: the interval vector is empty"
+         (qa1-msg #(theory/scale [] :c4 (core/seq* [0])))))
+  (is (= [:aug :aug7 :dim :dim7 :dom7 :m7b5 :maj7s11 :major :major7 :minor :minor7 :sus2 :sus4]
+         (theory/chord-names))))
+
+(deftest qa1-patterned-scale-name-checked-at-query
+  (let [p (theory/scale (core/seq* [:major :majr]) :c4 (core/pure 0))]
+    (is (= "scale: unknown scale :majr — did you mean :major?"
+           (qa1-msg #(doall (core/query p one-cycle)))))))

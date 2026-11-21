@@ -1093,7 +1093,7 @@
    pattern → {param {:tween pv :start-time start-time}}."
   [pattern start-time]
   (let [sp  {:start [0 1] :end [1 1]}
-        evs (try (core/query pattern sp) (catch :default _ []))]
+        evs (try (vec (core/query pattern sp)) (catch :default _ []))]
     (into {}
           (for [ev   evs
                 :let [v (:value ev)]
@@ -1140,7 +1140,42 @@
          ;; :start-time t0 :end-time t1} — read by the status head (REC text).
          :capture      nil
          ;; Called after a :stop song has finished (and its tail rung out).
-         :on-song-end  nil}))
+         :on-song-end  nil
+         ;; QA1: (fn [message]) — shows a track's query error on the output line.
+         :on-query-error nil}))
+
+;;; QA1 — per-track query isolation
+
+;; [track message] pairs already reported; each is shown once. A track's entries
+;; are cleared when play-track! replaces it, all of them by stop!.
+(defonce ^:private reported-query-errors (atom #{}))
+
+;; Test handle: track → onsets scheduled since the last stop!.
+(defonce scheduled-counts (atom {}))
+
+(defn query-error-message
+  "Pure. Output-line text for a query error of track (:_ = the pattern result)."
+  [track msg]
+  (if (= track :_)
+    (str "Error in pattern: " msg)
+    (str "Error in track " track ": " msg)))
+
+(defn report-query-error!
+  "A track's pattern threw while being queried (scheduler or export). Reported
+   once per [track message]: a console warning and the :on-query-error callback."
+  [track e]
+  (let [msg (or (ex-message e) (str e))
+        k   [track msg]]
+    (when-not (contains? @reported-query-errors k)
+      (swap! reported-query-errors conj k)
+      (js/console.warn "[REPuLse] query error in track" (str track) e)
+      (when-let [f (:on-query-error @scheduler-state)]
+        (f (query-error-message track msg))))))
+
+(defn- clear-query-errors!
+  ([] (reset! reported-query-errors #{}))
+  ([track] (swap! reported-query-errors
+                  (fn [s] (into #{} (remove #(= track (first %))) s)))))
 
 ;; Seconds a finished :end :stop song keeps the scheduler alive so tails ring out.
 (def song-release-secs 2.0)
@@ -1294,13 +1329,15 @@
       ;; end of a :stop song. Mute always wins (decision 8).
       (when origin
         (doseq [[track onsets] (group-by first
-                                         (for [{:keys [track event]} (song/song-onsets s tracks muted (- cycle origin))]
+                                         (for [{:keys [track event]} (song/song-onsets s tracks muted (- cycle origin)
+                                                                                        report-query-error!)]
                                            (let [whole-start (core/rat->float (:start (:whole event)))
                                                  whole-end   (core/rat->float (:end   (:whole event)))]
                                              [track event
                                               (* (+ origin whole-start) cycle-dur)
                                               (* (- whole-end whole-start) cycle-dur)])))
                 [event t dur] (with-glide track (map rest onsets))]
+          (swap! scheduled-counts update track (fnil inc 0))
           (schedule-event! ac state snap track event t dur)))
       ;; ── Free-running tracks (no song) ──────────────────────────────────
       (let [sp {:start [cycle 1] :end [(inc cycle) 1]}]
@@ -1311,18 +1348,23 @@
             ;; fragments, which must not re-trigger the sound. Continuous (analog)
             ;; events have no :whole and are skipped here on purpose; the user is
             ;; warned about structureless signals at eval time.
-            (doseq [[ev t dur]
-                    (with-glide
-                      track-name
-                      (for [ev (core/query-onsets pattern sp)]
-                        (let [whole-start       (core/rat->float (:start (:whole ev)))
-                              whole-end         (core/rat->float (:end   (:whole ev)))
-                              cycle-audio-start (* cycle cycle-dur)
-                              event-offset      (* (- whole-start cycle) cycle-dur)]
-                          [ev
-                           (+ cycle-audio-start event-offset)
-                           (* (- whole-end whole-start) cycle-dur)])))]
-              (schedule-event! ac state snap track-name ev t dur))))))))
+            ;; QA1: a track whose query throws is skipped for this cycle and
+            ;; reported once; the other tracks and the cycle counter go on.
+            (when-let [evs (try (vec (core/query-onsets pattern sp))
+                                (catch :default e (report-query-error! track-name e) nil))]
+              (doseq [[ev t dur]
+                      (with-glide
+                        track-name
+                        (for [ev evs]
+                          (let [whole-start       (core/rat->float (:start (:whole ev)))
+                                whole-end         (core/rat->float (:end   (:whole ev)))
+                                cycle-audio-start (* cycle cycle-dur)
+                                event-offset      (* (- whole-start cycle) cycle-dur)]
+                            [ev
+                             (+ cycle-audio-start event-offset)
+                             (* (- whole-end whole-start) cycle-dur)])))]
+                (swap! scheduled-counts update track-name (fnil inc 0))
+                (schedule-event! ac state snap track-name ev t dur)))))))))
 
 ;;; Song mode and real-time capture (SONG1)
 
@@ -1398,8 +1440,14 @@
             (let [{:keys [cycle cycle-dur lookahead]} state
                   cycle-start (* cycle cycle-dur)]
               (when (< (- cycle-start now) lookahead)
-                (schedule-cycle! ac state cycle)
-                (swap! scheduler-state update :cycle inc)))))))))
+                ;; QA1: the cycle always advances, even if scheduling throws —
+                ;; otherwise the same cycle is retried every tick and all goes silent.
+                (try
+                  (schedule-cycle! ac state cycle)
+                  (catch :default e
+                    (js/console.error "[REPuLse] schedule-cycle! failed:" e))
+                  (finally
+                    (swap! scheduler-state update :cycle inc)))))))))))
 
 (defn set-song!
   "Activate a song value. Not playing → fresh start at :start-bar (default 0).
@@ -1519,6 +1567,8 @@
 
 (defn stop! []
   (reset! glide-state {})
+  (clear-query-errors!)
+  (reset! scheduled-counts {})
   (cancel-capture!)
   (cancel-retire-timers!)
   (when-let [node @worklet-node]
@@ -1630,6 +1680,7 @@
     ;; running context — they just create/connect nodes and update atoms.  Only
     ;; ensure-running! must wait for .resume() so the scheduler clock is live.
     (revive-retiring! ac track-name)
+    (clear-query-errors! track-name)
     (ensure-track-node! ac track-name)
     (arm-transitions! track-name pattern ac)
     (swap! scheduler-state update :tracks assoc track-name pattern)
