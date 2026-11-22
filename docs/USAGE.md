@@ -3101,11 +3101,14 @@ solo, remove the `:solo` from the form (or press **S** again).
 
 Each entry is `[pattern cycles]`. After the total duration the arrangement loops.
 Durations may be fractional (`3/2`, `1.5`): a section that ends mid-cycle is cut there
-and the next one starts at that point. A duration of 0 or less is an error
+and the next one starts at that point. Notes never outlast their section: a note that
+would ring past the section's end is shortened to end there, so a pad does not overlap
+the next section. A duration of 0 or less is an error
 (`arrange: duration must be positive, got 0`).
 
 ```lisp
 (arrange [[(seq :a) 3/2] [(seq :b) 1/2]])   ; a for 1½ cycles, b for ½, loop every 2
+                                            ; ≡ (slow 2 (~ "a@2 a b"))
 ```
 
 ### `play-scenes` — one cycle per section

@@ -454,8 +454,9 @@
 (defn arrange*
   "plan: [[pattern cycles] …]; cycles may be integers, rationals [n d] or floats.
    Returns a Pattern that plays each section in order, looping after the total
-   duration. A section ending mid-cycle cuts its events there (parts are clipped,
-   wholes kept); the next section starts at that point."
+   duration. A section ending mid-cycle cuts its events there — notes end at the
+   section boundary (whole ends are clipped, onsets kept); the next section starts
+   at that point."
   [plan]
   (let [timeline (reduce
                    (fn [acc [pat dur]]
@@ -479,11 +480,17 @@
                   (let [loop-off (rat* (int->rat l) total)]
                     (mapcat
                      (fn [{:keys [pat from to]}]
-                       (let [off (rat+ loop-off from)]
-                         (when-let [is (span-intersect piece (span off (rat+ loop-off to)))]
-                           (map (fn [e] (map-spans #(span (rat+ (:start %) off)
-                                                          (rat+ (:end %) off))
-                                                   e))
+                       (let [off  (rat+ loop-off from)
+                             wend (rat+ loop-off to)]
+                         (when-let [is (span-intersect piece (span off wend))]
+                           ;; Shift into place; a note never outlasts its section
+                           ;; (the whole's end is clipped, its onset is kept).
+                           (map (fn [e]
+                                  (let [e (map-spans #(span (rat+ (:start %) off)
+                                                            (rat+ (:end %) off))
+                                                     e)]
+                                    (cond-> e
+                                      (:whole e) (update-in [:whole :end] rat-min wend))))
                                 (query pat (span (rat- (:start is) off)
                                                  (rat- (:end is) off)))))))
                      timeline)))))))))))

@@ -78,7 +78,7 @@
           (if (core/pattern? val)
             (let [events (core/query val (core/cycle-span 0))]
               {:ok true :event-count (count events) :duration-bars 1})
-            {:ok true :event-count 0 :duration-bars 0 :value (pr-str val)}))))
+            {:ok true :event-count 0 :duration-bars 0 :value (pr-str (leval/deep-unwrap val))}))))
     (catch :default e
       {:ok false :error (.-message e)})
     (finally
@@ -441,7 +441,7 @@
               (set-output! val :success)
 
               :else
-              (set-output! (str "=> " (pr-str val)) :success))
+              (set-output! (str "=> " (pr-str (leval/deep-unwrap val))) :success))
 
             ;; WS2: one-time console hint for master + top-level (fx …)
             (b-fx/loose-fx-hint!)

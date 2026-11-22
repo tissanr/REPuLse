@@ -102,3 +102,15 @@ test('count limits fail at eval within 100 ms', async ({ page }) => {
     expect(ms, code).toBeLessThan(100);
   }
 });
+
+test('results print plain values, not source wrappers', async ({ page }) => {
+  for (const [code, out] of [
+    // the output line drops the "=> " console prefix
+    ['((fn [a & r] r) 1 2 3)', '(2 3)'],
+    ['[1 :a "s"]', '[1 :a "s"]'],
+    ['{:a [1 2]}', '{:a [1 2]}'],
+  ]) {
+    await page.evaluate((c) => window.__REPULSE_APP__.evaluate(c), code);
+    await expect(output(page)).toHaveText(out);
+  }
+});
