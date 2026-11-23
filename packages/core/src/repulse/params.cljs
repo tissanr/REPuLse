@@ -9,23 +9,16 @@
   [v]
   (if (map? v) v {:note v}))
 
-(defn- pat?
-  "True if x is a REPuLse pattern (was created via core/pattern).
-   Uses the explicit ::core/pat tag so plain event-value maps
-   (which are also Clojure maps) are never misidentified."
-  [x]
-  (core/pattern? x))
-
 (defn- apply-param
   "Merge parameter kw into each event of note-pat, sourcing values from
    param-val-or-pat. Scalar values are wrapped in (pure …) first.
    note-pat may also be a raw value (e.g. the map returned by (sound …));
    it is coerced to (pure v) so that (rate 2.0 (sound :tabla 0)) works."
   [kw param-val-or-pat note-pat]
-  (let [param-pat (if (pat? param-val-or-pat)
+  (let [param-pat (if (core/pattern? param-val-or-pat)
                     param-val-or-pat
                     (core/pure param-val-or-pat))
-        note-pat' (if (pat? note-pat)
+        note-pat' (if (core/pattern? note-pat)
                     note-pat
                     (core/pure note-pat))]
     ;; Structure from the note pattern (Tidal `#`, Strudel `.set`).
@@ -196,12 +189,6 @@
 
 ;;; ── Phase TL4b: fix ──────────────────────────────────────────────────
 
-(defn- num-of [x]
-  (cond (number? x) x
-        (and (vector? x) (= 2 (count x)) (every? number? x) (not (zero? (second x))))
-        (/ (first x) (second x))
-        :else nil))
-
 (defn- rest-val? [v] (or (nil? v) (= v :_) (and (map? v) (= :_ (:note v)))))
 
 (defn- control-view
@@ -209,7 +196,7 @@
   [v]
   (when-not (rest-val? v)
     (let [m (cond (map? v) v
-                  (or (keyword? v) (number? v) (num-of v)) (to-map v)
+                  (or (keyword? v) (number? v) (core/as-number v)) (to-map v)
                   :else nil)]
       (when m
         (if (contains? m :s)
@@ -221,7 +208,7 @@
             (cond-> m s (assoc :s s))))))))
 
 (defn- val-match? [cv ev]
-  (let [a (num-of cv) b (num-of ev)]
+  (let [a (core/as-number cv) b (core/as-number ev)]
     (if (and a b) (== a b) (= cv ev))))
 
 (defn controls-match?
@@ -264,7 +251,7 @@
    so speed 1 plays the whole sample in one cycle).
    (unit :c pat)"
   ([u]     (fn [pat] (unit u pat)))
-  ([u pat] (apply-param :unit (if (pat? u) (core/fmap ->unit u) (->unit u)) pat)))
+  ([u pat] (apply-param :unit (if (core/pattern? u) (core/fmap ->unit u) (->unit u)) pat)))
 
 (defn accelerate
   "Glide the playback rate from rate to rate + v over the sample's playing time.
@@ -302,14 +289,12 @@
   ([v]     (fn [pat] (loop-end v pat)))
   ([v pat] (apply-param :loop-end v pat)))
 
-(defn- ->pat [x] (if (pat? x) x (core/pure x)))
-
-(defn- ->num [x] (if (vector? x) (core/rat->float (core/->rat x)) x))
+(defn- ->pat [x] (if (core/pattern? x) x (core/pure x)))
 
 (defn- range-of
   "[begin end] of an event value map (defaults 0, 1) as doubles."
   [m]
-  [(double (or (->num (:begin m)) 0)) (double (or (->num (:end m)) 1))])
+  [(double (or (core/as-number (:begin m)) (:begin m) 0)) (double (or (core/as-number (:end m)) (:end m) 1))])
 
 (defn- sub-range
   "Value v with its begin–end range narrowed to piece i of n (S1: relative)."
@@ -354,7 +339,7 @@
   ([n pat] ((core/patternify striate*) n (->pat pat))))
 
 (defn- slice-range [i n]
-  (let [i (->num i) n (->num n)]
+  (let [i (or (core/as-number i) i) n (or (core/as-number n) n)]
     (when (and (number? i) (number? n) (pos? n))
       (let [k (max 1 (int n))
             j (mod (int (Math/floor i)) k)]
@@ -387,7 +372,7 @@
       v
       (let [m (to-map v)]
         (assoc m
-               :rate (* (/ (frac-fn m) (whole-cycles ev)) (double (or (->num (:rate m)) 1)))
+               :rate (* (/ (frac-fn m) (whole-cycles ev)) (double (or (core/as-number (:rate m)) (:rate m) 1)))
                :unit :c)))))
 
 (defn splice
@@ -411,7 +396,7 @@
                  (if (rest-val? v)
                    v
                    (let [m (to-map v)]
-                     (assoc m :rate (* (double (or (->num (:rate m)) 1)) f) :unit :c))))
+                     (assoc m :rate (* (double (or (core/as-number (:rate m)) (:rate m) 1)) f) :unit :c))))
                (core/slow n pat))))
 
 (defn loop-at

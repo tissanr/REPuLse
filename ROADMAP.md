@@ -9,8 +9,8 @@
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
 
-- **Next for the unattended pipeline:** QA4 (quality track, added
-  2026-11-20 from a code review; QA1, QA2 and QA3 delivered), then WS6. After them, every remaining phase on the
+- **Next for the unattended pipeline:** WS6 (the quality-track phases QA1–QA4, added
+  2026-11-20 from a code review, are delivered). After it, every remaining phase on the
   critical path needs a human (🤖👂 or 🧑).
 - **Next for a human session:** the FX1 listen check (all parts implemented, PR on `dev`;
   decides whether `:spring` stays and sets the reverb trims) and KIT1 (spec expanded
@@ -64,7 +64,7 @@ without a human:
 | 0a | QA1 | ✅ | Robust language & pattern engine | 🤖 | full | opus |
 | 0b | QA2 | ✅ | Hardened, allocation-free audio engine | 🤖 | full | opus |
 | 0c | QA3 | ✅ | App robustness & keyboard accessibility | 🤖 | full | opus |
-| 0d | QA4 | 📋 | One source for builtins, strict lint, shared helpers | 🤖 | full | sonnet |
+| 0d | QA4 | ✅ | One source for builtins, strict lint, shared helpers | 🤖 | full | sonnet |
 | 0e | QA5 | 📋 | Security & backend hardening | 🧑 | outline | opus |
 | 0f | QA6 | 📋 | Audio & MIDI timing quality | 🤖👂 | outline | opus |
 | 0g | QA7 | 📋 | CI, tooling & code structure | 🧑 | outline | sonnet |
@@ -1656,7 +1656,7 @@ See full spec: [PROMPTS/PHASE-QA3.md](PROMPTS/PHASE-QA3.md)
 
 ---
 
-## Phase QA4 — One Source for Builtins, Strict Lint, Shared Helpers 📋 *planned*
+## Phase QA4 — One Source for Builtins, Strict Lint, Shared Helpers ✅ *delivered*
 
 > **Quality track** · **Automation:** 🤖 auto
 
@@ -1669,6 +1669,32 @@ hover docs and grammar highlighting are generated and can't drift.
 - clj-kondo at 0 warnings and failing CI on warnings; pinned installer
 - One shared implementation each for `xf`, number→float, Levenshtein, `shift-event`;
   dead code removed; CLAUDE.md library rule amended for `clojure.string`/`cljs.spec`
+
+**Delivered:**
+- `builtin_meta.edn` is the only hand-written name list: every entry carries `:type`,
+  `:detail`, `:signature` and `:doc` (123 names got hover docs they lacked). `npm run
+  gen:ai-docs` (`scripts/gen_builtins.mjs`, edn-only, validates required keys, examples,
+  `:see-also` and duplicates, fixed escape handling) writes `builtins.generated.js`
+  (completions + hover), the marked `BuiltinName` grammar region, `parser.js`,
+  `parser.terms.js` and `docs/ai/builtins.json`; `completions.js` and `hover.js` keep only
+  logic. `check:ai-docs` diffs all five generated files; the grammar now highlights
+  `samples! + - * / = not= < > <= >= keys vals`. CLAUDE.md Rule 3 rewritten
+- Env ↔ meta guard in two layers: `builtin_meta_test` (lisp env + `leval/special-forms`)
+  and `e2e/builtins-meta.spec.ts` (full app env via `__REPULSE_APP__.builtinNames`, both
+  directions; `play`, a rename stub that throws, is the one exclusion, and
+  synth/effect/UGen docs entries are documented-only). Added `map?`, `seq?`, `vector?`
+  entries the test found missing. Hover/highlight e2e cases in `e2e/editor.spec.ts`
+- clj-kondo 2025.10.23 at 0 warnings (the 8 listed plus one new in
+  `preview_policy_test`); `lint.yml` pins the installer and runs with
+  `--fail-level warning`
+- One implementation each: `repulse.lisp.builtins.common` (`xf`, `step->pat`, `n+p`,
+  `n+f+p`, `numeric-token?`), `core/as-number` (replaces seven coercions; `1/0` pairs now
+  give nil/the pair instead of ±Infinity), `core/shift-event`, `repulse.edit-distance`
+  (O(m·n) Levenshtein, `typo-hint` threshold 1/2/3 edits for names of ≤4/≤8/more letters).
+  Removed `core/combine`, `mini/alt*` (now `core/cat*`), the `:rest` branch,
+  `params/pat?`; `defmacro` uses `make-closure`
+- CLAUDE.md library rule allows the ClojureScript-bundled `clojure.string`, `clojure.set`,
+  `cljs.reader` and `cljs.spec.alpha`
 
 See full spec: [PROMPTS/PHASE-QA4.md](PROMPTS/PHASE-QA4.md)
 

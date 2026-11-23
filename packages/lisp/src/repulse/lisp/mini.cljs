@@ -327,18 +327,6 @@
 ;;                                          :to   base-offset+str-to}
 ;; so the exact token highlights during playback (not the whole string).
 
-(defn alt*
-  "Alternation: on cycle N, play the (mod N count)-th pattern."
-  [pats]
-  (let [n (count pats)]
-    (core/pattern
-      (fn [sp]
-        (mapcat (fn [piece]
-                  (let [cycle (int (Math/floor (core/rat->float (:start piece))))
-                        idx   (mod cycle n)]
-                    (core/query (nth pats idx) piece)))
-                (core/split-cycles sp))))))
-
 (defn- seed-rand
   "rand shifted by seed * 3/10000 of a cycle (Strudel: rand.early(seed * 0.0003))."
   [seed]
@@ -366,9 +354,6 @@
       (if (:sample-index node)
         (core/pure {:bank v :n (:sample-index node)} source)
         (core/pure v source)))
-
-    :rest
-    (core/pure :_)
 
     :seq
     (let [children (:children node)]
@@ -407,7 +392,7 @@
     (let [children (:children node)]
       (if (= 1 (count children))
         (compile-ast (first children) base-offset)
-        (alt* (mapv #(compile-ast % base-offset) children))))
+        (core/cat* (mapv #(compile-ast % base-offset) children))))
 
     :repeat
     (let [child-pat (compile-ast (:child node) base-offset)

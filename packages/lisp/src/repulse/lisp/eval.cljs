@@ -1,5 +1,6 @@
 (ns repulse.lisp.eval
   (:require [repulse.core :as core]
+            [repulse.edit-distance :as edit-distance]
             [repulse.lisp.util :as util]
             [repulse.lisp.builtins.pattern :as b-pattern]
             [repulse.lisp.builtins.signals :as b-signals]
@@ -24,12 +25,18 @@
 (def source-of util/source-of)
 (def ->num    util/->num)
 
-;;; Levenshtein / typo hints (moved to util so builtins can use them)
+;;; Levenshtein / typo hints (implemented in repulse.edit-distance; re-exported for the app layer)
 
-(def levenshtein util/levenshtein)
-(def typo-hint util/typo-hint)
+(def levenshtein edit-distance/levenshtein)
+(def typo-hint edit-distance/typo-hint)
 
 (declare eval-form)
+
+(def special-forms
+  "The heads handled by the `case` in eval-form. They are not env bindings, so
+   builtin_meta.edn and the env <-> meta tests take them from here."
+  #{"def" "defn" "let" "fn" "lambda" "if" "and" "or" "quote" "do" "->>" "->"
+    "quasiquote" "defmacro" "master" "defsynth" "loop" "recur"})
 
 (defn- form-str
   "Short printed form for error messages: deep-unwrapped pr-str, max 40 chars."
@@ -197,6 +204,8 @@
 
     (seq? form)
     (let [[head & tail] form]
+      ;; A new branch here needs an entry in `special-forms` (above) and in
+      ;; builtin_meta.edn.
       (case (when (symbol? head) (str head))
         "def"
         (let [[sym val-form] tail
@@ -276,9 +285,7 @@
         ;; (defmacro name [params] body)
         ;; Stores a macro function that receives unevaluated argument forms.
         (let [[name-sym params & body] tail
-              macro-fn (fn [& args]
-                         (let [local (merge env (bind-params (str name-sym) params args))]
-                           (last (map #(eval-form % local) body))))]
+              macro-fn (make-closure params body env (str name-sym))]
           (when-let [macros (:*macros* env)]
             (swap! macros assoc (str name-sym) macro-fn))
           nil)

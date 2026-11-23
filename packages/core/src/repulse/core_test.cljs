@@ -1,7 +1,8 @@
 (ns repulse.core-test
   (:require [cljs.test :refer [deftest is testing]]
             [repulse.core :as c]
-            [repulse.core.specs :as specs]))
+            [repulse.core.specs :as specs]
+            [clojure.string :as str]))
 
 (deftest test-rat
   (testing "rat reduces"
@@ -386,9 +387,9 @@
     (is (= {:from 5 :to 6} (:source (first (c/query (c/app-right + a b) (cyc 0))))))
     (is (= {:from 0 :to 1} (:source (first (c/query (c/app-both + a b) (cyc 0))))))))
 
-(deftest combine-is-app-right
-  (is (= (map ev-summary (c/query (c/app-right vector tens ones) (cyc 0)))
-         (map ev-summary (c/query (c/combine vector tens ones) (cyc 0))))))
+(deftest app-right-takes-structure-from-the-right
+  (is (= (set (map :whole (c/query ones (cyc 0))))
+         (set (map :whole (c/query (c/app-right vector tens ones) (cyc 0)))))))
 
 (deftest inner-join-hand-computed
   ;; outer: two halves carrying (seq :a :b) and (pure :c); structure from inner.
@@ -1251,7 +1252,7 @@
 ;;; ── Phase TL4b: pick family & restart/reset joins ────────────────────
 
 (defn- t4b-time [s]
-  (let [[n d] (clojure.string/split s #"/")]
+  (let [[n d] (str/split s #"/")]
     (c/rat (js/parseInt n) (if d (js/parseInt d) 1))))
 
 (defn- t4b-key [[v ws we ps pe]]
@@ -1549,3 +1550,32 @@
     (is (= "arrange: duration must be positive, got 0" (qa1-msg #(c/arrange* [[(c/pure :a) 0]]))))
     (is (= "arrange: duration must be positive, got -1/2"
            (qa1-msg #(c/arrange* [[(c/pure :a) [-1 2]]]))))))
+
+;;; ── Phase QA4: shared helpers ────────────────────────────────────────
+
+(deftest as-number-test
+  (testing "numbers pass through"
+    (is (= 3 (c/as-number 3)))
+    (is (= 0.5 (c/as-number 0.5))))
+  (testing "rational pairs become numbers"
+    (is (= 0.25 (c/as-number [1 4])))
+    (is (= 2 (c/as-number [6 3]))))
+  (testing "zero denominator and non-numbers are nil"
+    (is (nil? (c/as-number [1 0])))
+    (is (nil? (c/as-number :kw)))
+    (is (nil? (c/as-number [1 2 3])))
+    (is (nil? (c/as-number nil))))
+  (testing "lenient callers keep the input"
+    (is (= :kw (or (c/as-number :kw) :kw)))))
+
+(deftest shift-event-test
+  (testing "shifts whole and part"
+    (let [ev (c/event :bd (c/span [0 1] [1 1]) (c/span [0 1] [1 2]))
+          sh (c/shift-event ev [2 1])]
+      (is (= (c/span [2 1] [3 1]) (:whole sh)))
+      (is (= (c/span [2 1] [5 2]) (:part sh)))
+      (is (= :bd (:value sh)))))
+  (testing "an event without a whole keeps nil"
+    (let [sh (c/shift-event {:value 1 :whole nil :part (c/span [0 1] [1 2])} [1 1])]
+      (is (nil? (:whole sh)))
+      (is (= (c/span [1 1] [3 2]) (:part sh))))))

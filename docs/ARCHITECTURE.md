@@ -429,9 +429,10 @@ Colour mapping (oneDark palette):
 | `; comments` | `tags.lineComment` | grey |
 | `( )` depth 0–5 | `.rainbow-1` … `.rainbow-6` | red / gold / green / cyan / purple / blue |
 
-Regenerate the parser after grammar edits:
+The `BuiltinName` token list is generated from `builtin_meta.edn` (between the
+`// BEGIN/END GENERATED BuiltinName` markers). Regenerate it and the parser with:
 ```bash
-npm run gen:grammar
+npm run gen:ai-docs
 ```
 
 ---

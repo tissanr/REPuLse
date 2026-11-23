@@ -5,36 +5,13 @@
    over repulse.core."
   (:require [repulse.core :as core]
             [repulse.params :as params]
+            [repulse.lisp.builtins.common :refer [xf step->pat n+p n+f+p]]
             [repulse.lisp.util :as u]))
-
-(defn- xf
-  "Wrap a Lisp function argument so SourcedVals never reach core."
-  [f]
-  (let [f (u/unwrap f)]
-    (fn [p] (u/unwrap (f p)))))
-
-(defn- step->pat [x]
-  (let [v (u/unwrap x)]
-    (if (core/pattern? v) v (core/pure v (u/source-of x)))))
 
 (defn- p1
   "Builtin (f pat), no numeric arg."
   [f]
   (fn [p] (f (u/pat-arg p))))
-
-(defn- n+p
-  "Builtin (f n pat) with curried form (f n); n patternable."
-  [f]
-  (fn
-    ([n]   (let [n (u/pat-arg n)] (fn [p] (f n (u/unwrap p)))))
-    ([n p] (f (u/pat-arg n) (u/unwrap p)))))
-
-(defn- n+f+p
-  "Builtin (f n fn pat) with curried form (f n fn)."
-  [f]
-  (fn
-    ([n g]   (let [n (u/pat-arg n) g (xf g)] (fn [p] (f n g (u/unwrap p)))))
-    ([n g p] (f (u/pat-arg n) (xf g) (u/unwrap p)))))
 
 (defn- a+b+p
   "Builtin (f a b pat) with curried form (f a b); a and b patternable."

@@ -1,5 +1,5 @@
 (ns repulse.snippets.preview-policy-test
-  (:require [cljs.test :refer [deftest is testing]]
+  (:require [cljs.test :refer [deftest is]]
             [repulse.ai.knowledge :as knowledge]
             [repulse.snippets.preview-policy :as policy]))
 
