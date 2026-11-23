@@ -1,4 +1,5 @@
 use js_sys::Float32Array;
+use std::collections::VecDeque;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -1232,6 +1233,25 @@ impl DrumVoice {
 
 // ── Active voices ──────────────────────────────────────────────────────────
 
+/// QA2: cycle-unit phase accumulators are wrapped back to [0, 1) once they
+/// reach this many cycles. Unwrapped, a held note's phase grows without bound
+/// and loses precision (after an hour at 440 Hz the f64 ulp is ~2e-10
+/// cycles; after days it becomes audible). Wrapping at 1024 instead of 1
+/// keeps that bound (ulp ≤ 2.3e-13) while every note shorter than 1024
+/// cycles renders bit-identically to the pre-QA2 engine, which the stored
+/// legacy hashes (`syn6_tests::a9_old_strings`, 8192 samples of a 440 Hz
+/// tone) require. The subtraction of an integer is exact.
+const PHASE_WRAP: f64 = 1024.0;
+
+/// Wrap a cycle-unit phase accumulator (increments are ≥ 0 after
+/// trigger-time sanitising).
+#[inline]
+fn wrap_cycle(p: &mut f64) {
+    if *p >= PHASE_WRAP {
+        *p -= p.floor();
+    }
+}
+
 enum Voice {
     Kick {
         phase: f64,
@@ -1323,6 +1343,7 @@ impl Voice {
                 *freq = (*freq * *freq_decay).max(*freq_floor);
                 let s = (*phase * TAU).sin() as f32;
                 *phase += *freq / sr as f64;
+                wrap_cycle(phase);
                 let out = s * *gain;
                 *gain *= *gain_decay;
                 out
@@ -1340,6 +1361,7 @@ impl Voice {
                 *gain *= *gain_decay;
                 let crack = (*phase * TAU).sin() as f32 * *tone_gain * 0.35;
                 *phase += 180.0 / sr as f64;
+                wrap_cycle(phase);
                 *tone_gain *= *tone_gain_decay;
                 body + crack
             }
@@ -1373,6 +1395,7 @@ impl Voice {
                 }
                 let s = (*phase * TAU).sin() as f32;
                 *phase += *freq * pitch / sr as f64;
+                wrap_cycle(phase);
                 s * *gain
             }
             // Stereo voices are ticked through tick2; a mono read sums the buses.
@@ -1419,7 +1442,9 @@ impl Voice {
                 let mod_sig = (*mod_phase * TAU).sin() as f32;
                 let carrier_raw = (*carrier_phase * TAU + (*index * mod_sig) as f64).sin() as f32;
                 *carrier_phase += *carrier_freq * pitch / sr as f64;
+                wrap_cycle(carrier_phase);
                 *mod_phase += *mod_freq * pitch / sr as f64;
+                wrap_cycle(mod_phase);
                 let tonal = body_filters.iter_mut().fold(carrier_raw, |s, f| f.tick(s));
                 let noise_out = noise_hpf.tick(lcg_next(noise_state)) * *noise_amp;
                 (tonal + noise_out) * *gain
@@ -1448,6 +1473,9 @@ impl Voice {
                 *write_pos = (*write_pos + 1) % *buf_len;
                 *lp_prev = y;
                 *vib_phase += 2.0 * std::f32::consts::PI * *vib_rate / sr;
+                if *vib_phase >= std::f32::consts::TAU {
+                    *vib_phase -= std::f32::consts::TAU;
+                }
                 let out = body_filters.iter_mut().fold(y_fb, |s, f| f.tick(s));
                 *gain = out.abs().max(*gain * 0.9999);
                 out
@@ -1975,6 +2003,9 @@ struct ActiveVoice {
     inserts_b: Option<Inserts>,
     sends: Sends,
     mods: Mods,
+    /// QA2: produced a non-finite sample; silent from then on, removed at
+    /// the end of the block.
+    dead: bool,
 }
 
 // ── Orbit sends (Phase TL7b) ──────────────────────────────────────────────
@@ -2016,11 +2047,11 @@ impl Sends {
     }
 }
 
-// ── Pending event ──────────────────────────────────────────────────────────
+// ── Event parameters and the pending queue (Phase QA2) ────────────────────
 
-struct Pending {
-    time: f64,
-    value: String,
+/// Synthesis parameters of one event (trigger_v3 slots 0–43).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct EventParams {
     amp: f32,    // 0.0–2.0 (amp × gain × velocity), default 1.0
     attack: f32, // seconds, default 0.001
     decay: f32,  // seconds, default 1.5 for tones
@@ -2028,6 +2059,80 @@ struct Pending {
     inserts: InsertParams,
     sends: Sends,
     tl7c: Tl7cParams,
+}
+
+impl EventParams {
+    /// The defaults of `trigger` (and of missing trigger_v3 slots).
+    const DEFAULT: EventParams = EventParams {
+        amp: 1.0,
+        attack: 0.001,
+        decay: 1.5,
+        pan: 0.0,
+        inserts: InsertParams::OFF,
+        sends: Sends::OFF,
+        tl7c: Tl7cParams::OFF,
+    };
+
+    fn v2(amp: f32, attack: f32, decay: f32, pan: f32) -> EventParams {
+        EventParams {
+            amp,
+            attack,
+            decay,
+            pan,
+            ..EventParams::DEFAULT
+        }
+    }
+
+    /// QA2: slots 0–3 made finite and clamped (non-finite = the slot default).
+    /// The ranges contain every documented value, so valid input is
+    /// unchanged; decay ≥ 0 keeps the FM release divisor ≥ 0.01. Slots 4–43
+    /// are already sanitised by `Inserts::new`, `Sends::new` and
+    /// `Tl7cParams::from_slots`.
+    fn sanitised(self) -> EventParams {
+        EventParams {
+            amp: finite_or(self.amp, 1.0).clamp(0.0, 2.0),
+            attack: finite_or(self.attack, 0.001).clamp(0.0, 60.0),
+            decay: finite_or(self.decay, 1.5).clamp(0.0, 600.0),
+            pan: finite_or(self.pan, 0.0).clamp(-1.0, 1.0),
+            ..self
+        }
+    }
+}
+
+/// A voice built at trigger time, waiting for its onset.
+struct Scheduled {
+    time: f64,
+    voice: ActiveVoice,
+}
+
+/// Voices sounding at once. A due event while the engine is full is dropped
+/// (no voice stealing) and counted in `voice_cap_drops`.
+const MAX_VOICES: usize = 256;
+/// Events waiting for their onset. A trigger while the queue is full is
+/// dropped and counted in `queue_cap_drops`.
+const MAX_PENDING: usize = 8192;
+/// Queue capacity reserved at construction (it grows at trigger time only).
+const PENDING_RESERVE: usize = 1024;
+
+/// Frequency field of a trigger string. Missing or unparsable = 440 Hz (as
+/// before QA2); a number that is non-finite, ≤ 0 or > 1 MHz = None (drop).
+fn parse_freq(s: Option<&str>) -> Option<f64> {
+    match s.and_then(|s| s.parse::<f64>().ok()) {
+        None => Some(440.0),
+        Some(f) if f.is_finite() && f > 0.0 && f <= 1e6 => Some(f),
+        Some(_) => None,
+    }
+}
+
+/// Karplus-Strong delay buffer length: the lowest note (20 Hz) at this
+/// sample rate, so the buffer is pre-allocated once per voice.
+fn ks_buf_cap(sr: f32) -> usize {
+    ((sr / 20.0).ceil() as usize).max(2)
+}
+
+#[inline]
+fn bump(counter: &mut u32) {
+    *counter = counter.saturating_add(1);
 }
 
 // ── Parameter transitions ──────────────────────────────────────────────────
@@ -2093,13 +2198,12 @@ impl Transition {
 
 // ── AudioEngine ────────────────────────────────────────────────────────────
 
-/// Build a Pending from a trigger_v3 slot array (see `AudioEngine::trigger_v3`).
-fn pending_v3(value: &str, time: f64, params: &[f32]) -> Pending {
+/// EventParams from a trigger_v3 slot array (see `AudioEngine::trigger_v3`).
+/// Not yet sanitised (`schedule` does that).
+fn params_v3(params: &[f32]) -> EventParams {
     let slot = |i: usize, d: f32| params.get(i).copied().unwrap_or(d);
     let off = InsertParams::OFF;
-    Pending {
-        time,
-        value: value.to_string(),
+    EventParams {
         amp: slot(0, 1.0),
         attack: slot(1, 0.001),
         decay: slot(2, 1.5),
@@ -2122,14 +2226,26 @@ fn pending_v3(value: &str, time: f64, params: &[f32]) -> Pending {
 #[wasm_bindgen]
 pub struct AudioEngine {
     sample_rate: f32,
+    /// Sounding voices, capacity MAX_VOICES (never grows in `render`).
     voices: Vec<ActiveVoice>,
-    pending: Vec<Pending>,
+    /// Phase QA2: voices built at trigger time, sorted by ascending onset
+    /// time; equal times keep trigger order. The scheduler triggers in time
+    /// order, so an insert is normally a `push_back`; the next due event is
+    /// `front()` and draining is `pop_front()` (no shifting, no allocation).
+    pending: VecDeque<Scheduled>,
     noise_seed: u32,
     amp_transition: Option<Transition>,
     pan_transition: Option<Transition>,
     /// Phase TL7b: pre-allocated bus buffer for `process_block_buses_raw`,
     /// layout [bus][frame][channel] for the current block length n.
     bus: Vec<f32>,
+    /// Phase QA2: pre-allocated dry output buffer for `process_block_into`.
+    out: Vec<f32>,
+    /// Phase QA2 counters (saturating; `stop_all` keeps them).
+    invalid_drops: u32,
+    queue_cap_drops: u32,
+    voice_cap_drops: u32,
+    nonfinite_kills: u32,
 }
 
 #[wasm_bindgen]
@@ -2140,20 +2256,14 @@ impl AudioEngine {
             "[REPuLse WASM] PCM engine ready (sr={})",
             sample_rate
         ));
-        AudioEngine {
-            sample_rate,
-            voices: Vec::new(),
-            pending: Vec::new(),
-            noise_seed: 0xDEAD_BEEF,
-            amp_transition: None,
-            pan_transition: None,
-            bus: vec![0.0; BUS_FRAMES * 2 * N_BUSES],
-        }
+        AudioEngine::with_sample_rate(sample_rate)
     }
 
     /// Start a parameter transition. Replaces any existing transition for that param.
     /// param: "amp" or "pan"
     /// duration_samples: pre-computed on the JS side from bars * BPM * sample_rate
+    /// A non-finite start or end is ignored (the current transition stays)
+    /// and counted in `invalid_drops`.
     pub fn start_transition(
         &mut self,
         param: &str,
@@ -2162,6 +2272,10 @@ impl AudioEngine {
         duration_samples: u64,
         curve: &str,
     ) {
+        if !(start.is_finite() && end.is_finite()) {
+            bump(&mut self.invalid_drops);
+            return;
+        }
         let tr = Transition::new(start, end, duration_samples, CurveType::from_str(curve));
         match param {
             "amp" => self.amp_transition = Some(tr),
@@ -2181,17 +2295,7 @@ impl AudioEngine {
 
     /// Schedule a sound event at the given AudioContext time (uses default parameters).
     pub fn trigger(&mut self, value: &str, time: f64) {
-        self.pending.push(Pending {
-            time,
-            value: value.to_string(),
-            amp: 1.0,
-            attack: 0.001,
-            decay: 1.5,
-            pan: 0.0,
-            inserts: InsertParams::OFF,
-            sends: Sends::OFF,
-            tl7c: Tl7cParams::OFF,
-        });
+        self.schedule(value, time, EventParams::DEFAULT);
     }
 
     /// Schedule a sound event with explicit synthesis parameters.
@@ -2204,17 +2308,7 @@ impl AudioEngine {
         decay: f32,
         pan: f32,
     ) {
-        self.pending.push(Pending {
-            time,
-            value: value.to_string(),
-            amp,
-            attack,
-            decay,
-            pan,
-            inserts: InsertParams::OFF,
-            sends: Sends::OFF,
-            tl7c: Tl7cParams::OFF,
-        });
+        self.schedule(value, time, EventParams::v2(amp, attack, decay, pan));
     }
 
     /// Schedule a sound event with a parameter slot array (Phase TL7a).
@@ -2228,16 +2322,19 @@ impl AudioEngine {
     ///
     /// A missing trailing slot means its default.
     pub fn trigger_v3(&mut self, value: &str, time: f64, params: &[f32]) {
-        self.pending.push(pending_v3(value, time, params));
+        self.schedule(value, time, params_v3(params));
     }
 
     /// Generate one audio quantum. Returns an interleaved stereo Float32Array of
     /// `n_samples * 2` values: [L0, R0, L1, R1, …].
     /// `current_time` = AudioWorkletGlobalScope.currentTime at the block start.
+    ///
+    /// Allocates a new JS array per call; kept for compatibility. worklet.js
+    /// uses the allocation-free `render_block` instead.
     pub fn process_block(&mut self, n_samples: u32, current_time: f64) -> Float32Array {
-        let buf = self.process_block_raw(n_samples, current_time);
-        let arr = Float32Array::new_with_length(n_samples * 2);
-        arr.copy_from(&buf);
+        let buf = self.process_block_into(n_samples, current_time);
+        let arr = Float32Array::new_with_length(buf.len() as u32);
+        arr.copy_from(buf);
         arr
     }
 
@@ -2245,13 +2342,33 @@ impl AudioEngine {
     /// `N_BUSES · n_samples · 2` floats, layout [bus][frame][channel]:
     /// bus 0 = dry (identical to `process_block`), 1..=4 = room sends of
     /// orbits 0–3, 5..=8 = delay sends of orbits 0–3.
+    ///
+    /// Allocates a new JS array per call; kept for compatibility. worklet.js
+    /// uses the allocation-free `render_block_buses` instead.
     pub fn process_block_buses(&mut self, n_samples: u32, current_time: f64) -> Float32Array {
-        let n = n_samples as usize;
-        self.process_block_buses_raw(n_samples, current_time);
-        let len = N_BUSES * n * 2;
-        let arr = Float32Array::new_with_length(len as u32);
-        arr.copy_from(&self.bus[..len]);
+        let buf = self.process_block_buses_raw(n_samples, current_time);
+        let arr = Float32Array::new_with_length(buf.len() as u32);
+        arr.copy_from(buf);
         arr
+    }
+
+    /// Phase QA2: render one quantum into the engine's dry buffer and return a
+    /// pointer to its `n_samples · 2` interleaved floats in WASM memory (valid
+    /// until the next render call or memory growth). No allocation.
+    pub fn render_block(&mut self, n_samples: u32, current_time: f64) -> *const f32 {
+        self.process_block_into(n_samples, current_time).as_ptr()
+    }
+
+    /// Phase QA2: `process_block_buses` without the copy — returns a pointer
+    /// to the `N_BUSES · n_samples · 2` floats of the bus buffer.
+    pub fn render_block_buses(&mut self, n_samples: u32, current_time: f64) -> *const f32 {
+        self.process_block_buses_raw(n_samples, current_time)
+            .as_ptr()
+    }
+
+    /// Number of buses in the `render_block_buses` output (N_BUSES).
+    pub fn bus_count(&self) -> u32 {
+        N_BUSES as u32
     }
 
     pub fn stop_all(&mut self) {
@@ -2259,35 +2376,56 @@ impl AudioEngine {
         self.pending.clear();
         self.clear_transitions();
     }
+
+    /// Events and transitions dropped for invalid input (non-finite time or
+    /// transition value, invalid frequency, unknown drum voice).
+    pub fn invalid_drops(&self) -> u32 {
+        self.invalid_drops
+    }
+
+    /// Triggers dropped because MAX_PENDING events were already waiting.
+    pub fn queue_cap_drops(&self) -> u32 {
+        self.queue_cap_drops
+    }
+
+    /// Due events dropped because MAX_VOICES voices were already sounding.
+    pub fn voice_cap_drops(&self) -> u32 {
+        self.voice_cap_drops
+    }
+
+    /// Voices removed because they produced a non-finite sample.
+    pub fn nonfinite_kills(&self) -> u32 {
+        self.nonfinite_kills
+    }
 }
 
 impl AudioEngine {
-    #[cfg(test)]
-    pub fn new_for_test(sample_rate: f32) -> AudioEngine {
+    /// Shared constructor: every buffer the render path uses is reserved here.
+    fn with_sample_rate(sample_rate: f32) -> AudioEngine {
         AudioEngine {
             sample_rate,
-            voices: Vec::new(),
-            pending: Vec::new(),
+            voices: Vec::with_capacity(MAX_VOICES),
+            pending: VecDeque::with_capacity(PENDING_RESERVE),
             noise_seed: 0xDEAD_BEEF,
             amp_transition: None,
             pan_transition: None,
             bus: vec![0.0; BUS_FRAMES * 2 * N_BUSES],
+            out: vec![0.0; BUS_FRAMES * 2],
+            invalid_drops: 0,
+            queue_cap_drops: 0,
+            voice_cap_drops: 0,
+            nonfinite_kills: 0,
         }
     }
 
     #[cfg(test)]
+    pub fn new_for_test(sample_rate: f32) -> AudioEngine {
+        AudioEngine::with_sample_rate(sample_rate)
+    }
+
+    #[cfg(test)]
     pub fn trigger_raw(&mut self, value: &str, time: f64) {
-        self.pending.push(Pending {
-            time,
-            value: value.to_string(),
-            amp: 1.0,
-            attack: 0.001,
-            decay: 1.5,
-            pan: 0.0,
-            inserts: InsertParams::OFF,
-            sends: Sends::OFF,
-            tl7c: Tl7cParams::OFF,
-        });
+        self.schedule(value, time, EventParams::DEFAULT);
     }
 
     #[cfg(test)]
@@ -2300,29 +2438,32 @@ impl AudioEngine {
         decay: f32,
         pan: f32,
     ) {
-        self.pending.push(Pending {
-            time,
-            value: value.to_string(),
-            amp,
-            attack,
-            decay,
-            pan,
-            inserts: InsertParams::OFF,
-            sends: Sends::OFF,
-            tl7c: Tl7cParams::OFF,
-        });
+        self.schedule(value, time, EventParams::v2(amp, attack, decay, pan));
     }
 
     /// Pure-Rust stereo render — no JS types. Returns interleaved [L0, R0, L1, …].
-    /// The dry signal only: send levels are ignored here.
+    /// The dry signal only: send levels are ignored here. Allocates the
+    /// returned Vec (tests); the audio path uses `process_block_into`.
     pub fn process_block_raw(&mut self, n_samples: u32, current_time: f64) -> Vec<f32> {
+        self.process_block_into(n_samples, current_time).to_vec()
+    }
+
+    /// Render one block of the dry signal into the pre-allocated `out` buffer
+    /// and return it, interleaved [L0, R0, L1, …]. The buffer only grows when
+    /// n exceeds its length (never for 128-frame render quanta).
+    pub fn process_block_into(&mut self, n_samples: u32, current_time: f64) -> &[f32] {
         let n = n_samples as usize;
-        if n == 0 {
-            return Vec::new();
+        let len = n * 2;
+        if self.out.len() < len {
+            self.out.resize(len, 0.0);
         }
-        let mut buf = vec![0.0f32; n * 2];
-        self.render(n, current_time, &mut buf, false);
-        buf
+        let mut out = std::mem::take(&mut self.out);
+        out[..len].fill(0.0);
+        if n > 0 {
+            self.render(n, current_time, &mut out[..len], false);
+        }
+        self.out = out;
+        &self.out[..len]
     }
 
     /// Render one block into the pre-allocated bus buffer (Phase TL7b) and
@@ -2348,36 +2489,41 @@ impl AudioEngine {
     /// with `sends`, it holds N_BUSES·n·2 zeroed floats and each voice is also
     /// added to the room/delay bus of its orbit. The engine's amp/pan
     /// transitions and the output clamp apply to the dry bus only.
+    ///
+    /// Phase QA2: no heap allocation. Voices were built at trigger time;
+    /// due ones are popped off the sorted queue into `voices` (capacity
+    /// MAX_VOICES). Removing finished voices frees their buffers here.
     fn render(&mut self, n: usize, current_time: f64, out: &mut [f32], sends: bool) {
         let sr = self.sample_rate;
         let block_end = current_time + n as f64 / sr as f64;
-
-        let pending = std::mem::take(&mut self.pending);
-        let mut deferred = Vec::new();
-        let mut scheduled: Vec<Vec<Pending>> = (0..n).map(|_| Vec::new()).collect();
-        for p in pending {
-            if p.time < block_end {
-                let sample_idx = if p.time <= current_time {
-                    0
-                } else {
-                    ((p.time - current_time) * sr as f64).floor() as usize
-                };
-                scheduled[sample_idx.min(n.saturating_sub(1))].push(p);
-            } else {
-                deferred.push(p);
-            }
-        }
-        self.pending = deferred;
+        let mut kills = 0u32;
 
         let stride = n * 2;
         for i in 0..n {
-            for p in std::mem::take(&mut scheduled[i]) {
-                self.activate(p);
+            // Activate every event due at or before sample i.
+            while let Some(next) = self.pending.front() {
+                if next.time >= block_end {
+                    break;
+                }
+                let idx = if next.time <= current_time {
+                    0
+                } else {
+                    ((next.time - current_time) * sr as f64).floor() as usize
+                };
+                if idx.min(n - 1) > i {
+                    break;
+                }
+                if let Some(s) = self.pending.pop_front() {
+                    self.admit(s.voice);
+                }
             }
 
             let mut l = 0.0f32;
             let mut r = 0.0f32;
             for av in self.voices.iter_mut() {
+                if av.dead {
+                    continue;
+                }
                 // TL7c: envelopes and vibrato at control rate.
                 let m = &mut av.mods;
                 if m.active() && m.age % MOD_PERIOD == 0 {
@@ -2399,6 +2545,12 @@ impl AudioEngine {
                     Some(ib) => ib.tick(b),
                     None => sa,
                 };
+                // QA2 safety net: a voice that goes non-finite is removed.
+                if !(sa.is_finite() && sb.is_finite()) {
+                    av.dead = true;
+                    kills = kills.saturating_add(1);
+                    continue;
+                }
                 let angle = (av.pan + 1.0) / 2.0 * std::f32::consts::FRAC_PI_2;
                 let (vl, vr) = (sa * angle.cos(), sb * angle.sin());
                 l += vl;
@@ -2424,17 +2576,66 @@ impl AudioEngine {
                 1.0
             };
 
-            if let Some(ref mut tr) = self.pan_transition {
+            let (dl, dr) = if let Some(ref mut tr) = self.pan_transition {
                 let pan_val = tr.tick().clamp(-1.0, 1.0);
                 let bal_angle = (pan_val + 1.0) / 2.0 * std::f32::consts::FRAC_PI_2;
-                out[i * 2] = ((l + r) * bal_angle.cos() * amp_scale).clamp(-1.0, 1.0);
-                out[i * 2 + 1] = ((l + r) * bal_angle.sin() * amp_scale).clamp(-1.0, 1.0);
+                (
+                    (l + r) * bal_angle.cos() * amp_scale,
+                    (l + r) * bal_angle.sin() * amp_scale,
+                )
             } else {
-                out[i * 2] = (l * amp_scale).clamp(-1.0, 1.0);
-                out[i * 2 + 1] = (r * amp_scale).clamp(-1.0, 1.0);
+                (l * amp_scale, r * amp_scale)
+            };
+            out[i * 2] = clamp_out(dl);
+            out[i * 2 + 1] = clamp_out(dr);
+        }
+        self.voices.retain(|av| !av.dead && !av.voice.is_silent());
+        self.nonfinite_kills = self.nonfinite_kills.saturating_add(kills);
+    }
+
+    /// Move a due voice into `voices` (applying its hat choke), or drop it
+    /// when MAX_VOICES are sounding. Never grows `voices`.
+    fn admit(&mut self, voice: ActiveVoice) {
+        if self.voices.len() >= MAX_VOICES {
+            bump(&mut self.voice_cap_drops);
+            return;
+        }
+        if let Voice::Drum(d) = &voice.voice {
+            if d.choke != 0 {
+                let sr = self.sample_rate;
+                for av in self.voices.iter_mut() {
+                    if let Voice::Drum(o) = &mut av.voice {
+                        if o.choke == d.choke {
+                            o.choke(sr);
+                        }
+                    }
+                }
             }
         }
-        self.voices.retain(|av| !av.voice.is_silent());
+        self.voices.push(voice);
+    }
+
+    /// Validate, build and queue one event (every trigger entry point).
+    /// Order: time check → queue cap → build (frequency check, seed) → sorted
+    /// insert. All allocation of the event happens here, never in `render`.
+    fn schedule(&mut self, value: &str, time: f64, p: EventParams) {
+        if !time.is_finite() {
+            bump(&mut self.invalid_drops);
+            return;
+        }
+        if self.pending.len() >= MAX_PENDING {
+            bump(&mut self.queue_cap_drops);
+            return;
+        }
+        let p = p.sanitised();
+        match self.build_voice(value, time, &p) {
+            Some(voice) => {
+                // After every queued event with time ≤ this one.
+                let at = self.pending.partition_point(|q| q.time <= time);
+                self.pending.insert(at, Scheduled { time, voice });
+            }
+            None => bump(&mut self.invalid_drops),
+        }
     }
 
     fn next_seed(&mut self) -> u32 {
@@ -2445,14 +2646,46 @@ impl AudioEngine {
         self.noise_seed
     }
 
-    fn activate(&mut self, p: Pending) {
+    /// Build the complete voice of one event (trigger time). None drops the
+    /// event: an invalid frequency (checked before the seed is drawn) or an
+    /// unknown drum voice (after it, as before QA2). Formulas and the order
+    /// of RNG calls are those of the pre-QA2 `activate`.
+    fn build_voice(&mut self, value: &str, time: f64, p: &EventParams) -> Option<ActiveVoice> {
         let sr = self.sample_rate;
+        let value = value.trim_start_matches(':');
+
+        // QA2: the frequency field of this voice kind, if it has one.
+        let freq_field = if let Some(rest) = value
+            .strip_prefix("saw:")
+            .or_else(|| value.strip_prefix("square:"))
+            .or_else(|| value.strip_prefix("tri:"))
+            .or_else(|| value.strip_prefix("sine:"))
+        {
+            Some(positional(rest, 0))
+        } else if value == "noise" || value.starts_with("noise:") || value.starts_with("drum:") {
+            None
+        } else if let Some(rest) = value.strip_prefix("fm:") {
+            if rest.chars().next().unwrap_or('0').is_ascii_digit() {
+                Some(rest.split(':').next())
+            } else {
+                Some(rest.split_once(':').map(|(_, f)| f))
+            }
+        } else if let Some(rest) = value.strip_prefix("ks:") {
+            Some(rest.split_once(':').map(|(_, f)| f))
+        } else if matches!(value, "bd" | "sd" | "hh" | "oh") {
+            None
+        } else {
+            Some(Some(value))
+        };
+        let freq = match freq_field {
+            Some(f) => parse_freq(f)?,
+            None => 440.0,
+        };
+
         let seed = self.next_seed();
-        // 0–2: amp × gain may exceed 1 (TL7a); the output clamp at ±1 stays.
-        let amp = p.amp.clamp(0.0, 2.0);
+        let amp = p.amp;
         let inserts = Inserts::new(&p.inserts, &p.tl7c, sr);
         let mods = Mods::new(&p.tl7c, inserts.has_envelope());
-        let value = p.value.trim_start_matches(':');
 
         let osc = |wave: Wave, rest: &str| {
             Voice::Osc(OscVoice::new(wave, rest, amp, p.attack, p.decay, sr))
@@ -2475,7 +2708,8 @@ impl AudioEngine {
             // started before. So every hit sounds slightly different (like the
             // old running seed), yet a track renders bit-identically alone
             // (stem export) and in the mix, and exports are reproducible.
-            let drum_seed = drum_noise_seed(name, p.time);
+            // The hat choke is applied when the voice starts (`admit`).
+            let drum_seed = drum_noise_seed(name, time);
             match drum_voice(
                 name,
                 arg(rest, "tone"),
@@ -2485,31 +2719,27 @@ impl AudioEngine {
                 drum_seed,
                 sr,
             ) {
-                Some(d) => {
-                    if d.choke != 0 {
-                        for av in self.voices.iter_mut() {
-                            if let Voice::Drum(o) = &mut av.voice {
-                                if o.choke == d.choke {
-                                    o.choke(sr);
-                                }
-                            }
-                        }
-                    }
-                    Voice::Drum(d)
-                }
+                Some(d) => Voice::Drum(d),
                 None => {
                     engine_warn(&format!("[REPuLse WASM] unknown drum voice: {}", name));
-                    return;
+                    return None;
                 }
             }
         } else if let Some(rest) = value.strip_prefix("fm:") {
             let first_char = rest.chars().next().unwrap_or('0');
             if first_char.is_ascii_digit() {
                 // Legacy format: "fm:<carrier_hz>:<index>:<ratio>"
-                let parts: Vec<&str> = rest.splitn(3, ':').collect();
-                let carrier_freq = parts[0].parse::<f64>().unwrap_or(440.0);
-                let index: f32 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(1.0);
-                let ratio: f64 = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(2.0);
+                let mut parts = rest.splitn(3, ':');
+                let carrier_freq = freq;
+                parts.next();
+                let index: f32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(1.0);
+                let ratio: f64 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(2.0);
+                let index = finite_or(index, 1.0).clamp(0.0, 100.0);
+                let ratio = if ratio.is_finite() {
+                    ratio.clamp(0.0, 100.0)
+                } else {
+                    2.0
+                };
                 let peak = amp * 0.5;
                 Voice::FM {
                     carrier_phase: 0.0,
@@ -2531,9 +2761,8 @@ impl AudioEngine {
                 }
             } else {
                 // Preset format: "fm:<preset>:<freq>"
-                let parts: Vec<&str> = rest.splitn(2, ':').collect();
-                let preset = parts[0];
-                let carrier_freq: f64 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(440.0);
+                let preset = rest.split(':').next().unwrap_or("");
+                let carrier_freq = freq;
                 let (index, ratio, attack_time, decay_time, sustain, release_time) =
                     fm_preset(preset);
                 let peak = amp * 0.7;
@@ -2557,15 +2786,17 @@ impl AudioEngine {
                 }
             }
         } else if let Some(rest) = value.strip_prefix("ks:") {
-            let parts: Vec<&str> = rest.splitn(2, ':').collect();
-            let preset = parts.first().copied().unwrap_or("guitar");
-            let freq: f32 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(440.0);
+            let mut parts = rest.splitn(2, ':');
+            let preset = parts.next().unwrap_or("guitar");
+            // f32 parse as before QA2 (the f64 check above only validates).
+            let freq: f32 = parts.next().and_then(|s| s.parse().ok()).unwrap_or(440.0);
             let (feedback, brightness, pick_pos, vib_depth, vib_rate, excitation) =
                 ks_preset(preset);
-            let buf_len = ((sr / freq).floor() as usize).clamp(2, 2205);
+            let cap = ks_buf_cap(sr);
+            let buf_len = ((sr / freq).floor() as usize).clamp(2, cap);
             let peak = amp * 0.5;
             let fill = peak * excitation;
-            let mut buf = vec![0.0f32; 2205];
+            let mut buf = vec![0.0f32; cap];
             for slot in buf.iter_mut().take(buf_len) {
                 *slot = lcg_next(&mut self.noise_seed) * fill;
             }
@@ -2575,27 +2806,19 @@ impl AudioEngine {
                     buf[i] = 0.0;
                 }
             }
-            self.voices.push(ActiveVoice {
-                voice: Voice::KarplusStrong {
-                    buf,
-                    buf_len,
-                    write_pos: 0,
-                    lp_prev: 0.0,
-                    feedback,
-                    brightness,
-                    gain: fill,
-                    vib_phase: 0.0,
-                    vib_depth,
-                    vib_rate,
-                    body_filters: ks_body_filters(preset, sr),
-                },
-                pan: p.pan.clamp(-1.0, 1.0),
-                inserts,
-                inserts_b: None,
-                sends: p.sends,
-                mods,
-            });
-            return;
+            Voice::KarplusStrong {
+                buf,
+                buf_len,
+                write_pos: 0,
+                lp_prev: 0.0,
+                feedback,
+                brightness,
+                gain: fill,
+                vib_phase: 0.0,
+                vib_depth,
+                vib_rate,
+                body_filters: ks_body_filters(preset, sr),
+            }
         } else {
             // The four original drum voices. Since the default-kit decision
             // (2026-11-21, see drum-route in app/src/repulse/voices.cljs) no
@@ -2635,8 +2858,7 @@ impl AudioEngine {
                     gain: 0.4 * amp,
                     gain_decay: decay_rate(1.0, sr),
                 },
-                other => {
-                    let freq = other.parse::<f64>().unwrap_or(440.0);
+                _ => {
                     let peak = amp * 0.5;
                     let attack_samples = (p.attack * sr).max(1.0);
                     Voice::Tone {
@@ -2656,14 +2878,26 @@ impl AudioEngine {
         } else {
             None
         };
-        self.voices.push(ActiveVoice {
+        Some(ActiveVoice {
             voice,
-            pan: p.pan.clamp(-1.0, 1.0),
+            pan: p.pan,
             inserts,
             inserts_b,
             sends: p.sends,
             mods,
-        });
+            dead: false,
+        })
+    }
+}
+
+/// Final dry sample: clamped to ±1; a non-finite value (QA2 safety net, not
+/// reached by valid input) is written as silence.
+#[inline]
+fn clamp_out(x: f32) -> f32 {
+    if x.is_finite() {
+        x.clamp(-1.0, 1.0)
+    } else {
+        0.0
     }
 }
 
@@ -3232,7 +3466,7 @@ mod tl7a_insert_tests {
 
     #[test]
     fn trigger_v3_missing_slots_default() {
-        let p = pending_v3("bd", 1.0, &[0.5]);
+        let p = params_v3(&[0.5]);
         assert_eq!(p.amp, 0.5);
         assert_eq!(p.decay, 1.5);
         assert_eq!(p.inserts, InsertParams::OFF);
@@ -3365,7 +3599,7 @@ mod send_tests {
         assert_eq!(Sends::new(f32::NAN, 0.5, -2.0).orbit, 0);
         assert_eq!(Sends::new(0.0, 0.0, 1.4).orbit, 1);
         // missing trailing slots = no sends (TL7a messages stay valid)
-        let p = pending_v3("440", 0.0, &[1.0, 0.001, 1.5, 0.0]);
+        let p = params_v3(&[1.0, 0.001, 1.5, 0.0]);
         assert_eq!(p.sends, Sends::OFF);
     }
 
@@ -3417,7 +3651,7 @@ mod tl7c_tests {
     const A2: f32 = 110.0;
 
     /// trigger_v3 slots 0–40, all at their defaults (TL7a/TL7b/TL7c off).
-    fn base_slots() -> Vec<f32> {
+    pub(crate) fn base_slots() -> Vec<f32> {
         let mut v = vec![
             1.0, 0.001, 1.5, 0.0, // amp attack decay pan
             0.0, 0.707, 0.0, 0.707, 0.0, 1.0, 0.0, 16.0, // inserts
@@ -4631,3 +4865,9 @@ mod syn6_tests {
         }
     }
 }
+
+// ── Phase QA2: golden render and hardening tests (test-only module) ───────
+#[cfg(test)]
+mod alloc_count;
+#[cfg(test)]
+mod qa2_tests;
