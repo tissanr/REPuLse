@@ -300,3 +300,97 @@
     (fx/notify-plugins! [p] {:note :c4} 2.0)
     (fx/notify-plugins! [p] 440 3.0)
     (is (= [["bd" 1.5] ["c4" 2.0]] @seen))))
+
+;;; ── Phase QA3 A4: staging of global (fx …) calls ────────────────────────
+
+(defn- staging-fixture
+  "Run f with a one-effect chain whose plugin records setParam / resetParams.
+   → the recorded calls."
+  [f]
+  (let [saved-chain @fx/chain
+        saved-log   @fx/param-log
+        saved-st    @fx/staging
+        calls       (atom [])
+        plugin      #js {:setParam    (fn [p v] (swap! calls conj [:set p v]))
+                         :resetParams (fn [] (swap! calls conj [:reset]))
+                         :bypass      (fn [b] (swap! calls conj [:bypass b]))}]
+    (try
+      (reset! fx/chain [{:name "reverb" :plugin plugin :active? true :bypassed? false}])
+      (reset! fx/param-log {"reverb" [["wet" 0.42]]})
+      (reset! fx/staging nil)
+      (f calls)
+      @calls
+      (finally
+        (reset! fx/chain saved-chain)
+        (reset! fx/param-log saved-log)
+        (reset! fx/staging saved-st)))))
+
+(deftest qa3-staging-records-instead-of-applying
+  (staging-fixture
+   (fn [calls]
+     (fx/begin-staging!)
+     (fx/global-op! [:set "reverb" "wet" 0.1])
+     (fx/global-op! [:bypass "reverb" true])
+     (is (= [] @calls) "nothing reaches the plugin while staging")
+     (is (= [[:set "reverb" "wet" 0.1] [:bypass "reverb" true]] @fx/staging))
+     (is (= {"reverb" [["wet" 0.42]]} @fx/param-log) "param log untouched")
+     (fx/discard-staging!))))
+
+(deftest qa3-discard-keeps-the-param-log
+  (staging-fixture
+   (fn [calls]
+     (fx/begin-staging!)
+     (fx/global-op! [:set "reverb" "wet" 0.1])
+     (fx/discard-staging!)
+     (is (nil? @fx/staging))
+     (is (= [] @calls))
+     (is (= {"reverb" [["wet" 0.42]]} @fx/param-log))
+     (is (:active? (first @fx/chain)) "the effect stays active"))))
+
+(deftest qa3-commit-applies-in-order
+  (staging-fixture
+   (fn [calls]
+     (fx/begin-staging!)
+     (fx/global-op! [:set "reverb" "wet" 0.1])
+     (fx/global-op! [:set "reverb" "size" 0.9])
+     (fx/global-op! [:bypass "reverb" true])
+     (fx/commit-staging! false)
+     (is (nil? @fx/staging))
+     (is (= [[:reset] [:set "wet" 0.1] [:set "size" 0.9] [:bypass true]] @calls)
+         "reset first, then every op in order")
+     (is (= {"reverb" [["wet" 0.1] ["size" 0.9]]} @fx/param-log)))))
+
+(deftest qa3-commit-without-ops
+  (testing "(commit-staging! false) with no ops changes nothing"
+    (staging-fixture
+     (fn [calls]
+       (fx/begin-staging!)
+       (fx/commit-staging! false)
+       (is (= [] @calls))
+       (is (= {"reverb" [["wet" 0.42]]} @fx/param-log))
+       (is (:active? (first @fx/chain))))))
+  (testing "(commit-staging! true) — a whole program — resets the master chain"
+    (staging-fixture
+     (fn [calls]
+       (fx/begin-staging!)
+       (fx/commit-staging! true)
+       (is (= [[:reset]] @calls))
+       (is (= {} @fx/param-log))
+       (is (not (:active? (first @fx/chain))))))))
+
+(deftest qa3-global-op-applies-at-once-outside-staging
+  (staging-fixture
+   (fn [calls]
+     (fx/global-op! [:set "reverb" "wet" 0.3])
+     (is (= [[:set "wet" 0.3]] @calls)))))
+
+(deftest qa3-notify-plugins-warns-once
+  (let [warned (atom [])
+        orig   (.-warn js/console)
+        p      #js {:name "boom" :onEvent (fn [_ _] (throw (js/Error. "x")))}]
+    (set! (.-warn js/console) (fn [& args] (swap! warned conj (first args))))
+    (try
+      (fx/notify-plugins! [p] :bd 1.0)
+      (fx/notify-plugins! [p] :bd 2.0)
+      (finally (set! (.-warn js/console) orig)))
+    (is (= 1 (count (filter #(re-find #"plugin boom onEvent failed" (str %)) @warned))))))

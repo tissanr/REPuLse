@@ -20,6 +20,7 @@
             [repulse.ui.selection :as sel]
             [repulse.ui.selection-highlight :as sel-hl]
             [repulse.ui.goto :as goto]
+            [repulse.ui.a11y :as a11y]
             [repulse.ui.html :refer [escape-html]]
             ["@codemirror/view" :refer [EditorView keymap]]
             ["@codemirror/state" :refer [Prec]]
@@ -130,6 +131,9 @@
        "\" data-from=\"" from "\" data-to=\"" to "\""
        (when id (str " data-id=\"" (escape-html id) "\""))
        (when row-act (str " data-act=\"" row-act "\""))
+       ;; QA3 D: clickable rows are keyboard controls (Tab + Enter/Space)
+       (when (or id row-act) " role=\"button\" tabindex=\"0\"")
+       (when (= row-act "fold") (str " aria-expanded=\"" (boolean @song-open?) "\""))
        ">"
        "<span class=\"ol-glyph" (when glyph-class (str " " glyph-class)) "\""
        (when fold? " data-act=\"fold\"") ">" (or glyph "") "</span>"
@@ -186,7 +190,8 @@
                         ["sources" (count sources)]])]
     (when (seq parts)
       (str "<div class=\"ol-session" (when @session-open? " open") "\">"
-           "<div class=\"ol-session-head\" data-act=\"session\">"
+           "<div class=\"ol-session-head\" data-act=\"session\" role=\"button\" tabindex=\"0\""
+           " aria-expanded=\"" (boolean @session-open?) "\">"
            "<span class=\"ol-session-glyph\">" (if @session-open? "▾" "▸") "</span>"
            "<span class=\"ol-session-title\">session</span>"
            "<span class=\"ol-session-sum\">" (escape-html (apply str (interpose " · " parts))) "</span>"
@@ -240,7 +245,8 @@
 (defn- rail-html [song-entry playing-idx]
   (let [secs  (:children song-entry)
         total (reduce + 0 (map #(or (:bars %) 1) secs))]
-    (str "<div class=\"ol-rail\" data-act=\"expand\" title=\"Show outline  "
+    (str "<div class=\"ol-rail\" data-act=\"expand\" role=\"button\" tabindex=\"0\""
+         " aria-expanded=\"false\" aria-label=\"show outline\" title=\"Show outline  "
          (if (mac?) "⌘⇧O" "Ctrl+Shift+O") "\">"
          "<div class=\"ol-rail-btn\">›</div>"
          "<div class=\"ol-rail-label\">outline</div>"
@@ -367,11 +373,14 @@
   (when-let [panel (.getElementById js/document "outline-panel")]
     (when-let [main (.getElementById js/document "outline-main")]
       (let [list-el (.querySelector main ".ol-list")
-            scroll  (when list-el (.-scrollTop list-el))]
+            scroll  (when list-el (.-scrollTop list-el))
+            ;; QA3 D: the outline re-renders every bar — keep keyboard focus
+            fk      (a11y/focus-key main)]
         (if @collapsed?
           (.add (.-classList panel) "collapsed")
           (.remove (.-classList panel) "collapsed"))
         (set! (.-innerHTML main) (render-html))
+        (a11y/restore-focus! main fk)
         (when scroll
           (when-let [l (.querySelector main ".ol-list")]
             (set! (.-scrollTop l) scroll)))))))
@@ -516,6 +525,7 @@
   (reset! cursor-pos (.. view -state -selection -main -head))
   (re-extract! view)
   (when-let [panel (.getElementById js/document "outline-panel")]
-    (.addEventListener panel "click" on-click))
+    (.addEventListener panel "click" on-click)
+    (a11y/activate-on-key! panel))
   (.addEventListener js/document "keydown" on-doc-keydown)
   (render!))

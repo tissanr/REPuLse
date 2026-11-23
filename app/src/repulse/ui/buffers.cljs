@@ -12,6 +12,7 @@
   (:require [clojure.string :as str]
             [repulse.project :as project]
             [repulse.session :as session]
+            [repulse.ui.a11y :as a11y]
             [repulse.ui.dialog :as dialog]
             [repulse.ui.editor :as editor]
             [repulse.ui.goto :as goto]
@@ -93,16 +94,24 @@
               (if (and (= mode :rename) (= tab n))
                 (name-input-html n "rename buffer")
                 (let [m? (= n main)
-                      confirm? (= n pending-delete)]
-                  (str "<button class=\"buf-tab" (when (= n active) " active") (when m? " main")
-                       "\" data-buffer=\"" (escape-html n) "\""
+                      confirm? (= n pending-delete)
+                      en (escape-html n)]
+                  ;; QA3 D: the tab is a wrapper holding two real buttons
+                  ;; (name, close) — a button inside a button is invalid and
+                  ;; the close control was unreachable from the keyboard.
+                  (str "<div class=\"buf-tab" (when (= n active) " active") (when m? " main")
+                       "\" data-buffer=\"" en "\""
                        (when m? " title=\"main buffer — Alt+Enter evaluates from here\"")
-                       ">" (escape-html n)
+                       ">"
+                       "<button type=\"button\" class=\"buf-name\" data-buffer=\"" en "\""
+                       (when (= n active) " aria-current=\"true\"") ">" en "</button>"
                        (when-not m?
                          (if confirm?
-                           "<span class=\"buf-close confirm\" data-act=\"delete\" title=\"click again to delete this buffer\">delete?</span>"
-                           "<span class=\"buf-close\" data-act=\"delete\" title=\"delete buffer\">×</span>"))
-                       "</button>")))))
+                           (str "<button type=\"button\" class=\"buf-close confirm\" data-act=\"delete\" data-buffer=\"" en "\""
+                                " title=\"click again to delete this buffer\" aria-label=\"confirm: delete buffer " en "\">delete?</button>")
+                           (str "<button type=\"button\" class=\"buf-close\" data-act=\"delete\" data-buffer=\"" en "\""
+                                " title=\"delete buffer\" aria-label=\"delete buffer " en "\">×</button>")))
+                       "</div>")))))
      (if (= mode :add)
        (name-input-html value "new buffer name")
        "<button class=\"buf-add\" data-act=\"add\" title=\"new buffer\">+</button>")
@@ -113,10 +122,12 @@
 
 (defn render-tabs! []
   (when-let [el (.getElementById js/document "buffer-tabs")]
-    (set! (.-innerHTML el) (tabs-html))
-    (when-let [input (.querySelector el ".buf-name-input")]
-      (.focus input)
-      (.select input))))
+    (let [fk (a11y/focus-key el)]   ; QA3 D: keep keyboard focus across re-renders
+      (set! (.-innerHTML el) (tabs-html))
+      (if-let [input (.querySelector el ".buf-name-input")]
+        (do (.focus input)
+            (.select input))
+        (a11y/restore-focus! el fk)))))
 
 ;;; Operations
 

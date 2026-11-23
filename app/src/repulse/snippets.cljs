@@ -23,6 +23,18 @@
 ;; Per-snippet ratings — optimistic map of snippet-id (string) → 1–5 (absent = no rating)
 (defonce ratings       (atom {}))
 
+;; QA3 E: every load/reload takes a new number; a response applies only while
+;; its number is still the latest (a slow earlier response never replaces a
+;; later one).
+(defonce ^:private request-seq (atom 0))
+
+;; QA3 E: message of the last failed static library load, nil after success.
+(defonce load-error (atom nil))
+
+;; QA3 E: bumped when the client-side sort / author filter changes without a
+;; refetch (anonymous users); the panel re-renders its cards on it.
+(defonce filter-rev (atom 0))
+
 ;;; Data access
 
 (defn all-snippets [] (or (:snippets @library-atom) []))
@@ -52,25 +64,48 @@
       (not= 0 weighted-c) weighted-c
       :else (compare-created-desc (:created_at a) (:created_at b)))))
 
-(defn- apply-client-sort [snippets]
+(defn server-filtered?
+  "True when the library came from /api/snippets (version 2): the server has
+   already applied the sort order and the author filter."
+  []
+  (= 2 (:version @library-atom)))
+
+(defn- stable-sort-desc
+  "Stable sort by (k s) descending; snippets without k keep their file order
+   after the ones that have it."
+  [k cmp snippets]
+  (let [with    (filter #(some? (k %)) snippets)
+        without (remove #(some? (k %)) snippets)]
+    (concat (sort-by k #(cmp %2 %1) with) without)))
+
+(defn- apply-client-sort [snippets server?]
   (case @sort-order
     "top-rated" (sort top-rated-compare snippets)
+    "newest"    (if server? snippets (stable-sort-desc :created_at compare snippets))
+    ("most-used" "trending")
+    (if server? snippets (stable-sort-desc :usage_count compare snippets))
     snippets))
 
 (defn filter-snippets
   "Return snippets matching query (searches title, description, code) and tag.
-   Sort and author filtering happen server-side."
+   Sort and author filtering happen server-side for the API library; for the
+   static library (anonymous users) they are applied here (QA3 E)."
   [query tag]
   (let [q       (when (and query (seq (cstr/trim query)))
                   (cstr/lower-case (cstr/trim query)))
+        server? (server-filtered?)
+        author  (when-not server?
+                  (some-> @author-filter cstr/trim cstr/lower-case not-empty))
         snippets (all-snippets)]
     (apply-client-sort
       (cond->> snippets
-        tag (filter #(some #{tag} (or (:tags %) [])))
-        q   (filter (fn [s]
-                      (or (cstr/includes? (cstr/lower-case (or (:title s) "")) q)
-                          (cstr/includes? (cstr/lower-case (or (:description s) "")) q)
-                          (cstr/includes? (cstr/lower-case (or (:code s) "")) q))))))))
+        tag    (filter #(some #{tag} (or (:tags %) [])))
+        author (filter #(cstr/includes? (cstr/lower-case (str (or (:author %) ""))) author))
+        q      (filter (fn [s]
+                         (or (cstr/includes? (cstr/lower-case (or (:title s) "")) q)
+                             (cstr/includes? (cstr/lower-case (or (:description s) "")) q)
+                             (cstr/includes? (cstr/lower-case (or (:code s) "")) q)))))
+      server?)))
 
 ;;; Rating helpers
 
@@ -154,62 +189,77 @@
 
 ;;; Loading
 
-(defn- apply-api-result! [snippets]
-  (reset! library-atom {:version 2 :snippets snippets})
-  (reset! loaded? true)
-  (reset! loading? false))
+(defn- latest? [n] (= n @request-seq))
 
-(defn- load-from-static! []
+(defn- apply-api-result! [n snippets]
+  (when (latest? n)
+    (reset! load-error nil)
+    (reset! library-atom {:version 2 :snippets snippets})
+    (reset! loaded? true)
+    (reset! loading? false)))
+
+(defn- load-from-static! [n]
   (-> (js/fetch "/snippets/library.json")
-      (.then #(.json %))
+      (.then (fn [^js resp]
+               (if (.-ok resp)
+                 (.json resp)
+                 (throw (js/Error. (str "HTTP " (.-status resp)))))))
       (.then (fn [data]
-               (let [d (js->clj data :keywordize-keys true)]
-                 (reset! library-atom d)
-                 (reset! loaded? true)
-                 (reset! loading? false))))
+               (when (latest? n)
+                 (let [d (js->clj data :keywordize-keys true)]
+                   (reset! load-error nil)
+                   (reset! library-atom d)
+                   (reset! loaded? true)
+                   (reset! loading? false)))))
       (.catch (fn [e]
-                (reset! loading? false)
+                (when (latest? n)
+                  (reset! loading? false)
+                  (reset! load-error (error-message e)))
                 (js/console.warn "[REPuLse] snippet library load failed:" e)))))
 
 (defn- load-from-api!
-  ([] (load-from-api! {}))
-  ([opts]
-   (-> (api/fetch-snippets (merge {:sort @sort-order
-                                   :author @author-filter}
-                                  opts))
-       (.then (fn [result]
-                (let [result (api-result result "Malformed snippet API response")]
-                  (if-let [snippets (:data result)]
-                    (if (sequential? snippets)
-                      (apply-api-result! snippets)
-                      (do (js/console.warn "[REPuLse] API snippet load failed:"
+  [n]
+  (-> (api/fetch-snippets {:sort @sort-order
+                           :author @author-filter})
+      (.then (fn [result]
+               (when (latest? n)
+                 (let [result (api-result result "Malformed snippet API response")]
+                   (if-let [snippets (:data result)]
+                     (if (sequential? snippets)
+                       (apply-api-result! n snippets)
+                       (do (js/console.warn "[REPuLse] API snippet load failed:"
                                             "Malformed snippet API response")
-                          (load-from-static!)))
-                    (do (js/console.warn "[REPuLse] API snippet load failed:" (:error result))
-                        (load-from-static!))))))
-       (.catch (fn [e]
-                 (js/console.warn "[REPuLse] API snippet fetch error:" (error-message e))
-                 (load-from-static!))))))
+                           (load-from-static! n)))
+                     (do (js/console.warn "[REPuLse] API snippet load failed:" (:error result))
+                         (load-from-static! n)))))))
+      (.catch (fn [e]
+                (when (latest? n)
+                  (js/console.warn "[REPuLse] API snippet fetch error:" (error-message e))
+                  (load-from-static! n))))))
+
+(defn- fetch-library! []
+  (let [n (swap! request-seq inc)]
+    (reset! loading? true)
+    (if (auth/session)
+      (load-from-api! n)
+      (load-from-static! n))))
 
 (defn load!
   "Populate library-atom from the API (when authenticated) or static JSON.
    No-ops if already loaded or loading."
   []
   (when (and (not @loaded?) (not @loading?))
-    (reset! loading? true)
-    (if (auth/session)
-      (load-from-api!)
-      (load-from-static!))))
+    (fetch-library!)))
 
 (defn reload!
-  "Force re-fetch with current sort-order / author-filter params.
-   Always fires (ignores loaded? flag)."
+  "Re-fetch with the current sort-order / author-filter params. Anonymous
+   users with the static library loaded filter and sort client-side instead:
+   no fetch, only filter-rev is bumped (QA3 E)."
   []
-  (reset! loaded? false)
-  (reset! loading? true)
-  (if (auth/session)
-    (load-from-api!)
-    (load-from-static!)))
+  (if (and (not (auth/session)) @loaded? (not (server-filtered?)))
+    (swap! filter-rev inc)
+    (do (reset! loaded? false)
+        (fetch-library!))))
 
 ;;; Lisp built-in factory
 

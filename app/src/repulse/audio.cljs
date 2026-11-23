@@ -11,6 +11,7 @@
             [repulse.preview-track :as preview-track]
             [repulse.song :as song]
             [repulse.voices :as voices]
+            [repulse.tempo :as tempo]
             [repulse.audio-clock :as clock]))
 
 ;; Web Audio API scheduler
@@ -19,7 +20,8 @@
 ;; Set js/globalThis.__REPULSE_DEBUG__ = true (before page load) to enable verbose logging.
 (def ^:private debug? (boolean (.-__REPULSE_DEBUG__ js/globalThis)))
 
-(def ctx (atom nil))
+;; QA3 A7: defonce — a hot reload must not create a second AudioContext.
+(defonce ctx (atom nil))
 
 ;; AudioWorklet node — nil until loaded
 (defonce worklet-node (atom nil))
@@ -107,7 +109,11 @@
                    ;; (new WebAssembly.Module + new WebAssembly.Instance) which
                    ;; avoids every browser-specific limitation we hit before.
                    (-> (js/fetch (public-url "repulse_audio_bg.wasm"))
-                       (.then (fn [resp] (.arrayBuffer resp)))
+                       ;; QA3 A7: a 404 page must not reach the worklet as WASM.
+                       (.then (fn [resp]
+                                (if (.-ok resp)
+                                  (.arrayBuffer resp)
+                                  (throw (js/Error. (str "HTTP " (.-status resp)))))))
                        (.then (fn [buf]
                                 (when debug? (js/console.log "[REPuLse] WASM fetched, initializing worklet..."))
                                 (.. node -port
@@ -120,7 +126,9 @@
                                       "[REPuLse] audio backend: clojurescript synthesis (WASM init timed out — worklet did not send 'ready' after 5 s)")))
                                  5000)))
                        (.catch (fn [e]
-                                 (js/console.warn "[REPuLse] WASM fetch failed:" e)))))))
+                                 (js/console.warn
+                                  (str "[REPuLse] audio backend: clojurescript synthesis (WASM fetch failed: "
+                                       (or (ex-message e) (str e)) ")"))))))))
         (.catch (fn [e]
                   (js/console.warn "[REPuLse] audio backend: clojurescript synthesis (Worklet load failed)" e))))
     (js/console.warn "[REPuLse] audio backend: clojurescript synthesis (AudioWorklet not supported)")))
@@ -705,20 +713,57 @@
     (set! (.-oversample ws) "none")
     ws))
 
+;; QA3 A5: per-event JS node chains waiting to be disconnected — one list
+;; instead of one js/setTimeout per event. Entries {:at t-or-nil :track kw
+;; :nodes [...]}: :at = end of the voice + 0.5 s (swept by tick!), nil = length
+;; unknown (removed with the track, by clear-track! / retire-track! / stop!).
+(defonce pending-disconnects (atom []))
+
+(defn split-due
+  "Pure. [due keep] of pending-disconnect entries: due = :at known and ≤ now."
+  [entries now]
+  (let [due? (fn [{:keys [at]}] (and (some? at) (<= at now)))]
+    [(filterv due? entries) (filterv (complement due?) entries)]))
+
+(defn- disconnect-entries! [entries]
+  (doseq [{:keys [nodes]} entries
+          n nodes]
+    (try (.disconnect n) (catch :default _ nil))))
+
+(defn- sweep-disconnects!
+  "Disconnect every pending chain whose voice has ended by now."
+  [now]
+  (let [[due keep] (split-due @pending-disconnects now)]
+    (when (seq due)
+      (reset! pending-disconnects keep)
+      (disconnect-entries! due))))
+
+(defn- disconnect-track-chains!
+  "Disconnect and drop every pending chain of track-name."
+  [track-name]
+  (let [[mine others] ((juxt filterv remove) #(= track-name (:track %)) @pending-disconnects)]
+    (when (seq mine)
+      (reset! pending-disconnects (vec others))
+      (disconnect-entries! mine))))
+
 (defn- schedule-disconnect!
   "Disconnect nodes dur seconds (+ 0.5 s) after t. dur is a number or a Promise
-   of one (sample length, known once the buffer is loaded); ##Inf or nil = never.
-   Offline contexts skip the timer: the context is discarded after rendering."
-  [ac t nodes dur]
+   of one (sample length, known once the buffer is loaded). nil, non-finite or a
+   Promise resolving to nil/non-finite = unknown: the chain stays until its
+   track is cleared or retired, or (stop). Offline contexts skip this: the
+   context is discarded after rendering."
+  [ac t nodes dur track-name]
   (when-not (offline-context? ac)
-    (let [arm! (fn [d]
-                 (when (and (number? d) (js/isFinite d))
-                   (js/setTimeout
-                     (fn [] (doseq [n nodes] (try (.disconnect n) (catch :default _ nil))))
-                     (* 1000 (+ (max 0 (- t (.-currentTime ac))) d 0.5)))))]
-      (if (number? dur)
-        (arm! dur)
-        (when dur (.then dur arm!))))))
+    (let [at    (fn [d] (when (and (number? d) (js/isFinite d)) (+ t d 0.5)))
+          entry {:at (when (number? dur) (at dur)) :track track-name :nodes nodes}]
+      (swap! pending-disconnects conj entry)
+      (when (and dur (not (number? dur)) (fn? (.-then dur)))
+        ;; Known once the buffer is loaded: set :at on this very entry (it may
+        ;; already be gone when the track was cleared meanwhile).
+        (.then dur (fn [d]
+                     (when-let [t' (at d)]
+                       (swap! pending-disconnects
+                              (fn [es] (mapv #(if (identical? (:nodes %) nodes) (assoc % :at t') %) es))))))))))
 
 (defn- event-output
   "Return the node a JS voice should connect to. If the event has insert params
@@ -731,8 +776,9 @@
    of the chain that feeds dest (dry) and the room/delay inputs of the event's
    orbit. Without any of these, return dest — no extra nodes. coarse has no
    node here (warned once)."
-  ([ac t ins snd dest dur] (event-output ac t ins snd dest dur 1.0 nil))
-  ([ac t ins snd dest dur gain gate]
+  ([ac t ins snd dest dur] (event-output ac t ins snd dest dur 1.0 nil nil))
+  ([ac t ins snd dest dur gain gate] (event-output ac t ins snd dest dur gain gate nil))
+  ([ac t ins snd dest dur gain gate track-name]
    (if (and (nil? ins) (nil? snd) (== gain 1))
      dest
      (let [{:keys [lpf resonance hpf hpq bpf bpq shape crush
@@ -764,7 +810,7 @@
        (doseq [[a b] (partition 2 1 stages)]
          (.connect (:out a) (:in b)))
        (.connect (:out (peek stages)) dest)
-       (schedule-disconnect! ac t (into (vec (mapcat :nodes stages)) sends) dur)
+       (schedule-disconnect! ac t (into (vec (mapcat :nodes stages)) sends) dur track-name)
        (:in (first stages))))))
 
 (defn- sample-length
@@ -845,7 +891,7 @@
          ;; Destination for a JS voice sounding dur seconds. Only called on the
          ;; fallback branches, so a worklet event never builds a node chain; WASM
          ;; eligibility is still decided on the original dest.
-         js-dest  (fn [dur] (event-output ac t ins snd dest dur 1.0 gate))]
+         js-dest  (fn [dur] (event-output ac t ins snd dest dur 1.0 gate track-name))]
      ;; TL7b: size / delay-time / delay-feedback set the event's orbit, whichever
      ;; path plays the voice (and even when its own sends are 0). Rests carry
      ;; the keys too but are not events.
@@ -862,7 +908,7 @@
        (let [synth-def (synth/lookup-synth (:synth value))]
          ;; The defsynth's own envelope sets its length (unknown here); 30 s
          ;; bounds the cleanup so long pads are never cut.
-         (synth/play-synth! ac t synth-def value (event-output ac t ins snd dest 30.0 af gate)))
+         (synth/play-synth! ac t synth-def value (event-output ac t ins snd dest 30.0 af gate track-name)))
 
        ;; Bare defsynth name — (seq :lfo-sine) triggers a parameterless synth,
        ;; e.g. a bus writer. Note names keep their meaning.
@@ -1120,12 +1166,17 @@
                raw tween-st)
     raw))
 
-(def scheduler-state
+;; QA3 A7: defonce — a hot reload must not lose the running scheduler.
+(defonce scheduler-state
   (atom {:playing?     false
          :tracks       {}     ; keyword → Pattern
          :muted        #{}    ; set of muted track keywords
          :cycle        0
          :cycle-dur    2.0    ; seconds per cycle — 120 BPM, 1 cycle = 1 bar (4 beats)
+         ;; QA3 A1 tempo anchor: cycle x starts at
+         ;; anchor-time + (x − anchor-cycle) × cycle-dur (repulse.tempo).
+         :anchor-time  0.0
+         :anchor-cycle 0
          :lookahead    0.2    ; look-ahead in seconds
          :interval-id  nil
          :on-beat      nil
@@ -1193,10 +1244,14 @@
 (def ^:private capture-start-margin-secs 0.5)
 
 (defn first-song-bar
-  "Pure. The first bar index ≥ cycle whose start time (bar × cycle-dur) is at
-   least margin seconds after now."
-  [cycle cycle-dur now margin]
-  (max cycle (int (Math/ceil (/ (+ now margin) cycle-dur)))))
+  "Pure. The first bar index ≥ cycle whose start time is at least margin
+   seconds after now. Bar x starts at anchor-time + (x − anchor-cycle) ×
+   cycle-dur (QA3 tempo anchor; the 4-arity uses the anchor 0.0 / 0)."
+  ([cycle cycle-dur now margin]
+   (first-song-bar cycle cycle-dur now margin 0.0 0))
+  ([cycle cycle-dur now margin anchor-time anchor-cycle]
+   (max cycle (int (Math/ceil (+ anchor-cycle
+                                 (/ (- (+ now margin) anchor-time) cycle-dur)))))))
 
 (defn coerce-bpm
   "Clamp BPM to the safe scheduler range [20, 640]. Invalid, NaN, or
@@ -1210,9 +1265,13 @@
       :else n)))
 
 (defn set-bpm!
-  "Set the tempo in BPM. One cycle = one bar (4 beats)."
+  "Set the tempo in BPM. One cycle = one bar (4 beats). QA3: the change takes
+   effect at the next unscheduled bar, which starts exactly where the last
+   scheduled bar ends (tempo/retempo)."
   [bpm]
-  (swap! scheduler-state assoc :cycle-dur (/ 240.0 (coerce-bpm bpm))))
+  (swap! scheduler-state tempo/retempo
+         (if-let [ac @ctx] (.-currentTime ac) 0)
+         (/ 240.0 (coerce-bpm bpm))))
 
 (defn get-bpm []
   (/ 240.0 (:cycle-dur @scheduler-state)))
@@ -1334,7 +1393,7 @@
                                            (let [whole-start (core/rat->float (:start (:whole event)))
                                                  whole-end   (core/rat->float (:end   (:whole event)))]
                                              [track event
-                                              (* (+ origin whole-start) cycle-dur)
+                                              (tempo/time-at-cycle state (+ origin whole-start))
                                               (* (- whole-end whole-start) cycle-dur)])))
                 [event t dur] (with-glide track (map rest onsets))]
           (swap! scheduled-counts update track (fnil inc 0))
@@ -1356,12 +1415,10 @@
                       (with-glide
                         track-name
                         (for [ev evs]
-                          (let [whole-start       (core/rat->float (:start (:whole ev)))
-                                whole-end         (core/rat->float (:end   (:whole ev)))
-                                cycle-audio-start (* cycle cycle-dur)
-                                event-offset      (* (- whole-start cycle) cycle-dur)]
+                          (let [whole-start (core/rat->float (:start (:whole ev)))
+                                whole-end   (core/rat->float (:end   (:whole ev)))]
                             [ev
-                             (+ cycle-audio-start event-offset)
+                             (tempo/time-at-cycle state whole-start)
                              (* (- whole-end whole-start) cycle-dur)])))]
                 (swap! scheduled-counts update track-name (fnil inc 0))
                 (schedule-event! ac state snap track-name ev t dur)))))))))
@@ -1383,7 +1440,7 @@
       (let [cd          (:cycle-dur state)
             sr          (.-sampleRate ac)
             tail        (:tail cap)
-            t0          (* (+ origin start-bar) cd)
+            t0          (tempo/time-at-cycle state (+ origin start-bar))
             dur         (song/song-duration-secs s (/ 240.0 cd))
             t1          (+ t0 dur tail)
             start-frame (Math/round (* t0 sr))
@@ -1409,11 +1466,12 @@
   (let [state @scheduler-state
         sg    (:song state)]
     (when (and sg (nil? (:origin sg)))
-      (let [{:keys [cycle cycle-dur]} state
+      (let [{:keys [cycle cycle-dur anchor-time anchor-cycle]} state
             margin    (if (= :waiting (:status (:capture state)))
                         capture-start-margin-secs
                         song-start-margin-secs)
-            first-bar (first-song-bar cycle cycle-dur now margin)]
+            first-bar (first-song-bar cycle cycle-dur now margin
+                                      (or anchor-time 0.0) (or anchor-cycle 0))]
         (swap! scheduler-state assoc-in [:song :origin] (- first-bar (:start-bar sg)))
         (arm-capture! ac @scheduler-state)))))
 
@@ -1425,20 +1483,27 @@
   [state now]
   (let [{s :song origin :origin} (:song state)]
     (and s origin (= :stop (:end s)) (nil? (:capture state))
-         (>= now (+ (* (+ origin (:total s)) (:cycle-dur state)) song-release-secs)))))
+         (>= now (+ (tempo/time-at-cycle state (+ origin (:total s))) song-release-secs)))))
+
+;; QA3 A5: tick! sweeps pending-disconnects every sweep-every-ticks calls
+;; (10 × 25 ms = 250 ms).
+(def ^:private sweep-every-ticks 10)
+(defonce ^:private tick-count (atom 0))
 
 (defn tick! []
   (let [ac (get-ctx)]
     (when (:playing? @scheduler-state)
       (let [now (.-currentTime ac)]
+        (when (zero? (mod (swap! tick-count inc) sweep-every-ticks))
+          (sweep-disconnects! now))
         (resolve-song-origin! ac now)
         (let [state @scheduler-state]
           (if (song-finished? state now)
             (let [on-end (:on-song-end state)]
               (stop!)
               (when on-end (on-end)))
-            (let [{:keys [cycle cycle-dur lookahead]} state
-                  cycle-start (* cycle cycle-dur)]
+            (let [{:keys [cycle lookahead]} state
+                  cycle-start (tempo/time-at-cycle state cycle)]
               (when (< (- cycle-start now) lookahead)
                 ;; QA1: the cycle always advances, even if scheduling throws —
                 ;; otherwise the same cycle is retried every tick and all goes silent.
@@ -1545,9 +1610,8 @@
   "Start the scheduler tick loop if not already running."
   [ac on-beat-fn on-event-fn]
   (when-not (:interval-id @scheduler-state)
-    (let [now       (.-currentTime ac)
-          cycle-dur (:cycle-dur @scheduler-state)
-          start-cycle (int (Math/floor (/ now cycle-dur)))]
+    (let [now         (.-currentTime ac)
+          start-cycle (int (Math/floor (tempo/cycle-at-time @scheduler-state now)))]
       (swap! scheduler-state assoc
              :playing?    true
              :cycle       start-cycle
@@ -1584,6 +1648,9 @@
     (doseq [{:keys [plugin]} fx-chain]
       (try (.destroy ^js plugin) (catch :default _))))
   (reset! track-nodes {})
+  ;; QA3 A5: every per-event JS chain goes with the tracks
+  (disconnect-entries! @pending-disconnects)
+  (reset! pending-disconnects [])
   ;; Clean up all named buses and their persistent synth writers
   (bus/cleanup-all!)
   (swap! scheduler-state assoc
@@ -1661,6 +1728,7 @@
                (js/setTimeout
                 (fn []
                   (swap! retiring dissoc track-name)
+                  (disconnect-track-chains! track-name)
                   (try (.disconnect g) (catch :default _))
                   (doseq [{:keys [plugin]} (:fx-chain tn)]
                     (try (.destroy ^js plugin) (catch :default _)))
@@ -1669,7 +1737,8 @@
                     (swap! track-nodes dissoc track-name))
                   (finish!))
                 wait-ms)))
-      (finish!))))
+      (do (disconnect-track-chains! track-name)
+          (finish!)))))
 
 (defn play-track!
   "Add or replace a named track. Creates a per-track GainNode if needed.
@@ -1701,6 +1770,7 @@
 
 (defn clear-track! [track-name]
   (swap! glide-state dissoc track-name)
+  (disconnect-track-chains! track-name)
   (when-let [id (get @retiring track-name)]
     (js/clearTimeout id)
     (swap! retiring dissoc track-name))
@@ -1724,9 +1794,8 @@
   (let [ac (get-ctx)]
     (.resume ac)
     (arm-transitions! :_ pattern ac)
-    (let [now       (.-currentTime ac)
-          cycle-dur (:cycle-dur @scheduler-state)
-          start-cycle (int (Math/floor (/ now cycle-dur)))]
+    (let [now         (.-currentTime ac)
+          start-cycle (int (Math/floor (tempo/cycle-at-time @scheduler-state now)))]
       (swap! scheduler-state assoc
              :playing?    true
              :tracks      {:_ pattern}
@@ -1741,6 +1810,15 @@
 (defn playing? []
   (:playing? @scheduler-state))
 
+(defn audible-cycle
+  "QA3 A2: the cycle sounding now (floor of the cycle position at the audio
+   clock), or nil when not playing. Unlike :cycle (the next cycle to schedule)
+   this is the bar the listener hears."
+  []
+  (let [state @scheduler-state]
+    (when-let [ac (and (:playing? state) @ctx)]
+      (max 0 (int (Math/floor (tempo/cycle-at-time state (.-currentTime ac))))))))
+
 ;;; Tap tempo
 
 (defonce ^:private tap-times (atom []))
@@ -1748,7 +1826,8 @@
 (defn tap!
   "Register a tap for BPM detection. Returns computed BPM or nil if fewer than 2 taps."
   []
-  (let [now (js/Date.now)]
+  ;; QA3 A7: monotonic clock — Date.now jumps with wall-clock adjustments.
+  (let [now (.now js/performance)]
     (swap! tap-times (fn [ts]
       (->> (conj ts now)
            (filterv #(> % (- now 4000)))
