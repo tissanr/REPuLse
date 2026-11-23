@@ -5299,8 +5299,10 @@ Error: Unterminated list
 Error: seq is not a function  (when called wrong)
 ```
 
-Typo detection uses Levenshtein distance — if your symbol is within 3 edits of a known
-name, a suggestion is shown.
+Typo detection uses Levenshtein distance, and the allowed distance grows with the length of
+the name you typed: 1 edit for names of up to 4 letters, 2 for up to 8, 3 for longer ones.
+`(palindrom …)` suggests `palindrome` and `(stakc …)` suggests `stack`, while `(sqe …)` (two
+edits from `seq`, three letters) reports `Undefined symbol: sqe` with no suggestion.
 
 Unknown sound names are reported as warnings rather than errors — the code still plays:
 
