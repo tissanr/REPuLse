@@ -302,7 +302,8 @@
                                                            t' cycle-dur)
                                                     ret   (when (or (nil? stem) (= track stem))
                                                             (audio/play-event offline t' value track
-                                                                                {:dur dur :cycle-dur cycle-dur}))]
+                                                                                {:dur dur :cycle-dur cycle-dur
+                                                                 :onset (:start w)}))]
                                                 (fx/notify-plugins! plugins value t')
                                                 (when (thenable? ret)
                                                   (.catch ret (fn [_] nil))))))

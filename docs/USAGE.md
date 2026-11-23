@@ -2033,31 +2033,6 @@ Most sample banks contain multiple variations (different kit sounds). Use `sound
 (seq (sound :bd 0) (sound :bd 2) (sound :sd 1) :hh)
 ```
 
-### Layered banks — velocity layers and round-robin
-
-A bank in a JSON manifest (loaded with `samples!`) can be *layered*: instead of an
-array of files, give it layers, each the loudest velocity it covers (`vel-max`):
-
-```json
-{ "_base": "https://example.org/kit/",
-  "studio_sd": { "layers": [
-    { "vel-max": 0.4, "files": ["sd_soft_1.wav", "sd_soft_2.wav"] },
-    { "vel-max": 1.0, "files": ["sd_hard_1.wav", "sd_hard_2.wav"] } ] } }
-```
-
-```lisp
-(samples! "https://example.org/kit/manifest.json")
-(bank :studio)
-(->> (seq :sd :sd :sd :sd) (velocity "0.2 0.5 0.8 1"))   ; ghost note → accent
-```
-
-- **Layer:** the first layer whose `vel-max` ≥ the event's `velocity` (default 1); the
-  last layer if none. `velocity` still multiplies the amplitude.
-- **Round-robin:** within a layer the recording is chosen by the Tidal-compatible RNG
-  seeded with the event time in milliseconds — identical on every offline render.
-- Plain array banks work unchanged. Kits are selected with `(bank …)`; there is no
-  separate `kit` built-in (KIT1 spec decision 1).
-
 ### `bank` — drum machine prefix
 
 Set a global prefix so bare keywords resolve to a named drum machine bank:
@@ -2086,6 +2061,97 @@ sample bank. The active bank is shown as a badge in the status head
 The prefix is a session setting, like `bpm`: it persists across evaluations and page
 reloads until you change it or call `(bank nil)`. Removing a `(bank …)` line from the
 buffer does not clear it.
+
+### Drum kits — velocity layers and round-robin
+
+Two acoustic, multisampled kits ship with REPuLse, selected like any drum machine with
+`(bank …)` (there is no separate `kit` function):
+
+| Kit | Character | Source and licence |
+|---|---|---|
+| `JazzKit` | jazz club kit, played with sticks | Virtuosity Drums, CC0 1.0 |
+| `StudioKit` | full rock/pop studio kit | DRSKit by the DrumGizmo team and DRSDrums, CC-BY 4.0 |
+
+```lisp
+(bank :JazzKit)                                         ; bare drum names use the kit
+(seq :bd :sd :bd :sd)                                   ; top layer, rotating takes
+(->> (fast 4 (seq :hh :hh :hh :hh))
+     (velocity (seq 0.9 0.35 0.6 0.35)))                ; accents and soft hats
+(->> (seq :sd :sd :sd :sd) (velocity "0.15 0.4 0.7 1")) ; ghost note → hard hit
+(seq :JazzKit_rd :StudioKit_bd)                         ; address a kit instrument directly
+(sound :JazzKit_sd 4)                                   ; one fixed recording, no layering
+```
+
+Kit instruments are banks named `<Kit>_<instrument>` (`JazzKit_bd`), like the Tidal drum
+machines (`RolandTR909_bd`), so `(bank :JazzKit)`, the status-head badge, `sample-banks`
+and `(sound :JazzKit_sd 4)` all work as they do for drum machines. Selecting a kit also
+starts fetching all of its recordings (about 5 MB) in the background, so the first bars
+are not late.
+
+| Name | Instrument | Name | Instrument |
+|---|---|---|---|
+| `:bd` | kick | `:oh` | open hi-hat |
+| `:sd` | snare | `:ph` | pedal hi-hat |
+| `:rim` | cross-stick | `:cr` | crash |
+| `:hh` | closed hi-hat | `:rd` | ride |
+| `:lt` `:mt` `:ht` | low / mid / high tom | `:rb` | ride bell |
+
+`JazzKit` has no `:mt`. A name a kit lacks falls through to the
+[synth kit](#synth-drum-kit), as for drum machines — no error.
+
+- **Velocity layers.** Each instrument has several recordings per dynamic level. The
+  event's `velocity` (default 1) picks the layer: the first layer whose upper bound `v`
+  is ≥ the velocity. Soft layers sound different from hard ones (a ghost note is not just
+  a quiet snare). `velocity 0` is silent.
+- **Velocity on layered banks replaces the linear multiply.** On every other sound
+  `velocity` multiplies the amplitude (`amp × gain × velocity`). On a layered bank the
+  recording carries most of the dynamics, so the level is `amp × gain × layer gain ×
+  in-layer scale`: it rises smoothly across layer boundaries, from 60 % to 100 % within a
+  layer. Layer gains are level-matched when the kit is built.
+- **Round-robin.** Within a layer, repeated hits rotate through several takes: random,
+  but never the same take twice in a row. The choice is seeded by the event's onset time,
+  so it is identical on every offline render and WAV export from cycle 0.
+- **`sound` is the escape hatch.** `(sound :JazzKit_sd 4)` plays exactly recording number 4 of the
+  bank (counting from 0, the files in layer order, soft to hard), with the plain linear `velocity` multiply.
+- **Hat choke.** Closed, open and pedal hats of a kit share one choke group: a closed or
+  pedal hat cuts a ringing open hat, as on a real kit. Give a hit its own `(cut n)` to
+  opt out.
+- MIDI out and MIDI export still derive velocity from `amp`, as before.
+
+#### Your own layered banks
+
+Any JSON manifest loaded with `samples!` can contain layered instruments. A layered
+instrument is an object next to the usual array banks. `v` is the layer's upper velocity
+bound (strictly ascending, the last must be 1), `gain` (default 1, up to 4) levels the
+layers against each other, `choke` names a choke group shared by the kit's instruments:
+
+```json
+{ "_format": "repulse-kit/1",
+  "_base": "https://example.org/kit/",
+  "studio_sd": { "layers": [
+    { "v": 0.4, "gain": 1.5, "files": ["sd_soft_1.wav", "sd_soft_2.wav"] },
+    { "v": 1,   "files": ["sd_hard_1.wav", "sd_hard_2.wav", "sd_hard_3.wav"] } ] },
+  "studio_hh": { "choke": "hat", "layers": [ { "v": 1, "files": ["hh.wav"] } ] } }
+```
+
+```lisp
+(samples! "https://example.org/kit/manifest.json")
+(bank :studio)
+(->> (seq :sd :sd :sd :sd) (velocity "0.2 0.5 0.8 1"))
+```
+
+A malformed entry is skipped with a console warning naming it; the rest of the manifest
+still loads. Plain array banks work unchanged, and an older REPuLse (or Strudel) simply
+ignores layered entries. Layered manifests are JSON only (not `.edn`).
+
+The kit files are in `app/public/kits/`, built from the openly licensed sources by
+`scripts/kits/build-kit.mjs` (see `scripts/kits/*.json`).
+
+**Credits.** JazzKit: Virtuosity Drums by Versilian Studios / Virtuosity Musical
+Instruments (drummer Austin McMahon), CC0 1.0. StudioKit: DRSKit by Lars Muldjord, Bent
+Bisballe Nyeng and Jes Eiler (DRSDrums), SFZ mapping by kinwie, CC-BY 4.0; modified
+(selected layers and takes, trimmed, mixed from several microphones, level-matched).
+Details and licence texts are in the kit folders.
 
 ### Synth drum kit
 
@@ -2228,6 +2294,15 @@ Sample banks are loaded from the **Dirt-Samples** and **Tidal Drum Machines** co
 They are available after a short initial network fetch. The Dirt-Samples banks that share
 a name with the [synth kit](#synth-drum-kit) (`:bd :sd :hh :oh :cp :cr :cb :lt :mt :ht …`)
 play under `(bank :dirt)` or with `(sound :bd n)`; bare, those names play the synth kit.
+
+### Drum kits
+
+| Bank prefix | Description |
+|---|---|
+| `:JazzKit` | Multisampled jazz kit (Virtuosity Drums, CC0): 4 velocity layers × 3 takes on kick, snare and hi-hat |
+| `:StudioKit` | Multisampled studio kit (DRSKit, CC-BY 4.0): same layer and take counts, plus three toms |
+
+See [Drum kits](#drum-kits--velocity-layers-and-round-robin).
 
 ### Dirt-Samples (classic TidalCycles sounds)
 
@@ -2712,7 +2787,7 @@ string or a signal, and returns a transformer when called without the pattern:
 | `shape` | 0–0.99 | 0 (off) | soft waveshaper amount |
 | `crush` | 1–16 bits | 16 (off) | bit-depth quantiser |
 | `gain` | 0–2 | 1 | linear gain, multiplies `amp` |
-| `velocity` | 0–1 | 1 | linear, multiplies `amp` |
+| `velocity` | 0–1 | 1 | linear, multiplies `amp`; on [layered kit banks](#drum-kits--velocity-layers-and-round-robin) it picks the recording layer |
 
 ```lisp
 ;; Signal-driven filter sweep on hats, with resonance
@@ -2733,7 +2808,9 @@ string or a signal, and returns a transformer when called without the pattern:
   → `vowel` → `coarse` → `crush` → `shape` → `postgain` → pan → sends.
   Only the stages an event uses are built. An event without these keys costs nothing extra.
 - **Gain model:** voice level = `amp × gain × velocity`. All three are linear, so
-  `(velocity 0.5 (gain 2 pat))` sounds like `pat`. `amp` keeps its meaning.
+  `(velocity 0.5 (gain 2 pat))` sounds like `pat`. `amp` keeps its meaning. On layered
+  kit banks (`(bank :JazzKit)`) `velocity` instead selects the recording layer and a
+  level within it; see [Drum kits](#drum-kits--velocity-layers-and-round-robin).
 - A Q without its filter (`(resonance 4 pat)` with no `lpf`) is stored but does nothing.
 - Works on every voice: WASM synth voices, samples, `defsynth` voices, JS fallbacks and
   WAV export. Synth voices on the worklet filter in WASM; everything else uses the

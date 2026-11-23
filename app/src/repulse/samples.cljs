@@ -1,5 +1,5 @@
 (ns repulse.samples
-  (:require [repulse.core :as core]
+  (:require [repulse.kits :as kits]
             [repulse.lisp.reader :as reader]
             [repulse.specs :as specs]
             [clojure.string :as str]))
@@ -61,10 +61,35 @@
       (doseq [u drop] (.delete lru-order u))
       (swap! buffer-cache #(apply dissoc % drop)))))
 
-;; KIT1: velocity layers. bank-name -> [{:vel-max 0.3 :urls [...]} …] sorted by
-;; :vel-max ascending. Layered banks are also in `registry` (all files flattened),
-;; so has-bank?, bank listings and sample-length keep working unchanged.
+;; KIT1: layered banks. bank-name -> {:layers [{:v :gain :urls}] :choke s|nil}
+;; (see repulse.kits). Layered banks are also in `registry` (all files flattened,
+;; low -> high layer), so has-bank?, bank listings and sample-length keep working.
 (defonce layers (atom {}))
+
+(def ^:private public-base-url
+  (let [document (.-document js/globalThis)
+        script-src (some-> document .-currentScript .-src)]
+    (.-href
+     (cond
+       ;; app build (/js/main.js) and TEST1 harness build (/test-js/main.js)
+       ;; both live one level below app/public
+       (and script-src (or (str/includes? script-src "/js/")
+                           (str/includes? script-src "/test-js/")))
+       (js/URL. "../" script-src)
+
+       script-src
+       (js/URL. "./" script-src)
+
+       document
+       (js/URL. "./" (.-baseURI document))
+
+       :else
+       (js/URL. "./" "http://localhost/")))))
+
+(defn public-url
+  "Absolute URL of a file under app/public (also right for the embed build)."
+  [path]
+  (.-href (js/URL. path public-base-url)))
 
 ;; Active drum machine prefix — nil means no prefix active.
 ;; When set, keyword :kw is looked up as "<prefix>_<kw>" first.
@@ -90,67 +115,68 @@
 (def DEFAULT-MANIFESTS
   ["https://raw.githubusercontent.com/felixroos/dough-samples/main/Dirt-Samples.json"
    "https://raw.githubusercontent.com/felixroos/dough-samples/main/tidal-drum-machines.json"
-   "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/strudel.json"])
+   "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/strudel.json"
+   ;; KIT1: layered acoustic kits, served same-origin from app/public/kits/
+   (public-url "kits/kits.json")])
 
-(defn parse-layers
-  "Pure. A layered bank value {\"layers\" [{\"vel-max\" 0.3 \"files\" [..]} …]} (already
-   js->clj'd) → [{:vel-max n :urls [full-url …]} …] sorted by :vel-max, or nil when
-   malformed. Layers without :vel-max count as 1.0."
-  [v base]
-  (when (and (map? v) (vector? (get v "layers")))
-    (let [ls (->> (get v "layers")
-                  (keep (fn [l]
-                          (let [files (when (map? l) (get l "files"))
-                                urls  (when (vector? files)
-                                        (filterv string? (mapv #(str base %) files)))
-                                vm    (get l "vel-max" 1.0)]
-                            (when (and (seq urls) (number? vm))
-                              {:vel-max (double vm) :urls urls}))))
-                  (sort-by :vel-max)
-                  vec)]
-      (when (seq ls) ls))))
+(defn- warn-entry! [bank reason]
+  (js/console.warn (str "[REPuLse] skipping kit entry \"" bank "\": " reason)))
 
-(defn parse-manifest-layers
-  "Pure. {bank -> layers} for the layered entries of a js->clj'd manifest."
+(defn parse-manifest
+  "Parse a js->clj'd manifest into {:banks {bank-name [full-url …]} :entries {bank-name
+   entry}} where entries holds the layered (repulse-kit/1) banks. A layered bank also
+   appears in :banks with all its files flattened, so has-bank?, listings and
+   sample-length need no layer knowledge. Malformed layered entries are skipped with one
+   console.warn; the rest of the manifest still loads. Array values behave as before."
   [raw]
-  (let [base (get raw "_base" "")]
-    (reduce-kv (fn [acc k v]
-                 (if-let [ls (and (string? k) (parse-layers v base))]
-                   (assoc acc k ls)
-                   acc))
-               {} (if (map? raw) raw {}))))
-
-(defn- parse-manifest
-  "Parse a manifest JS object into {bank-name -> [full-url ...]}.
-   A bank value may also be a layered object (KIT1); its files are flattened here
-   and the layers are read by parse-manifest-layers."
-  [js-data]
-  (let [raw    (js->clj js-data)
+  (let [raw    (if (map? raw) raw {})
         base   (get raw "_base" "")
-        lay    (parse-manifest-layers raw)
-        flat   (fn [k v]
-                 (cond
-                   (vector? v) v
-                   (contains? lay k) (vec (mapcat :urls (get lay k)))
-                   :else nil))]
-    (let [banks (if (map? raw)
-                  (reduce-kv
-                   (fn [acc k v]
-                     (let [v (flat k v)]
-                       (if (and (not= k "_base") (string? k) (vector? v) (seq v))
-                         (let [urls (if (contains? lay k)
-                                      v ; already full URLs
-                                      (filterv string? (mapv #(str base %) v)))]
-                           (if (seq urls) (assoc acc k urls) acc))
-                         acc)))
-                   {}
-                   raw)
-                  {})]
-      (if (specs/sample-registry? banks)
-        banks
-        (do
-          (js/console.warn "[REPuLse] Ignoring malformed sample manifest")
-          {})))))
+        fmt    (get raw "_format")
+        bad-fmt (and fmt (not= fmt kits/manifest-format))]
+    (reduce-kv
+     (fn [acc k v]
+       (cond
+         (or (not (string? k)) (= k "_base") (= k "_format")) acc
+
+         (vector? v)
+         (let [urls (filterv string? (mapv #(str base %) v))]
+           (if (seq urls) (assoc-in acc [:banks k] urls) acc))
+
+         (map? v)
+         (if bad-fmt
+           (do (warn-entry! k (str "unknown manifest _format " (pr-str fmt))) acc)
+           (when-let [e (kits/parse-entry v base)]
+             (if (:error e)
+               (do (warn-entry! k (:error e)) acc)
+               (-> acc
+                   (assoc-in [:entries k] e)
+                   (assoc-in [:banks k] (kits/flatten-urls (:layers e)))))))
+
+         :else acc))
+     {:banks {} :entries {}}
+     raw)))
+
+(defn- resolve-base
+  "A relative _base (e.g. \"kits/\") is resolved against the app's own public root."
+  [raw]
+  (let [b (when (map? raw) (get raw "_base"))]
+    (if (and (string? b) (not (re-find #"^[a-zA-Z][a-zA-Z0-9+.-]*:" b)))
+      (assoc raw "_base" (public-url b))
+      raw)))
+
+(defn layered?
+  "True when bank (name or keyword) has velocity layers."
+  [bank]
+  (contains? @layers (name bank)))
+
+(defn kit-names
+  "Sorted prefixes whose banks are all layered, e.g. [\"JazzKit\" \"StudioKit\"]."
+  []
+  (let [by-prefix (group-by kits/kit-prefix (filter #(str/includes? % "_") (keys @registry)))]
+    (->> by-prefix
+         (keep (fn [[p bs]] (when (every? layered? bs) p)))
+         sort
+         vec)))
 
 (defn- fetch-ok!
   "Returns a Promise that rejects with a descriptive error if response.ok is false."
@@ -166,11 +192,13 @@
       (.then fetch-ok!)
       (.then #(.json %))
       (.then (fn [data]
-               (let [banks (parse-manifest data)]
-                 (swap! registry merge banks)
-                 (swap! layers merge (parse-manifest-layers (js->clj data)))
-                 (js/console.log (str "[REPuLse] loaded " (count banks)
-                                      " sample banks from " url)))))
+               (let [{:keys [banks entries]} (parse-manifest (resolve-base (js->clj data)))]
+                 (if (specs/sample-registry? banks)
+                   (do (swap! registry merge banks)
+                       (swap! layers merge entries)
+                       (js/console.log (str "[REPuLse] loaded " (count banks)
+                                            " sample banks from " url)))
+                   (js/console.warn "[REPuLse] Ignoring malformed sample manifest")))))
       (.catch (fn [e]
                 (js/console.warn (str "[REPuLse] manifest load failed: " url) e)))))
 
@@ -218,31 +246,6 @@
     (let [candidate (keyword (str pfx "_" (name kw)))]
       (if (has-bank? candidate) candidate kw))
     kw))
-
-(declare get-url)
-
-(defn select-url
-  "KIT1, pure. Pick the recording for a layered bank.
-   vel  — velocity 0–1 (nil = 1): the first layer whose :vel-max >= vel wins
-          (the last layer if none); velocity 0.1 and 0.9 can differ.
-   seed — event audio time in seconds: round-robin picks within the layer by the
-          Tidal-compatible RNG of the millisecond, so a render is reproducible."
-  [ls vel seed]
-  (let [v     (double (if (number? vel) vel 1.0))
-        layer (or (first (filter #(>= (:vel-max %) v) ls)) (last ls))
-        urls  (:urls layer)
-        ms    (Math/round (* 1000 (double (or seed 0))))
-        idx   (int (Math/floor (* (core/time->rand [ms 1000]) (count urls))))]
-    (nth urls (min idx (dec (count urls))))))
-
-(defn pick-url
-  "URL to play for bank/n: velocity layer + round-robin when the bank is layered
-   (extra carries :velocity and :seed), else get-url as before. :fixed-take in
-   extra (set by `sound`) skips layers and takes recording n of the flattened bank."
-  [bank n extra]
-  (if-let [ls (and (not (:fixed-take extra)) (get @layers (name bank)))]
-    (select-url ls (:velocity extra) (:seed extra))
-    (get-url bank n)))
 
 (defn get-url
   "Get the URL for the nth sample in a bank. Wraps around if n >= count."
@@ -422,6 +425,8 @@
     (swap! groups assoc group
            (vec (take-last max-voices-per-group (conj live' voice'))))))
 
+(declare play-url!)
+
 (defn play!
   "Schedule playback of the nth sample from bank at audio time t.
    amp        — 0.0–1.0 gain (default 1.0)
@@ -441,7 +446,13 @@
   ([ac t bank n amp pan] (play! ac t bank n amp pan {} nil))
   ([ac t bank n amp pan extra] (play! ac t bank n amp pan extra nil))
   ([ac t bank n amp pan extra dest]
-   (when-let [url (pick-url bank n (assoc extra :seed (or (:seed extra) t)))]
+   (when-let [url (get-url bank n)]
+     (play-url! ac t bank url amp pan extra dest))))
+
+(defn- play-url!
+  "Schedule url (a recording of bank) at audio time t; see play! for the params."
+  [ac t bank url amp pan extra dest]
+  (do
      (-> (get-buffer! url ac)
          (.then (fn [buf]
                   (when-let [plan (playback-plan extra (.-duration buf))]
@@ -488,7 +499,47 @@
          (.catch (fn [e]
                    (if (contains? @failed-urls url)
                      (report-load-error! bank url e)
-                     (js/console.debug "[REPuLse] sample play failed:" (name bank) e))))))))
+                     (js/console.debug "[REPuLse] sample play failed:" (name bank) e)))))))
+
+;; KIT1: last take played per [bank layer-index], per AudioContext (like cut groups), so
+;; an offline export never disturbs live playback and renders are reproducible.
+(defonce ^:private last-takes (js/WeakMap.))
+
+(defn layered-plan
+  "Choose the recording for one hit of layered bank at velocity vel (nil = 1):
+   {:url :level :cut} or nil when vel is 0 or the bank is not layered. :level is
+   amp-gain × layer gain × in-layer scale (amp-gain = amp × gain, without velocity).
+   Remembers the take on ac so the next hit never repeats it; extra's :onset (a
+   rational) seeds the round-robin and an explicit :cut in extra beats the choke group."
+  [ac bank vel amp-gain extra]
+  (let [entry (get @layers (name bank))
+        vel   (kits/clamp-velocity vel)]
+    (when (and entry (pos? vel))
+      (let [ls        (:layers entry)
+            [i layer] (kits/pick-layer ls vel)
+            memo      (or (.get last-takes ac)
+                          (let [a (atom {})] (.set last-takes ac a) a))
+            mk        [(name bank) i]
+            urls      (:urls layer)
+            take      (kits/pick-take (count urls) (get @memo mk) (:onset extra) bank)]
+        (swap! memo assoc mk take)
+        {:url   (nth urls take)
+         :level (kits/level ls i vel amp-gain)
+         :cut   (when (nil? (:cut extra)) (kits/choke-group bank entry))}))))
+
+(defn play-planned!
+  "Play a layered-plan result at time t; same params and return value as play!."
+  [ac t bank plan pan extra dest]
+  (if plan
+    (play-url! ac t bank (:url plan) (:level plan) pan
+               (cond-> extra (:cut plan) (assoc :cut (:cut plan))) dest)
+    (js/Promise.resolve nil)))
+
+(defn play-layered!
+  "Pick layer and take for bank at velocity vel, then play (KIT1). Velocity 0 plays
+   nothing. amp-gain is amp × gain (no velocity factor)."
+  [ac t bank vel amp-gain pan extra dest]
+  (play-planned! ac t bank (layered-plan ac bank vel amp-gain extra) pan extra dest))
 
 ;;; External sample loading — Lisp manifest, JSON manifest, GitHub discovery
 
@@ -624,6 +675,22 @@
   ;; Leading TitleCase word = manufacturer, e.g. "Roland" from "RolandTR808_bd"
   (second (re-find #"^([A-Z][a-z]+)" name)))
 
+(defn preload-kit!
+  "Start fetching and decoding every recording of kit (e.g. \"JazzKit\") on ac so the
+   first bars are not late (KIT1 decision 10). No-op when prefix is not a kit.
+   Returns a Promise that settles when all files have; failures are already reported
+   by get-buffer!'s negative cache and are not fatal here."
+  [ac prefix]
+  (let [p (some-> prefix name)]
+    (if (some #{p} (kit-names))
+      (js/Promise.all
+       (clj->js
+        (for [[b _] @layers
+              :when (= p (kits/kit-prefix b))
+              url   (get @registry b)]
+          (-> (get-buffer! url ac) (.catch (fn [_] nil))))))
+      (js/Promise.resolve nil))))
+
 (defn format-banks
   "Returns a human-readable grouped string of all registered sample banks.
    With a filter string/keyword, only banks whose name contains it (case-insensitive)."
@@ -634,11 +701,29 @@
                           (keys @registry)))]
     (if (empty? all)
       (if q (str "No sample banks match \"" q "\".") "No sample banks loaded yet.")
-      (let [simple   (filterv #(not (str/includes? % "_")) all)
-            compound (filterv #(str/includes? % "_") all)
+      (let [kitset   (set (kit-names))
+            kit-bank? #(and (str/includes? % "_") (contains? kitset (kits/kit-prefix %)))
+            kits-in  (filterv #(some (fn [b] (= % (kits/kit-prefix b))) (filter kit-bank? all))
+                              (kit-names))
+            simple   (filterv #(not (str/includes? % "_")) all)
+            compound (filterv #(and (str/includes? % "_") (not (kit-bank? %))) all)
             by-mfr   (group-by #(or (mfr-of %) "misc") compound)
             mfrs     (sort (keys by-mfr))
             sections (atom [])]
+        ;; KIT1 kits: layered banks, listed per kit with their layer/take depth
+        (when (seq kits-in)
+          (swap! sections conj
+                 (str "kits (" (count kits-in) "):\n"
+                      (str/join "\n"
+                        (map (fn [kit]
+                               (let [bs   (filter #(and (kit-bank? %) (= kit (kits/kit-prefix %))) all)
+                                     ents (map #(get @layers %) bs)
+                                     nv   (apply max (map #(count (:layers %)) ents))
+                                     nt   (apply max (mapcat #(map (comp count :urls) (:layers %)) ents))]
+                                 (str "  " kit ": "
+                                      (str/join "  " (sort (map #(second (str/split % #"_" 2)) bs)))
+                                      "  (" nv " vel × " nt " takes)")))
+                             kits-in)))))
         ;; General (Dirt Samples — no underscore in name)
         (when (seq simple)
           (swap! sections conj

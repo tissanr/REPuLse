@@ -126,53 +126,82 @@
     (is (= {:choke [1 3] :self-stop 2.0} (samples/cut-plan vs 0.5))))
   (is (= {:choke [] :self-stop nil} (samples/cut-plan [] 1.0))))
 
-;;; ── KIT1: velocity layers + round-robin ──────────────────────────────
+;;; ── KIT1: layered manifest entries ───────────────────────────────────
 
-(def ^:private fixture-layers
-  [{:vel-max 0.4 :urls ["soft1.wav" "soft2.wav" "soft3.wav"]}
-   {:vel-max 1.0 :urls ["hard1.wav" "hard2.wav" "hard3.wav"]}])
+(def ^:private kit-manifest
+  {"_format" "repulse-kit/1"
+   "_base"   "http://x/kits/"
+   "FixKit_bd" {"layers" [{"v" 0.4 "files" ["bd/s1.wav" "bd/s2.wav"]}
+                          {"v" 1 "gain" 1.2 "files" ["bd/h1.wav" "bd/h2.wav" "bd/h3.wav"]}]}
+   "FixKit_hh" {"choke" "hat" "layers" [{"v" 1 "files" ["hh/1.wav"]}]}
+   "FixKit_bad" {"layers" [{"v" 0.5 "files" ["x.wav"]}]}
+   "plain"     ["p1.wav" "p2.wav"]})
 
-(deftest parse-layers-sorts-and-prefixes
-  (let [ls (samples/parse-layers
-            {"layers" [{"vel-max" 1.0 "files" ["h.wav"]}
-                       {"vel-max" 0.4 "files" ["s1.wav" "s2.wav"]}]}
-            "http://x/")]
-    (is (= [0.4 1.0] (mapv :vel-max ls)))
-    (is (= ["http://x/s1.wav" "http://x/s2.wav"] (:urls (first ls)))))
-  (is (nil? (samples/parse-layers ["a.wav"] "")) "plain arrays are not layered")
-  (is (nil? (samples/parse-layers {"layers" []} ""))))
+(deftest parse-manifest-layered-and-flat
+  (let [{:keys [banks entries]} (samples/parse-manifest kit-manifest)]
+    (is (= ["http://x/kits/bd/s1.wav" "http://x/kits/bd/s2.wav"
+            "http://x/kits/bd/h1.wav" "http://x/kits/bd/h2.wav" "http://x/kits/bd/h3.wav"]
+           (get banks "FixKit_bd")) "flattened low → high layer")
+    (is (= ["http://x/kits/p1.wav" "http://x/kits/p2.wav"] (get banks "plain")))
+    (is (= #{"FixKit_bd" "FixKit_hh"} (set (keys entries))))
+    (is (not (contains? banks "FixKit_bad")) "malformed entry skipped, rest loads")
+    (is (= "hat" (:choke (get entries "FixKit_hh"))))))
 
-(deftest velocity-selects-layer
-  (is (str/starts-with? (samples/select-url fixture-layers 0.1 0) "soft"))
-  (is (str/starts-with? (samples/select-url fixture-layers 0.9 0) "hard"))
-  (is (str/starts-with? (samples/select-url fixture-layers nil 0) "hard") "default velocity 1"))
+(deftest array-manifests-parse-as-before
+  (let [raw {"_base" "http://x/" "bd" ["a.wav" "b.wav"] "sd" ["c.wav"]}
+        {:keys [banks entries]} (samples/parse-manifest raw)]
+    (is (= {"bd" ["http://x/a.wav" "http://x/b.wav"] "sd" ["http://x/c.wav"]} banks))
+    (is (empty? entries))))
 
-(deftest round-robin-is-deterministic-and-rotates
-  (let [times (map #(* % 0.25) (range 8))
-        pick  #(mapv (fn [t] (samples/select-url fixture-layers 0.9 t)) times)]
-    (is (= (pick) (pick)) "same times → same recordings")
-    (is (> (count (set (pick))) 1) "8 hits use more than one recording")))
+(deftest unknown-format-skips-object-entries
+  (let [{:keys [banks entries]}
+        (samples/parse-manifest (assoc kit-manifest "_format" "repulse-kit/2"))]
+    (is (empty? entries))
+    (is (not (contains? banks "FixKit_bd")))
+    (is (contains? banks "plain") "array entries still load")))
 
-(deftest layered-bank-via-pick-url
-  (let [orig @samples/layers]
-    (reset! samples/layers {"kit_sd" fixture-layers})
-    (is (str/starts-with? (samples/pick-url :kit_sd 0 {:velocity 0.1 :seed 0}) "soft"))
-    (reset! samples/layers orig))
-  (testing "unlayered banks keep using get-url"
-    (let [orig @samples/registry]
-      (reset! samples/registry {"bd" ["a.wav" "b.wav"]})
-      (is (= "b.wav" (samples/pick-url :bd 1 {:velocity 0.1})))
-      (reset! samples/registry orig))))
+(deftest layered-bank-registration-and-kit-names
+  (let [ro @samples/registry
+        lo @samples/layers
+        {:keys [banks entries]} (samples/parse-manifest kit-manifest)]
+    (reset! samples/registry (merge banks {"bd" ["d.wav"]}))
+    (reset! samples/layers entries)
+    (is (samples/layered? :FixKit_bd))
+    (is (not (samples/layered? "plain")))
+    (is (samples/has-bank? :FixKit_bd))
+    (is (= ["FixKit"] (samples/kit-names)))
+    (let [s (samples/format-banks)]
+      (is (str/includes? s "kits (1)"))
+      (is (str/includes? s "FixKit: bd  hh  (2 vel × 3 takes)")))
+    (reset! samples/registry ro)
+    (reset! samples/layers lo)))
 
-(deftest sound-fixed-take-skips-layers
+(deftest layered-plan-velocity-and-no-repeat
   (let [lo @samples/layers
-        ro @samples/registry]
-    (reset! samples/layers {"kit_sd" fixture-layers})
-    (reset! samples/registry {"kit_sd" (vec (mapcat :urls fixture-layers))})
-    (is (= "soft2.wav" (samples/pick-url :kit_sd 1 {:fixed-take true :velocity 1.0})))
-    (is (= "hard1.wav" (samples/pick-url :kit_sd 3 {:fixed-take true})))
-    (reset! samples/layers lo)
-    (reset! samples/registry ro)))
+        ac #js {}
+        {:keys [entries]} (samples/parse-manifest kit-manifest)]
+    (reset! samples/layers entries)
+    (let [soft (samples/layered-plan ac :FixKit_bd 0.1 1.0 {:onset [0 1]})
+          hard (samples/layered-plan ac :FixKit_bd 0.9 1.0 {:onset [0 1]})]
+      (is (str/includes? (:url soft) "/s"))
+      (is (str/includes? (:url hard) "/h")))
+    (is (nil? (samples/layered-plan ac :FixKit_bd 0 1.0 {})) "velocity 0 plays nothing")
+    (let [urls (mapv #(:url (samples/layered-plan ac :FixKit_bd 0.9 1.0 {:onset [% 8]})) (range 40))]
+      (is (every? (fn [[a b]] (not= a b)) (partition 2 1 urls)))
+      (is (> (count (set urls)) 1)))
+    (is (= [:kit "FixKit" "hat"] (:cut (samples/layered-plan ac :FixKit_hh 1 1.0 {}))))
+    (is (nil? (:cut (samples/layered-plan ac :FixKit_hh 1 1.0 {:cut 3}))) "explicit :cut wins")
+    (reset! samples/layers lo)))
+
+(deftest layered-plan-reproducible-per-context
+  (let [lo @samples/layers
+        {:keys [entries]} (samples/parse-manifest kit-manifest)
+        run #(let [ac #js {}]
+               (mapv (fn [i] (:url (samples/layered-plan ac :FixKit_bd 0.9 1.0 {:onset [i 4]})))
+                     (range 16)))]
+    (reset! samples/layers entries)
+    (is (= (run) (run)) "a fresh context replays the same takes")
+    (reset! samples/layers lo)))
 
 (deftest format-banks-filter
   (let [ro @samples/registry]

@@ -209,6 +209,12 @@
     (* (param v :gain 0.0 2.0 1.0) (param v :velocity 0.0 1.0 1.0))
     1.0))
 
+(defn gain-factor
+  "Linear gain of an event value, clamped to 0–2, default 1 (amp-factor without
+   velocity). Layered kit banks (KIT1) apply velocity through layer selection."
+  [v]
+  (if (map? v) (param v :gain 0.0 2.0 1.0) 1.0))
+
 (defn shape-k
   "Waveshaper coefficient k = 2a / (1 − a) for amount a (clamped to 0–0.99)."
   [amount]

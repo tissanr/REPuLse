@@ -39,6 +39,7 @@
             [repulse.ui.selection-test]
             [repulse.ui.inspector-model-test]
             [repulse.inserts-test]
+            [repulse.kits-test]
             [repulse.orbits-test]
             [repulse.tracks-model-test]
             [repulse.voices-test]
@@ -81,6 +82,7 @@
                   'repulse.ui.selection-test
                   'repulse.ui.inspector-model-test
                   'repulse.inserts-test
+                  'repulse.kits-test
                   'repulse.orbits-test
                   'repulse.tracks-model-test
                   'repulse.voices-test

@@ -1,6 +1,7 @@
 (ns repulse.env.builtins.samples
   "Sample-management builtins: samples!, sample-banks, bank."
-  (:require [repulse.samples :as samples]
+  (:require [repulse.audio :as audio]
+            [repulse.samples :as samples]
             [repulse.lisp.eval :as leval]))
 
 (defn make-builtins
@@ -18,5 +19,8 @@
 
    "bank"
    (fn [prefix]
-     (samples/set-bank-prefix! (leval/unwrap prefix))
+     (let [p (leval/unwrap prefix)]
+       (samples/set-bank-prefix! p)
+       ;; KIT1: a kit prefix starts fetching all of its recordings in the background.
+       (when p (samples/preload-kit! (audio/get-ctx) p)))
      (str "bank: " (if prefix (name (leval/unwrap prefix)) "cleared")))})

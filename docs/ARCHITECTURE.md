@@ -240,6 +240,23 @@ Fetches two manifests from Strudel's CDN at startup:
 and caching decoded buffers. `play!` uses `max(scheduledTime, currentTime)` to
 handle first-load latency gracefully.
 
+**Layered banks and kits (KIT1):**
+
+A JSON manifest entry may be an object `{"layers": [{"v", "gain", "files"}], "choke"}`
+(`_format: "repulse-kit/1"`) instead of an array. `repulse.kits` (pure, no DOM) parses
+and validates it and holds the formulas: `pick-layer` (the first layer whose `v` ≥ the
+velocity), `layer-scale`, and `pick-take` (round-robin seeded by `core/time->rand` of the
+event onset, never repeating the previous take). `samples.cljs` registers a layered bank
+twice: flattened in `registry` (so listings, `has-bank?` and `(sound :Kit_sd n)` need no
+layer knowledge) and as `{:layers :choke}` in the `layers` atom. `play-event` calls
+`samples/layered-plan` (layer, take, level, choke group) for layered banks reached by a
+bare keyword or a `:note` map, then plays the chosen file through the common `play-url!`.
+The last take per bank and layer is kept per `AudioContext`, so an offline export never
+disturbs live playback and renders are reproducible. Choke uses a TL6 cut group
+`[:kit "<Kit>" "<name>"]`. `(bank :Kit)` starts a background preload of the whole kit.
+The shipped kits live in `app/public/kits/` (served same-origin) and are built by
+`scripts/kits/build-kit.mjs`.
+
 **External sample loading (Phase 9):**
 
 `load-external!` is the router called by the `(samples! url)` Lisp built-in:

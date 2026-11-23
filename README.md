@@ -43,6 +43,8 @@ and **when** — not **how** synthesis works internally.
 
 - **Sounds:** drum keywords (`:bd`, `:sd`), sample keywords (`:arpy`), note keywords (`:c4`), frequencies (`440`), or
   synth voices (`(synth :saw)`, `(synth :fm :index 4)`, `(synth :guitar)`)
+- **Drum kits:** two multisampled acoustic kits with velocity layers and round-robin —
+  `(bank :JazzKit)` or `(bank :StudioKit)`, then `(->> (seq :sd :sd) (velocity "0.2 1"))`
 - **Synthesizer without samples:** band-limited oscillators with unison
   (`(->> (chord :minor :a3) (synth :supersaw))`), instruments like `:acid`, `:reese`, `:pad`,
   `:strings` with `glide` and `accent`, and an 18-voice synth drum kit — REPuLse's default
