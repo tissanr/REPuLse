@@ -181,6 +181,7 @@ const TOP_CATEGORIES = [
     items: [
       withBuiltinDetail("samples!", "(samples! ¦\"github:tidalcycles/Dirt-Samples\")"),
       withBuiltinDetail("bank", "(bank ¦:AkaiLinn)"),
+      withBuiltinDetail("kit", "(kit ¦:studio)"),
     ],
   },
   {

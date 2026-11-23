@@ -1628,6 +1628,13 @@
                 :examples ["(sample-banks)"]
                 :see-also ["samples!" "sound"]}
 
+ :kit        {:category "sample"
+              :returns "string"
+              :side-effects ["audio"]
+              :examples ["(kit :studio)"
+                         "(kit nil)"]
+              :see-also ["bank" "velocity" "samples!"]}
+
  :bank       {:category "sample"
               :returns "string"
               :side-effects ["audio"]

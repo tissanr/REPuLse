@@ -2473,6 +2473,11 @@ openly licensed sources only (no proprietary Roland module samples).
 - `velocity` per-event parameter (layer selection + gain); `(kit :name)`
 - One or two curated kits with documented licences, lazily loaded
 
+**Engine implemented (not yet delivered):** layered manifest banks, velocity layer
+selection, time-seeded round-robin, `(kit :name)` and USAGE docs are in. Still open
+for a human: licence research and choice of the curated kit(s), their hosting, and the
+listen check — only then is KIT1 marked ✅.
+
 See full spec: [PROMPTS/PHASE-KIT1.md](PROMPTS/PHASE-KIT1.md)
 
 ---

@@ -1916,6 +1916,34 @@ Most sample banks contain multiple variations (different kit sounds). Use `sound
 (seq (sound :bd 0) (sound :bd 2) (sound :sd 1) :hh)
 ```
 
+### `kit` — multisampled drum kits (velocity layers + round-robin)
+
+`(kit :studio)` selects a kit: bare keywords resolve to `<kit>_<name>` banks first
+(then the `bank` prefix, then the plain name). `(kit nil)` clears it.
+
+A bank in a JSON manifest (loaded with `samples!`) can be *layered*. Instead of an
+array of files, give it layers, each the loudest velocity it covers (`vel-max`):
+
+```json
+{ "_base": "https://example.org/kit/",
+  "studio_sd": { "layers": [
+    { "vel-max": 0.4, "files": ["sd_soft_1.wav", "sd_soft_2.wav", "sd_soft_3.wav"] },
+    { "vel-max": 1.0, "files": ["sd_hard_1.wav", "sd_hard_2.wav", "sd_hard_3.wav"] } ] } }
+```
+
+```lisp
+(samples! "https://example.org/kit/manifest.json")
+(kit :studio)
+(->> (seq :sd :sd :sd :sd) (velocity "0.2 0.5 0.8 1"))   ; ghost note → accent
+```
+
+- **Layer:** the first layer whose `vel-max` ≥ the event's `velocity` (default 1); the
+  last layer if none. `velocity` still multiplies the amplitude as before.
+- **Round-robin:** within a layer the recording is chosen by the Tidal-compatible RNG
+  seeded with the event's time in milliseconds — alternating takes, identical on every
+  offline render.
+- Plain array banks and `(bank …)` work unchanged. No curated kit ships yet.
+
 ### `bank` — drum machine prefix
 
 Set a global prefix so bare keywords resolve to a named drum machine bank:

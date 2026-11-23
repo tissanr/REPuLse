@@ -12,7 +12,7 @@ const NON_PATTERN_HEADS = new Set([
   "bpm", "stop", "fx", "load-plugin", "unload-plugin", "track",
   "mute!", "unmute!", "solo!", "clear!", "tracks", "tap!", "midi-sync!",
   "midi-map", "midi-out", "midi-clock-out!", "midi-export",
-  "freesound!", "freesound-key!", "samples!", "sample-banks", "bank", "sound",
+  "freesound!", "freesound-key!", "samples!", "sample-banks", "bank", "kit", "sound",
   "upd", "demo", "tutorial", "share!", "load-gist", "export", "reset!",
   "loop", "recur", "quote", "quasiquote", "bus", "out", "in", "kr",
 ]);

@@ -633,7 +633,7 @@
   "Promise of how long sample n of bank sounds for the event params in extra
    (playback-plan :length), or nil when the bank has no such sample."
   [ac bank n extra]
-  (when-let [url (samples/get-url bank n)]
+  (when-let [url (samples/pick-url bank n extra)]
     (-> (samples/get-buffer! url ac)
         (.then (fn [buf] (:length (samples/playback-plan extra (.-duration buf)))))
         (.catch (fn [_] nil)))))
@@ -657,7 +657,9 @@
    With pitch modulation (pm, TL7c) :on-source applies pitch! to the source."
   ([value timing] (sample-extra value timing nil nil))
   ([value timing pitch! pm]
-   (cond-> (merge (select-keys value sample-param-keys)
+   ;; :velocity picks the KIT1 layer; the voice gain comes from inserts/amp-factor.
+   ;; :seed (the event time, set by play-event) drives round-robin.
+   (cond-> (merge (select-keys value (conj sample-param-keys :velocity))
                   (select-keys timing [:dur :cycle-dur]))
      pm (assoc :on-source (fn [src _t'] (pitch! src))))))
 
@@ -773,7 +775,7 @@
                (or (when-not offline? (wasm! (str hz)))
                    (pitch! (make-sine ac t hz decay-v amp-v attack-v pan-v (js-dest tone-dur)))))
              (let [resolved (samples/resolve-keyword note)
-                   extra    (sample-extra value timing pitch! pm)]
+                   extra    (assoc (sample-extra value timing pitch! pm) :seed t)]
                (cond
                  (samples/has-bank? resolved)
                  (samples/play! ac t resolved 0 amp-v pan-v extra
@@ -791,7 +793,7 @@
        (let [{:keys [bank n]} value
              amp-v  (float (* (:amp value 1.0) af))
              pan-v  (float (:pan  value 0.0))
-             extra  (sample-extra value timing pitch! pm)]
+             extra  (assoc (sample-extra value timing pitch! pm) :seed t)]
          (if (samples/has-bank? bank)
            (samples/play! ac t bank n amp-v pan-v extra
                           (js-dest (when ins (sample-length ac bank n extra))))

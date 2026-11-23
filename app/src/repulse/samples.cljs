@@ -1,5 +1,6 @@
 (ns repulse.samples
-  (:require [repulse.lisp.reader :as reader]
+  (:require [repulse.core :as core]
+            [repulse.lisp.reader :as reader]
             [repulse.specs :as specs]
             [clojure.string :as str]))
 
@@ -11,6 +12,15 @@
 
 ;; In-flight fetch promises: url -> Promise<AudioBuffer>
 (def in-flight (atom {}))
+
+;; KIT1: velocity layers. bank-name -> [{:vel-max 0.3 :urls [...]} …] sorted by
+;; :vel-max ascending. Layered banks are also in `registry` (all files flattened),
+;; so has-bank?, bank listings and sample-length keep working unchanged.
+(defonce layers (atom {}))
+
+;; KIT1: active kit — nil, or a name; bare keyword :kw resolves to "<kit>_<kw>"
+;; first (before the bank prefix).
+(defonce active-kit (atom nil))
 
 ;; Active drum machine prefix — nil means no prefix active.
 ;; When set, keyword :kw is looked up as "<prefix>_<kw>" first.
@@ -38,18 +48,57 @@
    "https://raw.githubusercontent.com/felixroos/dough-samples/main/tidal-drum-machines.json"
    "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/strudel.json"])
 
+(defn parse-layers
+  "Pure. A layered bank value {\"layers\" [{\"vel-max\" 0.3 \"files\" [..]} …]} (already
+   js->clj'd) → [{:vel-max n :urls [full-url …]} …] sorted by :vel-max, or nil when
+   malformed. Layers without :vel-max count as 1.0."
+  [v base]
+  (when (and (map? v) (vector? (get v "layers")))
+    (let [ls (->> (get v "layers")
+                  (keep (fn [l]
+                          (let [files (when (map? l) (get l "files"))
+                                urls  (when (vector? files)
+                                        (filterv string? (mapv #(str base %) files)))
+                                vm    (get l "vel-max" 1.0)]
+                            (when (and (seq urls) (number? vm))
+                              {:vel-max (double vm) :urls urls}))))
+                  (sort-by :vel-max)
+                  vec)]
+      (when (seq ls) ls))))
+
+(defn parse-manifest-layers
+  "Pure. {bank -> layers} for the layered entries of a js->clj'd manifest."
+  [raw]
+  (let [base (get raw "_base" "")]
+    (reduce-kv (fn [acc k v]
+                 (if-let [ls (and (string? k) (parse-layers v base))]
+                   (assoc acc k ls)
+                   acc))
+               {} (if (map? raw) raw {}))))
+
 (defn- parse-manifest
-  "Parse a manifest JS object into {bank-name -> [full-url ...]}."
+  "Parse a manifest JS object into {bank-name -> [full-url ...]}.
+   A bank value may also be a layered object (KIT1); its files are flattened here
+   and the layers are read by parse-manifest-layers."
   [js-data]
-  (let [raw  (js->clj js-data)
-        base (get raw "_base" "")]
+  (let [raw    (js->clj js-data)
+        base   (get raw "_base" "")
+        lay    (parse-manifest-layers raw)
+        flat   (fn [k v]
+                 (cond
+                   (vector? v) v
+                   (contains? lay k) (vec (mapcat :urls (get lay k)))
+                   :else nil))]
     (let [banks (if (map? raw)
                   (reduce-kv
                    (fn [acc k v]
-                     (if (and (not= k "_base") (string? k) (vector? v) (seq v))
-                       (let [urls (filterv string? (mapv #(str base %) v))]
-                         (if (seq urls) (assoc acc k urls) acc))
-                       acc))
+                     (let [v (flat k v)]
+                       (if (and (not= k "_base") (string? k) (vector? v) (seq v))
+                         (let [urls (if (contains? lay k)
+                                      v ; already full URLs
+                                      (filterv string? (mapv #(str base %) v)))]
+                           (if (seq urls) (assoc acc k urls) acc))
+                         acc)))
                    {}
                    raw)
                   {})]
@@ -75,6 +124,7 @@
       (.then (fn [data]
                (let [banks (parse-manifest data)]
                  (swap! registry merge banks)
+                 (swap! layers merge (parse-manifest-layers (js->clj data)))
                  (js/console.log (str "[REPuLse] loaded " (count banks)
                                       " sample banks from " url)))))
       (.catch (fn [e]
@@ -120,10 +170,43 @@
    If a prefix is active and \"<prefix>_<kw>\" is a registered bank, returns that
    prefixed keyword. Otherwise returns kw unchanged."
   [kw]
-  (if-let [pfx @active-bank-prefix]
-    (let [candidate (keyword (str pfx "_" (name kw)))]
-      (if (has-bank? candidate) candidate kw))
-    kw))
+  (let [try-prefix (fn [kw pfx]
+                     (let [c (keyword (str pfx "_" (name kw)))]
+                       (if (has-bank? c) c kw)))
+        kw'        (if-let [k @active-kit] (try-prefix kw k) kw)]
+    (if (and (= kw' kw) @active-bank-prefix)
+      (try-prefix kw @active-bank-prefix)
+      kw')))
+
+(defn set-kit!
+  "KIT1: select a multisampled kit by name, or nil to clear. Returns a message."
+  [kit-name]
+  (reset! active-kit (when kit-name (name kit-name)))
+  (js/console.log (str "[REPuLse] kit: " (or @active-kit "none"))))
+
+(declare get-url)
+
+(defn select-url
+  "KIT1, pure. Pick the recording for a layered bank.
+   vel  — velocity 0–1 (nil = 1): the first layer whose :vel-max >= vel wins
+          (the last layer if none); velocity 0.1 and 0.9 can differ.
+   seed — event audio time in seconds: round-robin picks within the layer by the
+          Tidal-compatible RNG of the millisecond, so a render is reproducible."
+  [ls vel seed]
+  (let [v     (double (if (number? vel) vel 1.0))
+        layer (or (first (filter #(>= (:vel-max %) v) ls)) (last ls))
+        urls  (:urls layer)
+        ms    (Math/round (* 1000 (double (or seed 0))))
+        idx   (int (Math/floor (* (core/time->rand [ms 1000]) (count urls))))]
+    (nth urls (min idx (dec (count urls))))))
+
+(defn pick-url
+  "URL to play for bank/n: velocity layer + round-robin when the bank is layered
+   (extra carries :velocity and :seed), else get-url as before."
+  [bank n extra]
+  (if-let [ls (get @layers (name bank))]
+    (select-url ls (:velocity extra) (:seed extra))
+    (get-url bank n)))
 
 (defn get-url
   "Get the URL for the nth sample in a bank. Wraps around if n >= count."
@@ -305,7 +388,7 @@
   ([ac t bank n amp pan] (play! ac t bank n amp pan {} nil))
   ([ac t bank n amp pan extra] (play! ac t bank n amp pan extra nil))
   ([ac t bank n amp pan extra dest]
-   (when-let [url (get-url bank n)]
+   (when-let [url (pick-url bank n (assoc extra :seed (or (:seed extra) t)))]
      (-> (get-buffer! url ac)
          (.then (fn [buf]
                   (when-let [plan (playback-plan extra (.-duration buf))]

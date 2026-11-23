@@ -2704,6 +2704,25 @@
     "detail": "(bank :prefix) — resolve bare drum keywords to a drum-machine bank, (bank nil) clears",
     "description": "Set a default bank prefix for all subsequent keyword lookups."
   },
+  "kit": {
+    "category": "sample",
+    "signature": "(kit :name)",
+    "returns": "string",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(kit :studio)",
+      "(kit nil)"
+    ],
+    "see-also": [
+      "bank",
+      "velocity",
+      "samples!"
+    ],
+    "detail": "(kit :name) — select a multisampled drum kit (velocity layers + round-robin); (kit nil) clears",
+    "description": "Select a multisampled drum kit. Bare keywords resolve to \"<kit>_<name>\" banks; kits with velocity layers pick the recording from the event velocity and rotate round-robin takes. (kit nil) clears."
+  },
   "distort": {
     "category": "effect",
     "signature": "(fx :distort [:drive N] [:tone Hz] [:mix N] [:asym N] [:algo kw] [:oversample 1|2|4])",

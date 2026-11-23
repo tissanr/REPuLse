@@ -1242,6 +1242,11 @@ const DOCS = {
     description: "Set a default bank prefix for all subsequent keyword lookups.",
     example: "(bank :AkaiLinn)",
   },
+  "kit": {
+    signature: "(kit :name)",
+    description: "Select a multisampled drum kit. Bare keywords resolve to \"<kit>_<name>\" banks; kits with velocity layers pick the recording from the event velocity and rotate round-robin takes. (kit nil) clears.",
+    example: "(kit :studio)",
+  },
   "sound": {
     signature: "(sound bank n)",
     description: "Select sample number n from the named bank.",

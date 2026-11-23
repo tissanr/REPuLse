@@ -1,7 +1,18 @@
 # Phase KIT1 — High-Quality Drum Kits
 
-> **Spec status:** outline — expand into a full spec before implementing. The licence
-> research below must be finished first.
+> **Spec status:** engine part expanded and implemented (decisions below); the curated
+> kit(s), licence research and listen check remain open.
+
+## Engine decisions (implemented)
+
+- Manifest: a bank value may be `{"layers": [{"vel-max": n, "files": […]}, …]}`; layered
+  files are also flattened into the registry so `has-bank?`/listings are unchanged.
+- Layer = first with `vel-max` ≥ velocity (default 1), else the last.
+- `velocity` multiplies amp (existing TL7a behaviour) *and* selects the layer.
+- Round-robin = `time->rand` of the event time in ms (reproducible renders, no state).
+  Consecutive hits may repeat a take; "cycling" means deterministic rotation by time.
+- `(kit :name)` resolves `<kit>_<name>` before the `(bank …)` prefix.
+- Code: `samples.cljs` (`parse-layers`, `select-url`, `pick-url`, `set-kit!`).
 >
 > **Automation:** 🤖👂 auto + human check — loading, layer selection and round-robin are
 > testable automatically; choosing kits and judging sound quality needs a human listen.
