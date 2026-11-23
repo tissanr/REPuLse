@@ -13,8 +13,8 @@
   2026-11-20 from a code review; QA1, QA2 and QA3 delivered), then WS6. After them, every remaining phase on the
   critical path needs a human (🤖👂 or 🧑).
 - **Next for a human session:** the FX1 listen check (all parts implemented, PR on `dev`;
-  decides whether `:spring` stays and sets the reverb trims) and KIT1 (spec is an outline,
-  expand first); N1 opens M3. TL7c's listen check runs in the next release test round.
+  decides whether `:spring` stays and sets the reverb trims) and KIT1 (spec expanded
+  2026-11-23); N1 opens M3. TL7c's listen check runs in the next release test round.
 - **Side track open:** DOC1, TEST2, UI1, R3, PLUG1, O2, PL1; quality track QA5 (🧑),
   QA6 (🤖👂), QA7 (🧑).
 
@@ -80,7 +80,7 @@ without a human:
 | 8 | TL7a | ✅ | Per-event filters, shape & crush | 🤖👂 | full | opus |
 | 8b | TL7b | ✅ | Reverb & delay sends per orbit | 🤖👂 | full | opus |
 | 8c | TL7c | ✅ | Vowel, envelopes & modulators | 🤖👂 | full | opus |
-| 9 | KIT1 | 📋 | High-quality drum kits | 🤖👂 | outline | sonnet |
+| 9 | KIT1 | 📋 | High-quality drum kits | 🤖👂 | full | opus |
 | 9a | SYN6 | ✅ | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | full | opus |
 | 9b | FX1 | 📋 | Mixing, space & modulation effects | 🤖👂 | full | sonnet |
 | **M2** | | | **Full songs** | | | |
@@ -2601,12 +2601,14 @@ See full spec: [PROMPTS/PHASE-TL7c.md](PROMPTS/PHASE-TL7c.md)
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
 Studio-quality multisampled drum kits with velocity layers and round-robin, from
-openly licensed sources only (no proprietary Roland module samples).
+openly licensed sources only (CC0 / CC-BY / CC-BY-SA; no proprietary Roland module samples).
 
 **Key additions:**
-- Manifest extension for velocity layers and round-robin groups (backwards compatible)
-- `velocity` per-event parameter (layer selection + gain); `(kit :name)`
-- One or two curated kits with documented licences, lazily loaded
+- Layered banks: manifest entries with velocity layers and takes (backwards compatible)
+- `velocity` picks the recording layer on layered banks; round-robin without repeats,
+  seeded by onset; hat choke
+- `JazzKit` (Virtuosity Drums, CC0) and `StudioKit` (DRSKit, CC-BY 4.0), selected with
+  `(bank :JazzKit)` — no new built-in
 
 See full spec: [PROMPTS/PHASE-KIT1.md](PROMPTS/PHASE-KIT1.md)
 
