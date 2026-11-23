@@ -115,14 +115,20 @@
 
 (defn cycles->midi
   "{:tracks [[kw pat] …] :n n :cycle-dur cd :drum-map m}
-   → {:spec midi-file-spec :skipped {kw count}}. Cycles 0…n−1 via core/query-onsets."
-  [{:keys [tracks n cycle-dur drum-map]}]
+   → {:spec midi-file-spec :skipped {kw count}}. Cycles 0…n−1 via core/query-onsets.
+   Optional :on-error (fn [kw error]): a track whose query throws is left out of
+   that cycle and reported (QA1)."
+  [{:keys [tracks n cycle-dur drum-map on-error]}]
   (finish
    (map-indexed
     (fn [idx [kw pat]]
       (track-result kw pat
                     (for [c (range n)
-                          ev (core/query-onsets pat {:start [c 1] :end [(inc c) 1]})]
+                          ev (let [sp {:start [c 1] :end [(inc c) 1]}]
+                               (if on-error
+                                 (try (vec (core/query-onsets pat sp))
+                                      (catch :default e (on-error kw e) nil))
+                                 (core/query-onsets pat sp)))]
                       ev)
                     idx cycle-dur drum-map))
     tracks)
@@ -130,12 +136,13 @@
 
 (defn song->midi
   "{:song s :tracks {kw pat} :cycle-dur cd :drum-map m} → same shape. One pass
-   of the song via song/song-onsets (mute ignored); section markers (K16)."
-  [{s :song :keys [tracks cycle-dur drum-map]}]
+   of the song via song/song-onsets (mute ignored); section markers (K16).
+   Optional :on-error as in cycles->midi."
+  [{s :song :keys [tracks cycle-dur drum-map on-error]}]
   (let [kws   (st/stem-tracks s)
         by-tr (group-by :track
                         (for [bar (range (song/song-length s))
-                              o   (song/song-onsets s tracks #{} bar)]
+                              o   (song/song-onsets s tracks #{} bar on-error)]
                           o))]
     (finish
      (map-indexed

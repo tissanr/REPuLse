@@ -51,17 +51,13 @@
 (defn- scale-name-arg [x]
   (let [v (u/unwrap x)]
     (cond
-      (keyword? v) (do (when-not (some #{v} (theory/scale-names))
-                         (throw (eval-error
-                                 (str "scale: unknown scale " v " — known: "
-                                      (str/join " " (theory/scale-names))))))
-                       v)
-      (vector? v)  (u/deep-unwrap v)
+      (keyword? v) (theory/check-scale-name! "scale" v)
+      (vector? v)  (theory/check-scale-name! "scale" (u/deep-unwrap v))
       :else        (u/pat-arg x))))
 
 (defn- scale-root-arg [x]
   (let [v (u/unwrap x)]
-    (if (keyword? v) v (u/pat-arg x))))
+    (if (keyword? v) (theory/check-root! "scale" v) (u/pat-arg x))))
 
 (defn- pattern-value? [v] (core/pattern? v))
 

@@ -8,7 +8,8 @@
             [repulse.fx :as fx]
             [repulse.bus :as bus]
             [repulse.core :as core]
-            [repulse.song :as song]))
+            [repulse.song :as song]
+            [repulse.voices :as voices]))
 
 ;; Silent pre-roll trimmed from the result, so parameter glides (filter
 ;; setTargetAtTime, cab ramps) settle before bar 0 (decision E4).
@@ -85,25 +86,32 @@
 (defn job-events
   "Pure. The export's onsets as [{:track kw :event ev :t secs}] with t relative
    to bar 0 (exports ignore mute, E12).
-   :cycles — cycles 0…n−1 of every track; :song — one pass of the song."
-  [{:keys [kind tracks n cycle-dur] s :song}]
-  (case kind
-    :cycles
-    (vec
-     (for [c         (range n)
-           [kw pat]  tracks
-           :when     pat
-           ev        (core/query-onsets pat {:start [c 1] :end [(inc c) 1]})
-           :let      [t (* (core/rat->float (:start (:whole ev))) cycle-dur)]
-           :when     (>= t 0)]
-       {:track kw :event ev :t t}))
+   :cycles — cycles 0…n−1 of every track; :song — one pass of the song.
+   With on-error (fn [track-kw error]), a track whose query throws is left out
+   of that cycle and reported; the export goes on (QA1 decision 4)."
+  ([job] (job-events job nil))
+  ([{:keys [kind tracks n cycle-dur] s :song} on-error]
+   (case kind
+     :cycles
+     (vec
+      (for [c         (range n)
+            [kw pat]  tracks
+            :when     pat
+            ev        (let [sp {:start [c 1] :end [(inc c) 1]}]
+                        (if on-error
+                          (try (vec (core/query-onsets pat sp))
+                               (catch :default e (on-error kw e) nil))
+                          (core/query-onsets pat sp)))
+            :let      [t (* (core/rat->float (:start (:whole ev))) cycle-dur)]
+            :when     (>= t 0)]
+        {:track kw :event ev :t t}))
 
-    :song
-    (vec
-     (for [bar (range (song/song-length s))
-           {:keys [track event]} (song/song-onsets s tracks #{} bar)]
-       {:track track :event event
-        :t (* (core/rat->float (:start (:whole event))) cycle-dur)}))))
+     :song
+     (vec
+      (for [bar (range (song/song-length s))
+            {:keys [track event]} (song/song-onsets s tracks #{} bar on-error)]
+        {:track track :event event
+         :t (* (core/rat->float (:start (:whole event))) cycle-dur)})))))
 
 ;;; ── Graph building ─────────────────────────────────────────────────────
 
@@ -117,13 +125,15 @@
 
 (defn- build-instance!
   "Instantiate effect-name's registered plugin in the offline context (decision
-   2 / E7): fresh instance → init(offline host) → createNodes → validate.
+   2 / E7): fresh instance → init(offline host) → createNodes → validate →
+   setTempo(cycle-dur, pre-roll-secs) (FX1, D1: cycle 0 starts after the pre-roll).
    → {:name :plugin :input :output}. Throws a fallback error on failure."
-  [effect-name ^js plugin ^js offline host]
+  [effect-name ^js plugin ^js offline host cycle-dur]
   (try
     (let [^js fresh (fx/instantiate-plugin plugin)]
       (when (fn? (.-init fresh)) (.init fresh host))
       (let [^js nodes (fx/validate-effect-nodes! effect-name (.createNodes fresh offline))]
+        (fx/call-set-tempo! fresh cycle-dur pre-roll-secs)
         {:name   effect-name
          :plugin fresh
          :input  (.-inputNode nodes)
@@ -161,7 +171,7 @@
    master? false (SK1 stems, K5): unity master gain straight to the destination,
    no global chain; the plan's entries are only used to look track-FX plugins up.
    → {:master node :instances [inst…] :track-dests {kw node}}."
-  [^js offline sr plan tracks master?]
+  [^js offline sr plan tracks master? cycle-dur]
   (let [master   (.createGain offline)
         _        (set! (.. master -gain -value)
                        (if-let [^js mg (and master? @audio/master-gain)]
@@ -170,7 +180,7 @@
         host     (offline-host offline sr master)
         global   (if master?
                    (vec (for [{:keys [name plugin] :as entry} (:build plan)]
-                          (let [inst (build-instance! name plugin offline host)]
+                          (let [inst (build-instance! name plugin offline host cycle-dur)]
                             (replay-global-params! entry (:plugin inst))
                             inst)))
                    [])
@@ -182,7 +192,7 @@
                                      (for [{:keys [name params]} (:track-fx pat)
                                            :let [p (get by-name name)]
                                            :when p]
-                                       (let [inst (build-instance! name p offline host)]
+                                       (let [inst (build-instance! name p offline host cycle-dur)]
                                          ;; same as fx/apply-track-effects!: metadata params only
                                          (doseq [[k v] params]
                                            (.setParam ^js (:plugin inst) k v))
@@ -257,7 +267,7 @@
         (if (nil? (.-audioWorklet offline))
           (js/Promise.reject (fallback-error "AudioWorklet unavailable offline"))
           (-> (js/Promise.resolve nil)
-              (.then (fn [_] (build-graph! offline sr plan plan-tracks master?)))
+              (.then (fn [_] (build-graph! offline sr plan plan-tracks master? cycle-dur)))
               (.then
                (fn [{:keys [master instances track-dests]}]
                  (-> (audio/init-offline-worklet! offline master)
@@ -282,13 +292,13 @@
                        ;; fetched (samples/play! returns that promise): wait for
                        ;; all of them, so no sample is created after rendering starts.
                        pending  (into []
-                                      (keep (fn [{:keys [track event t]}]
+                                      (keep (fn [{:keys [track event t value]}]
                                               (let [t'    (+ pre-roll-secs t)
                                                     w     (:whole event)
                                                     dur   (* (core/rat->float (core/rat- (:end w) (:start w)))
                                                              cycle-dur)
                                                     value (audio/resolve-tweens
-                                                           (:value event) (get tween-st track)
+                                                           value (get tween-st track)
                                                            t' cycle-dur)
                                                     ret   (when (or (nil? stem) (= track stem))
                                                             (audio/play-event offline t' value track
@@ -296,7 +306,10 @@
                                                 (fx/notify-plugins! plugins value t')
                                                 (when (thenable? ret)
                                                   (.catch ret (fn [_] nil))))))
-                                      (job-events job))]
+                                      ;; SYN6 C4: glide like playback.
+                                      (voices/glide-all
+                                        (map #(assoc % :value (:value (:event %)))
+                                             (job-events job audio/report-query-error!))))]
                    (-> (js/Promise.all (into-array pending))
                        (.then (fn [_] (audio/sync-worklet! node)))))))
               (.then (fn [_] (.startRendering offline)))

@@ -18,10 +18,4 @@
    "bank"
    (fn [prefix]
      (samples/set-bank-prefix! (leval/unwrap prefix))
-     (str "bank: " (if prefix (name (leval/unwrap prefix)) "cleared")))
-
-   "kit"
-   (fn [kit-name]
-     (let [k (leval/unwrap kit-name)]
-       (samples/set-kit! k)
-       (str "kit: " (if k (name k) "cleared"))))})
+     (str "bank: " (if prefix (name (leval/unwrap prefix)) "cleared")))})

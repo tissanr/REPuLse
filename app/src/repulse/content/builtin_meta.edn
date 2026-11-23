@@ -492,7 +492,7 @@
               :side-effects []
               :examples ["(sub 12 (seq :c4 :e4 :g4))"
                          "(->> (seq 8 7 5) (sub \"<0 1>\") (scale :major :c4))"]
-              :see-also ["add" "mul" "div"]}
+              :see-also ["add" "mul" "div" "sub-osc"]}
 
  :mul        {:category "transform"
               :returns "Pattern"
@@ -569,8 +569,9 @@
               :returns "Pattern"
               :side-effects []
               :examples ["(decay 0.5 (seq :c4 :e4))"
-                         "(->> (seq :bd) (decay 0.08))"]
-              :see-also ["attack" "release" "amp"]}
+                         "(->> (seq :bd) (decay 0.08))"
+                         "(->> (seq :bd :bd) (tune -5) (decay 0.8))"]
+              :see-also ["attack" "release" "amp" "tune" "tone"]}
 
  :release    {:category "transform"
               :returns "Pattern"
@@ -825,8 +826,10 @@
               :side-effects []
               :examples ["(->> (seq :c4 :eb4) (synth :saw))"
                          "(->> (scale :minor :c3 (seq 0 2 4)) (synth :fm :index 3))"
-                         "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :western))"]
-              :see-also ["noise" "fm" "western" "nylon" "harp" "koto" "pizz" "lute" "mandolin" "defsynth"]}
+                         "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :western))"
+                         "(->> (seq :c4 :_ :c4 :_) (synth :noise :color :pink) (decay 0.3))"
+                         "(->> (chord :minor :a3) (synth :supersaw))"]
+              :see-also ["noise" "fm" "supersaw" "unison" "acid" "pad" "western" "nylon" "harp" "koto" "pizz" "lute" "mandolin" "defsynth"]}
 
 ;; ── Continuous signals (TL2) ────────────────────────────────────────────────
  :signal {:category "signal"
@@ -1006,7 +1009,7 @@
  :noise      {:category "source"
               :returns "Pattern"
               :side-effects []
-              :examples ["(noise)" "(->> (noise) (amp 0.5) (decay 0.1))"]
+              :examples ["(noise)" "(->> (noise) (amp 0.5) (decay 0.1))" "(noise :color :pink)"]
               :see-also ["synth" "fm"]}
 
  :fm         {:category "source"
@@ -1524,8 +1527,10 @@
               :side-effects ["audio" "dom"]
               :examples ["(fx :reverb 0.4)"
                          "(fx :delay :wet 0.3 :time 0.25)"
-                         "(->> (seq :bd :_ :bd :_) (fx :filter 1000))"]
-              :see-also ["track" "distort" "amp-sim" "cab"]}
+                         "(->> (seq :bd :_ :bd :_) (fx :filter 1000))"
+                         "(fx :reverb :type :hall :decay 3 :wet 0.3)"
+                         "(master (fx :limiter -1))"]
+              :see-also ["track" "master" "eq" "limiter" "distort" "amp-sim" "cab"]}
 
  :master     {:category "effect"
               :returns "nil"
@@ -1562,6 +1567,60 @@
                          "(->> (seq :e2 :_ :e2 :g2) (synth :saw) (fx :amp-sim :gain 30 :stages 3) (fx :cab :ir :4x12))"
                          "(->> (seq :c2 :e2) (synth :saw) (fx :distort :drive 8) (fx :cab :ir :di))"]
               :see-also ["amp-sim" "distort" "waveshape" "fx"]}
+
+ ;; Phase FX1 — mixing, space & modulation effects
+ :eq         {:category "effect"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(->> (seq :c2 :_ :eb2 :_) (synth :saw) (fx :eq :low 3 :low-freq 80 :mid -4 :mid-freq 400 :mid-q 1.5))"
+                         "(master (fx :eq :high 2 :high-freq 8000))"]
+              :see-also ["limiter" "gate" "fx" "master"]}
+
+ :limiter    {:category "effect"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(master (fx :limiter -1))"
+                         "(master (fx :eq :high 2) (fx :limiter :ceiling -1 :release 0.1))"]
+              :see-also ["eq" "gate" "fx" "master"]}
+
+ :gate       {:category "effect"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(->> (seq :_ :sd :_ :sd) (fx :gate :threshold -35 :release 0.08))"
+                         "(->> (seq :_ :sd :_ :sd) (fx :reverb 0.6) (fx :gate :threshold -30 :range -12))"]
+              :see-also ["limiter" "eq" "fx"]}
+
+ :flanger    {:category "effect"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(->> (seq :c3 :g3) (synth :saw) (fx :flanger :rate 0.25 :depth 0.7 :feedback 0.6 :wet 0.8))"]
+              :see-also ["vibrato" "auto-pan" "fx"]}
+
+ :vibrato    {:category "effect"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(->> (seq :a4) (synth :saw) (fx :vibrato :rate 5 :depth 50))"]
+              :see-also ["flanger" "vib" "fx"]}
+
+ :auto-pan   {:category "effect"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(->> (fast 8 (seq :hh)) (fx :auto-pan :sync 1))"
+                         "(->> (fast 8 (seq :hh)) (fx :auto-pan :rate 0.5 :shape :tri))"]
+              :see-also ["width" "pan" "fx"]}
+
+ :ring-mod   {:category "effect"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(->> (seq :a4 :e4) (synth :saw) (fx :ring-mod :freq 220 :mix 1))"]
+              :see-also ["flanger" "fx"]}
+
+ :width      {:category "effect"
+              :returns "nil"
+              :side-effects ["audio"]
+              :examples ["(master (fx :width 1.4))"
+                         "(->> (seq :hh :_ :hh :_) (fx :width :haas 12))"]
+              :see-also ["auto-pan" "pan" "fx"]}
 
  :chebyshev  {:category "effect"
               :returns "Float32Array"
@@ -1628,17 +1687,11 @@
                 :examples ["(sample-banks)"]
                 :see-also ["samples!" "sound"]}
 
- :kit        {:category "sample"
-              :returns "string"
-              :side-effects ["audio"]
-              :examples ["(kit :studio)"
-                         "(kit nil)"]
-              :see-also ["bank" "velocity" "samples!"]}
-
  :bank       {:category "sample"
               :returns "string"
               :side-effects ["audio"]
-              :examples ["(bank :AkaiLinn)"
+              :examples ["(bank :dirt)"
+                         "(bank :AkaiLinn)"
                          "(bank :RolandTR808)"
                          "(bank nil)"]
               :see-also ["sample-banks" "sound" "samples!"]}
@@ -2516,4 +2569,209 @@
   :side-effects []
   :examples ["(struct (binary-n 5 4) (pure :x))" "(binary-n 1 \"<2 4>\")"]
   :see-also ["binary" "struct"]}
+
+ ;; ── Phase SYN6: synth parameters ──────────────────────────────────────────
+ :unison {:category "param"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(->> (seq :a1 :a1 :c2 :e1) (synth :saw) (unison 3) (detune 12) (sub-osc 0.5))"]
+  :see-also ["detune" "spread" "supersaw"]}
+
+ :detune {:category "param"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(->> (chord :minor :a3) (synth :supersaw) (detune 18) (spread 0.8))"]
+  :see-also ["unison" "spread"]}
+
+ :spread {:category "param"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(->> (chord :minor :a3) (synth :supersaw) (spread 0))"]
+  :see-also ["unison" "detune"]}
+
+ :sub-osc {:category "param"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(->> (seq :a1 :c2) (synth :saw) (sub-osc 0.5))"]
+  :see-also ["unison" "sub"]}
+
+ :pw {:category "param"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(->> (seq :c3 :e3) (synth :pulse) (pw 0.25))"]
+  :see-also ["pw-rate" "pw-depth"]}
+
+ :pw-rate {:category "param"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(->> (seq :c3) (synth :pulse) (pw 0.5) (pw-rate 1) (pw-depth 0.4) (decay 4))"]
+  :see-also ["pw" "pw-depth"]}
+
+ :pw-depth {:category "param"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(->> (seq :c3) (synth :pulse) (pw-rate 1) (pw-depth 0.4) (decay 4))"]
+  :see-also ["pw" "pw-rate"]}
+
+ :sync {:category "param"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(->> (seq :c3 :c3 :c3 :c3) (synth :saw) (sync (seq 2 3 4.5 6)))"]
+  :see-also ["synth" "sync-lead"]}
+
+ :tune {:category "param"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(->> (seq :bd :bd :bd :bd) (tune (seq 0 0 -5 0)) (decay 0.8))"]
+  :see-also ["tone" "decay" "bank"]}
+
+ :tone {:category "param"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(->> (fast 4 (seq :hh :hh :oh :hh)) (tone (range 0.2 0.9 sine)))"]
+  :see-also ["tune" "decay" "bank"]}
+
+ :glide {:category "param"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(->> (seq :c2 :c2 :eb2 :g1) (synth :acid) (glide (seq 0 0 0.06 0)))"]
+  :see-also ["acid" "theremin"]}
+
+ :accent {:category "param"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(->> (seq :c2 :c2 :c2 :c2) (synth :acid) (accent (seq 0 1 0 0)))"]
+  :see-also ["acid" "lp-env"]}
+
+ :lp-rate {:category "param"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(->> (seq :a1) (synth :saw) (lpf 400) (lp-rate 4) (lp-depth 2) (decay 2))"]
+  :see-also ["lp-depth" "lpf" "wobble"]}
+
+ :lp-depth {:category "param"
+  :returns "Pattern"
+  :side-effects []
+  :examples ["(->> (seq :a1) (synth :saw) (lpf 400) (lp-rate 2) (lp-depth 2) (decay 2))"]
+  :see-also ["lp-rate" "lpf"]}
+
+ ;; ── Phase SYN6: voices ──────────────────────────────────────────────────────
+ :pulse {:category "synth"
+  :description "Band-limited pulse wave (alias of :square); (pw 0.25), (pw-rate 1) (pw-depth 0.4)."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (seq :c3 :e3 :g3) (synth :pulse) (pw 0.3))"]
+  :see-also ["square" "pw" "supersaw" "synth"]}
+
+ :supersaw {:category "synth"
+  :description "Seven detuned saws spread in stereo (unison 7, detune 20, spread 0.7)."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (chord :minor :a3) (synth :supersaw) (detune 18) (spread 0.8))"]
+  :see-also ["unison" "detune" "spread" "synth"]}
+
+ :acid {:category "synth"
+  :description "Squelchy resonant saw bass, fast filter envelope; reacts to accent and glide."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (seq :c2 :c2 :eb2 :g1) (synth :acid) (glide (seq 0 0 0.06 0)))"]
+  :see-also ["accent" "glide" "fm-bass" "synth"]}
+
+ :reese {:category "synth"
+  :description "Two detuned saws, a dark beating bass."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (seq :c2 :eb2 :g1 :bb1) (synth :reese))"]
+  :see-also ["sub-bass" "wobble" "synth"]}
+
+ :sub-bass {:category "synth"
+  :description "Sine bass with gentle saturation."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (seq :c1 :_ :g1 :_) (synth :sub-bass))"]
+  :see-also ["reese" "sub-osc" "synth"]}
+
+ :fm-bass {:category "synth"
+  :description "FM bass with a plucky filter envelope."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (seq :c2 :c2 :eb2 :f2) (synth :fm-bass))"]
+  :see-also ["acid" "fm" "synth"]}
+
+ :wobble {:category "synth"
+  :description "Saw bass with a cutoff LFO, four wobbles per cycle."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (seq :a1) (synth :wobble) (decay 2))"]
+  :see-also ["lp-rate" "lp-depth" "reese" "synth"]}
+
+ :lead {:category "synth"
+  :description "Bright saw lead with vibrato."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (seq :c4 :eb4 :g4 :bb4) (synth :lead))"]
+  :see-also ["sync-lead" "pluck" "synth"]}
+
+ :sync-lead {:category "synth"
+  :description "Hard-synced saw lead, bright and torn."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (seq :c4 :g4) (synth :sync-lead))"]
+  :see-also ["sync" "lead" "synth"]}
+
+ :pluck {:category "synth"
+  :description "Short plucked saw with a snappy filter envelope."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (scale :minor :c4 (seq 0 2 4 7)) (synth :pluck))"]
+  :see-also ["lead" "western" "synth"]}
+
+ :theremin {:category "synth"
+  :description "Sine with portamento and wide vibrato."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (seq :c4 :g4 :e4 :c5) (synth :theremin))"]
+  :see-also ["glide" "vib" "synth"]}
+
+ :reed {:category "synth"
+  :description "Nasal pulse through a band-pass."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (seq :c4 :d4 :e4) (synth :reed))"]
+  :see-also ["sax" "pulse" "synth"]}
+
+ :pad {:category "synth"
+  :description "Three detuned saws, slow attack, soft low-pass."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (chord :major :f3) (synth :pad) (lpf 900))"]
+  :see-also ["strings" "sweep-pad" "brass-pad" "synth"]}
+
+ :strings {:category "synth"
+  :description "Five detuned saws, slow attack \u2014 string ensemble."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (chord :minor7 :d3) (synth :strings))"]
+  :see-also ["pad" "sweep-pad" "synth"]}
+
+ :sweep-pad {:category "synth"
+  :description "Wide seven-saw pad with a slow filter sweep."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (chord :minor :a2) (synth :sweep-pad))"]
+  :see-also ["pad" "strings" "synth"]}
+
+ :brass-pad {:category "synth"
+  :description "Brassy pad with a short filter swell."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (chord :major :bb2) (synth :brass-pad))"]
+  :see-also ["pad" "synth-brass" "synth"]}
+
+ :trumpet-cup {:category "synth"
+  :description "FM cup-muted trumpet, softer and rounder than the open trumpet."
+  :returns "event-param-map"
+  :side-effects []
+  :examples ["(->> (seq :c4 :e4) (synth :trumpet-cup))"]
+  :see-also ["trumpet" "trumpet-muted" "harmon-out" "synth"]}
 }

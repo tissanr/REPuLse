@@ -271,12 +271,15 @@
     "side-effects": [],
     "examples": [
       "(decay 0.5 (seq :c4 :e4))",
-      "(->> (seq :bd) (decay 0.08))"
+      "(->> (seq :bd) (decay 0.08))",
+      "(->> (seq :bd :bd) (tune -5) (decay 0.8))"
     ],
     "see-also": [
       "attack",
       "release",
-      "amp"
+      "amp",
+      "tune",
+      "tone"
     ],
     "detail": "(decay secs pat) — envelope decay time in seconds; (decay secs) returns transformer",
     "description": "Set envelope decay time in seconds. 0.08 = short stab, 2.0 = long tone."
@@ -944,6 +947,220 @@
     ],
     "detail": "(delay-sync cycles pat) — orbit delay time in cycles, 1/64–16",
     "description": "Delay time of the event's orbit in cycles, so echoes stay locked to the tempo; overrides delay-time on the same event (clamped to 4 s). Last event wins per orbit."
+  },
+  "unison": {
+    "category": "param",
+    "signature": "(unison n pat) or (unison n)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :a1 :a1 :c2 :e1) (synth :saw) (unison 3) (detune 12) (sub-osc 0.5))"
+    ],
+    "see-also": [
+      "detune",
+      "spread",
+      "supersaw"
+    ],
+    "detail": "(unison n pat) — number of oscillators 1–7 of a synth voice (saw/square/pulse/tri/sine)",
+    "description": "Number of oscillators of an oscillator voice (1–7), detuned by detune and spread in stereo by spread. Loudness stays about the same."
+  },
+  "detune": {
+    "category": "param",
+    "signature": "(detune cents pat) or (detune cents)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (chord :minor :a3) (synth :supersaw) (detune 18) (spread 0.8))"
+    ],
+    "see-also": [
+      "unison",
+      "spread"
+    ],
+    "detail": "(detune cents pat) — total width of the unison stack in cents (0–200; 20 when unison > 1)",
+    "description": "Total detune width of the unison stack in cents (0–200). Default 20 when unison > 1, else 0."
+  },
+  "spread": {
+    "category": "param",
+    "signature": "(spread w pat) or (spread w)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (chord :minor :a3) (synth :supersaw) (spread 0))"
+    ],
+    "see-also": [
+      "unison",
+      "detune"
+    ],
+    "detail": "(spread w pat) — stereo width 0–1 of the unison stack (supersaw 0.7)",
+    "description": "Stereo width of the unison stack, 0 (mono) to 1 (oscillators panned fully left and right). Supersaw default 0.7."
+  },
+  "sub-osc": {
+    "category": "param",
+    "signature": "(sub-osc level pat) or (sub-osc level)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :a1 :c2) (synth :saw) (sub-osc 0.5))"
+    ],
+    "see-also": [
+      "unison",
+      "sub"
+    ],
+    "detail": "(sub-osc level pat) — sine one octave below the note, 0–1 (0.5 = 6 dB below the fundamental)",
+    "description": "Adds a sine one octave below the note. 0.5 puts it 6 dB below the note's fundamental, whatever the waveform. Not the arithmetic sub."
+  },
+  "pw": {
+    "category": "param",
+    "signature": "(pw width pat) or (pw width)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c3 :e3) (synth :pulse) (pw 0.25))"
+    ],
+    "see-also": [
+      "pw-rate",
+      "pw-depth"
+    ],
+    "detail": "(pw width pat) — pulse width 0.01–0.99 of :square / :pulse (default 0.5)",
+    "description": "Pulse width of the :square / :pulse voice (0.01–0.99, default 0.5). The same key as (synth :square :pw 0.25)."
+  },
+  "pw-rate": {
+    "category": "param",
+    "signature": "(pw-rate hz pat) or (pw-rate hz)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c3) (synth :pulse) (pw 0.5) (pw-rate 1) (pw-depth 0.4) (decay 4))"
+    ],
+    "see-also": [
+      "pw",
+      "pw-depth"
+    ],
+    "detail": "(pw-rate hz pat) — pulse-width LFO rate 0–20 Hz (WASM voices only)",
+    "description": "Rate of the pulse-width LFO in Hz (0–20). Needs pw-depth. WASM synth voices only (static pw on tracks with an fx chain)."
+  },
+  "pw-depth": {
+    "category": "param",
+    "signature": "(pw-depth d pat) or (pw-depth d)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c3) (synth :pulse) (pw-rate 1) (pw-depth 0.4) (decay 4))"
+    ],
+    "see-also": [
+      "pw",
+      "pw-rate"
+    ],
+    "detail": "(pw-depth d pat) — pulse-width LFO depth 0–0.49 (WASM voices only)",
+    "description": "Depth of the pulse-width LFO (0–0.49). WASM synth voices only."
+  },
+  "sync": {
+    "category": "param",
+    "signature": "(sync ratio pat) or (sync ratio)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c3 :c3 :c3 :c3) (synth :saw) (sync (seq 2 3 4.5 6)))"
+    ],
+    "see-also": [
+      "synth",
+      "sync-lead"
+    ],
+    "detail": "(sync ratio pat) — hard-sync ratio 1–16 of :saw / :pulse (WASM voices only)",
+    "description": "Hard sync: the audible oscillator runs at ratio × the note and restarts with it. The pitch stays the note; higher ratios move a bright formant up. :saw and :pulse, WASM only."
+  },
+  "tune": {
+    "category": "param",
+    "signature": "(tune st pat) or (tune st)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :bd :bd :bd :bd) (tune (seq 0 0 -5 0)) (decay 0.8))"
+    ],
+    "see-also": [
+      "tone",
+      "decay",
+      "bank"
+    ],
+    "detail": "(tune st pat) — pitch of a synthesized drum in semitones (−48…48)",
+    "description": "Pitch of a synthesized kit drum in semitones (−48…48). Samples and the legacy drums ignore it."
+  },
+  "tone": {
+    "category": "param",
+    "signature": "(tone t pat) or (tone t)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (fast 4 (seq :hh :hh :oh :hh)) (tone (range 0.2 0.9 sine)))"
+    ],
+    "see-also": [
+      "tune",
+      "decay",
+      "bank"
+    ],
+    "detail": "(tone t pat) — brightness / body–noise balance 0–1 of a synthesized drum",
+    "description": "Brightness of a synthesized kit drum (0–1): kick sweep and click, snare body vs noise, hat high-pass, clap band. Absent = the voice's default."
+  },
+  "glide": {
+    "category": "param",
+    "signature": "(glide secs pat) or (glide secs)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c2 :c2 :eb2 :g1) (synth :acid) (glide (seq 0 0 0.06 0)))"
+    ],
+    "see-also": [
+      "acid",
+      "theremin"
+    ],
+    "detail": "(glide secs pat) — portamento from the previous note of the track, 0–5 s",
+    "description": "Portamento: the note slides from the previous note of the same track (the nearest note of the previous chord) in secs. Oscillator voices and the presets built on them."
+  },
+  "accent": {
+    "category": "param",
+    "signature": "(accent a pat) or (accent a)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c2 :c2 :c2 :c2) (synth :acid) (accent (seq 0 1 0 0)))"
+    ],
+    "see-also": [
+      "acid",
+      "lp-env"
+    ],
+    "detail": "(accent a pat) — accent 0–1: louder; with a filter envelope opens further, closes faster",
+    "description": "Accent (0–1): amp × (1 + 0.5a); with a filter envelope also lp-env + 1.5a and a shorter lp-decay."
+  },
+  "lp-rate": {
+    "category": "param",
+    "signature": "(lp-rate n pat) or (lp-rate n)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :a1) (synth :saw) (lpf 400) (lp-rate 4) (lp-depth 2) (decay 2))"
+    ],
+    "see-also": [
+      "lp-depth",
+      "lpf",
+      "wobble"
+    ],
+    "detail": "(lp-rate n pat) — cutoff LFO rate of the low-pass, periods per cycle (0–64)",
+    "description": "Cutoff LFO of the low-pass in periods per cycle, phase-locked to the cycle. Needs lpf and lp-depth."
+  },
+  "lp-depth": {
+    "category": "param",
+    "signature": "(lp-depth oct pat) or (lp-depth oct)",
+    "returns": "Pattern",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :a1) (synth :saw) (lpf 400) (lp-rate 2) (lp-depth 2) (decay 2))"
+    ],
+    "see-also": [
+      "lp-rate",
+      "lpf"
+    ],
+    "detail": "(lp-depth oct pat) — cutoff LFO depth of the low-pass in octaves (0–4)",
+    "description": "Depth of the cutoff LFO in octaves (0–4). Needs lpf."
   },
   "euclidean": {
     "category": "source",
@@ -2140,9 +2357,10 @@
     "see-also": [
       "add",
       "mul",
-      "div"
+      "div",
+      "sub-osc"
     ],
-    "detail": "(sub [mode] amt pat) — subtract amt from values; mode :in :out :mix :squeeze",
+    "detail": "(sub [mode] amt pat) — subtract amt from values; mode :in :out :mix :squeeze (sub-oscillator: sub-osc)",
     "description": "Subtract amt from every value. Same modes and argument types as add."
   },
   "mul": {
@@ -2438,10 +2656,15 @@
     "examples": [
       "(fx :reverb 0.4)",
       "(fx :delay :wet 0.3 :time 0.25)",
-      "(->> (seq :bd :_ :bd :_) (fx :filter 1000))"
+      "(->> (seq :bd :_ :bd :_) (fx :filter 1000))",
+      "(fx :reverb :type :hall :decay 3 :wet 0.3)",
+      "(master (fx :limiter -1))"
     ],
     "see-also": [
       "track",
+      "master",
+      "eq",
+      "limiter",
       "distort",
       "amp-sim",
       "cab"
@@ -2692,6 +2915,7 @@
       "audio"
     ],
     "examples": [
+      "(bank :dirt)",
       "(bank :AkaiLinn)",
       "(bank :RolandTR808)",
       "(bank nil)"
@@ -2701,27 +2925,8 @@
       "sound",
       "samples!"
     ],
-    "detail": "(bank :prefix) — resolve bare drum keywords to a drum-machine bank, (bank nil) clears",
-    "description": "Set a default bank prefix for all subsequent keyword lookups."
-  },
-  "kit": {
-    "category": "sample",
-    "signature": "(kit :name)",
-    "returns": "string",
-    "side-effects": [
-      "audio"
-    ],
-    "examples": [
-      "(kit :studio)",
-      "(kit nil)"
-    ],
-    "see-also": [
-      "bank",
-      "velocity",
-      "samples!"
-    ],
-    "detail": "(kit :name) — select a multisampled drum kit (velocity layers + round-robin); (kit nil) clears",
-    "description": "Select a multisampled drum kit. Bare keywords resolve to \"<kit>_<name>\" banks; kits with velocity layers pick the recording from the event velocity and rotate round-robin takes. (kit nil) clears."
+    "detail": "(bank :prefix) — kit for bare drum names: default = synth kit; (bank :dirt) = Dirt-Samples drums; (bank :RolandTR808) = a drum machine; (bank nil) clears",
+    "description": "Choose the drum kit for bare drum names (:bd :sd :hh …). Default (no bank, (bank nil), (bank :synth)): REPuLse's synth kit. (bank :dirt): the Dirt-Samples drums. (bank :AkaiLinn) etc.: that drum machine's samples."
   },
   "distort": {
     "category": "effect",
@@ -4647,7 +4852,7 @@
       "saw",
       "range"
     ],
-    "detail": "sine — sine wave 0..1, 0.5 at t=0; (segment 4 sine)",
+    "detail": "sine — sine wave 0..1, 0.5 at t=0; (segment 4 sine). Voice: (synth :sine pat)",
     "description": "Continuous signal: sine wave 0..1, 0.5 at t=0. Values at t = 0, 1/4, 1/2, 3/4: 0.5 1 0.5 0. Has no rhythm of its own: give it structure with (segment n sine) or use it as a parameter, e.g. (pan sine pat)."
   },
   "cosine": {
@@ -5036,18 +5241,19 @@
   },
   "noise": {
     "category": "source",
-    "signature": "(noise) — white noise burst; works with amp/decay/pan",
+    "signature": "(noise) or (noise :color :pink) — noise burst: :white :pink :brown :dust :lfsr; (synth :noise pat) plays noise per note",
     "returns": "Pattern",
     "side-effects": [],
     "examples": [
       "(noise)",
-      "(->> (noise) (amp 0.5) (decay 0.1))"
+      "(->> (noise) (amp 0.5) (decay 0.1))",
+      "(noise :color :pink)"
     ],
     "see-also": [
       "synth",
       "fm"
     ],
-    "detail": "(noise) — white noise burst; works with amp/decay/pan",
+    "detail": "(noise) or (noise :color :pink) — noise burst: :white :pink :brown :dust :lfsr; (synth :noise pat) plays noise per note",
     "description": ""
   },
   "fm": {
@@ -5075,11 +5281,17 @@
     "examples": [
       "(->> (seq :c4 :eb4) (synth :saw))",
       "(->> (scale :minor :c3 (seq 0 2 4)) (synth :fm :index 3))",
-      "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :western))"
+      "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :western))",
+      "(->> (seq :c4 :_ :c4 :_) (synth :noise :color :pink) (decay 0.3))",
+      "(->> (chord :minor :a3) (synth :supersaw))"
     ],
     "see-also": [
       "noise",
       "fm",
+      "supersaw",
+      "unison",
+      "acid",
+      "pad",
       "western",
       "nylon",
       "harp",
@@ -5435,6 +5647,284 @@
     "detail": "(synth :flute) — FM flute, breathy with slow attack",
     "description": ""
   },
+  "trumpet-cup": {
+    "category": "synth",
+    "signature": "(synth :trumpet-cup) — FM cup-muted trumpet, softer and rounder than the open trumpet",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c4 :e4) (synth :trumpet-cup))"
+    ],
+    "see-also": [
+      "trumpet",
+      "trumpet-muted",
+      "harmon-out",
+      "synth"
+    ],
+    "detail": "(synth :trumpet-cup) — FM cup-muted trumpet, softer and rounder than the open trumpet",
+    "description": ""
+  },
+  "pulse": {
+    "category": "synth",
+    "signature": "(synth :pulse) — band-limited pulse wave (alias of :square); (pw 0.25), (pw-rate 1) (pw-depth 0.4)",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c3 :e3 :g3) (synth :pulse) (pw 0.3))"
+    ],
+    "see-also": [
+      "square",
+      "pw",
+      "supersaw",
+      "synth"
+    ],
+    "detail": "(synth :pulse) — band-limited pulse wave (alias of :square); (pw 0.25), (pw-rate 1) (pw-depth 0.4)",
+    "description": ""
+  },
+  "supersaw": {
+    "category": "synth",
+    "signature": "(synth :supersaw) — seven detuned saws spread in stereo (unison 7, detune 20, spread 0.7)",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (chord :minor :a3) (synth :supersaw) (detune 18) (spread 0.8))"
+    ],
+    "see-also": [
+      "unison",
+      "detune",
+      "spread",
+      "synth"
+    ],
+    "detail": "(synth :supersaw) — seven detuned saws spread in stereo (unison 7, detune 20, spread 0.7)",
+    "description": ""
+  },
+  "acid": {
+    "category": "synth",
+    "signature": "(synth :acid) — squelchy resonant saw bass, fast filter envelope; reacts to accent and glide",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c2 :c2 :eb2 :g1) (synth :acid) (glide (seq 0 0 0.06 0)))"
+    ],
+    "see-also": [
+      "accent",
+      "glide",
+      "fm-bass",
+      "synth"
+    ],
+    "detail": "(synth :acid) — squelchy resonant saw bass, fast filter envelope; reacts to accent and glide",
+    "description": ""
+  },
+  "reese": {
+    "category": "synth",
+    "signature": "(synth :reese) — two detuned saws, a dark beating bass",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c2 :eb2 :g1 :bb1) (synth :reese))"
+    ],
+    "see-also": [
+      "sub-bass",
+      "wobble",
+      "synth"
+    ],
+    "detail": "(synth :reese) — two detuned saws, a dark beating bass",
+    "description": ""
+  },
+  "sub-bass": {
+    "category": "synth",
+    "signature": "(synth :sub-bass) — sine bass with gentle saturation",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c1 :_ :g1 :_) (synth :sub-bass))"
+    ],
+    "see-also": [
+      "reese",
+      "sub-osc",
+      "synth"
+    ],
+    "detail": "(synth :sub-bass) — sine bass with gentle saturation",
+    "description": ""
+  },
+  "fm-bass": {
+    "category": "synth",
+    "signature": "(synth :fm-bass) — FM bass with a plucky filter envelope",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c2 :c2 :eb2 :f2) (synth :fm-bass))"
+    ],
+    "see-also": [
+      "acid",
+      "fm",
+      "synth"
+    ],
+    "detail": "(synth :fm-bass) — FM bass with a plucky filter envelope",
+    "description": ""
+  },
+  "wobble": {
+    "category": "synth",
+    "signature": "(synth :wobble) — saw bass with a cutoff LFO, four wobbles per cycle",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :a1) (synth :wobble) (decay 2))"
+    ],
+    "see-also": [
+      "lp-rate",
+      "lp-depth",
+      "reese",
+      "synth"
+    ],
+    "detail": "(synth :wobble) — saw bass with a cutoff LFO, four wobbles per cycle",
+    "description": ""
+  },
+  "lead": {
+    "category": "synth",
+    "signature": "(synth :lead) — bright saw lead with vibrato",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c4 :eb4 :g4 :bb4) (synth :lead))"
+    ],
+    "see-also": [
+      "sync-lead",
+      "pluck",
+      "synth"
+    ],
+    "detail": "(synth :lead) — bright saw lead with vibrato",
+    "description": ""
+  },
+  "sync-lead": {
+    "category": "synth",
+    "signature": "(synth :sync-lead) — hard-synced saw lead, bright and torn",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c4 :g4) (synth :sync-lead))"
+    ],
+    "see-also": [
+      "sync",
+      "lead",
+      "synth"
+    ],
+    "detail": "(synth :sync-lead) — hard-synced saw lead, bright and torn",
+    "description": ""
+  },
+  "pluck": {
+    "category": "synth",
+    "signature": "(synth :pluck) — short plucked saw with a snappy filter envelope",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (scale :minor :c4 (seq 0 2 4 7)) (synth :pluck))"
+    ],
+    "see-also": [
+      "lead",
+      "western",
+      "synth"
+    ],
+    "detail": "(synth :pluck) — short plucked saw with a snappy filter envelope",
+    "description": ""
+  },
+  "theremin": {
+    "category": "synth",
+    "signature": "(synth :theremin) — sine with portamento and wide vibrato",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c4 :g4 :e4 :c5) (synth :theremin))"
+    ],
+    "see-also": [
+      "glide",
+      "vib",
+      "synth"
+    ],
+    "detail": "(synth :theremin) — sine with portamento and wide vibrato",
+    "description": ""
+  },
+  "reed": {
+    "category": "synth",
+    "signature": "(synth :reed) — nasal pulse through a band-pass",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (seq :c4 :d4 :e4) (synth :reed))"
+    ],
+    "see-also": [
+      "sax",
+      "pulse",
+      "synth"
+    ],
+    "detail": "(synth :reed) — nasal pulse through a band-pass",
+    "description": ""
+  },
+  "pad": {
+    "category": "synth",
+    "signature": "(synth :pad) — three detuned saws, slow attack, soft low-pass",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (chord :major :f3) (synth :pad) (lpf 900))"
+    ],
+    "see-also": [
+      "strings",
+      "sweep-pad",
+      "brass-pad",
+      "synth"
+    ],
+    "detail": "(synth :pad) — three detuned saws, slow attack, soft low-pass",
+    "description": ""
+  },
+  "strings": {
+    "category": "synth",
+    "signature": "(synth :strings) — five detuned saws, slow attack — string ensemble",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (chord :minor7 :d3) (synth :strings))"
+    ],
+    "see-also": [
+      "pad",
+      "sweep-pad",
+      "synth"
+    ],
+    "detail": "(synth :strings) — five detuned saws, slow attack — string ensemble",
+    "description": ""
+  },
+  "sweep-pad": {
+    "category": "synth",
+    "signature": "(synth :sweep-pad) — wide seven-saw pad with a slow filter sweep",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (chord :minor :a2) (synth :sweep-pad))"
+    ],
+    "see-also": [
+      "pad",
+      "strings",
+      "synth"
+    ],
+    "detail": "(synth :sweep-pad) — wide seven-saw pad with a slow filter sweep",
+    "description": ""
+  },
+  "brass-pad": {
+    "category": "synth",
+    "signature": "(synth :brass-pad) — brassy pad with a short filter swell",
+    "returns": "event-param-map",
+    "side-effects": [],
+    "examples": [
+      "(->> (chord :major :bb2) (synth :brass-pad))"
+    ],
+    "see-also": [
+      "pad",
+      "synth-brass",
+      "synth"
+    ],
+    "detail": "(synth :brass-pad) — brassy pad with a short filter swell",
+    "description": ""
+  },
   "sin": {
     "category": "ugen",
     "signature": "(sin freq) — sine oscillator UGen",
@@ -5467,7 +5957,7 @@
       "segment",
       "defsynth"
     ],
-    "detail": "tri — signal triangle 0→1→0; (segment 4 tri). Inside defsynth: (tri freq) UGen",
+    "detail": "tri — signal triangle 0→1→0; (segment 4 tri). Voice: (synth :tri pat) — band-limited triangle. Inside defsynth: (tri freq) UGen",
     "description": "Continuous signal: triangle wave rising 0→1 in the first half-cycle and falling back in the second. Top-level tri is the signal; inside defsynth bodies (tri freq) is the triangle-wave UGen."
   },
   "lpf": {
@@ -6345,6 +6835,156 @@
     ],
     "detail": "(sample-banks) — list all registered bank names",
     "description": "List all registered sample bank names."
+  },
+  "eq": {
+    "category": "effect",
+    "signature": "(fx :eq [:low dB] [:low-freq Hz] [:mid dB] [:mid-freq Hz] [:mid-q Q] [:mid2 dB] [:mid2-freq Hz] [:mid2-q Q] [:high dB] [:high-freq Hz])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(->> (seq :c2 :_ :eb2 :_) (synth :saw) (fx :eq :low 3 :low-freq 80 :mid -4 :mid-freq 400 :mid-q 1.5))",
+      "(master (fx :eq :high 2 :high-freq 8000))"
+    ],
+    "see-also": [
+      "limiter",
+      "gate",
+      "fx",
+      "master"
+    ],
+    "detail": "effect — parametric EQ: low/high shelf, two peaking bands (fx :eq :low 3 :high 2)",
+    "description": "Parametric EQ: low shelf, two peaking bands, high shelf. Gains −24…24 dB (default 0, i.e. flat). :low-freq 20–1000 Hz (100), :mid-freq 100–8000 Hz (1000), :mid2-freq 200–16000 Hz (3000), :high-freq 1000–20000 Hz (8000), :mid-q / :mid2-q 0.1–10 (1). A shelf reaches half its gain at its corner frequency. No positional value."
+  },
+  "limiter": {
+    "category": "effect",
+    "signature": "(fx :limiter ceiling [:release s])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(master (fx :limiter -1))",
+      "(master (fx :eq :high 2) (fx :limiter :ceiling -1 :release 0.1))"
+    ],
+    "see-also": [
+      "eq",
+      "gate",
+      "fx",
+      "master"
+    ],
+    "detail": "effect — look-ahead peak limiter (fx :limiter -1); ceiling dBFS, 5 ms latency",
+    "description": "Look-ahead peak limiter: no output sample exceeds :ceiling (−24…0 dBFS, default −1). :release 0.01–1 s (0.1) is the recovery time after a peak. Delays the signal by 5 ms. Inactive until named; put it last on the master."
+  },
+  "gate": {
+    "category": "effect",
+    "signature": "(fx :gate threshold [:attack s] [:hold s] [:release s] [:range dB])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(->> (seq :_ :sd :_ :sd) (fx :gate :threshold -35 :release 0.08))",
+      "(->> (seq :_ :sd :_ :sd) (fx :reverb 0.6) (fx :gate :threshold -30 :range -12))"
+    ],
+    "see-also": [
+      "limiter",
+      "eq",
+      "fx"
+    ],
+    "detail": "effect — noise gate (fx :gate -40); threshold dBFS, hold, release, range",
+    "description": "Noise gate: opens above :threshold (−80…0 dBFS, default −40), stays open for :hold (0–2 s, 0.05) after the level drops, then closes over :release (0.005–2 s, 0.1). :attack 0.0001–0.1 s (0.001). :range −80…0 dB (−80 ≈ silent; −12 makes it an expander)."
+  },
+  "flanger": {
+    "category": "effect",
+    "signature": "(fx :flanger wet [:rate Hz] [:depth N] [:delay s] [:feedback N])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(->> (seq :c3 :g3) (synth :saw) (fx :flanger :rate 0.25 :depth 0.7 :feedback 0.6 :wet 0.8))"
+    ],
+    "see-also": [
+      "vibrato",
+      "auto-pan",
+      "fx"
+    ],
+    "detail": "effect — flanger with feedback (fx :flanger 0.6 :feedback 0.6)",
+    "description": "Flanger: a short modulated delay with feedback. wet 0–1 (default 0; the dry signal stays at 1). :rate 0.01–10 Hz (0.25), :depth 0–1 (0.7) sweeps the delay between delay·(1 − depth) and delay·(1 + depth), :delay 0.0005–0.01 s (0.002), :feedback −0.95…0.95 (0; negative inverts the comb)."
+  },
+  "vibrato": {
+    "category": "effect",
+    "signature": "(fx :vibrato depth [:rate Hz])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(->> (seq :a4) (synth :saw) (fx :vibrato :rate 5 :depth 50))"
+    ],
+    "see-also": [
+      "flanger",
+      "vib",
+      "fx"
+    ],
+    "detail": "effect — pitch vibrato (fx :vibrato 20); depth in cents, :rate Hz",
+    "description": "Pitch vibrato on the whole track: depth 0–100 cents up and down (default 20), :rate 0.5–20 Hz (5). Inactive until named."
+  },
+  "auto-pan": {
+    "category": "effect",
+    "signature": "(fx :auto-pan depth [:rate Hz] [:sync cycles] [:shape kw])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(->> (fast 8 (seq :hh)) (fx :auto-pan :sync 1))",
+      "(->> (fast 8 (seq :hh)) (fx :auto-pan :rate 0.5 :shape :tri))"
+    ],
+    "see-also": [
+      "width",
+      "pan",
+      "fx"
+    ],
+    "detail": "effect — equal-power auto-pan (fx :auto-pan 1 :sync 1)",
+    "description": "Equal-power auto-pan: depth 0–1 (default 1 = fully left to fully right), :rate 0.01–20 Hz (1), :sync length of one sweep in cycles (wins over :rate, locked to the cycle grid), :shape :sine (default), :tri or :square. Total power stays constant. Inactive until named."
+  },
+  "ring-mod": {
+    "category": "effect",
+    "signature": "(fx :ring-mod mix [:freq Hz] [:shape kw])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(->> (seq :a4 :e4) (synth :saw) (fx :ring-mod :freq 220 :mix 1))"
+    ],
+    "see-also": [
+      "flanger",
+      "fx"
+    ],
+    "detail": "effect — ring modulator (fx :ring-mod 0.5 :freq 220)",
+    "description": "Ring modulator: multiplies the signal by a carrier. mix 0–1 crossfades dry → modulated (default 0). :freq 0.1–5000 Hz (440), :shape :sine (default), :tri, :square or :saw."
+  },
+  "width": {
+    "category": "effect",
+    "signature": "(fx :width width [:haas ms])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(master (fx :width 1.4))",
+      "(->> (seq :hh :_ :hh :_) (fx :width :haas 12))"
+    ],
+    "see-also": [
+      "auto-pan",
+      "pan",
+      "fx"
+    ],
+    "detail": "effect — stereo width 0–2 (fx :width 1.4); :haas ms",
+    "description": "Stereo width: 0 = mono, 1 = unchanged (default), 2 = side level doubled. Above 1 raises out-of-phase content and reduces mono compatibility. :haas 0–30 ms delays the right channel and widens mono material. Per track it only widens what is already stereo (panned events) unless :haas is set."
   },
   "+": {
     "category": "util",

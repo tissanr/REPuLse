@@ -1079,6 +1079,76 @@ const DOCS = {
     description: "Pitch envelope release time after the event ends (default 0.1 s). No effect without penv.",
     example: "(->> (seq :c3 :c3) (synth :saw) (penv 12) (p-decay 0.08) (p-release 0.3))",
   },
+  "unison": {
+    signature: "(unison n pat) or (unison n)",
+    description: "Number of oscillators of an oscillator voice (1\u20137), detuned by detune and spread in stereo by spread. Loudness stays about the same.",
+    example: "(->> (seq :a1 :a1 :c2 :e1) (synth :saw) (unison 3) (detune 12) (sub-osc 0.5))",
+  },
+  "detune": {
+    signature: "(detune cents pat) or (detune cents)",
+    description: "Total detune width of the unison stack in cents (0\u2013200). Default 20 when unison > 1, else 0.",
+    example: "(->> (chord :minor :a3) (synth :supersaw) (detune 18) (spread 0.8))",
+  },
+  "spread": {
+    signature: "(spread w pat) or (spread w)",
+    description: "Stereo width of the unison stack, 0 (mono) to 1 (oscillators panned fully left and right). Supersaw default 0.7.",
+    example: "(->> (chord :minor :a3) (synth :supersaw) (spread 0))",
+  },
+  "sub-osc": {
+    signature: "(sub-osc level pat) or (sub-osc level)",
+    description: "Adds a sine one octave below the note. 0.5 puts it 6 dB below the note's fundamental, whatever the waveform. Not the arithmetic sub.",
+    example: "(->> (seq :a1 :c2) (synth :saw) (sub-osc 0.5))",
+  },
+  "pw": {
+    signature: "(pw width pat) or (pw width)",
+    description: "Pulse width of the :square / :pulse voice (0.01\u20130.99, default 0.5). The same key as (synth :square :pw 0.25).",
+    example: "(->> (seq :c3 :e3) (synth :pulse) (pw 0.25))",
+  },
+  "pw-rate": {
+    signature: "(pw-rate hz pat) or (pw-rate hz)",
+    description: "Rate of the pulse-width LFO in Hz (0\u201320). Needs pw-depth. WASM synth voices only (static pw on tracks with an fx chain).",
+    example: "(->> (seq :c3) (synth :pulse) (pw 0.5) (pw-rate 1) (pw-depth 0.4) (decay 4))",
+  },
+  "pw-depth": {
+    signature: "(pw-depth d pat) or (pw-depth d)",
+    description: "Depth of the pulse-width LFO (0\u20130.49). WASM synth voices only.",
+    example: "(->> (seq :c3) (synth :pulse) (pw-rate 1) (pw-depth 0.4) (decay 4))",
+  },
+  "sync": {
+    signature: "(sync ratio pat) or (sync ratio)",
+    description: "Hard sync: the audible oscillator runs at ratio \u00d7 the note and restarts with it. The pitch stays the note; higher ratios move a bright formant up. :saw and :pulse, WASM only.",
+    example: "(->> (seq :c3 :c3 :c3 :c3) (synth :saw) (sync (seq 2 3 4.5 6)))",
+  },
+  "tune": {
+    signature: "(tune st pat) or (tune st)",
+    description: "Pitch of a synthesized kit drum in semitones (\u221248\u202648). Samples and the legacy drums ignore it.",
+    example: "(->> (seq :bd :bd :bd :bd) (tune (seq 0 0 -5 0)) (decay 0.8))",
+  },
+  "tone": {
+    signature: "(tone t pat) or (tone t)",
+    description: "Brightness of a synthesized kit drum (0\u20131): kick sweep and click, snare body vs noise, hat high-pass, clap band. Absent = the voice's default.",
+    example: "(->> (fast 4 (seq :hh :hh :oh :hh)) (tone (range 0.2 0.9 sine)))",
+  },
+  "glide": {
+    signature: "(glide secs pat) or (glide secs)",
+    description: "Portamento: the note slides from the previous note of the same track (the nearest note of the previous chord) in secs. Oscillator voices and the presets built on them.",
+    example: "(->> (seq :c2 :c2 :eb2 :g1) (synth :acid) (glide (seq 0 0 0.06 0)))",
+  },
+  "accent": {
+    signature: "(accent a pat) or (accent a)",
+    description: "Accent (0\u20131): amp \u00d7 (1 + 0.5a); with a filter envelope also lp-env + 1.5a and a shorter lp-decay.",
+    example: "(->> (seq :c2 :c2 :c2 :c2) (synth :acid) (accent (seq 0 1 0 0)))",
+  },
+  "lp-rate": {
+    signature: "(lp-rate n pat) or (lp-rate n)",
+    description: "Cutoff LFO of the low-pass in periods per cycle, phase-locked to the cycle. Needs lpf and lp-depth.",
+    example: "(->> (seq :a1) (synth :saw) (lpf 400) (lp-rate 4) (lp-depth 2) (decay 2))",
+  },
+  "lp-depth": {
+    signature: "(lp-depth oct pat) or (lp-depth oct)",
+    description: "Depth of the cutoff LFO in octaves (0\u20134). Needs lpf.",
+    example: "(->> (seq :a1) (synth :saw) (lpf 400) (lp-rate 2) (lp-depth 2) (decay 2))",
+  },
   "vib": {
     signature: "(vib hz pat) or (vib hz)",
     description: "Per-event vibrato rate in Hz. Depth: vib-mod (semitones, default 0.5). Works on tonal synth voices and samples (not drums, noise, ks or defsynth).",
@@ -1239,13 +1309,8 @@ const DOCS = {
   },
   "bank": {
     signature: "(bank :prefix)",
-    description: "Set a default bank prefix for all subsequent keyword lookups.",
-    example: "(bank :AkaiLinn)",
-  },
-  "kit": {
-    signature: "(kit :name)",
-    description: "Select a multisampled drum kit. Bare keywords resolve to \"<kit>_<name>\" banks; kits with velocity layers pick the recording from the event velocity and rotate round-robin takes. (kit nil) clears.",
-    example: "(kit :studio)",
+    description: "Choose the drum kit for bare drum names (:bd :sd :hh …). Default (no bank, (bank nil), (bank :synth)): REPuLse's synth kit. (bank :dirt): the Dirt-Samples drums. (bank :AkaiLinn) etc.: that drum machine's samples.",
+    example: "(bank :dirt)",
   },
   "sound": {
     signature: "(sound bank n)",
@@ -1283,6 +1348,47 @@ const DOCS = {
     signature: "(fx :cab [:ir kw] [:mix N])",
     description: "Speaker cabinet impulse response convolution. :ir chooses :1x12, :2x12, :4x12, or :di (dry passthrough). :mix blends dry/wet from 0.0–1.0. Pairs well with (fx :amp-sim ...) or (fx :distort ...).",
     example: "(->> (seq :e2 :_ :e2 :g2) (synth :saw) (fx :amp-sim :gain 30 :stages 3 :tonestack :mid-scoop) (fx :cab :ir :4x12))",
+  },
+  // --- Phase FX1 effects (hover on the keyword in (fx :name …)) ---
+  "eq": {
+    signature: "(fx :eq [:low dB] [:low-freq Hz] [:mid dB] [:mid-freq Hz] [:mid-q Q] [:mid2 dB] [:mid2-freq Hz] [:mid2-q Q] [:high dB] [:high-freq Hz])",
+    description: "Parametric EQ: low shelf, two peaking bands, high shelf. Gains −24…24 dB (default 0, i.e. flat). :low-freq 20–1000 Hz (100), :mid-freq 100–8000 Hz (1000), :mid2-freq 200–16000 Hz (3000), :high-freq 1000–20000 Hz (8000), :mid-q / :mid2-q 0.1–10 (1). A shelf reaches half its gain at its corner frequency. No positional value.",
+    example: "(->> (seq :c2 :_ :eb2 :_) (synth :saw) (fx :eq :low 3 :low-freq 80 :mid -4 :mid-freq 400))",
+  },
+  "limiter": {
+    signature: "(fx :limiter ceiling [:release s])",
+    description: "Look-ahead peak limiter: no output sample exceeds :ceiling (−24…0 dBFS, default −1). :release 0.01–1 s (0.1) is the recovery time after a peak. Delays the signal by 5 ms. Inactive until named; put it last on the master.",
+    example: "(master (fx :limiter -1))",
+  },
+  "gate": {
+    signature: "(fx :gate threshold [:attack s] [:hold s] [:release s] [:range dB])",
+    description: "Noise gate: opens above :threshold (−80…0 dBFS, default −40), stays open for :hold (0–2 s, 0.05) after the level drops, then closes over :release (0.005–2 s, 0.1). :attack 0.0001–0.1 s (0.001). :range −80…0 dB (−80 ≈ silent; −12 makes it an expander).",
+    example: "(->> (seq :_ :sd :_ :sd) (fx :reverb 0.6) (fx :gate :threshold -30 :release 0.05))",
+  },
+  "flanger": {
+    signature: "(fx :flanger wet [:rate Hz] [:depth N] [:delay s] [:feedback N])",
+    description: "Flanger: a short modulated delay with feedback. wet 0–1 (default 0; the dry signal stays at 1). :rate 0.01–10 Hz (0.25), :depth 0–1 (0.7) sweeps the delay between delay·(1 − depth) and delay·(1 + depth), :delay 0.0005–0.01 s (0.002), :feedback −0.95…0.95 (0; negative inverts the comb).",
+    example: "(->> (seq :c3 :g3) (synth :saw) (fx :flanger :rate 0.25 :depth 0.7 :feedback 0.6 :wet 0.8))",
+  },
+  "vibrato": {
+    signature: "(fx :vibrato depth [:rate Hz])",
+    description: "Pitch vibrato on the whole track: depth 0–100 cents up and down (default 20), :rate 0.5–20 Hz (5). Inactive until named.",
+    example: "(->> (seq :a4) (synth :saw) (fx :vibrato :rate 5 :depth 50))",
+  },
+  "auto-pan": {
+    signature: "(fx :auto-pan depth [:rate Hz] [:sync cycles] [:shape kw])",
+    description: "Equal-power auto-pan: depth 0–1 (default 1 = fully left to fully right), :rate 0.01–20 Hz (1), :sync length of one sweep in cycles (wins over :rate, locked to the cycle grid), :shape :sine (default), :tri or :square. Total power stays constant. Inactive until named.",
+    example: "(->> (fast 8 (seq :hh)) (fx :auto-pan :sync 1))",
+  },
+  "ring-mod": {
+    signature: "(fx :ring-mod mix [:freq Hz] [:shape kw])",
+    description: "Ring modulator: multiplies the signal by a carrier. mix 0–1 crossfades dry → modulated (default 0). :freq 0.1–5000 Hz (440), :shape :sine (default), :tri, :square or :saw.",
+    example: "(->> (seq :a4 :e4) (synth :saw) (fx :ring-mod :freq 220 :mix 1))",
+  },
+  "width": {
+    signature: "(fx :width width [:haas ms])",
+    description: "Stereo width: 0 = mono, 1 = unchanged (default), 2 = side level doubled. Above 1 raises out-of-phase content and reduces mono compatibility. :haas 0–30 ms delays the right channel and widens mono material. Per track it only widens what is already stereo (panned events) unless :haas is set.",
+    example: "(master (fx :width 1.4))",
   },
   "chebyshev": {
     signature: "(chebyshev N)",
@@ -1481,10 +1587,30 @@ const DOCS = {
  * Find a BuiltinName or Symbol node at the given position.
  * Returns { from, to, word } or null.
  */
+/** Is `node` (a Keyword) the effect name of an (fx …) form, i.e. the argument
+ * right after `fx`? Then its hover shows the effect's doc (Phase FX1). */
+function isFxEffectKeyword(state, node) {
+  const list = node.parent;
+  if (!list || list.name !== "List") return false;
+  const args = [];
+  for (let c = list.firstChild; c; c = c.nextSibling) {
+    if (c.name === "OpenParen" || c.name === "CloseParen" || c.name === "LineComment") continue;
+    args.push(c);
+  }
+  return args.length >= 2 &&
+    state.sliceDoc(args[0].from, args[0].to) === "fx" &&
+    args[1].from === node.from;
+}
+
 function wordAt(state, pos) {
   const tree = syntaxTree(state);
   let node = tree.resolveInner(pos, 0);
   while (node) {
+    if (node.name === "Keyword" && isFxEffectKeyword(state, node)) {
+      // `:limiter` in (fx :limiter -1) → "limiter"; :dattorro is the reverb alias
+      const name = state.sliceDoc(node.from + 1, node.to);
+      return { from: node.from, to: node.to, word: name === "dattorro" ? "dattorro-reverb" : name };
+    }
     if (node.name === "BuiltinName" || node.name === "Symbol") {
       const word = state.sliceDoc(node.from, node.to);
       return { from: node.from, to: node.to, word };

@@ -46,11 +46,11 @@ Method-chaining (`s("bd").fast(2)`) maps to Lisp application or threading:
 | Randomness & conditionals | TL4/TL4b | 33 | 0 | 0 | 8 | 1 | 2 | 44 |
 | Layering, pitch & harmony | TL5 | 18 | 1 | 0 | 5 | 0 | 2 | 26 |
 | Sample manipulation | TL6 | 15 | 0 | 0 | 2 | 1 | 2 | 20 |
-| Control parameters & effects | TL7a–c | 26 | 4 | 2 | 9 | 7 | 12 | 60 |
+| Control parameters & effects | TL7a–c, SYN6 | 27 | 4 | 2 | 9 | 7 | 11 | 60 |
 | Mini-notation | TL1/TL3/TL4 | 15 | 0 | 2 | 0 | 0 | 0 | 17 |
 | Tidal-only functions | TL3–TL5 | 8 | 0 | 0 | 3 | 0 | 2 | 13 |
 | Visuals, I/O & JS-specific | — | 4 | 2 | 1 | 1 | 13 | 3 | 24 |
-| **Total** | | **209** | **9** | **22** | **47** | **29** | **39** | **355** |
+| **Total** | | **210** | **9** | **22** | **47** | **29** | **38** | **355** |
 
 Rows grouped in one line (e.g. `sine2 / cosine2 / …`) count once.
 
@@ -415,8 +415,8 @@ envelopes, modulators and the rest. They apply to WASM synth voices and to the J
 | `chorus` / `leslie` | `(fx :chorus …)` | 🔁 | — | Track-level chorus (Phase A); no `leslie` (TL7c decision 4) |
 | `vib` / `vibmod` | `vib`, `vib-mod` | ✅ | TL7c | Rate in Hz, depth in semitones; tonal voices and samples |
 | Pitch envelope `penv` `pattack` `pdecay` `psustain` `prelease` `pcurve` `panchor` | `penv`, `p-attack` … `p-release` | ✅ | TL7c | Semitones, linear; no `pcurve`/`panchor`; tonal voices and samples |
-| `detune` / `unison` / `spread` (supersaw) | — | ❓ | — | Synth-design scope; see SYN phases |
-| `fm` / `fmh` / `fmenv` / `fmattack` … (8 operators, matrix) | `(synth :fm :index …)` | 🟡 | SYN6 | 2-operator FM exists; per-event FM controls deferred by TL7c |
+| `detune` / `unison` / `spread` (supersaw) | `detune`, `unison`, `spread`, `(synth :supersaw)` | ✅ | SYN6 | Per event on the oscillator voices; detune in cents (total width), spread 0–1 |
+| `fm` / `fmh` / `fmenv` / `fmattack` … (8 operators, matrix) | `(synth :fm :index …)` | 🟡 | — | 2-operator FM and the `:fm-bass` preset (SYN6); per-event FM controls (index envelope) still open |
 | Wavetable `wt*` / `warp*` | — | ⛔ | — | Synth-design scope, out of Milestone 1 |
 | ZZFX `z*` / `zzfx` | — | ⛔ | — | Strudel-specific chiptune engine |
 | Spectral `freeze` `xsdelay` `tsdelay` `real` `imag` `enhance` `comb` `smear` `scram` `binshift` `hbrick` `lbrick` `waveloss` `ring*` `fshift*` `octer*` | — | ⛔ | — | SuperDirt-only effects |
@@ -479,7 +479,7 @@ Not in Strudel, but common in Tidal tutorials.
 | `rolled` / `rolledBy` | `rolled` / `rolled-by` | ✅ | TL5 | Strum chords |
 | `toScale` | `scale` | 🔁 | — | `scale` with a semitone vector |
 | `discretise` | `segment` | 🔁 | — | |
-| `fastspread` / `spread` | `spread` | ❓ | — | |
+| `fastspread` / `spread` | — | ❓ | — | The name `spread` is taken by the unison stereo width (SYN6); a port would need another name |
 | `nTake` | — | ❓ | — | |
 | `euclidOff` | `euclidean` | 🔁 | — | Rotation argument |
 

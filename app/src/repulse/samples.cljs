@@ -4,23 +4,67 @@
             [repulse.specs :as specs]
             [clojure.string :as str]))
 
-;; Sample registry: bank-name (string) -> [full-url ...]
-(def registry (atom {}))
+;; QA3 A6: defonce, so a hot reload keeps loaded banks and decoded buffers.
 
-;; Decoded buffer cache: url -> AudioBuffer
-(def buffer-cache (atom {}))
+;; Sample registry: bank-name (string) -> [full-url ...]
+(defonce registry (atom {}))
+
+;; Decoded buffer cache: url -> AudioBuffer (LRU-capped, see cache-buffer!)
+(defonce buffer-cache (atom {}))
 
 ;; In-flight fetch promises: url -> Promise<AudioBuffer>
-(def in-flight (atom {}))
+(defonce in-flight (atom {}))
+
+;; QA3 A6: negative cache — url -> reason (error message) of a failed load.
+;; A failed URL is not fetched again until the page is reloaded.
+(defonce failed-urls (atom {}))
+
+;; QA3 A6: (fn [bank reason]) — reports a failed sample once per URL.
+(defonce on-load-error (atom nil))
+(defonce ^:private reported-urls (atom #{}))
+
+;; QA3 A6: LRU order of decoded buffers, url -> bytes, oldest first (a JS Map
+;; keeps insertion order; a hit moves the url to the end).
+(defonce ^:private lru-order (js/Map.))
+
+(def buffer-cache-cap
+  "Bytes of decoded audio (length × channels × 4) kept in buffer-cache."
+  (* 200 1024 1024))
+
+(defn lru-evict
+  "Pure. order — [[url bytes] …] oldest first. → urls to drop (oldest first)
+   until the sum of the remaining bytes is ≤ cap."
+  [order cap]
+  (loop [total (reduce + 0 (map second order))
+         [[url bytes] & more :as es] (seq order)
+         drop []]
+    (if (and es (> total cap))
+      (recur (- total bytes) more (conj drop url))
+      drop)))
+
+(defn- buffer-bytes [^js buf]
+  (* (.-length buf) (.-numberOfChannels buf) 4))
+
+(defn- touch-lru! [url]
+  (when (.has lru-order url)
+    (let [b (.get lru-order url)]
+      (.delete lru-order url)
+      (.set lru-order url b))))
+
+(defn- cache-buffer! [url buf]
+  (swap! buffer-cache assoc url buf)
+  (.delete lru-order url)
+  (.set lru-order url (buffer-bytes buf))
+  (let [order (mapv vec (es6-iterator-seq (.entries lru-order)))
+        drop  (lru-evict order buffer-cache-cap)]
+    (when (seq drop)
+      (doseq [u drop] (.delete lru-order u))
+      (swap! buffer-cache #(apply dissoc % drop)))))
 
 ;; KIT1: velocity layers. bank-name -> [{:vel-max 0.3 :urls [...]} …] sorted by
 ;; :vel-max ascending. Layered banks are also in `registry` (all files flattened),
 ;; so has-bank?, bank listings and sample-length keep working unchanged.
 (defonce layers (atom {}))
-
-;; KIT1: active kit — nil, or a name; bare keyword :kw resolves to "<kit>_<kw>"
-;; first (before the bank prefix).
-(defonce active-kit (atom nil))
 
 ;; Active drum machine prefix — nil means no prefix active.
 ;; When set, keyword :kw is looked up as "<prefix>_<kw>" first.
@@ -170,19 +214,10 @@
    If a prefix is active and \"<prefix>_<kw>\" is a registered bank, returns that
    prefixed keyword. Otherwise returns kw unchanged."
   [kw]
-  (let [try-prefix (fn [kw pfx]
-                     (let [c (keyword (str pfx "_" (name kw)))]
-                       (if (has-bank? c) c kw)))
-        kw'        (if-let [k @active-kit] (try-prefix kw k) kw)]
-    (if (and (= kw' kw) @active-bank-prefix)
-      (try-prefix kw @active-bank-prefix)
-      kw')))
-
-(defn set-kit!
-  "KIT1: select a multisampled kit by name, or nil to clear. Returns a message."
-  [kit-name]
-  (reset! active-kit (when kit-name (name kit-name)))
-  (js/console.log (str "[REPuLse] kit: " (or @active-kit "none"))))
+  (if-let [pfx @active-bank-prefix]
+    (let [candidate (keyword (str pfx "_" (name kw)))]
+      (if (has-bank? candidate) candidate kw))
+    kw))
 
 (declare get-url)
 
@@ -215,26 +250,43 @@
     (when (seq urls)
       (nth urls (mod (max 0 (or n 0)) (count urls))))))
 
+(defn- error-reason [e]
+  (or (ex-message e) (some-> e .-message) (str e)))
+
 (defn get-buffer!
-  "Returns a Promise<AudioBuffer> for the given URL, using cache."
+  "Returns a Promise<AudioBuffer> for the given URL, using cache. A URL that
+   failed before rejects at once (QA3 negative cache, no refetch)."
   [url ac]
   (if-let [buf (get @buffer-cache url)]
-    (js/Promise.resolve buf)
-    (if-let [p (get @in-flight url)]
-      p
-      (let [p (-> (js/fetch url)
-                  (.then fetch-ok!)
-                  (.then #(.arrayBuffer %))
-                  (.then #(.decodeAudioData ac %))
-                  (.then (fn [buf]
-                           (swap! buffer-cache assoc url buf)
-                           (swap! in-flight dissoc url)
-                           buf))
-                  (.catch (fn [e]
-                            (swap! in-flight dissoc url)
-                            (js/Promise.reject e))))]
-        (swap! in-flight assoc url p)
-        p))))
+    (do (touch-lru! url)
+        (js/Promise.resolve buf))
+    (if-let [reason (get @failed-urls url)]
+      (js/Promise.reject (js/Error. reason))
+      (if-let [p (get @in-flight url)]
+        p
+        (let [p (-> (js/fetch url)
+                    (.then fetch-ok!)
+                    (.then #(.arrayBuffer %))
+                    (.then #(.decodeAudioData ac %))
+                    (.then (fn [buf]
+                             (cache-buffer! url buf)
+                             (swap! in-flight dissoc url)
+                             buf))
+                    (.catch (fn [e]
+                              (swap! failed-urls assoc url (error-reason e))
+                              (swap! in-flight dissoc url)
+                              (js/Promise.reject e))))]
+          (swap! in-flight assoc url p)
+          p)))))
+
+(defn- report-load-error!
+  "Report a failed sample once per URL through on-load-error."
+  [bank url e]
+  (when-not (contains? @reported-urls url)
+    (swap! reported-urls conj url)
+    (js/console.warn "[REPuLse] sample load failed:" (name bank) url e)
+    (when-let [f @on-load-error]
+      (f bank (or (get @failed-urls url) (error-reason e))))))
 
 ;;; ── Phase TL6: playback planning (pure) ──────────────────────────────
 
@@ -433,7 +485,9 @@
                                           :end   (+ t' length)
                                           :src   src :gain gain :amp amp}))))))
          (.catch (fn [e]
-                   (js/console.debug "[REPuLse] sample play failed:" (name bank) e)))))))
+                   (if (contains? @failed-urls url)
+                     (report-load-error! bank url e)
+                     (js/console.debug "[REPuLse] sample play failed:" (name bank) e))))))))
 
 ;;; External sample loading — Lisp manifest, JSON manifest, GitHub discovery
 

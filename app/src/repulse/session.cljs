@@ -110,18 +110,50 @@
 
 (defonce save-timeout (atom nil))
 
+;; QA3 A3: the JSON string last written — an unchanged session is not rewritten.
+(defonce ^:private last-saved (atom nil))
+
+;; QA3 A3: (fn []) called once per page load when localStorage refuses a write
+;; (quota full, storage disabled). Set by app.cljs.
+(defonce on-save-error (atom nil))
+(defonce ^:private save-error-reported? (atom false))
+
+(def save-debounce-ms 1000)
+
+(defn project-relevant-change?
+  "Pure. Does a scheduler-state change old → new change the saved session?
+   Only the tempo is persisted from the scheduler (the code holds the rest), so
+   the per-bar :cycle counter and track swaps never trigger a save."
+  [old new]
+  (not= (:cycle-dur old) (:cycle-dur new)))
+
 (defn save-session! []
   (try
-    (let [data (build-session-snapshot)]
-      (.setItem js/localStorage storage-key
-                (js/JSON.stringify (clj->js data))))
-    (catch :default _ nil)))
+    (let [json (js/JSON.stringify (clj->js (build-session-snapshot)))]
+      (when-not (and (= json @last-saved)
+                     (= json (.getItem js/localStorage storage-key)))
+        (.setItem js/localStorage storage-key json)
+        (reset! last-saved json)))
+    (catch :default e
+      (js/console.warn "[REPuLse] session not saved:" e)
+      (when-not @save-error-reported?
+        (reset! save-error-reported? true)
+        (when-let [f @on-save-error] (f))))))
 
 (defn schedule-save! []
   (when-let [id @save-timeout]
     (js/clearTimeout id))
   (reset! save-timeout
-    (js/setTimeout save-session! 300)))
+    (js/setTimeout (fn [] (reset! save-timeout nil) (save-session!)) save-debounce-ms)))
+
+(defn flush-save!
+  "Write a pending (debounced) save now — on pagehide, so a reload or a closed
+   tab never loses the last second of edits (QA3: the debounce is 1 s)."
+  []
+  (when-let [id @save-timeout]
+    (js/clearTimeout id)
+    (reset! save-timeout nil)
+    (save-session!)))
 
 ;;; ── Load ─────────────────────────────────────────────────────────────────
 

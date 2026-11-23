@@ -24,12 +24,20 @@
 (defonce ^:private raf-started? (atom false))
 (defonce ^:private energy-cache (atom {}))
 
+;; QA3 A2: per-track query cache {track-name {:pattern p :cycle c :muted? m :data d}}
+;; — a track is queried at most once per cycle (and again when its pattern or
+;; mute state changes), not every animation frame.
+(defonce ^:private events-cache (atom {}))
+;; Test handles: track-events calls so far, and the cycle of the last draw.
+(defonce query-count (atom 0))
+(defonce last-cycle (atom nil))
+
 (def ^:private track-colors ["#e94560" "#56b6c2" "#e5c07b" "#c678dd" "#98c379" "#d19a66"])
 (def ^:private energy-resolution 512)
 
 (defn track-events [track-name pattern cycle color muted?]
   (let [sp {:start [cycle 1] :end [(inc cycle) 1]}
-        evs (try (core/query pattern sp) (catch :default _ []))]
+        evs (try (vec (core/query pattern sp)) (catch :default _ []))]
     {:name track-name
      :cycle cycle
      :color color
@@ -46,22 +54,39 @@
                    evs)}))
 
 (defn song-resting-tracks
-  "In song mode: the set of tracks that do not play in the current song bar
-   (drawn like muted tracks). nil without an active song."
-  [{:keys [tracks cycle] :as state}]
-  (when-let [{s :song origin :origin} (:song state)]
-    (let [q      (when origin (song/wrap-bar s (- cycle 1 origin)))
-          active (if q (song/active-tracks-at-bar s q) #{})]
-      (set (remove active (keys tracks))))))
+  "In song mode: the set of tracks that do not play in the song bar of the
+   scheduler cycle `audible` (default: the cycle before the next one to
+   schedule) — drawn like muted tracks. nil without an active song."
+  ([state] (song-resting-tracks state (dec (:cycle state))))
+  ([{:keys [tracks] :as state} audible]
+   (when-let [{s :song origin :origin} (:song state)]
+     (let [q      (when origin (song/wrap-bar s (- audible origin)))
+           active (if q (song/active-tracks-at-bar s q) #{})]
+       (set (remove active (keys tracks)))))))
+
+(defn- cached-track-events
+  "track-events through events-cache (QA3 A2)."
+  [track-name pattern cycle color muted?]
+  (let [c (get @events-cache track-name)]
+    (if (and c (identical? pattern (:pattern c)) (= cycle (:cycle c)) (= muted? (:muted? c)))
+      (assoc (:data c) :color color)
+      (let [d (track-events track-name pattern cycle color muted?)]
+        (swap! query-count inc)
+        (swap! events-cache assoc track-name {:pattern pattern :cycle cycle :muted? muted? :data d})
+        d))))
 
 (defn- active-track-data []
-  (let [{:keys [tracks muted cycle] :as state} @audio/scheduler-state
-        resting (or (song-resting-tracks state) #{})]
+  (let [{:keys [tracks muted] :as state} @audio/scheduler-state
+        ;; QA3 A2: the bar the listener hears, not the next one to schedule
+        cycle   (or (audio/audible-cycle) (:cycle state))
+        resting (or (song-resting-tracks state cycle) #{})]
+    (swap! events-cache select-keys (keys tracks))
+    (reset! last-cycle cycle)
     (mapv (fn [[idx [track-name pattern]]]
-            (track-events track-name pattern cycle
-                          (nth track-colors (mod idx (count track-colors)))
-                          (or (contains? muted track-name)
-                              (contains? resting track-name))))
+            (cached-track-events track-name pattern cycle
+                                 (nth track-colors (mod idx (count track-colors)))
+                                 (or (contains? muted track-name)
+                                     (contains? resting track-name))))
           (map-indexed vector (sort-by (comp name first) tracks)))))
 
 (defn- draw-label! [ctx x y {:keys [name color muted?]}]
@@ -339,6 +364,9 @@
                 (when (audio/playing?)
                   (swap! phase + (* (- ts @last-ts) 0.001))))
               (reset! last-ts ts)
-              (draw-viz!)
+              ;; QA3 A2: animate only while playing; render-track-panel! draws
+              ;; the stopped state once.
+              (when (audio/playing?)
+                (draw-viz!))
               (js/requestAnimationFrame frame))]
       (js/requestAnimationFrame frame))))

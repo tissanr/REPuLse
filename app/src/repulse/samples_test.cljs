@@ -163,13 +163,3 @@
       (reset! samples/registry {"bd" ["a.wav" "b.wav"]})
       (is (= "b.wav" (samples/pick-url :bd 1 {:velocity 0.1})))
       (reset! samples/registry orig))))
-
-(deftest kit-resolves-before-bank-prefix
-  (let [orig @samples/registry]
-    (reset! samples/registry {"studio_bd" ["k.wav"] "bd" ["x.wav"]})
-    (samples/set-kit! :studio)
-    (is (= :studio_bd (samples/resolve-keyword :bd)))
-    (is (= :cp (samples/resolve-keyword :cp)))
-    (samples/set-kit! nil)
-    (is (= :bd (samples/resolve-keyword :bd)))
-    (reset! samples/registry orig)))

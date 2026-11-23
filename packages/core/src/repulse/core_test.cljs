@@ -1416,3 +1416,136 @@
     (let [v (with-meta {:bank :bd} {:source {:from 3 :to 9}})]
       (is (= {:from 0 :to 1} (:source (first (c/query (c/pure v {:from 0 :to 1}) (c/cycle-span 0))))))
       (is (nil? (:source (first (c/query (c/pure :bd) (c/cycle-span 0)))))))))
+
+;;; ── Phase QA1 ────────────────────────────────────────────────────────
+
+(defn- qa1-msg [f]
+  (try (f) nil (catch :default e (ex-message e))))
+
+(defn- qa1-events
+  "[value [part-start part-end] [whole-start whole-end]] as floats, sorted."
+  [pat start end]
+  (->> (c/query pat (c/span (c/->rat start) (c/->rat end)))
+       (map (fn [{:keys [value part whole]}]
+              [value
+               [(c/rat->float (:start part)) (c/rat->float (:end part))]
+               [(c/rat->float (:start whole)) (c/rat->float (:end whole))]]))
+       (sort-by (fn [[_ [s]]] s))
+       vec))
+
+(deftest qa1-untested-helpers
+  (testing "gcd"
+    (is (= 6 (c/gcd 12 18)))
+    (is (= 5 (c/gcd -5 0))))
+  (testing "rational comparisons"
+    (is (true? (c/rat< [1 3] [1 2])))
+    (is (false? (c/rat< [1 2] [1 2])))
+    (is (true? (c/rat<= [1 2] [1 2])))
+    (is (true? (c/rat> [3 4] [1 2])))
+    (is (true? (c/rat>= [1 2] [1 2])))
+    (is (false? (c/rat>= [1 3] [1 2]))))
+  (testing "rat-min / rat-max / rat-neg"
+    (is (= [1 3] (c/rat-min [1 2] [1 3])))
+    (is (= [1 2] (c/rat-max [1 2] [1 3])))
+    (is (= [-1 2] (c/rat-neg [1 2]))))
+  (testing "span-intersect"
+    (is (= (c/span [1 4] [1 2]) (c/span-intersect (c/span [0 1] [1 2]) (c/span [1 4] [1 1]))))
+    (is (nil? (c/span-intersect (c/span [0 1] [1 2]) (c/span [1 2] [1 1])))))
+  (testing "silence"
+    (is (empty? (c/query c/silence (c/cycle-span 0))))))
+
+(deftest qa1-patternify2-3
+  (let [f2 (c/patternify2 (fn [a b pat] (c/fmap #(+ % a b) pat)))
+        f3 (c/patternify3 (fn [a b d pat] (c/fmap #(+ % a b d) pat)))]
+    (testing "scalars take the direct path"
+      (is (= [11] (map :value (c/query (f2 1 10 (c/pure 0)) (c/cycle-span 0)))))
+      (is (= [111] (map :value (c/query (f3 1 10 100 (c/pure 0)) (c/cycle-span 0))))))
+    (testing "patterned arguments are joined per event"
+      (is (= [11 12] (map :value (sort-by #(c/rat->float (:start (:part %)))
+                                          (c/query (f2 (c/seq* [1 2]) 10 (c/pure 0))
+                                                   (c/cycle-span 0))))))
+      (is (= [111 211] (map :value (sort-by #(c/rat->float (:start (:part %)))
+                                            (c/query (f3 1 10 (c/seq* [100 200]) (c/pure 0))
+                                                     (c/cycle-span 0)))))))))
+
+(deftest qa1-polymeter-pats
+  (let [a (c/seq* [:a :b :c])
+        b (c/seq* [:x :y])]
+    (testing "nil steps → the first layer's count"
+      (is (= 6 (count (c/query (c/polymeter-pats nil [[a 3] [b 2]]) (c/cycle-span 0))))))
+    (testing "layers with a 0 count are dropped; none left → silence"
+      (is (= 3 (count (c/query (c/polymeter-pats nil [[b 0] [a 3]]) (c/cycle-span 0)))))
+      (is (empty? (c/query (c/polymeter-pats nil [[a 0]]) (c/cycle-span 0)))))))
+
+(deftest qa1-count-limits
+  (testing "1024 steps pass, 1025 throw with the exact text"
+    (is (= 1024 (count (c/query (c/run 1024) (c/cycle-span 0)))))
+    (is (= "run: n = 1025 exceeds the limit of 1024" (qa1-msg #(c/run 1025))))
+    (is (= "euclidean: n = 100000000 exceeds the limit of 1024"
+           (qa1-msg #(c/euclidean 3 100000000 :bd))))
+    (is (= "euclid-legato: n = 2000 exceeds the limit of 1024"
+           (qa1-msg #(c/euclid-legato 3 2000 (c/pure :bd)))))
+    (is (= "ply: n = 1025 exceeds the limit of 1024" (qa1-msg #(c/ply 1025 (c/pure :a)))))
+    (is (= "ply: n = 1025 exceeds the limit of 1024" (qa1-msg #(c/ply 1024.5 (c/pure :a)))))
+    (is (= "segment: n = 5000 exceeds the limit of 1024" (qa1-msg #(c/segment 5000 c/sine))))
+    (is (= "chunk: n = 2048 exceeds the limit of 1024" (qa1-msg #(c/chunk 2048 c/rev (c/pure :a)))))
+    (is (= "chunk-into: n = 2048 exceeds the limit of 1024"
+           (qa1-msg #(c/chunk-into 2048 c/rev (c/pure :a))))))
+  (testing "layers and iterations: 64"
+    (is (some? (c/apply-n 64 c/rev (c/seq* [1 2]))))
+    (is (= "apply-n: n = 65 exceeds the limit of 64" (qa1-msg #(c/apply-n 65 c/rev (c/seq* [1 2])))))
+    (is (= "stutter: n = 100 exceeds the limit of 64"
+           (qa1-msg #(c/stutter 100 [1 8] (c/pure :a)))))
+    (is (= "echo-with: n = 65 exceeds the limit of 64"
+           (qa1-msg #(c/echo-with 65 [1 8] identity (c/pure :a))))))
+  (testing "a patterned count fails at query time, not at construction"
+    (let [p (c/run (c/seq* [4 2000]))]
+      (is (= "run: n = 2000 exceeds the limit of 1024"
+             (qa1-msg #(doall (c/query p (c/cycle-span 0)))))))))
+
+(deftest qa1-every
+  (testing "n < 1 is an error"
+    (is (= "every: n must be at least 1, got 0" (qa1-msg #(c/every 0 c/rev (c/seq* [1 2])))))
+    (is (= "every: n must be at least 1, got 1/2" (qa1-msg #(c/every [1 2] c/rev (c/seq* [1 2])))))
+    (is (= "first-of: n must be at least 1, got 0" (qa1-msg #(c/first-of 0 c/rev (c/seq* [1 2]))))))
+  (testing "rational n is truncated; transform is applied once, not per query"
+    (let [calls (atom 0)
+          f     (fn [p] (swap! calls inc) (c/rev p))
+          p     (c/every [5 2] f (c/seq* [1 2]))]
+      (is (= [2 1] (map :value (sort-by #(c/rat->float (:start (:part %)))
+                                        (c/query p (c/cycle-span 0))))))
+      (is (= [1 2] (map :value (sort-by #(c/rat->float (:start (:part %)))
+                                        (c/query p (c/cycle-span 1))))))
+      (dotimes [i 4] (doall (c/query p (c/cycle-span i))))
+      (is (= 1 @calls)))))
+
+(deftest qa1-last-of-and-chunk-build-once
+  (let [calls (atom 0)
+        f     (fn [p] (swap! calls inc) (c/rev p))
+        pl    (c/last-of 3 f (c/seq* [1 2]))
+        pc    (c/chunk 4 f (c/seq* [1 2 3 4]))]
+    (dotimes [i 8] (doall (c/query pl (c/cycle-span i))) (doall (c/query pc (c/cycle-span i))))
+    ;; last-of: 1 call; chunk: one within* per chunk index (4)
+    (is (= 5 @calls))))
+
+(deftest qa1-arrange-rational
+  (let [a (c/pure :a) b (c/pure :b)
+        expected [[:a [0 1] [0 1]]
+                  [:a [1 1.5] [1 1.5]]
+                  [:b [1.5 2] [1.5 2]]]]
+    (testing "a section ending mid-cycle hands over to the next at that point"
+      (is (= expected (qa1-events (c/arrange* [[a [3 2]] [b [1 2]]]) 0 2))))
+    (testing "floats give the same result"
+      (is (= expected (qa1-events (c/arrange* [[a 1.5] [b 0.5]]) 0 2))))
+    (testing "loops after the total"
+      (is (= [[:a [2 3] [2 3]]] (qa1-events (c/arrange* [[a [3 2]] [b [1 2]]]) 2 3))))
+    (testing "integer durations are unchanged"
+      (is (= [[:a [0 1] [0 1]] [:a [1 2] [1 2]] [:b [2 3] [2 3]] [:a [3 4] [3 4]]]
+             (qa1-events (c/arrange* [[a 2] [b 1]]) 0 4)))))
+  (testing "a note never outlasts its section (onset kept, whole end clipped)"
+    (is (= [[:a [0 1] [0 1]] [:b [1 2] [1 2]]]
+           (qa1-events (c/arrange* [[(c/slow 2 (c/pure :a)) 1] [(c/pure :b) 1]]) 0 2))))
+  (testing "durations must be positive"
+    (is (= "arrange: duration must be positive, got 0" (qa1-msg #(c/arrange* [[(c/pure :a) 0]]))))
+    (is (= "arrange: duration must be positive, got -1/2"
+           (qa1-msg #(c/arrange* [[(c/pure :a) [-1 2]]]))))))

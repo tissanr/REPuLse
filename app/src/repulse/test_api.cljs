@@ -9,7 +9,8 @@
             [repulse.song :as song]
             [repulse.song-transport :as song-transport]
             [repulse.env.builtins.song :as b-song]
-            [repulse.tracks-model :as tracks-model]))
+            [repulse.tracks-model :as tracks-model]
+            [repulse.voices :as voices]))
 
 (def ^:private default-sample-rate 44100)
 (def ^:private default-cycle-dur 2.0)
@@ -79,14 +80,18 @@
   [offline pattern cycles cycle-dur]
   (js/Promise.all
    (into-array
-    (for [c     (range cycles)
-          ev    (core/query-onsets pattern {:start [c 1] :end [(inc c) 1]})
-          :let  [w     (:whole ev)
-                 abs-t (* (core/rat->float (:start w)) cycle-dur)
-                 dur   (* (core/rat->float (core/rat- (:end w) (:start w))) cycle-dur)
-                 ret   (when (>= abs-t 0)
-                         (audio/play-event offline abs-t (:value ev) nil
-                                           {:dur dur :cycle-dur cycle-dur}))]
+    (for [{:keys [t value dur]}
+          ;; SYN6 C4: glide like playback.
+          (voices/glide-all
+            (for [c  (range cycles)
+                  ev (core/query-onsets pattern {:start [c 1] :end [(inc c) 1]})
+                  :let [w (:whole ev)]]
+              {:t     (* (core/rat->float (:start w)) cycle-dur)
+               :dur   (* (core/rat->float (core/rat- (:end w) (:start w))) cycle-dur)
+               :value (:value ev)}))
+          :let  [ret (when (>= t 0)
+                       (audio/play-event offline t value nil
+                                         {:dur dur :cycle-dur cycle-dur}))]
           :when (and (some? ret) (fn? (.-then ^js ret)))]
       ret))))
 
@@ -155,6 +160,7 @@
 (defn- reset-test-state! []
   (when (:interval-id @audio/scheduler-state)
     (audio/stop!))
+  (samples/set-bank-prefix! nil)
   (bus/cleanup-all!)
   (song-transport/reset-pending!)
   (cljs.core/reset! song-transport/song-buffer nil)
@@ -281,5 +287,7 @@
              :songEvents song-events
              :audioReady audio-ready
              :captureSong capture-song
-             :registerTestSample register-test-sample!})
+             :registerTestSample register-test-sample!
+             ;; SYN6: (bank …) is an app built-in, not in the harness env.
+             :setBankPrefix (fn [p] (samples/set-bank-prefix! p) true)})
   (set! (.-__REPULSE_TEST_READY__ js/window) true))

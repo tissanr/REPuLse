@@ -21,7 +21,8 @@ Map    { OpenBrace expr* CloseBrace }
 
   LineComment { ";" ![\n]* }
 
-  Number { @digit+ ("." @digit+)? }
+  // optional sign, decimals and rationals: 12, -12, 0.5, -0.5, 3/16, -1/4
+  Number { "-"? @digit+ ("." @digit+)? ("/" @digit+)? }
 
   String { '"' (![\"\\] | "\\" _)* '"' }
 
@@ -38,6 +39,8 @@ Map    { OpenBrace expr* CloseBrace }
     "bp-decay" | "bp-sustain" | "bp-release" | "penv" | "p-attack" | "p-decay" |
     "p-sustain" | "p-release" | "vib" | "vib-mod" | "vowel" | "coarse" | "djf" |
     "postgain" | "nudge" | "delay-sync" |
+    "unison" | "detune" | "spread" | "sub-osc" | "pw" | "pw-rate" | "pw-depth" | "sync" |
+    "tune" | "tone" | "glide" | "accent" | "lp-rate" | "lp-depth" |
     "euclidean" | "cat" | "late" | "early" |
     "sometimes" | "often" | "rarely" | "sometimes-by" |
     "degrade" | "degrade-by" |
@@ -50,7 +53,7 @@ Map    { OpenBrace expr* CloseBrace }
     "add" | "sub" | "mul" | "div" | "set" |
     "def" | "defn" | "let" | "fn" | "lambda" | "if" | "do" |
     "defmacro" | "defsynth" | "loop" | "recur" | "quasiquote" |
-    "bpm" | "stop" | "fx" | "master" | "load-plugin" | "unload-plugin" | "arrange" | "play-scenes" | "song" | "section" | "automate" | "ramp" | "fill" | "play-from" | "use" | "sound" | "bank" | "kit" |
+    "bpm" | "stop" | "fx" | "master" | "load-plugin" | "unload-plugin" | "arrange" | "play-scenes" | "song" | "section" | "automate" | "ramp" | "fill" | "play-from" | "use" | "sound" | "bank" |
     "distort" | "amp-sim" | "waveshape" | "cab" |
     "chebyshev" | "fold" | "bitcrush" |
     "get" | "assoc" | "merge" | "not" | "and" | "or" | "comp" |
@@ -68,7 +71,9 @@ Map    { OpenBrace expr* CloseBrace }
     "saw" | "square" | "noise" | "fm" | "synth" |
     "western" | "nylon" | "guitar" | "harp" | "koto" | "pizz" | "lute" | "mandolin" |
     "sax" | "trumpet" | "trumpet-muted" | "trombone" | "synth-brass" |
-    "harmon-out" | "harmon-in" | "epiano" | "bell" | "marimba" | "flute" |
+    "harmon-out" | "harmon-in" | "epiano" | "bell" | "marimba" | "flute" | "trumpet-cup" |
+    "pulse" | "supersaw" | "acid" | "reese" | "sub-bass" | "fm-bass" | "wobble" | "lead" |
+    "sync-lead" | "pluck" | "theremin" | "reed" | "pad" | "strings" | "sweep-pad" | "brass-pad" |
     "sin" | "tri" | "lpf" | "hpf" | "bpf" | "mix" | "gain" | "delay-node" |
     "env-perc" | "env-asr" | "env-gen" | "env" |
     "bus" | "out" | "in" | "kr" |
@@ -82,10 +87,10 @@ Map    { OpenBrace expr* CloseBrace }
 
   Symbol { identStart identChar* }
 
-  identStart { @asciiLetter | "-" | "_" | "!" | "?" | "+" | "*" | "/" | "=" | "<" | ">" | "." | "'" | "~" }
-  identChar  { @asciiLetter | @digit | "-" | "_" | "!" | "?" | "+" | "*" | "/" | "=" | "<" | ">" | "." | "'" | "~" }
+  identStart { @asciiLetter | "-" | "_" | "!" | "?" | "+" | "*" | "/" | "=" | "<" | ">" | "." | "'" | "~" | "&" }
+  identChar  { @asciiLetter | @digit | "-" | "_" | "!" | "?" | "+" | "*" | "/" | "=" | "<" | ">" | "." | "'" | "~" | "&" }
 
-  @precedence { BuiltinName, Symbol }
+  @precedence { Number, BuiltinName, Symbol }
 
   space { @whitespace+ | "," }
 }

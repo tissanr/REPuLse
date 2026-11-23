@@ -5,7 +5,9 @@
             [repulse.lisp.util :as u]))
 
 (defn make-builtins []
-  {"noise"  (fn [] {:synth :noise})
+  {"noise"  (fn [& opts]
+              ;; (noise :color :pink :density 100) — SYN6 noise colours
+              (merge {:synth :noise} (apply hash-map (mapv u/unwrap opts))))
    "fm"     (fn [note & opts]
               (let [n     (u/unwrap note)
                     opts' (apply hash-map (mapv u/unwrap opts))

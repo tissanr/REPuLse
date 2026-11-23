@@ -103,7 +103,8 @@
              (if-let [{s :song tracks :tracks} (song-transport/current-song-buffer)]
                (let [{:keys [spec skipped]}
                      (midi-export/song->midi {:song s :tracks (into {} tracks)
-                                              :cycle-dur cycle-dur :drum-map drum-map})
+                                              :cycle-dur cycle-dur :drum-map drum-map
+                                              :on-error audio/report-query-error!})
                      bars (song/song-length s)]
                  (download/download-parts! #js [(midi/midi-file spec)] "audio/midi"
                                            (str "repulse-song-" bars "bars.mid"))
@@ -117,7 +118,8 @@
                  (str "Error: no track :" (name target))
                  (let [{:keys [spec skipped]}
                        (midi-export/cycles->midi {:tracks [[target pattern]] :n n
-                                                  :cycle-dur cycle-dur :drum-map drum-map})]
+                                                  :cycle-dur cycle-dur :drum-map drum-map
+                                                  :on-error audio/report-query-error!})]
                    (download/download-parts! #js [(midi/midi-file spec)] "audio/midi"
                                              (str "repulse-" (name target) ".mid"))
                    (str "exported " n " cycles of :" (name target) " as MIDI"

@@ -12,6 +12,7 @@
             [repulse.api :as api]
             [repulse.ai.tools :as ai-tools]
             [repulse.ui.dialog :as dialog]
+            [repulse.ui.modal-stack :as modal-stack]
             [repulse.ui.html :refer [escape-html]]
             [clojure.string :as cstr]
             [clojure.set :as cset]))
@@ -195,86 +196,114 @@
   "Re-render only the cards area, preserving the toolbar."
   []
   (when-let [container (el "snippet-cards")]
-    (let [snips (snippets/filter-snippets @search-query @tag-filter)]
+    (if (and @snippets/load-error (empty? (snippets/all-snippets)))
+      ;; QA3 E: a failed load says so (instead of "loading…" forever)
       (set! (.-innerHTML container)
-            (if (empty? snips)
-              "<div class=\"snippet-empty\">no snippets match</div>"
-              (cstr/join "" (map render-card snips))))
-      (preview/render-waveforms!))))
+            (str "<div class=\"snippet-empty snippet-load-error\" role=\"alert\">"
+                 "could not load the snippet library "
+                 "<button type=\"button\" class=\"snippet-retry-btn\">retry</button>"
+                 "</div>"))
+      (let [snips (snippets/filter-snippets @search-query @tag-filter)]
+        (set! (.-innerHTML container)
+              (if (empty? snips)
+                "<div class=\"snippet-empty\">no snippets match</div>"
+                (cstr/join "" (map render-card snips))))
+        (preview/render-waveforms!)))))
 
-(defn- render-toolbar!
-  "Re-render the toolbar (tag dropdown + sort must reflect loaded tags)."
+(defn- toolbar-html
+  "The toolbar, built once by init! (QA3 E: never re-rendered afterwards, so
+   typing in its inputs never loses focus)."
   []
-  (when-let [toolbar (el "snippet-toolbar")]
-    (let [all-tags  (snippets/all-tags)
-          cur-tag   @tag-filter
-          cur-sort  @snippets/sort-order
-          cur-auth  (or @snippets/author-filter "")]
-      (set! (.-innerHTML toolbar)
-            (str "<span class=\"snippet-panel-title\">Snippets</span>"
-                 "<input id=\"snippet-search\" class=\"snippet-search\" type=\"text\""
-                 " placeholder=\"search\u2026\" value=\"" (escape-html (or @search-query "")) "\" />"
-                 "<select id=\"snippet-tag-filter\" class=\"snippet-tag-filter\">"
-                 "<option value=\"\">all tags</option>"
-                 (cstr/join ""
-                            (map (fn [t]
-                                   (str "<option value=\"" (escape-html t) "\""
-                                        (when (= t cur-tag) " selected")
-                                        ">" (escape-html t) "</option>"))
-                                 all-tags))
-                 "</select>"
-                 "<select id=\"snippet-sort\" class=\"snippet-sort-filter\">"
-                 "<option value=\"top-rated\""   (when (= cur-sort "top-rated")   " selected") ">&#9733; top rated</option>"
-                 "<option value=\"newest\""      (when (= cur-sort "newest")      " selected") ">&#128337; newest</option>"
-                 "<option value=\"most-used\""   (when (= cur-sort "most-used")   " selected") ">&#128200; uses</option>"
-                 "<option value=\"trending\""    (when (= cur-sort "trending")    " selected") ">&#128293; trending</option>"
-                 "</select>"
-                 "<input id=\"snippet-author-filter\" class=\"snippet-author-filter\" type=\"text\""
-                 " placeholder=\"author\u2026\" value=\"" (escape-html cur-auth) "\" />"
-                 (when (logged-in?)
-                   "<button id=\"snippet-share-btn\" class=\"snippet-share-btn\" title=\"Share current code as a snippet\">+ share</button>")
-                 "<button class=\"snippet-close-btn\" id=\"snippet-close-btn\">&times;</button>"))
-      ;; Re-wire toolbar input events after re-render
-      (when-let [search-input (el "snippet-search")]
-        (.addEventListener search-input "input"
-          (fn [^js e]
-            (reset! search-query (.-value (.-target e)))
-            (render-cards!))))
+  (str "<span class=\"snippet-panel-title\">Snippets</span>"
+       "<input id=\"snippet-search\" class=\"snippet-search\" type=\"text\""
+       " placeholder=\"search\u2026\" aria-label=\"search snippets\" />"
+       "<select id=\"snippet-tag-filter\" class=\"snippet-tag-filter\" aria-label=\"filter by tag\">"
+       "<option value=\"\">all tags</option>"
+       "</select>"
+       "<select id=\"snippet-sort\" class=\"snippet-sort-filter\" aria-label=\"sort order\">"
+       "<option value=\"top-rated\">&#9733; top rated</option>"
+       "<option value=\"newest\">&#128337; newest</option>"
+       "<option value=\"most-used\">&#128200; uses</option>"
+       "<option value=\"trending\">&#128293; trending</option>"
+       "</select>"
+       "<input id=\"snippet-author-filter\" class=\"snippet-author-filter\" type=\"text\""
+       " placeholder=\"author\u2026\" aria-label=\"filter by author\" />"
+       "<button type=\"button\" id=\"snippet-share-btn\" class=\"snippet-share-btn\""
+       " title=\"Share current code as a snippet\" hidden>+ share</button>"
+       "<button type=\"button\" class=\"snippet-close-btn\" id=\"snippet-close-btn\""
+       " aria-label=\"close snippet library\">&times;</button>"))
+
+(defonce ^:private shown-tags (atom nil))
+
+(defn- sync-toolbar!
+  "Bring the toolbar's controls in line with the state without replacing it:
+   tag options only when the tag list changed, select values, input values
+   only when the input is not focused, the share button's visibility."
+  []
+  (when (el "snippet-toolbar")
+    (let [all-tags (snippets/all-tags)
+          active   (.-activeElement js/document)]
       (when-let [tag-sel (el "snippet-tag-filter")]
-        (.addEventListener tag-sel "change"
-          (fn [^js e]
-            (let [v (.-value (.-target e))]
-              (reset! tag-filter (when (seq v) v)))
-            (render-cards!))))
+        (when (not= all-tags @shown-tags)
+          (reset! shown-tags all-tags)
+          (set! (.-innerHTML tag-sel)
+                (str "<option value=\"\">all tags</option>"
+                     (cstr/join ""
+                                (map (fn [t]
+                                       (str "<option value=\"" (escape-html t) "\">"
+                                            (escape-html t) "</option>"))
+                                     all-tags)))))
+        (set! (.-value tag-sel) (or @tag-filter "")))
       (when-let [sort-sel (el "snippet-sort")]
-        (.addEventListener sort-sel "change"
-          (fn [^js e]
-            (reset! snippets/sort-order (.-value (.-target e)))
-            (when-let [cards (el "snippet-cards")]
-              (set! (.-innerHTML cards)
-                    "<div class=\"snippet-empty\">loading\u2026</div>"))
-            (snippets/reload!))))
-      (when-let [author-input (el "snippet-author-filter")]
-        ;; Debounce: reload 400ms after user stops typing
-        (let [timer (atom nil)]
-          (.addEventListener author-input "input"
-            (fn [^js e]
-              (when @timer (js/clearTimeout @timer))
-              (reset! timer
-                (js/setTimeout
-                  (fn []
-                    (reset! snippets/author-filter
-                            (let [v (cstr/trim (.-value (.-target e)))]
-                              (when (seq v) v)))
-                    (when-let [cards (el "snippet-cards")]
-                      (set! (.-innerHTML cards)
-                            "<div class=\"snippet-empty\">loading\u2026</div>"))
-                    (snippets/reload!))
-                  400))))))
-      (when-let [share-btn (el "snippet-share-btn")]
-        (.addEventListener share-btn "click" submit-modal/open!))
-      (when-let [close-btn (el "snippet-close-btn")]
-        (.addEventListener close-btn "click" hide-panel!)))))
+        (set! (.-value sort-sel) @snippets/sort-order))
+      (when-let [search (el "snippet-search")]
+        (when-not (identical? search active)
+          (set! (.-value search) (or @search-query ""))))
+      (when-let [author (el "snippet-author-filter")]
+        (when-not (identical? author active)
+          (set! (.-value author) (or @snippets/author-filter ""))))
+      (when-let [share (el "snippet-share-btn")]
+        (set! (.-hidden share) (not (logged-in?)))))))
+
+(defn- show-loading! []
+  (when-let [cards (el "snippet-cards")]
+    (set! (.-innerHTML cards) "<div class=\"snippet-empty\">loading\u2026</div>")))
+
+(defn- wire-toolbar! []
+  (when-let [search-input (el "snippet-search")]
+    (.addEventListener search-input "input"
+      (fn [^js e]
+        (reset! search-query (.-value (.-target e)))
+        (render-cards!))))
+  (when-let [tag-sel (el "snippet-tag-filter")]
+    (.addEventListener tag-sel "change"
+      (fn [^js e]
+        (let [v (.-value (.-target e))]
+          (reset! tag-filter (when (seq v) v)))
+        (render-cards!))))
+  (when-let [sort-sel (el "snippet-sort")]
+    (.addEventListener sort-sel "change"
+      (fn [^js e]
+        (reset! snippets/sort-order (.-value (.-target e)))
+        (when (snippets/server-filtered?) (show-loading!))
+        (snippets/reload!))))
+  (when-let [author-input (el "snippet-author-filter")]
+    ;; Debounce: reload 400ms after user stops typing
+    (let [timer (atom nil)]
+      (.addEventListener author-input "input"
+        (fn [^js e]
+          (when @timer (js/clearTimeout @timer))
+          (reset! timer
+            (js/setTimeout
+              (fn []
+                (reset! snippets/author-filter
+                        (let [v (cstr/trim (.-value (.-target e)))]
+                          (when (seq v) v)))
+                (when (snippets/server-filtered?) (show-loading!))
+                (snippets/reload!))
+              400))))))
+  (when-let [share-btn (el "snippet-share-btn")]
+    (.addEventListener share-btn "click" submit-modal/open!)))
 
 ;;; Rating handler
 
@@ -331,13 +360,14 @@
     (.remove (.-classList panel) "hidden")
     (.add    (.-classList (el "snippet-toggle-btn")) "active")
     (when (empty? (snippets/all-snippets))
-      (when-let [container (el "snippet-cards")]
-        (set! (.-innerHTML container)
-              "<div class=\"snippet-empty\">loading\u2026</div>")))
-    (snippets/load!)
-    (when @snippets/loaded?
-      (render-toolbar!)
-      (render-cards!))))
+      (show-loading!))
+    (sync-toolbar!)
+    (if (and @snippets/load-error (not @snippets/loaded?))
+      ;; a failed load is retried by the retry button, not by reopening
+      (render-cards!)
+      (do (snippets/load!)
+          (when @snippets/loaded?
+            (render-cards!))))))
 
 (defn hide-panel! []
   (when-let [panel (el "snippet-panel")]
@@ -390,12 +420,17 @@
           (handle-report! id)
 
           (and id (.contains cl "snippet-delete-btn"))
-          (handle-delete! id)))))
+          (handle-delete! id)
 
-  ;; Keyboard: Escape closes panel
+          (.contains cl "snippet-retry-btn")
+          (do (show-loading!)
+              (snippets/reload!))))))
+
+  ;; Keyboard: Escape closes panel — not while a modal (dialog, submit modal)
+  ;; is open: that Escape belongs to the modal (QA3 C).
   (.addEventListener js/document "keydown"
     (fn [^js e]
-      (when (and @visible? (= "Escape" (.-key e)))
+      (when (and @visible? (= "Escape" (.-key e)) (not (modal-stack/any-open?)))
         (hide-panel!)))))
 
 ;;; Initialization
@@ -409,45 +444,27 @@
   (when-let [panel (el "snippet-panel")]
     (set! (.-innerHTML panel)
           (str "<div id=\"snippet-toolbar\" class=\"snippet-panel-bar\">"
-               "<span class=\"snippet-panel-title\">Snippets</span>"
-               "<input id=\"snippet-search\" class=\"snippet-search\" type=\"text\""
-               " placeholder=\"search\u2026\" />"
-               "<select id=\"snippet-tag-filter\" class=\"snippet-tag-filter\">"
-               "<option value=\"\">all tags</option>"
-               "</select>"
-               "<select id=\"snippet-sort\" class=\"snippet-sort-filter\">"
-               "<option value=\"top-rated\">&#9733; top rated</option>"
-               "<option value=\"newest\">&#128337; newest</option>"
-               "<option value=\"most-used\">&#128200; uses</option>"
-               "<option value=\"trending\">&#128293; trending</option>"
-               "</select>"
-               "<input id=\"snippet-author-filter\" class=\"snippet-author-filter\" type=\"text\""
-               " placeholder=\"author\u2026\" />"
-               "<button id=\"snippet-close-btn\" class=\"snippet-close-btn\">&times;</button>"
+               (toolbar-html)
                "</div>"
                "<div id=\"snippet-cards\" class=\"snippet-cards\"></div>"))
-
-    ;; Wire toolbar inputs
-    (when-let [search-input (el "snippet-search")]
-      (.addEventListener search-input "input"
-        (fn [^js e]
-          (reset! search-query (.-value (.-target e)))
-          (render-cards!))))
-    (when-let [tag-sel (el "snippet-tag-filter")]
-      (.addEventListener tag-sel "change"
-        (fn [^js e]
-          (let [v (.-value (.-target e))]
-            (reset! tag-filter (when (seq v) v)))
-          (render-cards!))))
-
+    (reset! shown-tags nil)
+    (wire-toolbar!)
     (wire-panel! panel)
 
     ;; Watch library-atom: re-render when fetch completes
     (add-watch snippets/library-atom ::panel-update
       (fn [_ _ _ _]
         (when @visible?
-          (render-toolbar!)
+          (sync-toolbar!)
           (render-cards!))))
+
+    ;; QA3 E: client-side sort / author filter (anonymous) and load errors
+    (add-watch snippets/filter-rev ::filter-update
+      (fn [_ _ _ _]
+        (when @visible? (render-cards!))))
+    (add-watch snippets/load-error ::load-error
+      (fn [_ _ _ _]
+        (when @visible? (render-cards!))))
 
     ;; Watch ratings-atom: re-render cards when load-ratings! completes
     ;; (ratings load async, often after the first render)

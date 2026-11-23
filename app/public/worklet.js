@@ -27,6 +27,9 @@ class RepulseProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.engine = null;
+    this.wasm = null;   // wasm exports (initSync's return value); has `memory`
+    this.nBuses = 1;
+    this._v = null;     // cached Float32Array view into WASM memory (Phase QA2)
     this.port.onmessage = (e) => this._onMessage(e.data);
     if (DEBUG) console.log("[REPuLse Worklet] Processor created");
   }
@@ -39,8 +42,9 @@ class RepulseProcessor extends AudioWorkletProcessor {
         //   1. new WebAssembly.Module(bytes)    — synchronous compile from bytes
         //   2. new WebAssembly.Instance(module) — synchronous instantiate
         // Both are allowed in workers/worklets regardless of module size.
-        initSync({ module: msg.wasmBytes });
+        this.wasm = initSync({ module: msg.wasmBytes });
         this.engine = new AudioEngine(sampleRate);
+        this.nBuses = this.engine.bus_count();
         this.port.postMessage({ type: 'ready' });
       } catch (err) {
         console.error("[REPuLse Worklet] Init failed:", err);
@@ -77,6 +81,20 @@ class RepulseProcessor extends AudioWorkletProcessor {
     }
   }
 
+  // Phase QA2: a Float32Array view of `len` floats at `ptr` in WASM memory.
+  // render_block / render_block_buses return a pointer into a buffer the
+  // engine pre-allocates, so the view is rebuilt only when that pointer or
+  // length changes, or when WASM memory grew (which detaches the old buffer).
+  // No typed array is created per block.
+  _view(ptr, len) {
+    const v = this._v;
+    const buf = this.wasm.memory.buffer;
+    if (v === null || v.buffer !== buf || v.byteOffset !== ptr || v.length !== len) {
+      this._v = new Float32Array(buf, ptr, len);
+    }
+    return this._v;
+  }
+
   process(_inputs, outputs) {
     if (!this.engine) return true;
     const out = outputs[0];
@@ -88,11 +106,12 @@ class RepulseProcessor extends AudioWorkletProcessor {
     const n = out[0].length;
 
     // Phase TL7b: a node built with 9 outputs gets the orbit send buses.
-    // process_block_buses returns [bus][frame][channel]: bus 0 = dry,
+    // render_block_buses writes [bus][frame][channel]: bus 0 = dry,
     // 1–4 = room sends of orbits 0–3, 5–8 = delay sends of orbits 0–3.
     if (outputs.length > 1) {
-      const raw = this.engine.process_block_buses(n, currentTime);
-      const nb = Math.min(outputs.length, raw.length / (n * 2));
+      const ptr = this.engine.render_block_buses(n, currentTime);
+      const raw = this._view(ptr, this.nBuses * n * 2);
+      const nb = Math.min(outputs.length, this.nBuses);
       for (let b = 0; b < nb; b++) {
         const o = outputs[b];
         const base = b * n * 2;
@@ -110,8 +129,8 @@ class RepulseProcessor extends AudioWorkletProcessor {
       return true;
     }
 
-    // process_block returns interleaved stereo: [L0, R0, L1, R1, …]
-    const raw = this.engine.process_block(n, currentTime);
+    // render_block writes interleaved stereo: [L0, R0, L1, R1, …]
+    const raw = this._view(this.engine.render_block(n, currentTime), n * 2);
 
     if (out.length >= 2) {
       // Stereo output — split interleaved channels

@@ -83,6 +83,36 @@
     :else
     (throw (ex-info (str "Expected a number, got " (pr-str x)) {:type :not-a-number}))))
 
+;;; Count limits (QA1)
+
+(defn- ->int
+  "Truncate a number or rational to an integer."
+  [x] (int (rat->float (->rat x))))
+
+(def max-steps
+  "Limit for steps and repeats per cycle (run, euclidean, ply, segment, chunk …)."
+  1024)
+
+(def max-layers
+  "Limit for stacked layers and iterations (apply-n, echo, echo-with …)."
+  64)
+
+(defn check-count!
+  "Throw an :eval-error when n exceeds limit, e.g.
+   \"run: n = 1025 exceeds the limit of 1024\". Returns n."
+  [fname arg n limit]
+  (when (> n limit)
+    (throw (ex-info (str fname ": " arg " = " n " exceeds the limit of " limit)
+                    {:type :eval-error})))
+  n)
+
+(defn- rat-str
+  "Print a number or rational for a message: 3, 1/2, 0.5."
+  [x]
+  (if (vector? x)
+    (let [[n d] (->rat x)] (if (= d 1) (str n) (str n "/" d)))
+    (str x)))
+
 ;;; Time spans
 
 (defn span [start end] {:start start :end end})
@@ -403,49 +433,67 @@
         (map (fn [e] (map-spans mirror e))
              (query pat (span (reflect end) (reflect start)))))))))
 
-(defn- every* [n transform pat]
-  (pattern
-   (per-cycle
-    (fn [sp]
-      (let [cycle (int (Math/floor (rat->float (:start sp))))]
-        (if (zero? (mod cycle n))
-          (query (transform pat) sp)
-          (query pat sp)))))))
+(defn- every* [fname n transform pat]
+  (let [k (->int n)]
+    (when (< k 1)
+      (throw (ex-info (str fname ": n must be at least 1, got " (rat-str n))
+                      {:type :eval-error})))
+    (let [tp (transform pat)]
+      (pattern
+       (per-cycle
+        (fn [sp]
+          (let [cycle (int (Math/floor (rat->float (:start sp))))]
+            (query (if (zero? (mod cycle k)) tp pat) sp))))))))
 
 (defn every
   "Apply transform to pat on every nth cycle (cycles 0, n, 2n, …).
    n may be a number or a pattern of numbers."
   [n transform pat]
-  ((patternify (fn [n' p] (every* n' transform p))) n pat))
+  ((patternify (fn [n' p] (every* "every" n' transform p))) n pat))
 
 (defn arrange*
-  "plan: [[pattern cycles] …]
-   Returns a Pattern that plays each section in order, looping after the total duration."
+  "plan: [[pattern cycles] …]; cycles may be integers, rationals [n d] or floats.
+   Returns a Pattern that plays each section in order, looping after the total
+   duration. A section ending mid-cycle cuts its events there — notes end at the
+   section boundary (whole ends are clipped, onsets kept); the next section starts
+   at that point."
   [plan]
   (let [timeline (reduce
                    (fn [acc [pat dur]]
-                     (let [prev (:to (last acc) 0)]
-                       (conj acc {:pat pat :from prev :to (+ prev dur)})))
+                     (let [d    (->rat dur)
+                           prev (:to (peek acc) [0 1])]
+                       (when-not (pos? (first d))
+                         (throw (ex-info (str "arrange: duration must be positive, got "
+                                              (rat-str dur))
+                                         {:type :eval-error})))
+                       (conj acc {:pat pat :from prev :to (rat+ prev d)})))
                    [] plan)
-        total    (or (:to (last timeline)) 1)]
+        total    (or (:to (peek timeline)) [1 1])]
     (pattern
      (per-cycle
-      (fn [{:keys [start end]}]
-        (let [g-cycle  (int (Math/floor (rat->float start)))
-              lc       (mod g-cycle total)
-              loop-off (- g-cycle lc)
-              entry    (some #(when (and (>= lc (:from %)) (< lc (:to %))) %) timeline)]
-          (when entry
-            (let [sec-off     (:from entry)
-                  offset      (+ loop-off sec-off)
-                  local-start (rat+ start [(- offset) 1])
-                  local-end   (rat+ end   [(- offset) 1])
-                  evs         (query (:pat entry) {:start local-start :end local-end})]
-              (map (fn [e]
-                     (map-spans #(span (rat+ (:start %) [offset 1])
-                                       (rat+ (:end   %) [offset 1]))
-                                e))
-                   evs)))))))))
+      (fn [{:keys [start end] :as piece}]
+        (let [l0 (int (Math/floor (rat->float (rat-div start total))))]
+          (->> (iterate inc l0)
+               (take-while #(rat< (rat* (int->rat %) total) end))
+               (mapcat
+                (fn [l]
+                  (let [loop-off (rat* (int->rat l) total)]
+                    (mapcat
+                     (fn [{:keys [pat from to]}]
+                       (let [off  (rat+ loop-off from)
+                             wend (rat+ loop-off to)]
+                         (when-let [is (span-intersect piece (span off wend))]
+                           ;; Shift into place; a note never outlasts its section
+                           ;; (the whole's end is clipped, its onset is kept).
+                           (map (fn [e]
+                                  (let [e (map-spans #(span (rat+ (:start %) off)
+                                                            (rat+ (:end %) off))
+                                                     e)]
+                                    (cond-> e
+                                      (:whole e) (update-in [:whole :end] rat-min wend))))
+                                (query pat (span (rat- (:start is) off)
+                                                 (rat- (:end is) off)))))))
+                     timeline)))))))))))
 
 ;;; ── Phase I: Pattern Combinators ───────────────────────────────────
 
@@ -610,7 +658,7 @@
   (if (pattern? n) (inner-join (fmap irand* n)) (irand* n)))
 
 (defn- run* [n]
-  (let [k (int (rat->float (->rat n)))]
+  (let [k (check-count! "run" "n" (->int n) max-steps)]
     (if (pos? k) (seq* (vec (range k))) silence)))
 
 (defn run
@@ -620,8 +668,14 @@
 
 ;;; ── Phase TL2: Shaping ──────────────────────────────────────────────
 
+(defn- ceil-count
+  "Rounded-up step count of n (ply, segment), checked against max-steps."
+  [fname n]
+  (check-count! fname "n" (Math/ceil (rat->float (->rat n))) max-steps))
+
 (defn- segment* [n pat]
   ;; Tidal: _segment n p = _fast n (pure id) <* p
+  (ceil-count "segment" n)
   (app-left (fn [_ v] v) (fast* n (pure true)) pat))
 
 (defn segment
@@ -686,10 +740,6 @@
 
 (defn- shift-event [ev off]
   (map-spans #(span (rat+ (:start %) off) (rat+ (:end %) off)) ev))
-
-(defn- ->int
-  "Truncate a number or rational to an integer."
-  [x] (int (rat->float (->rat x))))
 
 (defn- fmap-event [f pat]
   (pattern (fn [sp] (map #(assoc % :value (f %)) (query pat sp)))))
@@ -774,8 +824,8 @@
               (recur j (- i j) (mapv into (subvec xs 0 j) ys) (subvec xs j))
               (recur i (- j i) (mapv into xs (subvec ys 0 i)) (subvec ys i)))))))))
 
-(defn- euclid-bools [k n r]
-  (let [k (->int k) n (->int n) r (->int r)]
+(defn- euclid-bools [fname k n r]
+  (let [k (->int k) n (check-count! fname "n" (->int n) max-steps) r (->int r)]
     (if (<= n 0)
       []
       (let [v (bjorklund k n)
@@ -809,7 +859,7 @@
   (fmap #(if (= :_ %) % (not (step-true? %))) pat))
 
 (defn- euclidean* [k n val r]
-  (let [bs (euclid-bools k n r)]
+  (let [bs (euclid-bools "euclidean" k n r)]
     (if (empty? bs)
       silence
       (if (pattern? val)
@@ -827,8 +877,8 @@
   ([k n val rotation]
    ((patternify3 (fn [k' n' r' v] (euclidean* k' n' v r'))) k n rotation val)))
 
-(defn- euclid-legato* [k n r pat]
-  (let [bs   (euclid-bools k n r)
+(defn- euclid-legato* [fname k n r pat]
+  (let [bs   (euclid-bools fname k n r)
         idxs (vec (keep-indexed (fn [i b] (when b i)) bs))
         cnt  (count bs)]
     (if (empty? idxs)
@@ -841,16 +891,17 @@
 (defn euclid-legato
   "Like the struct form of euclidean, but each hit lasts until the next hit."
   [k n pat]
-  ((patternify2 (fn [k' n' p] (euclid-legato* k' n' 0 p))) k n pat))
+  ((patternify2 (fn [k' n' p] (euclid-legato* "euclid-legato" k' n' 0 p))) k n pat))
 
 (defn euclid-legato-rot
   "euclid-legato on the rotated boolean list; steps before the first hit rest."
   [k n r pat]
-  ((patternify3 euclid-legato*) k n r pat))
+  ((patternify3 (partial euclid-legato* "euclid-legato-rot")) k n r pat))
 
 ;;; Repetition
 
 (defn- ply* [n pat]
+  (ceil-count "ply" n)
   (squeeze-join (fmap-event #(fast* n (pure (:value %) (:source %))) pat)))
 
 (defn ply
@@ -858,7 +909,7 @@
   [n pat] ((patternify ply*) n pat))
 
 (defn- ply-with* [n f pat]
-  (let [k (max 1 (int (Math/ceil (rat->float (->rat n)))))]
+  (let [k (max 1 (int (ceil-count "ply-with" n)))]
     (squeeze-join
      (fmap-event #(fastcat* (vec (take k (iterate f (pure (:value %) (:source %)))))) pat))))
 
@@ -956,26 +1007,28 @@
 
 ;;; Chunks
 
-(defn- chunk* [n f pat idx-fn hold?]
-  (let [n (->int n)]
+(defn- chunk* [fname n f pat idx-fn hold?]
+  (let [n (check-count! fname "n" (->int n) max-steps)]
     (if (< n 1)
       pat
-      (let [variant (fn [c] (let [i (idx-fn c n)] (within* (rat i n) (rat (inc i) n) f pat)))]
+      ;; One within* per chunk index, built once up front.
+      (let [variants (mapv #(within* (rat % n) (rat (inc %) n) f pat) (range n))
+            variant  (fn [c] (nth variants (idx-fn c n)))]
         (if hold?
           (slowcat-held* n variant)
           (pattern (per-cycle (fn [sp] (query (variant (cycle-of sp)) sp)))))))))
 
 (defn chunk
   "Apply f to chunk (c mod n) of the cycle, cycle-holding."
-  [n f pat] ((patternify (fn [n' p] (chunk* n' f p #(mod %1 %2) true))) n pat))
+  [n f pat] ((patternify (fn [n' p] (chunk* "chunk" n' f p #(mod %1 %2) true))) n pat))
 
 (defn chunk-back
   "As chunk, with chunk index (mod (- c) n)."
-  [n f pat] ((patternify (fn [n' p] (chunk* n' f p #(mod (- %1) %2) true))) n pat))
+  [n f pat] ((patternify (fn [n' p] (chunk* "chunk-back" n' f p #(mod (- %1) %2) true))) n pat))
 
 (defn fast-chunk
   "As chunk, without cycle-holding."
-  [n f pat] ((patternify (fn [n' p] (chunk* n' f p #(mod %1 %2) false))) n pat))
+  [n f pat] ((patternify (fn [n' p] (chunk* "fast-chunk" n' f p #(mod %1 %2) false))) n pat))
 
 ;;; Meters & conditionals
 
@@ -1002,13 +1055,14 @@
 
 (defn first-of
   "Exactly every: apply f when c mod n = 0."
-  [n f pat] (every n f pat))
+  [n f pat] ((patternify (fn [n' p] (every* "first-of" n' f p))) n pat))
 
 (defn- last-of* [n f pat]
   (let [n (->int n)]
     (if (< n 1)
       pat
-      (pattern (per-cycle (fn [sp] (query (if (= (mod (cycle-of sp) n) (dec n)) (f pat) pat) sp)))))))
+      (let [fp (f pat)]
+        (pattern (per-cycle (fn [sp] (query (if (= (mod (cycle-of sp) n) (dec n)) fp pat) sp))))))))
 
 (defn last-of
   "Apply f when c mod n = n - 1."
@@ -1168,26 +1222,28 @@
   "Cut each cycle into n slices; each event of ipat plays its slice."
   [n ipat pat] ((patternify (fn [n' p] (bite* n' (->pat ipat) p))) n pat))
 
-(defn- chunk-into* [n f pat idx-fn]
-  (let [n (->int n)]
+(defn- chunk-into* [fname n f pat idx-fn]
+  (let [n (check-count! fname "n" (->int n) max-steps)]
     (if (< n 1)
       pat
-      (pattern
-       (per-cycle
-        (fn [sp]
-          (let [i (idx-fn (cycle-of sp) n) a (rat i n) b (rat (inc i) n)]
-            (query (within* a b #(compress* a b (f (zoom* a b %))) pat) sp))))))))
+      (let [variants (mapv (fn [i]
+                             (let [a (rat i n) b (rat (inc i) n)]
+                               (within* a b #(compress* a b (f (zoom* a b %))) pat)))
+                           (range n))]
+        (pattern
+         (per-cycle
+          (fn [sp] (query (nth variants (idx-fn (cycle-of sp) n)) sp))))))))
 
 (defn chunk-into
   "Apply f to the looped sub-cycle of chunk (c mod n)."
-  [n f pat] ((patternify (fn [n' p] (chunk-into* n' f p #(mod %1 %2)))) n pat))
+  [n f pat] ((patternify (fn [n' p] (chunk-into* "chunk-into" n' f p #(mod %1 %2)))) n pat))
 
 (defn chunk-back-into
   "As chunk-into, chunk index (mod (-(c+1)) n)."
-  [n f pat] ((patternify (fn [n' p] (chunk-into* n' f p #(mod (- (inc %1)) %2)))) n pat))
+  [n f pat] ((patternify (fn [n' p] (chunk-into* "chunk-back-into" n' f p #(mod (- (inc %1)) %2)))) n pat))
 
 (defn- ply-for-each* [n f pat]
-  (let [k (max 1 (int (Math/ceil (rat->float (->rat n)))))]
+  (let [k (max 1 (int (ceil-count "ply-for-each" n)))]
     (squeeze-join
      (fmap-event (fn [ev]
                    (let [p0 (pure (:value ev) (:source ev))]
@@ -1199,7 +1255,7 @@
   [n f pat] ((patternify (fn [n' p] (ply-for-each* n' f p))) n pat))
 
 (defn- euclidish* [k n g pat]
-  (let [bs   (euclid-bools k n 0)
+  (let [bs   (euclid-bools "euclidish" k n 0)
         n'   (count bs)
         idxs (vec (keep-indexed (fn [i b] (when b i)) bs))
         k'   (count idxs)
@@ -1508,7 +1564,9 @@
 (defn apply-n
   "Apply f n times."
   [n f pat]
-  ((patternify (fn [n' p] (nth (iterate f p) (max 0 (->int n'))))) n pat))
+  ((patternify (fn [n' p]
+                 (nth (iterate f p) (max 0 (check-count! "apply-n" "n" (->int n') max-layers)))))
+   n pat))
 
 ;;; ── Phase TL4b: Pick & fix ───────────────────────────────────────────
 
@@ -1619,15 +1677,21 @@
       pat
       (stack* [pat (f (late t (echo-with* (dec n) t f pat)))]))))
 
+(defn- echo-with-checked [fname n t f pat]
+  ((patternify2 (fn [n' t' p]
+                  (check-count! fname "n" (->int n') max-layers)
+                  (echo-with* n' t' f p)))
+   n t pat))
+
 (defn echo-with
   "Tidal stutWith: pat plus n-1 copies, copy i = (f ∘ late t) applied i times."
   [n t f pat]
-  ((patternify2 (fn [n' t' p] (echo-with* n' t' f p))) n t pat))
+  (echo-with-checked "echo-with" n t f pat))
 
 (defn stutter
   "Tidal stutter: n copies of pat, t apart, unchanged."
   [n t pat]
-  (echo-with n t identity pat))
+  (echo-with-checked "stutter" n t identity pat))
 
 (defn- group-wholes
   "Group events of one query by equal :whole (order-preserving, digital only)."
