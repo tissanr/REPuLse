@@ -12,8 +12,8 @@
 - **Next for the unattended pipeline:** QA2 → QA3 → QA4 (quality track, added
   2026-11-20 from a code review; QA1 delivered), then WS6. After them, every remaining phase on the
   critical path needs a human (🤖👂 or 🧑).
-- **Next for a human session:** FX1 (three owner questions open) and KIT1 (spec is an
-  outline, expand first); N1 opens M3. TL7c's listen check runs in the next release test round.
+- **Next for a human session:** FX1 (owner questions answered 2026-11-23; ready to build,
+  listen check after) and KIT1 (spec is an outline, expand first); N1 opens M3. TL7c's listen check runs in the next release test round.
 - **Side track open:** DOC1, TEST2, UI1, R3, PLUG1, O2, PL1; quality track QA5 (🧑),
   QA6 (🤖👂), QA7 (🧑).
 
@@ -1027,8 +1027,8 @@ Every effect a finished song needs, in one phase: mixing tools, a controllable r
 delay, and the missing modulation and stereo effects. All are track-level plugins.
 
 **Key additions:**
-- Mixing: `eq` (shelves + two peaking bands), `limiter` (true output ceiling; the engine hard-clips at ±1 today), `gate`; shelving, peaking and all-pass types plus `gain` on `filter`
-- Space: `(fx :reverb :type :room|:hall|:plate|:spring|:gated|:reverse :decay … :size … :damp … :predelay …)` via impulse-response generators (today `reverb` has only `wet`); `(fx :delay :sync 3/16 :mode :ping-pong …)`, multi-tap, filters in the feedback path
+- Mixing: `eq` (shelves + two peaking bands), opt-in `limiter` (true output ceiling; the engine's ±1 hard clip is widened to a ±8 safety bound), `gate`; shelving, peaking and all-pass types plus `gain` on `filter`
+- Space: `(fx :reverb :type :room|:hall|:plate|:spring|:gated|:reverse :decay … :size … :damp … :predelay …)` via impulse-response generators (today `reverb` has only `wet`); `(fx :delay :sync 3/16 :mode :ping-pong …)`, positional value = wet (was time), multi-tap, filters in the feedback path
 - Modulation & stereo: `flanger`, `vibrato`, `auto-pan`, `ring-mod`, `width`
 - All effects work per track and in offline export; acceptance by offline-render measurements plus a human listen
 

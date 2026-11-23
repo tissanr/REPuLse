@@ -1,7 +1,7 @@
 # Phase FX1 — Mixing, Space & Modulation Effects
 
-> **Spec status:** full. Three questions for the project owner are open (next section);
-> each has a default the implementer follows until it is answered.
+> **Spec status:** full. The three owner questions were answered on 2026-11-23 (next
+> section): limiter opt-in, engine clamp widened to ±8, positional delay value = wet.
 >
 > **Automation:** 🤖👂 auto + human check — gains, ceilings, decay times, echo spacing,
 > notch positions and channel balance are measured in offline renders; attack/release
@@ -18,11 +18,25 @@ in the order **0 (shared groundwork) → A (mixing) → B (space) → C (modulat
 each part is testable on its own and may be a separate commit, but it is one phase and
 one PR.
 
-## Questions for the project owner
+## Owner decisions (answered 2026-11-23)
 
-These three change what existing sessions sound like, so they are not decided here.
-Until one is answered the implementer takes the **default**, which keeps today's
-behaviour.
+These three change what existing sessions sound like, so the project owner decided them.
+All three follow the recommendation:
+
+| Question | Answer | What the implementer does |
+|---|---|---|
+| Q1 — default master limiter | **No**, opt-in | `limiter` is inactive until named, like every other effect; USAGE "Mixing" and the insert menu show `(master (fx :limiter -1))` |
+| Q2 — engine clamp at ±1 | **Yes**, widen to ±8 | Build step 7 (`lib.rs` safety bound `.clamp(-8.0, 8.0)`, Rust test, `npm run build:wasm`, export test) is **required** |
+| Q3 — positional `(fx :delay 0.4)` | **Wet** | `delay.js` descriptor `value: "wet"`, `FX-PRIMARY-PARAM` `"delay" "wet"`; the time is set with `:time` or `:sync` |
+
+Q3 follow-ups: existing tests and comments that use the positional value as a time
+(`app/src/repulse/fx_test.cljs`, `outline_test.cljs`, `ui/selection_test.cljs`, the
+comment in `env/builtins/fx.cljs`) keep passing as they only check structure, but update
+the comment to `(fx :delay 0.4 :time 0.25)`. The PR description and the ROADMAP delivered
+entry name the change: track chains that wrote `(fx :delay 0.25 …)` for the time now
+write `(fx :delay :time 0.25 …)`.
+
+The original questions, kept for the reasoning:
 
 **Q1 — Should a limiter sit on the master output by default?**
 Today every effect is inactive until the code names it (`fx/reset-global-effects!` resets
@@ -50,7 +64,7 @@ exceeds ±1 today: with no limiter the overs are then clipped by the audio outpu
 of by the engine (the same hard clip, but after master gain and effects); `(export …)`
 still clamps at ±1 when writing the WAV (`app/src/repulse/wav.cljs` lines 40–41).
 *Default:* keep the clamp; no Rust change in this phase.
-*If yes:* build step A7.
+*If yes:* build step 7 (Build order).
 
 **Q3 — What should the positional value of `(fx :delay 0.4)` set?**
 USAGE.md ("`(fx :delay 0.5) ; delay wet = 0.5`") and the insert menu ("`(fx :delay mix)`")
@@ -659,8 +673,8 @@ reverberation time of the low end.
 
 | Parameter | Range | Default | Meaning |
 |---|---|---|---|
-| `wet` | 0–1 | 0 | echo level |
-| `time` (positional, see Q3) | 0.001–4 s | 0.375 | delay time in seconds |
+| `wet` (positional, Q3) | 0–1 | 0 | echo level |
+| `time` | 0.001–4 s | 0.375 | delay time in seconds |
 | `sync` | > 0 cycles, e.g. `3/16` | unset | delay time in cycles; wins over `time` while set |
 | `feedback` | 0–0.95 | 0.35 | repeat amount |
 | `mode` | `stereo` `mono` `ping-pong` | `stereo` | see below |
@@ -816,11 +830,11 @@ and reduce mono compatibility; USAGE says so and points to D10 for per-track use
   "square"]}`, `"ring-mod" {"shape" ["sine" "tri" "square" "saw"]}`.
 - `FX-PRIMARY-PARAM`: `"limiter" "ceiling"`, `"gate" "threshold"`, `"flanger" "wet"`,
   `"vibrato" "depth"`, `"auto-pan" "depth"`, `"ring-mod" "mix"`, `"width" "width"` (no
-  entry for `eq`; `delay` per Q3).
+  entry for `eq`; `delay` changes from `"time"` to `"wet"`, Q3).
 - `insert-categories.js` "Effects": `(fx :eq :low ¦3 :high 2)`, `(fx :limiter ¦-1)`,
   `(fx :gate ¦-40)`, `(fx :flanger ¦0.6)`, `(fx :vibrato ¦20)`, `(fx :auto-pan ¦1)`,
   `(fx :ring-mod ¦0.5 :freq 220)`, `(fx :width ¦1.4)`, each with a one-line detail; fix
-  the `delay` entry per Q3.
+  the `delay` entry stays `(fx :delay ¦mix)`, now correct (Q3).
 - `completions.js` (type `"keyword"`), `hover.js` (signature, description with ranges and
   defaults, example) and `builtin_meta.edn` (`:category "effect"`, `:returns "nil"`,
   `:side-effects ["audio"]`, ≥ 1 example, `:see-also`) for `eq`, `limiter`, `gate`,
@@ -841,7 +855,7 @@ and reduce mono compatibility; USAGE says so and points to D10 for per-track use
   `filter` tables; a short **Mixing** example with `eq` on two tracks and `eq` + `limiter`
   in `(master …)`; the limiter's latency and the per-track `width` note; "Effect chain
   order" with the order of 0.3. Correct the stale defaults found on the way (the reverb
-  table says wet `0.3`, the code starts at 0; `delay` per Q3).
+  table says wet `0.3`, the code starts at 0; the `delay` positional value is now `wet`, Q3, with a note for sessions that used it as the time).
 - `docs/PLUGINS.md`: `params` descriptor and `setTempo(cycleDur, origin)` in the effect
   protocol table and a short section each; "start oscillators with `start(0)`".
 - `README.md` line 54 (effects bullet): add one mixing example.
@@ -869,7 +883,7 @@ and reduce mono compatibility; USAGE says so and points to D10 for per-track use
 | `app/src/repulse/content/builtin_meta.edn` + `docs/ai/builtins.json` | Entries; `npm run gen:ai-docs` |
 | `e2e/helpers/fx-bench.ts`, `e2e/helpers/app.ts` (new), `e2e/helpers/audio-analysis.ts` | Bench, shared app helpers, analysis functions |
 | `e2e/fx-effects.spec.ts` (new), `e2e/export-parity.spec.ts` | Reference tests; import the moved helpers |
-| `packages/audio/src/lib.rs` | Only if Q2 = yes: safety bound + test; `npm run build:wasm` |
+| `packages/audio/src/lib.rs` | Q2: safety bound ±8 + test; `npm run build:wasm` |
 | `docs/USAGE.md`, `docs/PLUGINS.md`, `README.md`, `docs/FUTURE-FEATURES.md`, `docs/SYNTHESIS-COVERAGE.md`, `ROADMAP.md` | Docs, delivered entry |
 
 ## Build order
@@ -899,7 +913,7 @@ on the unmodified branch).
 4. `gate-processor.js`, `gate.js` + tests A10–A12.
 5. App tables, URL list, completions/hover/meta for the three new effects; `gen:ai-docs`.
 6. App-level tests X1–X4 for `eq`, `limiter`, `gate` (export, per track, bypass, inactive).
-7. Only if Q2 = yes: `lib.rs` safety bound, a Rust test (four voices at amp 1 in phase:
+7. Q2: `lib.rs` safety bound `.clamp(-8.0, 8.0)`, a Rust test (four voices at amp 1 in phase:
    the block peak is above 1.0 and at most 8.0; a single voice at amp 0.5 renders
    bit-identically to before), `npm run build:wasm`, and an export test (a synth mix that
    peaks above 0 dBFS with `(master (fx :limiter -1))` has no sample above −1 dBFS and no
@@ -1015,7 +1029,7 @@ values come from the filter formulas and the prototypes; tolerances are the pass
 - [ ] X2: `(export …)` with each effect active renders offline (no fall-back to real-time capture).
 - [ ] X3: each effect works per track: `(track :a (->> (seq :a4) (fx :flanger 0.8)))` leaves other tracks dry.
 - [ ] The three worklet processors allocate nothing in `process` (code review item) and their files tolerate being loaded twice.
-- [ ] Q1–Q3 are implemented as answered, or with their defaults, and the PR states which.
+- [ ] Q1–Q3 are implemented as answered (limiter opt-in, clamp ±8, delay positional = wet) and the PR states the delay change.
 - [ ] Inspector: every new effect shows its sliders and selects; `completions.js`, `hover.js`, `builtin_meta.edn` entries for the 8 names; `gen:grammar` and `gen:ai-docs` leave no drift.
 - [ ] USAGE.md, PLUGINS.md, README.md, FUTURE-FEATURES.md and SYNTHESIS-COVERAGE.md updated as listed under Docs; ROADMAP delivered entry.
 - [ ] Human listen check recorded in the PR (below); spring kept or removed per D7; final reverb trims noted.
@@ -1028,9 +1042,8 @@ Done by a human on the PR branch, headphones on, results written into the PR:
 
 1. **Limiter:** a dense mix (kick, bass, pad, hats, all at `amp 1`) with and without
    `(master (fx :limiter -1))`. With it, no crackle on the kick and no audible pumping at
-   `release 0.1`. If the engine clamp is kept (Q2 default), give every synth track a
-   track effect for this check (append `(fx :filter 20000)`), because the engine clips
-   synth voices on plain tracks before the limiter sees them.
+   `release 0.1`. Plain synth tracks must also be clean with the limiter (the engine
+   clamp is ±8 since Q2).
 2. **Reverb types** on `(track :snare (->> (seq :_ :sd :_ :sd) (fx :reverb :type … :wet 0.5)))`,
    one after the other: all seven are equally loud at the same `wet` (adjust the trims if
    not); room is short and close, hall long and distant, plate bright and dense, gated
@@ -1075,8 +1088,6 @@ snippet with Alt+Enter (macOS Option+Enter); stop playback between tests.
   (master (fx :limiter -1))
   ```
   Expected: loud but no crackle on the kicks. Remove the `master` line: the kicks crackle.
-  (If the engine clamp was kept, Q2: append `(fx :filter 20000)` to the `:bass` and `:pad`
-  chains first; plain synth tracks are clipped by the engine before the limiter.)
 - [ ] **4. Gate.** `(track :snare (->> (seq :_ :sd :_ :sd) (fx :reverb 0.6) (fx :gate :threshold -30 :release 0.05)))`
   Expected: two snares per cycle, the reverb tail is cut off shortly after each hit.
 - [ ] **5. Filter types.** `(track :hats (->> (fast 8 (seq :hh)) (fx :filter :type :peaking :freq 3000 :gain 12 :q 2)))`
@@ -1126,6 +1137,8 @@ snippet with Alt+Enter (macOS Option+Enter); stop playback between tests.
   Expected: the same reverb as on `dev` (about 2.5 s tail).
 - [ ] **20. Delay in seconds.** `(track :hat (seq :hh :_ :_ :_))` + `(master (fx :delay :wet 0.5 :time 0.25 :feedback 0.4))`
   Expected: echoes 250 ms apart on both sides, as before.
+- [ ] **20b. Positional delay is the wet level (Q3).** `(track :hat (seq :hh :_ :_ :_))` + `(master (fx :delay 0.5))`
+  Expected: audible echoes at the default 375 ms spacing (before this phase the form was silent); the inspector's delay slider shows `wet 0.5`.
 - [ ] **21. Filter.** `(track :hats (->> (fast 8 (seq :hh)) (fx :filter 800)))`
   Expected: 8 dull hats per cycle, as before.
 - [ ] **22. Filter bypass.**
