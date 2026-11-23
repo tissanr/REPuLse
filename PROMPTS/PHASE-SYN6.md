@@ -153,8 +153,9 @@ These answer the outline's open design questions. Each is based on the code as i
    mechanism only ever looks at `synth_<name>`. If a manifest registers a bank named
    `synth_bd`, the synthesized voice wins for keyword addressing and the sample stays
    reachable with `(sound :synth_bd 0)` (a `(sound …)` map always uses samples, see
-   `play-event` line 576). KIT1's `(kit …)` selects multisampled kits and is
-   independent: `(bank :synth)` wins for the 18 drum names while it is active.
+   `play-event` line 576). KIT1's multisampled kits are banks too
+   (`(bank :JazzKit)`): only one prefix is active, so `(bank :synth)` and a kit prefix
+   replace each other.
 8. **`tone` is one shared 0–1 brightness parameter** (event key `:tone`). Each voice
    documents what it maps to. Deferred SYN4 uses the same key for the guitar tone
    control. Reason: it is the same idea (a tone knob), and one name per voice family
