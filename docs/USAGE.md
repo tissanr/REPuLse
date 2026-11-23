@@ -338,7 +338,7 @@ open while something in the outline is selected), the **editor** (your program) 
 | **Ctrl+.** or **F9** | Run `(upd)` — apply changes without restarting running patterns; in a single-buffer project also stops tracks the buffer no longer declares |
 | **Escape** | Close the inspector (clear the outline selection); with nothing selected, jump to the command bar |
 | **F12** | With an outline selection: move the cursor to it; otherwise go to the definition under the cursor |
-| **Cmd+K S** / **Ctrl+K S** | Wrap the number under the cursor in (slider …), or unwrap the slider under the cursor |
+| **Cmd+K S** / **Ctrl+K S** | Wrap the number under the cursor in (slider …), or unwrap the slider under the cursor. Press K, release, then S; holding Cmd/Ctrl for both keys (**Cmd+K Cmd+S**) works too |
 | **Cmd+/** / **Ctrl+/** (German layout: **Cmd+Shift+7** / **Ctrl+Shift+7**) | Comment / uncomment the selected lines with `;` |
 | **Ctrl+A** / **Cmd+A** | Select all |
 | **Ctrl+Z** / **Cmd+Z** | Undo |

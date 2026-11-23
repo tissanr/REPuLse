@@ -184,7 +184,10 @@
 
 (def extension
   #js [field
-       (.high Prec (.of keymap #js [#js {:key "Mod-k s"
-                                         :run (fn [^js view]
-                                                (toggle-at! view (.. view -state -selection -main -head))
-                                                true)}]))])
+       ;; "Mod-k s" is ⌘K, then S. Holding ⌘ for both keys (⌘K ⌘S, as in VS Code)
+       ;; is "Mod-k Mod-s": without it the browser's "save page" ran.
+       (let [run (fn [^js view]
+                   (toggle-at! view (.. view -state -selection -main -head))
+                   true)]
+         (.high Prec (.of keymap #js [#js {:key "Mod-k s"     :run run}
+                                      #js {:key "Mod-k Mod-s" :run run}])))])
