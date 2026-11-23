@@ -170,8 +170,8 @@ object entries with a warning (forward compatibility).
 machines unchanged): `bd sd rim hh ph oh lt mt ht cr rd rb`
 (`rim` = cross-stick, `ph` = pedal hat, `rb` = ride bell). Layers × takes:
 `bd sd hh`: 4 × 3; `oh ph rim lt mt ht`: 3 × 2; `cr rd rb`: 3 × 2. A kit that lacks an
-articulation omits it; under `(bank :JazzKit)` that name then falls back to the
-unprefixed bank, as for drum machines today (no error).
+articulation omits it; under `(bank :JazzKit)` that name then falls through
+`voices/drum-route` to the SYN6 synth kit voice, as for drum machines today (no error).
 `hh ph oh` carry `"choke": "hat"`.
 
 ## Background (where things are)
@@ -181,9 +181,17 @@ unprefixed bank, as for drum machines today (no error).
   `play!` (amp, pan, `extra` params, TL6 cut groups via `join-cut-group!` keyed by any
   value), `set-bank-prefix!`/`resolve-keyword`, `format-banks` (groups by leading
   TitleCase word — needs a "kits" section).
-- `app/src/repulse/audio.cljs` `play-event` — three sample paths: bare keyword
-  (`samples/play! … 0 1.0 0.0 {}`), `:note` map (`amp-v` already includes
-  `inserts/amp-factor`, i.e. `gain × velocity`), `{:bank :n}` map from `sound`.
+- `app/src/repulse/voices.cljs` `drum-route` (SYN6) — decides synth kit voice vs sample
+  for a bare keyword. Rule 2 (a drum-machine prefix whose `<prefix>_<name>` bank is
+  registered → that sample) already covers `(bank :JazzKit)`; KIT1 adds no routing
+  rule. The synth kit stays the default without a prefix (SYN6 decision 3).
+- `app/src/repulse/audio.cljs` `play-event` — sample paths: bare keyword and `:note` map
+  both go through `drum-route` (`{:kind :sample :bank …}`; the `:note` map's `amp-v`
+  already includes `inserts/amp-factor`, i.e. `gain × velocity`), and the `{:bank :n}`
+  map from `sound`.
+- `samples.cljs` decoded-buffer cache is LRU-capped at 200 MB (QA3). A fully preloaded
+  kit decodes to roughly 40 MB (≈ 110 files × ~1 s × stereo float), so the preload
+  stays well under the cap; don't raise it.
   `schedule-event!` calls it with `{:dur :cycle-dur}`; the event's `:whole` start is
   known there but not passed.
 - `app/src/repulse/offline_render.cljs` and `app/src/repulse/test_api.cljs` — the other
@@ -242,8 +250,8 @@ No DOM, no Web Audio, unit-tested in `kits_test.cljs` (add it to the `:test` bui
   level, sets `:cut` to `[:kit prefix choke]` when the entry has `:choke` and `extra` has
   no `:cut`, then delegates to `play!` with the chosen URL (refactor `play!` so its body
   takes a URL; `play!` keeps its signature).
-- `play-event`: on the bare-keyword path and the `:note`-map sample path, when the
-  resolved bank is `layered?`, call `play-layered!` with `amp × gain` (compute the
+- `play-event`: on the bare-keyword path and the `:note`-map sample path, when
+  `drum-route` returns `{:kind :sample :bank b}` and `b` is `layered?`, call `play-layered!` with `amp × gain` (compute the
   factor without velocity: add `inserts/gain-factor` next to `amp-factor`) and the
   clamped velocity. `{:bank :n}` maps (`sound`) keep `play!` and `amp-factor`
   (decision 6). `sample-length` (used for per-event inserts) takes the chosen URL.
@@ -334,8 +342,9 @@ Identify which file sounded per onset with a Goertzel scan over the rendered buf
 - Choke: `FixKit_oh` (2 s sine) then `FixKit_hh` ¼ cycle later — energy at the oh
   frequency drops ≥ 30 dB within 10 ms after the hh onset; with `(cut 3)` on the hh it
   does not.
-- Regression: `(bank :RolandTR909) (seq :bd :sd)` and `(sound :bd 3)` render the same
-  onsets and non-silent output as before.
+- Regression: `(bank :RolandTR909) (seq :bd :sd)`, `(bank :dirt) (seq :bd :sd)`,
+  bare `(seq :bd :sd)` (synth kit) and `(sound :bd 3)` render the same onsets and
+  non-silent output as before.
 - Real kits (served from `app/public`): `(bank :JazzKit)` and `(bank :StudioKit)`
   each render `(seq :bd :sd :hh :oh :lt :cr)` non-silent at every onset, and two
   renders are sample-identical.
