@@ -1,6 +1,5 @@
 (ns repulse.audio
-  (:require [clojure.string :as str]
-            [repulse.core :as core]
+  (:require [repulse.core :as core]
             [repulse.theory :as theory]
             [repulse.samples :as samples]
             [repulse.inserts :as inserts]
