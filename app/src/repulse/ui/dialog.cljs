@@ -3,17 +3,25 @@
    Native dialogs block the main thread, and with it the lookahead audio
    scheduler: playback went silent while one was open. These render a small
    overlay instead and return a js/Promise, so audio keeps running.
-   Enter confirms, Escape cancels. Only one dialog is shown at a time; opening
-   another one cancels the previous one.
-   Exports: confirm!, prompt!, alert!.")
+   Enter confirms (or activates the focused button), Escape cancels, Tab stays
+   inside the dialog (QA3). Only one dialog is shown at a time; opening
+   another one cancels the previous one. Focus returns to the element that had
+   it when the dialog opened.
+   Exports: confirm!, prompt!, alert!."
+  (:require [repulse.ui.a11y :as a11y]
+            [repulse.ui.modal-stack :as modal-stack]))
 
-;; {:overlay el :resolve f :cancel-value v} of the open dialog, else nil.
+;; {:overlay el :resolve f :cancel-value v :opener el} of the open dialog, else nil.
 (defonce ^:private current (atom nil))
+(defonce ^:private id-counter (atom 0))
 
 (defn- close! [value]
-  (when-let [{:keys [overlay resolve]} @current]
+  (when-let [{:keys [overlay resolve ^js opener]} @current]
     (reset! current nil)
     (.remove overlay)
+    (modal-stack/remove! :dialog)
+    (when (and opener (.-isConnected opener) (fn? (.-focus opener)))
+      (.focus opener))
     (resolve value)))
 
 (defn- el [tag cls]
@@ -36,6 +44,8 @@
   (js/Promise.
    (fn [resolve _]
      (let [cancel-value (when (= kind :confirm) false)
+           opener  (.-activeElement js/document)
+           msg-id  (str "rp-dialog-msg-" (swap! id-counter inc))
            overlay (el "div" "rp-dialog-overlay")
            box     (el "div" "rp-dialog")
            msg     (el "p" "rp-dialog-message")
@@ -56,6 +66,8 @@
            cancel! #(close! cancel-value)]
        (.setAttribute box "role" (if (= kind :alert) "alertdialog" "dialog"))
        (.setAttribute box "aria-modal" "true")
+       (set! (.-id msg) msg-id)
+       (.setAttribute box "aria-labelledby" msg-id)
        (set! (.-textContent msg) message)
        (.appendChild box msg)
        (when input (.appendChild box input))
@@ -71,12 +83,24 @@
        (.addEventListener overlay "keydown"
                           (fn [^js e]
                             (case (.-key e)
-                              "Enter"  (do (.preventDefault e) (ok!))
+                              ;; Enter on a focused button activates that
+                              ;; button (Cancel cancels); elsewhere it confirms.
+                              "Enter"  (let [t (.-target e)]
+                                         (.preventDefault e)
+                                         ;; Alt/Ctrl/Cmd+Enter (evaluate) does
+                                         ;; nothing while a dialog is open
+                                         (when-not (or (.-altKey e) (.-ctrlKey e) (.-metaKey e))
+                                           (if (= "BUTTON" (.-tagName t))
+                                             (.click t)
+                                             (ok!))))
                               "Escape" (do (.preventDefault e) (cancel!))
+                              "Tab"    (a11y/trap-tab! e box)
                               nil)
                             ;; keep keys away from the editor's global handlers
                             (.stopPropagation e)))
-       (reset! current {:overlay overlay :resolve resolve :cancel-value cancel-value})
+       (reset! current {:overlay overlay :resolve resolve :cancel-value cancel-value
+                        :opener opener})
+       (modal-stack/push! :dialog)
        (.appendChild (.-body js/document) overlay)
        (if input
          (do (.focus input) (.select input))
