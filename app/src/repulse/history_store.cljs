@@ -2,8 +2,7 @@
   "In-memory mirror + write-behind coordinator for the SK2 history store.
    All logic is in repulse.history (pure); this ns holds the atoms and writes
    the resulting ops to a HistoryStorage adapter."
-  (:require [repulse.history :as history]
-            [clojure.string :as str]))
+  (:require [repulse.history :as history]))
 
 (defonce store (atom history/empty-store))
 (defonce status (atom :uninitialized))   ; :uninitialized | :loading | :ready

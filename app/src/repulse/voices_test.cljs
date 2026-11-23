@@ -156,10 +156,10 @@
     (is (= voices/drum-voices (rust-list src "DRUM_VOICES")))))
 
 (deftest every-voice-is-registered
-  (let [labels (set (map second (re-seq #"label: \"([^\"]+)\""
-                                         (slurp' "app/src/repulse/lisp-lang/completions.js"))))
+  (let [labels (set (map second (re-seq #"\"label\":\"([^\"]+)\""
+                                         (slurp' "app/src/repulse/lisp-lang/builtins.generated.js"))))
         metas  (set (map second (re-seq #"(?m)^[\s{]*:([a-z0-9-]+)\s+\{"
                                         (slurp' "app/src/repulse/content/builtin_meta.edn"))))
         names  (map name voices/synth-voices)]
-    (is (= [] (remove labels names)) "voices missing in completions.js")
+    (is (= [] (remove labels names)) "voices missing in builtins.generated.js")
     (is (= [] (remove metas names)) "voices missing in builtin_meta.edn")))

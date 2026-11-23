@@ -58,7 +58,7 @@
     (number? value)  {:kind :pitch :note (hz-note value)}
 
     (map? value)
-    (let [{:keys [note freq bank synth]} value]
+    (let [{:keys [note freq bank]} value]
       (cond
         (keyword? note) (keyword-note note drum-map)
         (number? note)  {:kind :pitch :note (hz-note note)}
@@ -84,7 +84,7 @@
 
 (defn- event->note
   "→ {:note map-or-nil :unmapped kw-or-nil} for one onset event."
-  [{:keys [whole value]} pat tween-st idx cycle-dur drum-map]
+  [{:keys [whole value]} _pat tween-st idx cycle-dur drum-map]
   (let [t   (* (core/rat->float (:start whole)) cycle-dur)
         v   (audio/resolve-tweens value tween-st t cycle-dur)
         res (event-note v drum-map)]

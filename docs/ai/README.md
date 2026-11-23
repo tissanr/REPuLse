@@ -53,8 +53,8 @@ Each key is a built-in name. Each value is:
   "side-effects": ["audio", "dom", "network", "storage", "midi"],
   "examples":    ["(name arg1 arg2)", "…"],
   "see-also":    ["other-name", "…"],
-  "detail":      "one-line description from completions.js",
-  "description": "longer description from hover.js (may be empty)"
+  "detail":      "one-line completion description (:detail in builtin_meta.edn)",
+  "description": "hover description (:doc in builtin_meta.edn)"
 }
 ```
 
@@ -95,7 +95,7 @@ All code in `cookbook.json` is playable in a fresh REPuLse session without any e
 
 ## Stability guarantee
 
-- `builtins.json` tracks the editor's completion list. It changes when a new built-in is added. Run `npm run check:ai-docs` to verify it is up to date; CI fails if it drifts.
+- `builtins.json` is generated from `builtin_meta.edn`, the same source as the editor's completion list. It changes when a new built-in is added. Run `npm run check:ai-docs` to verify it is up to date; CI fails if it drifts.
 - `concepts.json` and `session-schema.json` are updated manually when the language model changes.
 - `cookbook.json` is stable; recipes are additive.
 
@@ -104,11 +104,11 @@ All code in `cookbook.json` is playable in a fresh REPuLse session without any e
 When you add a new built-in name (see CLAUDE.md Rule 3):
 
 ```bash
-npm run gen:grammar          # regenerate Lezer parser
-# edit completions.js        # add { label, type, detail } entry
-# edit builtin_meta.edn      # add metadata entry
-npm run gen:ai-docs          # regenerate builtins.json
-# commit all four files together
+# edit builtin_meta.edn      # the only hand-written name list: add the entry with all required keys
+npm run gen:ai-docs          # regenerate completions, hover docs, grammar region, parser, builtins.json
+# commit the .edn together with the generated files
 ```
 
-CI runs `npm run check:ai-docs` on every PR and fails if `builtins.json` is stale.
+`gen:ai-docs` exits 1 with one line per problem when an entry lacks a required key, has no
+example, or names an unknown `:see-also` entry. CI runs `npm run check:ai-docs` on every PR and
+fails if any generated file is stale.

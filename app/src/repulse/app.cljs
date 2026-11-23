@@ -31,6 +31,7 @@
             [repulse.ui.auth-button :as auth-button]
             [repulse.auth :as auth]
             [repulse.env.builtins :as builtins]
+            [repulse.lisp.eval :as leval]
             [repulse.eval-orchestrator :as eo]
             [repulse.offline-render :as offline-render]
             [repulse.song-transport :as song-transport]
@@ -339,6 +340,10 @@
                  ;; a track's GainNode (to watch the retire ramp).
                  :tracks     (fn [] (clj->js (sort (map name (keys (:tracks @audio/scheduler-state))))))
                  :cycle      (fn [] (:cycle @audio/scheduler-state))
+                 ;; Phase QA4 (e2e/builtins-meta.spec.ts): every name bound in the
+                 ;; full env plus the special forms, sorted.
+                 :builtinNames (fn [] (clj->js (sort (into (set (filter string? @builtins/builtin-names))
+                                                           leval/special-forms))))
                  ;; Phase QA3 (e2e/qa3-robustness.spec.ts): start time of the
                  ;; next cycle to schedule, the cycle sounding now, timeline
                  ;; query counter / last drawn cycle, pending JS node chains.

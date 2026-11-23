@@ -1,5 +1,5 @@
 (ns repulse.core
-  (:refer-clojure :exclude [rand time chunk iter shuffle]))
+  (:refer-clojure :exclude [rand time chunk iter shuffle mask]))
 
 ;;; Rational arithmetic — rationals as [numerator denominator]
 
@@ -34,6 +34,17 @@
 (defn rat-min [a b] (if (rat< a b) a b))
 (defn rat-max [a b] (if (rat> a b) a b))
 (defn rat->float [[n d]] (/ n d))
+
+(defn as-number
+  "The numeric value of x: a number as-is, a rational pair [n d] with numeric n,
+   d and d ≠ 0 → (/ n d); otherwise nil. Lenient callers use (or (as-number x) x)."
+  [x]
+  (cond
+    (number? x) x
+    (and (vector? x) (= 2 (count x)) (number? (first x)) (number? (second x))
+         (not (zero? (second x))))
+    (/ (first x) (second x))
+    :else nil))
 (defn int->rat [n] [n 1])
 (defn rat-neg [[n d]] [(- n) d])
 
@@ -295,12 +306,6 @@
              :when (and w p)]
          (with-source (event (f (:value ea) (:value eb)) w p)
                       (or (:source ea) (:source eb))))))))
-
-(defn combine
-  "Applicative lift with structure from pat-b — identical to app-right.
-   Kept for callers that predate TL1."
-  [f pat-a pat-b]
-  (app-right f pat-a pat-b))
 
 ;;; ── Joins ────────────────────────────────────────────────────────────
 
@@ -684,11 +689,9 @@
   [n pat]
   ((patternify segment*) n pat))
 
-(defn- num-val [x] (if (vector? x) (rat->float x) x))
-
 (defn- scale-val [v lo hi]
   (if (number? v)
-    (let [lo (num-val lo) hi (num-val hi)]
+    (let [lo (or (as-number lo) lo) hi (or (as-number hi) hi)]
       (+ lo (* (- hi lo) v)))
     v))
 
@@ -707,13 +710,13 @@
   "Exponential range: exp(range(log lo, log hi, v)). lo and hi must be > 0,
    otherwise throw ex-info {:type :eval-error} \"rangex needs positive bounds\"."
   [lo hi pat]
-  (let [check (fn [x] (when (and (number? (num-val x)) (not (pos? (num-val x))))
+  (let [check (fn [x] (when (and (number? (or (as-number x) x)) (not (pos? (or (as-number x) x))))
                         (throw (ex-info "rangex needs positive bounds"
                                         {:type :eval-error}))))]
     (when-not (pattern? lo) (check lo))
     (when-not (pattern? hi) (check hi))
-    (let [lg (fn [x] (if (pattern? x) (fmap #(do (check %) (Math/log (num-val %))) x)
-                         (Math/log (num-val x))))]
+    (let [lg (fn [x] (if (pattern? x) (fmap #(do (check %) (Math/log (or (as-number %) %))) x)
+                         (Math/log (or (as-number x) x))))]
       (fmap #(if (number? %) (Math/exp %) %)
             (range-pat (lg lo) (lg hi) pat)))))
 
@@ -738,8 +741,13 @@
   "Exact position of rational t inside its cycle, in [0, 1)."
   [[n d]] (rat (mod n d) d))
 
-(defn- shift-event [ev off]
-  (map-spans #(span (rat+ (:start %) off) (rat+ (:end %) off)) ev))
+(defn shift-event
+  "Shift an event's :whole and :part by the rational offset off. Nil-safe: an
+   event without a :whole (analog) keeps nil."
+  [ev off]
+  (cond-> ev
+    (:whole ev) (update :whole #(span (rat+ (:start %) off) (rat+ (:end %) off)))
+    (:part ev)  (update :part #(span (rat+ (:start %) off) (rat+ (:end %) off)))))
 
 (defn- fmap-event [f pat]
   (pattern (fn [sp] (map #(assoc % :value (f %)) (query pat sp)))))
@@ -1343,7 +1351,7 @@
 ;;; ── Phase TL4: Randomness & conditionals ────────────────────────────
 
 (defn- degrade-by-with* [rpat x pat]
-  (let [x (num-val x)]
+  (let [x (or (as-number x) x)]
     (app-left (fn [v _] v) pat
               (keep-values #(and (number? %) (>= % x)) (->pat rpat)))))
 
@@ -1365,7 +1373,7 @@
   (degrade-by 0.5 pat))
 
 (defn- undegrade-by* [x pat]
-  (let [x (num-val x)]
+  (let [x (or (as-number x) x)]
     (app-left (fn [v _] v) pat (keep-values #(< % x) rand))))
 
 (defn undegrade-by
@@ -1392,7 +1400,7 @@
 (defn never          [_f pat] pat)
 
 (defn- some-cycles-by* [x f pat]
-  (let [x (num-val x) fp (f pat)]
+  (let [x (or (as-number x) x) fp (f pat)]
     (pattern (per-cycle (fn [sp]
                           (query (if (< (rand-at (int->rat (cycle-of sp))) x) fp pat) sp))))))
 
@@ -1409,7 +1417,7 @@
   (mapv (fn [x s] (if (pattern? x) x (pure x s))) xs (concat sources (repeat nil))))
 
 (defn- choose-index [v n]
-  (int (min (dec n) (max 0 (Math/floor (* (num-val v) n))))))
+  (int (min (dec n) (max 0 (Math/floor (* (or (as-number v) v) n))))))
 
 (defn- choose-pats [sig xs]
   (let [xs (mapv ->pat xs) n (count xs)]
@@ -1440,12 +1448,12 @@
 (defn randcat [pats] (choose-cycles pats))
 
 (defn- wchoose-pats [sig pairs]
-  (let [ws    (mapv #(max 0 (num-val (first %))) pairs)
+  (let [ws    (mapv #(max 0 (or (as-number (first %)) (first %))) pairs)
         xs    (mapv #(->pat (second %)) pairs)
         total (reduce + ws)
         cum   (vec (reductions + ws))]
     (when (pos? total)
-      (fmap (fn [v] (let [find (* total (num-val v))]
+      (fmap (fn [v] (let [find (* total (or (as-number v) v))]
                       (nth xs (or (first (keep-indexed (fn [i c] (when (> c find) i)) cum))
                                   (dec (count xs))))))
             (->pat sig)))))
@@ -1474,7 +1482,7 @@
 
 ;; Signals
 
-(defn- brand-by* [p] (let [p (num-val p)] (fmap #(< % p) rand)))
+(defn- brand-by* [p] (let [p (or (as-number p) p)] (fmap #(< % p) rand)))
 (defn brand-by [p] (if (pattern? p) (inner-join (fmap brand-by* p)) (brand-by* p)))
 (def brand (brand-by* 0.5))
 
@@ -1595,17 +1603,11 @@
   "Strudel restartJoin: each outer event restarts its inner pattern from cycle 0."
   [pp] (reset-join* pp true))
 
-(defn- pick-num [x]
-  (cond (number? x) x
-        (and (vector? x) (= 2 (count x)) (every? number? x) (not (zero? (second x))))
-        (rat->float x)
-        :else nil))
-
 (defn- pick-entry
   "K3/K4: the lookup entry selected by index value v, or nil."
   [lookup v mod?]
   (if (vector? lookup)
-    (when-let [x (pick-num v)]
+    (when-let [x (as-number v)]
       (let [n (count lookup) i (Math/round x)]
         (nth lookup (if mod? (mod i n) (min (dec n) (max 0 i))))))
     (or (get lookup v)
