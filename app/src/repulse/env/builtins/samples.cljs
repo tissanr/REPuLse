@@ -22,5 +22,5 @@
      (let [p (leval/unwrap prefix)]
        (samples/set-bank-prefix! p)
        ;; KIT1: a kit prefix starts fetching all of its recordings in the background.
-       (when p (samples/preload-kit! (audio/get-ctx) p)))
-     (str "bank: " (if prefix (name (leval/unwrap prefix)) "cleared")))})
+       (when p (samples/preload-kit! (audio/get-ctx) p))
+       (str "bank: " (if p (name p) "cleared"))))})

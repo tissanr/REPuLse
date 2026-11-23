@@ -180,3 +180,13 @@ test.describe('KIT1 shipped kits', () => {
     });
   }
 });
+
+test('(bank nil) clears the prefix without an error', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => !!(window as any).__REPULSE_APP__);
+  const ev = (c: string) => page.evaluate((x) => (window as any).__REPULSE_APP__.evaluate(x), c);
+  await ev('(bank :JazzKit)');
+  await expect(page.locator('#output')).toHaveText(/bank: JazzKit/);
+  await ev('(bank nil)');
+  await expect(page.locator('#output')).toHaveText(/bank: cleared/);
+});
