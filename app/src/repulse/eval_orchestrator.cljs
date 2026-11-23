@@ -305,7 +305,23 @@
     (reset! declared-flags (into {} declared))
     (empty? declared)))
 
-(defn- evaluate* [code {:keys [project reconcile?]}]
+(declare evaluate-staged*)
+
+(defn- evaluate*
+  "QA3 A4: global (fx …) calls are staged while the code runs and applied only
+   when the evaluation succeeds (fx/commit-staging!); a failed or throwing
+   evaluation discards them. A nested evaluation joins the outer staging."
+  [code opts]
+  (if (some? @fx/staging)
+    (evaluate-staged* code (assoc opts ::nested? true))
+    (do (fx/begin-staging!)
+        (try
+          (evaluate-staged* code opts)
+          (finally
+            ;; no-op after commit-staging!; discards on error or throw
+            (fx/discard-staging!))))))
+
+(defn- evaluate-staged* [code {:keys [project reconcile?] :as opts}]
   (let [{:keys [on-beat make-stop-fn set-playing!]} @cbs
         ;; Remember the last output message so an unknown-sound warning can be
         ;; appended to it rather than replacing it.
@@ -315,9 +331,9 @@
                       ((:set-output! @cbs) msg status))]
     (swap! eval-generation inc)
     (builtins/ensure-env!)
-    ;; Reset global FX so removed or partial (fx ...) calls cannot inherit
-    ;; parameter values from an earlier evaluation.
-    (fx/reset-global-effects!)
+    ;; Global FX are no longer reset here (QA3 A4): they are reset by
+    ;; fx/commit-staging! once the evaluation succeeded, so removed or partial
+    ;; (fx ...) calls still cannot inherit values from an earlier evaluation.
     ;; Clear per-evaluation duplicate-track detector
     (reset! builtins/seen-tracks #{})
     ;; Clear the per-evaluation eval warnings (Phase WS3: slider clamps)
@@ -378,6 +394,10 @@
               (report-eval-error! {:message msg :source src} project set-output!)
               {:ok? false :error msg})
           (do
+          ;; QA3 A4: the evaluation succeeded — apply its staged global
+          ;; (fx …) calls (a whole program resets the master chain first).
+          (when-not (::nested? opts)
+            (fx/commit-staging! (boolean (or reconcile? @b-tracks/whole-buffer-upd))))
           (when project (reset! last-bases bases))
           ;; Clear stale diagnostics only when there is a real result.
           ;; A nil val means the command handled output itself (e.g. (upd), (stop))

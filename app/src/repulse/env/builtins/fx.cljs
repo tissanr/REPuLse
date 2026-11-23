@@ -83,20 +83,22 @@
            (when-not (:in? @master-run) (swap! master-run update :loose inc))
            (let [first-arg (first args')]
              (cond
+               ;; QA3 A4: fx/global-op! records these while an evaluation
+               ;; runs; they apply only when it succeeds.
                (= first-arg :off)
-               (fx/bypass! (effect-name (second args')) true)
+               (fx/global-op! [:bypass (effect-name (second args')) true])
 
                (= first-arg :on)
-               (fx/bypass! (effect-name (second args')) false)
+               (fx/global-op! [:bypass (effect-name (second args')) false])
 
                (= first-arg :remove)
-               (fx/remove-effect! (effect-name (second args')))
+               (fx/global-op! [:remove (effect-name (second args'))])
 
                :else
                (let [effect-name (effect-name first-arg)
                      rest-args   (rest args')]
                  (if (keyword? (first rest-args))
                    (doseq [[k v] (partition 2 rest-args)]
-                     (fx/set-param! effect-name (cljs.core/name k) v))
-                   (fx/set-param! effect-name "value" (first rest-args))))))
+                     (fx/global-op! [:set effect-name (cljs.core/name k) v]))
+                   (fx/global-op! [:set effect-name "value" (first rest-args)])))))
            nil))))})
