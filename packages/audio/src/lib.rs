@@ -3417,7 +3417,7 @@ mod tl7c_tests {
     const A2: f32 = 110.0;
 
     /// trigger_v3 slots 0–40, all at their defaults (TL7a/TL7b/TL7c off).
-    fn base_slots() -> Vec<f32> {
+    pub(crate) fn base_slots() -> Vec<f32> {
         let mut v = vec![
             1.0, 0.001, 1.5, 0.0, // amp attack decay pan
             0.0, 0.707, 0.0, 0.707, 0.0, 1.0, 0.0, 16.0, // inserts
@@ -4631,3 +4631,7 @@ mod syn6_tests {
         }
     }
 }
+
+// ── Phase QA2: golden render and hardening tests (test-only module) ───────
+#[cfg(test)]
+mod qa2_tests;
