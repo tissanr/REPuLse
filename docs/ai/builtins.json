@@ -4310,18 +4310,19 @@
   },
   "sample-banks": {
     "category": "sample",
-    "signature": "(sample-banks)",
+    "signature": "(sample-banks [filter])",
     "returns": "vector",
     "side-effects": [],
     "examples": [
-      "(sample-banks)"
+      "(sample-banks)",
+      "(sample-banks \"tk\")"
     ],
     "see-also": [
       "samples!",
       "sound"
     ],
-    "detail": "(sample-banks) — list all registered bank names",
-    "description": "List all registered sample bank names."
+    "detail": "(sample-banks [filter]) — list registered bank names, optionally only those containing filter",
+    "description": "List all registered sample bank names. With a filter string or keyword, only banks whose name contains it (case-insensitive)."
   },
   "bank": {
     "category": "sample",

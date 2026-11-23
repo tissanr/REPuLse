@@ -817,7 +817,7 @@
   "Promise of how long sample n of bank sounds for the event params in extra
    (playback-plan :length), or nil when the bank has no such sample."
   [ac bank n extra]
-  (when-let [url (samples/get-url bank n)]
+  (when-let [url (samples/pick-url bank n extra)]
     (-> (samples/get-buffer! url ac)
         (.then (fn [buf] (:length (samples/playback-plan extra (.-duration buf)))))
         (.catch (fn [_] nil)))))
@@ -845,7 +845,7 @@
    With pitch modulation (pm, TL7c) :on-source applies pitch! to the source."
   ([value timing] (sample-extra value timing nil nil))
   ([value timing pitch! pm]
-   (cond-> (merge (select-keys value sample-param-keys)
+   (cond-> (merge (select-keys value (conj sample-param-keys :velocity))
                   (select-keys timing [:dur :cycle-dur]))
      pm (assoc :on-source (fn [src _t'] (pitch! src))))))
 
@@ -976,7 +976,7 @@
                (case (:kind route)
                  :sample
                  (let [bank  (:bank route)
-                       extra (sample-extra value timing pitch! pm)]
+                       extra (assoc (sample-extra value timing pitch! pm) :seed t)]
                    (samples/play! ac t bank 0 amp-v pan-v extra
                                   (js-dest (when ins (sample-length ac bank 0 extra)))))
                  ;; SYN6 kit voice — the default drum kit (decision 2026-11-21,
@@ -998,7 +998,7 @@
        (let [{:keys [bank n]} value
              amp-v  (float (* (:amp value 1.0) af))
              pan-v  (float (:pan  value 0.0))
-             extra  (sample-extra value timing pitch! pm)]
+             extra  (assoc (sample-extra value timing pitch! pm) :seed t :fixed-take true)]
          (if (samples/has-bank? bank)
            (samples/play! ac t bank n amp-v pan-v extra
                           (js-dest (when ins (sample-length ac bank n extra))))

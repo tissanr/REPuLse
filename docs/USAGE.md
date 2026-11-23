@@ -2033,6 +2033,31 @@ Most sample banks contain multiple variations (different kit sounds). Use `sound
 (seq (sound :bd 0) (sound :bd 2) (sound :sd 1) :hh)
 ```
 
+### Layered banks — velocity layers and round-robin
+
+A bank in a JSON manifest (loaded with `samples!`) can be *layered*: instead of an
+array of files, give it layers, each the loudest velocity it covers (`vel-max`):
+
+```json
+{ "_base": "https://example.org/kit/",
+  "studio_sd": { "layers": [
+    { "vel-max": 0.4, "files": ["sd_soft_1.wav", "sd_soft_2.wav"] },
+    { "vel-max": 1.0, "files": ["sd_hard_1.wav", "sd_hard_2.wav"] } ] } }
+```
+
+```lisp
+(samples! "https://example.org/kit/manifest.json")
+(bank :studio)
+(->> (seq :sd :sd :sd :sd) (velocity "0.2 0.5 0.8 1"))   ; ghost note → accent
+```
+
+- **Layer:** the first layer whose `vel-max` ≥ the event's `velocity` (default 1); the
+  last layer if none. `velocity` still multiplies the amplitude.
+- **Round-robin:** within a layer the recording is chosen by the Tidal-compatible RNG
+  seeded with the event time in milliseconds — identical on every offline render.
+- Plain array banks work unchanged. Kits are selected with `(bank …)`; there is no
+  separate `kit` built-in (KIT1 spec decision 1).
+
 ### `bank` — drum machine prefix
 
 Set a global prefix so bare keywords resolve to a named drum machine bank:
@@ -2174,7 +2199,7 @@ by folder name. Each folder becomes one bank:
 (samples! "https://raw.githubusercontent.com/algorave-dave/samples/main/samples.json")
 ```
 
-**`sample-banks`** — returns a sorted list of every registered bank name (built-ins
+**`sample-banks`** — (`(sample-banks "tk")` lists only banks whose name contains `tk`) returns a sorted list of every registered bank name (built-ins
 plus anything loaded via `samples!`):
 
 ```lisp

@@ -2636,6 +2636,8 @@ openly licensed sources only (CC0 / CC-BY / CC-BY-SA; no proprietary Roland modu
 - `JazzKit` (Virtuosity Drums, CC0) and `StudioKit` (DRSKit, CC-BY 4.0), selected with
   `(bank :JazzKit)` — no new built-in
 
+**Partly implemented (not delivered):** layered manifest banks, velocity layer selection and time-seeded round-robin are in `samples.cljs`. The rest of the spec (kit manifest, hat choke, curated kits, preload) is still open.
+
 See full spec: [PROMPTS/PHASE-KIT1.md](PROMPTS/PHASE-KIT1.md)
 
 ---

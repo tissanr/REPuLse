@@ -1,5 +1,6 @@
 (ns repulse.samples
-  (:require [repulse.lisp.reader :as reader]
+  (:require [repulse.core :as core]
+            [repulse.lisp.reader :as reader]
             [repulse.specs :as specs]
             [clojure.string :as str]))
 
@@ -60,6 +61,11 @@
       (doseq [u drop] (.delete lru-order u))
       (swap! buffer-cache #(apply dissoc % drop)))))
 
+;; KIT1: velocity layers. bank-name -> [{:vel-max 0.3 :urls [...]} …] sorted by
+;; :vel-max ascending. Layered banks are also in `registry` (all files flattened),
+;; so has-bank?, bank listings and sample-length keep working unchanged.
+(defonce layers (atom {}))
+
 ;; Active drum machine prefix — nil means no prefix active.
 ;; When set, keyword :kw is looked up as "<prefix>_<kw>" first.
 (defonce active-bank-prefix (atom nil))
@@ -86,18 +92,57 @@
    "https://raw.githubusercontent.com/felixroos/dough-samples/main/tidal-drum-machines.json"
    "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/strudel.json"])
 
+(defn parse-layers
+  "Pure. A layered bank value {\"layers\" [{\"vel-max\" 0.3 \"files\" [..]} …]} (already
+   js->clj'd) → [{:vel-max n :urls [full-url …]} …] sorted by :vel-max, or nil when
+   malformed. Layers without :vel-max count as 1.0."
+  [v base]
+  (when (and (map? v) (vector? (get v "layers")))
+    (let [ls (->> (get v "layers")
+                  (keep (fn [l]
+                          (let [files (when (map? l) (get l "files"))
+                                urls  (when (vector? files)
+                                        (filterv string? (mapv #(str base %) files)))
+                                vm    (get l "vel-max" 1.0)]
+                            (when (and (seq urls) (number? vm))
+                              {:vel-max (double vm) :urls urls}))))
+                  (sort-by :vel-max)
+                  vec)]
+      (when (seq ls) ls))))
+
+(defn parse-manifest-layers
+  "Pure. {bank -> layers} for the layered entries of a js->clj'd manifest."
+  [raw]
+  (let [base (get raw "_base" "")]
+    (reduce-kv (fn [acc k v]
+                 (if-let [ls (and (string? k) (parse-layers v base))]
+                   (assoc acc k ls)
+                   acc))
+               {} (if (map? raw) raw {}))))
+
 (defn- parse-manifest
-  "Parse a manifest JS object into {bank-name -> [full-url ...]}."
+  "Parse a manifest JS object into {bank-name -> [full-url ...]}.
+   A bank value may also be a layered object (KIT1); its files are flattened here
+   and the layers are read by parse-manifest-layers."
   [js-data]
-  (let [raw  (js->clj js-data)
-        base (get raw "_base" "")]
+  (let [raw    (js->clj js-data)
+        base   (get raw "_base" "")
+        lay    (parse-manifest-layers raw)
+        flat   (fn [k v]
+                 (cond
+                   (vector? v) v
+                   (contains? lay k) (vec (mapcat :urls (get lay k)))
+                   :else nil))]
     (let [banks (if (map? raw)
                   (reduce-kv
                    (fn [acc k v]
-                     (if (and (not= k "_base") (string? k) (vector? v) (seq v))
-                       (let [urls (filterv string? (mapv #(str base %) v))]
-                         (if (seq urls) (assoc acc k urls) acc))
-                       acc))
+                     (let [v (flat k v)]
+                       (if (and (not= k "_base") (string? k) (vector? v) (seq v))
+                         (let [urls (if (contains? lay k)
+                                      v ; already full URLs
+                                      (filterv string? (mapv #(str base %) v)))]
+                           (if (seq urls) (assoc acc k urls) acc))
+                         acc)))
                    {}
                    raw)
                   {})]
@@ -123,6 +168,7 @@
       (.then (fn [data]
                (let [banks (parse-manifest data)]
                  (swap! registry merge banks)
+                 (swap! layers merge (parse-manifest-layers (js->clj data)))
                  (js/console.log (str "[REPuLse] loaded " (count banks)
                                       " sample banks from " url)))))
       (.catch (fn [e]
@@ -172,6 +218,31 @@
     (let [candidate (keyword (str pfx "_" (name kw)))]
       (if (has-bank? candidate) candidate kw))
     kw))
+
+(declare get-url)
+
+(defn select-url
+  "KIT1, pure. Pick the recording for a layered bank.
+   vel  — velocity 0–1 (nil = 1): the first layer whose :vel-max >= vel wins
+          (the last layer if none); velocity 0.1 and 0.9 can differ.
+   seed — event audio time in seconds: round-robin picks within the layer by the
+          Tidal-compatible RNG of the millisecond, so a render is reproducible."
+  [ls vel seed]
+  (let [v     (double (if (number? vel) vel 1.0))
+        layer (or (first (filter #(>= (:vel-max %) v) ls)) (last ls))
+        urls  (:urls layer)
+        ms    (Math/round (* 1000 (double (or seed 0))))
+        idx   (int (Math/floor (* (core/time->rand [ms 1000]) (count urls))))]
+    (nth urls (min idx (dec (count urls))))))
+
+(defn pick-url
+  "URL to play for bank/n: velocity layer + round-robin when the bank is layered
+   (extra carries :velocity and :seed), else get-url as before. :fixed-take in
+   extra (set by `sound`) skips layers and takes recording n of the flattened bank."
+  [bank n extra]
+  (if-let [ls (and (not (:fixed-take extra)) (get @layers (name bank)))]
+    (select-url ls (:velocity extra) (:seed extra))
+    (get-url bank n)))
 
 (defn get-url
   "Get the URL for the nth sample in a bank. Wraps around if n >= count."
@@ -370,7 +441,7 @@
   ([ac t bank n amp pan] (play! ac t bank n amp pan {} nil))
   ([ac t bank n amp pan extra] (play! ac t bank n amp pan extra nil))
   ([ac t bank n amp pan extra dest]
-   (when-let [url (get-url bank n)]
+   (when-let [url (pick-url bank n (assoc extra :seed (or (:seed extra) t)))]
      (-> (get-buffer! url ac)
          (.then (fn [buf]
                   (when-let [plan (playback-plan extra (.-duration buf))]
@@ -554,11 +625,15 @@
   (second (re-find #"^([A-Z][a-z]+)" name)))
 
 (defn format-banks
-  "Returns a human-readable grouped string of all registered sample banks."
-  []
-  (let [all (sort (keys @registry))]
+  "Returns a human-readable grouped string of all registered sample banks.
+   With a filter string/keyword, only banks whose name contains it (case-insensitive)."
+  ([] (format-banks nil))
+  ([flt]
+  (let [q   (some-> flt name str/lower-case)
+        all (sort (filter #(or (nil? q) (str/includes? (str/lower-case %) q))
+                          (keys @registry)))]
     (if (empty? all)
-      "No sample banks loaded yet."
+      (if q (str "No sample banks match \"" q "\".") "No sample banks loaded yet.")
       (let [simple   (filterv #(not (str/includes? % "_")) all)
             compound (filterv #(str/includes? % "_") all)
             by-mfr   (group-by #(or (mfr-of %) "misc") compound)
@@ -582,4 +657,4 @@
                                    (str "  " model ": " (str/join "  " insts))))
                                (sort (keys by-model))))))))
         (str (count all) " sample banks\n\n"
-             (str/join "\n\n" @sections))))))
+             (str/join "\n\n" @sections)))))))

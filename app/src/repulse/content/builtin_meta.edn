@@ -2706,13 +2706,13 @@
               :see-also ["sample-banks" "sound"]}
 
  :sample-banks {:type "function"
-                :detail "(sample-banks) — list all registered bank names"
-                :signature "(sample-banks)"
-                :doc "List all registered sample bank names."
+                :detail "(sample-banks [filter]) — list registered bank names, optionally only those containing filter"
+                :signature "(sample-banks [filter])"
+                :doc "List all registered sample bank names. With a filter string or keyword, only banks whose name contains it (case-insensitive)."
                 :category "sample"
                 :returns "vector"
                 :side-effects []
-                :examples ["(sample-banks)"]
+                :examples ["(sample-banks)" "(sample-banks \"tk\")"]
                 :see-also ["samples!" "sound"]}
 
  :bank       {:type "function"
