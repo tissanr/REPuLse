@@ -1,6 +1,6 @@
 # REPuLse — Roadmap
 
-## Where we stand (updated 2026-11-21)
+## Where we stand (updated 2026-11-23)
 
 | Milestone | Delivered | Still open |
 |---|---|---|
@@ -9,8 +9,8 @@
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
 
-- **Next for the unattended pipeline:** QA2 → QA3 → QA4 (quality track, added
-  2026-11-20 from a code review; QA1 delivered), then WS6. After them, every remaining phase on the
+- **Next for the unattended pipeline:** QA3 → QA4 (quality track, added
+  2026-11-20 from a code review; QA1 and QA2 delivered), then WS6. After them, every remaining phase on the
   critical path needs a human (🤖👂 or 🧑).
 - **Next for a human session:** FX1 (three owner questions open) and KIT1 (spec is an
   outline, expand first); N1 opens M3. TL7c's listen check runs in the next release test round.
@@ -61,7 +61,7 @@ without a human:
 | 0 | TEST3 | ✅ | Release-protocol automation: UI workflows & measured sound | 🤖 | full | sonnet |
 | **Quality** | | | **Quality track (no milestone, from the 2026-11-20 review)** | | | |
 | 0a | QA1 | ✅ | Robust language & pattern engine | 🤖 | full | opus |
-| 0b | QA2 | 📋 | Hardened, allocation-free audio engine | 🤖 | full | opus |
+| 0b | QA2 | ✅ | Hardened, allocation-free audio engine | 🤖 | full | opus |
 | 0c | QA3 | 📋 | App robustness & keyboard accessibility | 🤖 | full | opus |
 | 0d | QA4 | 📋 | One source for builtins, strict lint, shared helpers | 🤖 | full | sonnet |
 | 0e | QA5 | 📋 | Security & backend hardening | 🧑 | outline | opus |
@@ -1535,7 +1535,7 @@ See full spec: [PROMPTS/PHASE-QA1.md](PROMPTS/PHASE-QA1.md)
 
 ---
 
-## Phase QA2 — Hardened, Allocation-Free Audio Engine 📋 *planned*
+## Phase QA2 — Hardened, Allocation-Free Audio Engine ✅ *delivered*
 
 > **Quality track** · **Automation:** 🤖 auto
 
@@ -1548,6 +1548,33 @@ valid input sounds sample-identical to before.
 - Voices built at trigger time, pre-reserved pending queue and voice pool, reused output
   buffers; KS buffer sized from the sample rate
 - Hard caps (256 voices, 8192 pending); counting-allocator and golden-render tests
+
+**Delivered:**
+- Golden render first: `src/golden/qa2.bin` (345 blocks, dry bus + per-bus energy of
+  37 voice kinds incl. every FM/KS preset and the SYN6 oscillators, noise and kit with
+  inserts, sends, TL7c and transitions) was recorded and committed before any engine
+  change; `golden_render_matches` passes at the end (max dry difference 6e-8)
+- Sanitising at trigger time: `EventParams::sanitised` (amp 0–2, attack 0–60 s, decay
+  0–600 s, pan ±1, non-finite = slot default), legacy FM index/ratio and square pulse
+  width finite and clamped; `parse_freq` drops non-finite, ≤ 0 or > 1 MHz frequencies
+  (missing/unparsable stays 440 Hz); non-finite event times and transition values are
+  dropped. A voice with a non-finite sample is removed; a non-finite dry sample is 0
+- Voices are built in `schedule` at trigger time (KS buffer, body filters, inserts,
+  seed); the pending queue is a time-sorted `VecDeque` (reserve 1024, push_back for
+  in-order triggers, `pop_front` when due). Caps `MAX_VOICES = 256`,
+  `MAX_PENDING = 8192`, no stealing; counters `invalid_drops`, `queue_cap_drops`,
+  `voice_cap_drops`, `nonfinite_kills` with wasm getters
+- `render` allocates nothing: `process_block_into` / `render_block` /
+  `render_block_buses` write to pre-allocated `out` / `bus` buffers and return
+  pointers; `worklet.js` reads WASM memory through a cached `Float32Array` view
+  (rebuilt only on memory growth). `process_block*` remain as copying wrappers
+- KS buffer `ks_buf_cap(sr) = ceil(sr/20)` (2205 at 44.1 kHz, 4800 at 96 kHz); f64 phase
+  accumulators (Kick, Snare, Tone, FM carrier/modulator) wrap at 1024 cycles, KS vibrato
+  at 2π
+- Tests: `alloc_count.rs` counting allocator; `qa2_tests` — non-finite slots, invalid
+  frequencies, negative FM decay, non-finite time, NaN voice kill, voice cap, queue cap,
+  queue order, phase wrap, KS buffer per sample rate, `render_is_allocation_free`
+  (0 allocations over 2000 blocks with the voice cap hit)
 
 See full spec: [PROMPTS/PHASE-QA2.md](PROMPTS/PHASE-QA2.md)
 

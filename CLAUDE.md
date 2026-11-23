@@ -129,10 +129,22 @@ features (S2/S3): `vercel link` then `vercel env pull .env.local` (both gitignor
 Read before touching `packages/audio/src/lib.rs`.
 
 **Karplus-Strong delay buffer: pre-allocate max per voice.**
-Every `Voice::KarplusStrong` holds a fixed buffer sized for ~20 Hz (2205 samples at
-44.1 kHz, ~9 KB/voice). Wasteful on high notes, but keeps the AudioWorklet render
+Every `Voice::KarplusStrong` holds a fixed buffer sized for 20 Hz, `ks_buf_cap(sr) =
+ceil(sr / 20)` samples (2205 at 44.1 kHz, 4800 at 96 kHz, ~9–19 KB/voice), allocated
+when the event is triggered. Wasteful on high notes, but keeps the AudioWorklet render
 callback allocation-free. Do not move allocation into the render path without
 profiling first.
+
+**QA2: voices are built at trigger time; `render` never allocates.**
+`trigger*` validate and sanitise the event (`EventParams::sanitised`, `parse_freq`),
+build the complete `ActiveVoice` and insert it into the time-sorted `pending` queue
+(`VecDeque`, reserved at construction). `render` only pops due voices into `voices`
+(capacity `MAX_VOICES = 256`); the queue holds at most `MAX_PENDING = 8192`. Over a cap
+the event is dropped and counted (no voice stealing). A voice that produces a
+non-finite sample is removed. Output goes to the pre-allocated `out` / `bus` buffers
+(`render_block*` return pointers; `worklet.js` reads WASM memory through a cached view).
+`qa2_tests::render_is_allocation_free` (counting allocator in `alloc_count.rs`) and
+`golden_render_matches` (`src/golden/qa2.bin`, never re-recorded) guard this.
 
 **SYN1 plucked strings: body resonance EQ chain per instrument.**
 `Voice::KarplusStrong` carries `body_filters: Vec<Biquad>`, built by
