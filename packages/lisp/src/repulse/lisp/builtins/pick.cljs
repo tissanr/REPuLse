@@ -3,13 +3,8 @@
    and repulse.params."
   (:require [repulse.core :as core]
             [repulse.params :as params]
+            [repulse.lisp.builtins.common :refer [xf]]
             [repulse.lisp.util :as u]))
-
-(defn- xf
-  "Wrap a Lisp function argument so SourcedVals never reach core."
-  [f]
-  (let [f (u/unwrap f)]
-    (fn [p] (u/unwrap (f p)))))
 
 (defn- entry->pat [x]                       ; K5
   (let [v (u/unwrap x)]

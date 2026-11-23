@@ -287,15 +287,6 @@
        :section-bar  (- q (:start sec))
        :section-bars (:bars sec)})))
 
-(defn- shift-span [sp offset]
-  (when sp
-    (core/span (core/rat+ (:start sp) offset) (core/rat+ (:end sp) offset))))
-
-(defn- shift-event [ev offset]
-  (cond-> ev
-    (:whole ev) (update :whole shift-span offset)
-    (:part ev)  (update :part shift-span offset)))
-
 ;;; ── Automation and fills (SONG2) ──────────────────────────────────
 
 (defn ramp-value
@@ -401,7 +392,7 @@
                        (let [ev (if (seq tl)
                                   (update ev :value #(apply-lanes tl % (:start (:whole ev))))
                                   ev)]
-                         {:track t :event (if (zero? (- bar q)) ev (shift-event ev offset))}))
+                         {:track t :event (if (zero? (- bar q)) ev (core/shift-event ev offset))}))
                      (core/query-onsets pat sp))))]
        (into []
              (mapcat
