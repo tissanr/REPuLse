@@ -86,14 +86,16 @@
              (when-not (:in? @master-run) (swap! master-run update :loose inc))
              (let [first-arg (first args')]
                (cond
+                 ;; QA3 A4: fx/global-op! records these while an evaluation
+                 ;; runs; they apply only when it succeeds.
                  (= first-arg :off)
-                 (fx/bypass! (effect-name (second args')) true)
+                 (fx/global-op! [:bypass (effect-name (second args')) true])
 
                  (= first-arg :on)
-                 (fx/bypass! (effect-name (second args')) false)
+                 (fx/global-op! [:bypass (effect-name (second args')) false])
 
                  (= first-arg :remove)
-                 (fx/remove-effect! (effect-name (second args')))
+                 (fx/global-op! [:remove (effect-name (second args'))])
 
                  :else
                  (let [effect-name (effect-name first-arg)
@@ -102,9 +104,9 @@
                      (if-let [w (fx/needs-param-warning (fx/find-plugin effect-name) effect-name)]
                        (report-warnings! warn! [{:message w :arg nil}] (first raw-args))
                        ;; no descriptor: unchanged pre-FX1 behaviour
-                       (fx/set-param! effect-name "value" nil))
+                       (fx/global-op! [:set effect-name "value" nil]))
                      (let [{:keys [pairs warnings]} (fx/prepare-fx-args effect-name rest-raw)]
                        (report-warnings! warn! warnings (first raw-args))
                        (doseq [[k v] pairs]
-                         (fx/set-param! effect-name k v)))))))
+                         (fx/global-op! [:set effect-name k v])))))))
              nil))))}))

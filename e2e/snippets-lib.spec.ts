@@ -133,3 +133,83 @@ test('L4: ↓ insert appends the snippet code to the active buffer', async ({ pa
     .toBe('(bpm 124)\n\n(track :kick (seq :bd :bd :bd :bd))');
   await page.evaluate(() => window.__REPULSE_APP__.evaluate('(stop)'));
 });
+
+// ── Phase QA3 E: focus, request sequencing, anonymous filter, load errors ──
+
+async function open(page: Page, route: (r: import('@playwright/test').Route) => Promise<void> | void) {
+  await page.addInitScript(() => {
+    try { localStorage.clear(); } catch {}
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.route('**/snippets/library.json', route);
+  await page.route('**/api/snippets*', (r) =>
+    r.fulfill({ contentType: 'application/json', body: JSON.stringify(LIBRARY.snippets) }));
+  await page.goto('/');
+  await page.waitForFunction(() => !!window.__REPULSE_EDITOR__ && !!window.__REPULSE_APP__);
+  await page.locator('#snippet-toggle-btn').click();
+  await expect(page.locator('#snippet-panel')).toBeVisible();
+}
+
+const json = (body: unknown) => ({ contentType: 'application/json', body: JSON.stringify(body) });
+
+test('E1: typing in the author filter while the library lands keeps focus and value', async ({ page }) => {
+  await open(page, async (r) => {
+    await new Promise((res) => setTimeout(res, 1200));
+    await r.fulfill(json(LIBRARY));
+  });
+  const author = page.locator('#snippet-author-filter');
+  await author.focus();
+  await page.keyboard.type('mal', { delay: 150 });
+  // the (delayed) response lands while the field has focus
+  await expect(page.locator('.snippet-card')).toHaveCount(1, { timeout: 10_000 });
+  await expect(author).toBeFocused();
+  await expect(author).toHaveValue('mal');
+  expect(await titles(page)).toEqual(['Evil Tags']);
+});
+
+test('E2: a slower earlier response does not replace a later one', async ({ page }) => {
+  let n = 0;
+  const STALE = { version: 1, snippets: [{ ...LIBRARY.snippets[0], id: 'stale', title: 'Stale' }] };
+  await open(page, async (r) => {
+    n += 1;
+    if (n === 1) {
+      await new Promise((res) => setTimeout(res, 1500));
+      await r.fulfill(json(STALE));
+    } else {
+      await r.fulfill(json(LIBRARY));
+    }
+  });
+  // the panel's first load is still pending — reload again
+  await page.evaluate(() => window.__REPULSE_APP__.reloadSnippets());
+  await expect(page.locator('.snippet-card')).toHaveCount(LIBRARY.snippets.length);
+  await page.waitForTimeout(2000);   // the stale response has landed by now
+  expect(n).toBe(2);
+  await expect(page.locator('.snippet-card')).toHaveCount(LIBRARY.snippets.length);
+  expect(await titles(page)).not.toContain('Stale');
+});
+
+test('E3: anonymous author filter and sort work client-side', async ({ page }) => {
+  let n = 0;
+  await open(page, (r) => { n += 1; return r.fulfill(json(LIBRARY)); });
+  await expect(page.locator('.snippet-card')).toHaveCount(LIBRARY.snippets.length);
+  await page.locator('#snippet-author-filter').fill('mallory');
+  await expect(page.locator('.snippet-card')).toHaveCount(1);
+  expect(await titles(page)).toEqual(['Evil Tags']);
+  await page.locator('#snippet-author-filter').fill('');
+  await expect(page.locator('.snippet-card')).toHaveCount(LIBRARY.snippets.length);
+  await page.locator('#snippet-sort').selectOption('newest');
+  await expect(page.locator('.snippet-card')).toHaveCount(LIBRARY.snippets.length);
+  expect(n).toBe(1);   // no refetch for sort or author changes
+});
+
+test('E4: a failed library load shows an error with a working retry', async ({ page }) => {
+  await open(page, (r) => r.fulfill({ status: 500, body: 'boom' }));
+  const err = page.locator('#snippet-cards .snippet-load-error');
+  await expect(err).toBeVisible();
+  await expect(err).toHaveAttribute('role', 'alert');
+  await expect(err).toContainText('could not load the snippet library');
+  await page.unroute('**/snippets/library.json');
+  await err.locator('.snippet-retry-btn').click();
+  await expect(page.locator('.snippet-card').first()).toBeVisible();
+  await expect(page.locator('.snippet-load-error')).toHaveCount(0);
+});

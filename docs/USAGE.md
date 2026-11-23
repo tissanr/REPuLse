@@ -339,13 +339,35 @@ open while something in the outline is selected), the **editor** (your program) 
 | **Escape** | Close the inspector (clear the outline selection); with nothing selected, jump to the command bar |
 | **F12** | With an outline selection: move the cursor to it; otherwise go to the definition under the cursor |
 | **Cmd+K S** / **Ctrl+K S** | Wrap the number under the cursor in (slider …), or unwrap the slider under the cursor. Press K, release, then S; holding Cmd/Ctrl for both keys (**Cmd+K Cmd+S**) works too |
+
+| **Cmd+K I** / **Ctrl+K I** | Open the insert menu (the hover `+`) at the cursor: on an empty line, or with the cursor at a list's `(` (wrap) or `)` (chain) |
 | **Cmd+/** / **Ctrl+/** (German layout: **Cmd+Shift+7** / **Ctrl+Shift+7**) | Comment / uncomment the selected lines with `;` |
 | **Ctrl+A** / **Cmd+A** | Select all |
 | **Ctrl+Z** / **Cmd+Z** | Undo |
 | **Ctrl+Shift+Z** / **Cmd+Shift+Z** | Redo |
 
-The **footer line** shows the last result or error. The **dot** in the header pulses on each beat
-when a pattern is playing.
+The **footer line** shows the last result or error (screen readers announce it: it is a polite
+live region). The **dot** in the header pulses on each beat when a pattern is playing; its text
+alternative reads "playing" or "stopped".
+
+Global shortcuts (Alt+Enter, Ctrl+. / F9, Cmd/Ctrl+A) do nothing while a dialog or the
+snippet submit modal is open, and leave text fields outside the editors alone — Cmd/Ctrl+A in
+the snippet search box selects the search text, not the editor.
+
+#### Keyboard only
+
+Every control works without a mouse: **Tab** reaches it, **Enter** or **Space** activates it.
+
+| Where | Keys |
+|---|---|
+| Insert menu (**Cmd/Ctrl+K I**) | opens with the first entry focused; **↓ / ↑** move (wrapping), **Home / End** jump, **Enter / Space** insert the entry, **Esc** closes and returns to the editor |
+| Outline | rows, the session line and the collapsed rail are Tab stops; **Enter / Space** selects a row (like a click), folds the song or opens the session block |
+| History panel | evaluation entries and snapshots are Tab stops; **Enter / Space** selects one (shows its diff) |
+| Buffer tabs | each tab is a name button and a **×** button; **Enter** on **×** asks `delete?`, a second **Enter** deletes the buffer |
+| Inspector | `≋` (inline slider), `↗ L<n>` (go to code) and `esc` (close) are buttons |
+| Dialogs | **Tab** cycles inside the dialog, **Enter** activates the focused button (Enter on Cancel cancels), **Esc** cancels; focus returns to where it was |
+
+Keyboard focus survives the panels' redraws (the outline redraws every bar).
 
 The **▶ play** / **■ stop** button in the header evaluates the current editor content and
 toggles playback.
@@ -2162,6 +2184,17 @@ plus anything loaded via `samples!`):
 > **Note:** the unauthenticated GitHub API allows 60 requests/hour per IP.
 > One `(samples! "github:…")` call uses exactly one API request.
 
+**Failed samples.** When a sample file cannot be fetched or decoded (a 404, a network error),
+it is not requested again until the page is reloaded, and the output line says so once per
+file, e.g.:
+
+```
+sample :qa failed to load (HTTP 404 Not Found) — it stays silent until reload
+```
+
+Decoded samples are kept in memory up to about 200 MB; beyond that the least recently played
+ones are dropped and fetched again when they next play.
+
 ---
 
 ## Available sample banks
@@ -2927,7 +2960,11 @@ Default tempo is **120 BPM** (one cycle = one bar = 4 beats = 2 seconds).
 (stack (bpm 160) (seq :bd :sd)) ; set tempo and play together
 ```
 
-`bpm` takes effect immediately, even mid-playback. One cycle = one bar regardless of BPM.
+`bpm` takes effect at the next bar, even mid-playback: the bars already scheduled (about
+0.2 s ahead) keep the old tempo and the next bar starts exactly where the last one ends — no
+gap when you slow down, no burst of catch-up bars when you speed up. One cycle = one bar
+regardless of BPM. The tap button, MIDI clock sync and the status head's BPM field change the
+tempo the same way.
 
 ### `tap!` — tap tempo
 
@@ -3427,7 +3464,8 @@ unique; a project has at most 32 buffers. Each buffer keeps its own undo history
 
 None of these actions open a browser pop-up, so playback keeps running while you use them.
 REPuLse's own confirmations (import, history, snippets, plugin loading) are in-page dialogs for
-the same reason: **Enter** confirms, **Esc** cancels.
+the same reason: **Enter** confirms (or activates the focused button — Enter on **Cancel**
+cancels), **Esc** cancels, **Tab** stays inside the dialog.
 
 ### `use`
 
@@ -4687,13 +4725,22 @@ output panel after `freesound!` completes to see which keywords were registered.
 
 REPuLse automatically saves all session state to `localStorage` and restores it on every page reload. No explicit save action is needed.
 
+The save runs about one second after the last change (an edit, a tempo change, a buffer
+switch) and when the page is closed or reloaded; playback alone never writes, and an unchanged
+session is not rewritten. When the browser refuses the write (storage full), the output line
+says once per page load:
+
+```
+session not saved — browser storage is full. Export the project to keep your work.
+```
+
 ### What is persisted
 
 | State | Notes |
 |-------|-------|
 | Project buffers | Every buffer's text, which buffer is `main`, and the active tab |
 | BPM | Current tempo |
-| FX chain | Effect names, parameters, bypass state |
+| FX chain | Not stored separately: the `(fx …)` / `(master …)` forms in the code are the source of truth |
 | Bank prefix | Active `(bank :Name)` prefix |
 | External sample repos | URLs loaded via `(samples! ...)` |
 | Track mute/solo state | Lives in the code as `:mute` / `:solo` flags (Phase WS5). An older session's `:muted` list is migrated into `:mute` flags on load; new sessions don't write it |
@@ -5040,10 +5087,17 @@ The toolbar provides multiple ways to narrow the list:
 | **Search box** | Client-side filter by title, description, or code content |
 | **Tag dropdown** | Filter by genre/role tag |
 | **Sort dropdown** | `★ top rated` (default) · `🕐 newest` · `📈 uses` · `🔥 trending` |
-| **Author input** | Server-side filter by author display name (debounced, 400 ms) |
+| **Author input** | Filter by author name (debounced, 400 ms); case-insensitive substring |
 
 Top rated sorts by average rating first, then rating count. Trending score uses
 a time-decay formula based on weighted rating and usage.
+
+Signed in, sort and author filter are applied by the server. Without an account the built-in
+library is filtered and sorted in the browser — no refetch: **newest** by creation date,
+**uses** and **trending** by usage count (snippets without the field keep their order).
+Typing in the toolbar keeps its focus when the list reloads, and a slow earlier response never
+replaces a newer one. When the library cannot be loaded, the panel says
+`could not load the snippet library` with a **retry** button.
 
 ### Preview and insert
 
@@ -5056,6 +5110,21 @@ Each card has three action buttons:
 | `↓ insert` | Appends the snippet code to the editor and triggers `(upd)`; increments usage counter |
 
 Insert warns you if the snippet's track name already exists in your session.
+
+**What a preview may run.** A preview evaluates the snippet in a sandbox. Built-ins without
+side effects run normally, and so do the ones the sandbox handles itself (`track`, `fx`, `bpm`
+and the tempo, `song` / `play-from` (ignored), `stop`, `mute!` …, `samples!` / `load-plugin` /
+`bus` (skipped), `master` (ignored), `defsynth`, `tween` …). Every other built-in with a side
+effect fails the preview instead of running — for example `restore!`, `snapshot!`,
+`delete-snapshot!`, `rename-snapshot!`, `reset!`, `upd`, `tap!`, `export`, `midi-export`,
+`midi-map`, `midi-out`, `midi-clock-out!`, `midi-sync!`, `freesound!`, `freesound-key!`,
+`history` and `ai`. The card turns red and shows, e.g.:
+
+```
+restore! is not available in snippet previews
+```
+
+`↓ insert` is not affected: inserted code runs like anything you type.
 
 ### Star and report
 
@@ -5073,7 +5142,11 @@ Click **+ share** in the snippet panel toolbar to open the submit modal:
 1. Fill in **Title** (required), Description, Tags (comma-separated), and BPM (pre-filled from current session)
 2. The **Code preview** shows what will be submitted (current editor content)
 3. Click **submit** — on success the panel refreshes and a toast confirms the submission
-4. Close at any time with **cancel**, **Escape**, or clicking outside the modal
+4. Close at any time with **cancel**, the **×** button, **Escape**, or clicking outside the modal.
+   Escape closes only the modal — the snippet panel behind it stays open. Tab stays inside
+   the modal while it is open.
+
+BPM accepts 20–640, the same range as `(bpm …)`; other values are clamped.
 
 ### Lisp built-in
 

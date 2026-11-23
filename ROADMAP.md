@@ -9,8 +9,8 @@
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
 
-- **Next for the unattended pipeline:** QA3 → QA4 (quality track, added
-  2026-11-20 from a code review; QA1 and QA2 delivered), then WS6. After them, every remaining phase on the
+- **Next for the unattended pipeline:** QA4 (quality track, added
+  2026-11-20 from a code review; QA1, QA2 and QA3 delivered), then WS6. After them, every remaining phase on the
   critical path needs a human (🤖👂 or 🧑).
 - **Next for a human session:** the FX1 listen check (all parts implemented, PR on `dev`;
   decides whether `:spring` stays and sets the reverb trims) and KIT1 (spec is an outline,
@@ -63,7 +63,7 @@ without a human:
 | **Quality** | | | **Quality track (no milestone, from the 2026-11-20 review)** | | | |
 | 0a | QA1 | ✅ | Robust language & pattern engine | 🤖 | full | opus |
 | 0b | QA2 | ✅ | Hardened, allocation-free audio engine | 🤖 | full | opus |
-| 0c | QA3 | 📋 | App robustness & keyboard accessibility | 🤖 | full | opus |
+| 0c | QA3 | ✅ | App robustness & keyboard accessibility | 🤖 | full | opus |
 | 0d | QA4 | 📋 | One source for builtins, strict lint, shared helpers | 🤖 | full | sonnet |
 | 0e | QA5 | 📋 | Security & backend hardening | 🧑 | outline | opus |
 | 0f | QA6 | 📋 | Audio & MIDI timing quality | 🤖👂 | outline | opus |
@@ -1602,7 +1602,7 @@ See full spec: [PROMPTS/PHASE-QA2.md](PROMPTS/PHASE-QA2.md)
 
 ---
 
-## Phase QA3 — App Robustness & Keyboard Accessibility 📋 *planned*
+## Phase QA3 — App Robustness & Keyboard Accessibility ✅ *delivered*
 
 > **Quality track** · **Automation:** 🤖 auto
 
@@ -1616,6 +1616,41 @@ keyboard.
 - Dialogs with focus trap, correct Enter/Escape and ARIA; global shortcuts stay out of
   inputs; focusable rows and buttons, keyboard insert menu, `aria-live` output; snippet
   panel keeps focus and ignores stale responses
+
+**Delivered:**
+- Tempo anchor (`repulse.tempo`: `time-at-cycle`, `cycle-at-time`, `retempo`): `:anchor-time`
+  / `:anchor-cycle` in the scheduler; every cycle→time site (tick, free and song scheduling,
+  capture start, song end, `first-song-bar` 6-arity, start cycle) uses it. A BPM change
+  re-anchors at the next unscheduled bar — 480→120 BPM continues within one old bar,
+  120→480 schedules no catch-up burst. `ctx` / `scheduler-state` are `defonce`; the WASM fetch
+  checks `resp.ok`; `tap!` uses `performance.now`
+- Timeline draws the audible bar (`audio/audible-cycle`), queries each track at most once
+  per bar (cache by pattern identity, cycle, mute) and animates only while playing.
+  Autosave: 1 s debounce, only on tempo / code / bank / source changes (no per-bar or
+  `fx/chain` saves), unchanged JSON not rewritten, flushed on `pagehide`; a full storage
+  says so once
+- FX staging: global `(fx …)` ops are recorded during an evaluation and applied on success
+  (whole programs reset the master chain first); a failed eval, `(tap!)` or any op-less
+  command leaves the master effects alone. Plugin `onEvent` failures are logged once per
+  plugin
+- Per-event JS node chains go into one pending list swept every 10th tick; unknown-length
+  chains (samples with sends but no inserts) are freed with their track or by `(stop)`.
+  Samples: negative cache per URL (no refetch, one `sample :x failed to load (…) — it stays
+  silent until reload` message), 200 MB LRU of decoded buffers, `defonce` registries
+- Snippet previews use an allow-list (`snippets/preview-policy`): built-ins with documented
+  side effects throw `<name> is not available in snippet previews` unless the sandbox
+  handles them (`preview-extra`); `restore!`, `delete-snapshot!`, `reset!`, `upd`, `tap!`,
+  `export`, MIDI and AI built-ins can no longer run from a preview
+- One modal stack (`ui/modal-stack`) and `ui/a11y` helpers: dialogs label themselves, trap
+  Tab, activate the focused button on Enter and restore focus; the submit modal is a real
+  dialog (BPM 20–640, Escape closes only it); global shortcuts ignore open modals and
+  outside text fields. Keyboard access: buffer tabs as name + close buttons, focusable outline
+  rows / session head / rail and history entries (Enter/Space), inspector buttons, `Mod-k i`
+  insert menu with arrow keys, `aria-live` output, labelled header buttons and playing dot.
+  Snippet panel: toolbar built once (focus survives reloads), request sequencing, client-side
+  sort/author filter for anonymous users, load error with retry. Tests:
+  `audio_scheduler_test`, `preview_policy_test`, fx staging tests, `e2e/qa3-robustness`,
+  `e2e/qa3-keyboard`, snippet panel E1–E4
 
 See full spec: [PROMPTS/PHASE-QA3.md](PROMPTS/PHASE-QA3.md)
 

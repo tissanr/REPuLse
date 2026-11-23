@@ -277,6 +277,50 @@
               {:pairs [] :warnings []}
               pairs))))
 
+;;; ── Staging of global (fx …) calls (Phase QA3 A4) ────────────────────────
+;; While an evaluation runs, global (fx …) calls are recorded here instead of
+;; being applied: a failed evaluation must not touch the master effects, and a
+;; one-off command such as (tap!) must not reset them. nil = apply at once
+;; (outside evaluate*: tests, plugin UI), else a vector of ops
+;; [:set name param v] | [:bypass name bool] | [:remove name].
+
+(defonce staging (atom nil))
+
+(defn- apply-op! [[kind effect-name a b]]
+  (case kind
+    :set    (set-param! effect-name a b)
+    :bypass (bypass! effect-name a)
+    :remove (remove-effect! effect-name)))
+
+(defn global-op!
+  "Apply a global effect op now, or record it while an evaluation is staging."
+  [op]
+  (if (some? @staging)
+    (swap! staging conj op)
+    (apply-op! op)))
+
+(defn begin-staging!
+  "Start recording global ops (evaluate*)."
+  []
+  (reset! staging []))
+
+(defn commit-staging!
+  "End staging. When ops were recorded, or the evaluation was a whole program
+   (whole? — the code is the source of truth for the master chain), reset the
+   global effects to their defaults and apply the ops in order; otherwise
+   change nothing."
+  [whole?]
+  (let [ops @staging]
+    (reset! staging nil)
+    (when (or (seq ops) whole?)
+      (reset-global-effects!)
+      (doseq [op ops] (apply-op! op)))))
+
+(defn discard-staging!
+  "End staging and drop the recorded ops (failed evaluation)."
+  []
+  (reset! staging nil))
+
 ;;; ── Per-track FX chains ───────────────────────────────────────────────────
 
 (defn- rewire-track!
@@ -363,13 +407,22 @@
     (and (map? value) (:synth value)) (cljs.core/name (:synth value))
     :else nil))
 
+;; QA3 A7: plugin names whose onEvent threw — logged once each.
+(defonce ^:private onevent-warned (atom #{}))
+
 (defn notify-plugins!
-  "Call onEvent(name, t) on every plugin in plugins that implements it."
+  "Call onEvent(name, t) on every plugin in plugins that implements it. The
+   first failure of each plugin is logged (QA3 A7), later ones stay quiet."
   [plugins value t]
   (when-let [evt (event-name value)]
     (doseq [^js plugin plugins]
       (when (and plugin (.-onEvent plugin))
-        (try (.onEvent plugin evt t) (catch :default _))))))
+        (try (.onEvent plugin evt t)
+             (catch :default e
+               (let [nm (str (.-name plugin))]
+                 (when-not (contains? @onevent-warned nm)
+                   (swap! onevent-warned conj nm)
+                   (js/console.warn (str "[REPuLse] plugin " nm " onEvent failed (further errors from it are not logged):") e)))))))))
 
 (defn notify-fx-event!
   "Notify all plugins (global and per-track) that implement onEvent of a fired event.

@@ -1,12 +1,15 @@
-import { Decoration, ViewPlugin, WidgetType } from "@codemirror/view";
+import { Decoration, ViewPlugin, WidgetType, keymap } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
-import { RangeSetBuilder, StateEffect, StateField } from "@codemirror/state";
+import { Prec, RangeSetBuilder, StateEffect, StateField } from "@codemirror/state";
 import { getInsertCategories } from "./insert-categories.js";
 
 const HOVER_DELAY_MS = 50;
 const CURSOR_MARKER = "¦";
 const SLOT_MARKER = "__TARGET__";
 const hoverTimers = new WeakMap();
+// QA3 D: views whose next dropdown was opened from the keyboard (Mod-k i) —
+// the dropdown then focuses its first item.
+const keyboardOpen = new WeakSet();
 const NON_PATTERN_HEADS = new Set([
   "def", "defn", "defmacro", "defsynth", "let", "fn", "lambda", "if", "do",
   "bpm", "stop", "fx", "load-plugin", "unload-plugin", "track",
@@ -360,6 +363,19 @@ function applyInsertion(view, target, item) {
   else applyTopLevelInsertion(view, target, item);
 }
 
+/**
+ * QA3 D — open the insert menu at the cursor (bound to Mod-k i): the list edge
+ * under the cursor, else an empty line. Returns false when neither applies.
+ */
+export function openInsertMenuAtCursor(view) {
+  const head = view.state.selection.main.head;
+  const target = listEdgeTargetAt(view.state, head) || lineTargetAt(view.state, head);
+  if (!target) return false;
+  keyboardOpen.add(view);
+  view.dispatch({ effects: openInsertMenu.of(target) });
+  return true;
+}
+
 function targetFromButton(button) {
   if (!button) return null;
   return {
@@ -387,7 +403,12 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
         this.closeMenu();
       };
       this.boundKeyDown = event => {
-        if (event.key === "Escape") this.closeMenu();
+        if (event.key !== "Escape" || !this.dropdown) return;
+        const inside = this.dropdown.contains(document.activeElement);
+        event.preventDefault();
+        event.stopPropagation();
+        this.closeMenu();
+        if (inside) view.focus();
       };
       this.boundScroll = () => this.closeMenu();
       this.boundResize = () => this.closeMenu();
@@ -423,6 +444,8 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
 
       const dropdown = document.createElement("div");
       dropdown.className = "insert-dropdown";
+      dropdown.setAttribute("role", "menu");
+      dropdown.setAttribute("aria-label", ariaLabelForTarget(target.kind));
       const usedItems = target.kind === "chain" ? usedChainItems(this.view.state, target) : new Set();
 
       for (const category of getInsertCategories(target.kind)) {
@@ -439,6 +462,8 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
           row.type = "button";
           row.className = "insert-dropdown-item";
           row.dataset.label = item.label;
+          row.setAttribute("role", "menuitem");
+          row.tabIndex = -1;
 
           const name = document.createElement("span");
           name.className = "insert-fn-name";
@@ -450,16 +475,28 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
           detail.textContent = item.detail;
           row.appendChild(detail);
 
+          const apply = () => {
+            if (this.dropdown !== dropdown) return;   // already applied / closed
+            applyInsertion(this.view, target, item);
+            this.closeMenu();
+          };
           row.addEventListener("mousedown", event => {
             event.preventDefault();
             event.stopPropagation();
-            applyInsertion(this.view, target, item);
-            this.closeMenu();
+            apply();
+          });
+          // keyboard activation / programmatic .click()
+          row.addEventListener("click", event => {
+            event.preventDefault();
+            event.stopPropagation();
+            apply();
           });
 
           dropdown.appendChild(row);
         }
       }
+
+      dropdown.addEventListener("keydown", event => this.onDropdownKey(event));
 
       document.body.appendChild(dropdown);
       this.dropdown = dropdown;
@@ -468,6 +505,39 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
       this.view.scrollDOM.addEventListener("scroll", this.boundScroll, true);
       window.addEventListener("resize", this.boundResize, true);
       this.positionDropdown(target);
+
+      if (keyboardOpen.has(this.view)) {
+        keyboardOpen.delete(this.view);
+        const first = dropdown.querySelector(".insert-dropdown-item");
+        if (first) first.focus({ preventScroll: true });
+      }
+    }
+
+    /** QA3 D: arrow / Home / End move focus, Enter / Space apply. */
+    onDropdownKey(event) {
+      const items = Array.from(this.dropdown ? this.dropdown.querySelectorAll(".insert-dropdown-item") : []);
+      if (!items.length) return;
+      const idx = items.indexOf(document.activeElement);
+      const focusAt = i => { items[(i + items.length) % items.length].focus({ preventScroll: true }); };
+      switch (event.key) {
+        case "ArrowDown": focusAt(idx < 0 ? 0 : idx + 1); break;
+        case "ArrowUp":   focusAt(idx < 0 ? items.length - 1 : idx - 1); break;
+        case "Home":      focusAt(0); break;
+        case "End":       focusAt(items.length - 1); break;
+        case "Enter":
+        case " ":
+          if (idx >= 0) items[idx].click();
+          break;
+        case "Tab":
+          // the menu is a single stop: Tab closes it and returns to the editor
+          this.closeMenu();
+          this.view.focus();
+          break;
+        default:
+          return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
     }
 
     destroyDropdown() {
@@ -486,11 +556,27 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
       const selector = `.insert-plus-btn[data-kind="${target.kind}"][data-from="${target.from}"][data-to="${target.to}"]`;
       const button = this.view.dom.querySelector(selector);
       if (!button) {
-        this.closeMenu();
+        // QA3 D: opened from the keyboard, the + widget may not be drawn yet —
+        // place the menu at the target position once the view has laid out.
+        const dropdown = this.dropdown;
+        const pos = target.kind === "chain" ? target.to : target.from;
+        this.view.requestMeasure({
+          read: view => view.coordsAtPos(pos),
+          write: coords => {
+            if (this.dropdown !== dropdown) return;
+            const btn = this.view.dom.querySelector(selector);
+            if (btn) this.placeAt(btn.getBoundingClientRect());
+            else if (coords) this.placeAt(coords);
+            else setTimeout(() => this.closeMenu(), 0);
+          },
+        });
         return;
       }
+      this.placeAt(button.getBoundingClientRect());
+    }
 
-      const rect = button.getBoundingClientRect();
+    placeAt(rect) {
+      if (!this.dropdown) return;
       // Force layout so getBoundingClientRect returns real dimensions.
       void this.dropdown.offsetHeight;
       const menuRect = this.dropdown.getBoundingClientRect();
@@ -512,4 +598,6 @@ const insertHelperPlugin = ViewPlugin.fromClass(class {
 export const insertHelper = [
   insertStateField,
   insertHelperPlugin,
+  // QA3 D: keyboard access to the insert menu (chord, like Mod-k s for sliders)
+  Prec.high(keymap.of([{ key: "Mod-k i", run: openInsertMenuAtCursor }])),
 ];
