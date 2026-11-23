@@ -163,3 +163,13 @@
       (reset! samples/registry {"bd" ["a.wav" "b.wav"]})
       (is (= "b.wav" (samples/pick-url :bd 1 {:velocity 0.1})))
       (reset! samples/registry orig))))
+
+(deftest sound-fixed-take-skips-layers
+  (let [lo @samples/layers
+        ro @samples/registry]
+    (reset! samples/layers {"kit_sd" fixture-layers})
+    (reset! samples/registry {"kit_sd" (vec (mapcat :urls fixture-layers))})
+    (is (= "soft2.wav" (samples/pick-url :kit_sd 1 {:fixed-take true :velocity 1.0})))
+    (is (= "hard1.wav" (samples/pick-url :kit_sd 3 {:fixed-take true})))
+    (reset! samples/layers lo)
+    (reset! samples/registry ro)))

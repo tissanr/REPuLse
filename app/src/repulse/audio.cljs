@@ -998,7 +998,7 @@
        (let [{:keys [bank n]} value
              amp-v  (float (* (:amp value 1.0) af))
              pan-v  (float (:pan  value 0.0))
-             extra  (assoc (sample-extra value timing pitch! pm) :seed t)]
+             extra  (assoc (sample-extra value timing pitch! pm) :seed t :fixed-take true)]
          (if (samples/has-bank? bank)
            (samples/play! ac t bank n amp-v pan-v extra
                           (js-dest (when ins (sample-length ac bank n extra))))

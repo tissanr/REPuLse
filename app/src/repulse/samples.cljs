@@ -237,9 +237,10 @@
 
 (defn pick-url
   "URL to play for bank/n: velocity layer + round-robin when the bank is layered
-   (extra carries :velocity and :seed), else get-url as before."
+   (extra carries :velocity and :seed), else get-url as before. :fixed-take in
+   extra (set by `sound`) skips layers and takes recording n of the flattened bank."
   [bank n extra]
-  (if-let [ls (get @layers (name bank))]
+  (if-let [ls (and (not (:fixed-take extra)) (get @layers (name bank)))]
     (select-url ls (:velocity extra) (:seed extra))
     (get-url bank n)))
 

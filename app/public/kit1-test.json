@@ -1,4 +1,7 @@
 { "_base": "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/",
-  "tk_hit": { "layers": [
-    { "vel-max": 0.4, "files": ["cp/HANDCLP0.wav", "cp/HANDCLPA.wav"] },
-    { "vel-max": 1.0, "files": ["bd/BT0A0A7.wav", "bd/BT0A0D0.wav", "bd/BT0A0D3.wav"] } ] } }
+  "tk_bd": { "layers": [
+    { "vel-max": 0.4, "files": ["bd/BT0A0A7.wav", "bd/BT0A0D0.wav"] },
+    { "vel-max": 1.0, "files": ["bd/BT0A0D3.wav", "bd/BT7A0D0.wav"] } ] },
+  "tk_sd": { "layers": [
+    { "vel-max": 0.4, "files": ["sn/ST0T0S0.wav", "sn/ST0T0S3.wav"] },
+    { "vel-max": 1.0, "files": ["sn/ST0T0S7.wav", "sn/ST0T0SA.wav"] } ] } }
