@@ -1,17 +1,17 @@
 # REPuLse — Roadmap
 
-## Where we stand (updated 2026-11-23)
+## Where we stand (updated 2026-11-24)
 
 | Milestone | Delivered | Still open |
 |---|---|---|
 | **M1** Tidal-Lisp core | 12 / 14 | KIT1, FX1 (implemented, listen check open) — both 🤖👂 |
-| **M2** Full songs | 9 / 10 | WS6 |
+| **M2** Full songs | 10 / 10 | — (complete) |
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
 
-- **Next for the unattended pipeline:** WS6 (the quality-track phases QA1–QA4, added
-  2026-11-20 from a code review, are delivered). After it, every remaining phase on the
-  critical path needs a human (🤖👂 or 🧑).
+- **Next for the unattended pipeline:** nothing left on the critical path (WS6 and the
+  quality-track phases QA1–QA4 are delivered); every remaining phase needs a human
+  (🤖👂 or 🧑).
 - **Next for a human session:** the FX1 listen check (all parts implemented, PR on `dev`;
   decides whether `:spring` stays and sets the reverb trims) and KIT1 (spec expanded
   2026-11-23); N1 opens M3. TL7c's listen check runs in the next release test round.
@@ -93,7 +93,7 @@ without a human:
 | 13c | WS3 | ✅ | Inline sliders in code: `(slider v min max)` | 🤖 | full | opus |
 | 13d | WS4 | ✅ | AI assistant rail | 🤖 | outline | sonnet |
 | 13e | WS5 | ✅ | Code is the source of truth: track reconciliation, `:mute`/`:solo` in code | 🤖 | full | opus |
-| 13f | WS6 | 📋 | Runtime-aware outline: run state per track, running group | 🤖 | full | sonnet |
+| 13f | WS6 | ✅ | Runtime-aware outline: run state per track, running group | 🤖 | full | sonnet |
 | **M3** | | | **Plays with others** | | | |
 | 14 | N1 | 📋 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
 | 15 | LIVE1 | 📋 | Companion bridge: Ableton Link & OSC | 🧑 | outline | opus |
@@ -2965,7 +2965,7 @@ See full spec: [PROMPTS/PHASE-WS5.md](PROMPTS/PHASE-WS5.md)
 
 ---
 
-## Phase WS6 — Runtime-Aware Outline: What You Hear Is What You See 📋 *planned*
+## Phase WS6 — Runtime-Aware Outline: What You Hear Is What You See ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2980,6 +2980,18 @@ is never changed.
   anonymous `:_` (`anonymous`) and tracks of other project buffers (buffer name, click jumps there)
 - New pure `repulse.ui.outline-model` (`track-state`, `running-rows`) with unit tests;
   `outline-panel` render + `goto/goto-entry-in-buffer!`; no new built-ins
+
+**Delivered:**
+- `repulse.ui.outline-model` (`track-state`, `running-rows`, reference-vector unit tests in
+  `outline_model_test.cljs`, registered in the test runner)
+- Track rows outside a song: `•` / `■` / `ol-off` + `title="not running"`; the song section logic
+  is unchanged; `ol-off` now dims name, kind and line number
+- Running group after the master group (divider + `running` header with count); origins
+  `not in code`, `anonymous` and other-buffer name; not selectable (no `data-id`); shown even
+  when the active buffer has no entries
+- `outline-panel/other-tracks-fn` (set in `app.cljs`, parses memoised per buffer code), a
+  `goto-buffer` click via the new `goto/goto-entry-in-buffer!` (Shift+F12 returns)
+- `e2e/outline-runtime.spec.ts` (6 real-app tests); docs: USAGE "Outline & go-to-definition"
 
 See full spec: [PROMPTS/PHASE-WS6.md](PROMPTS/PHASE-WS6.md)
 

@@ -36,6 +36,7 @@
             [repulse.audio-clock-test]
             [repulse.ui.slider-model-test]
             [repulse.ui.status-model-test]
+            [repulse.ui.outline-model-test]
             [repulse.ui.selection-test]
             [repulse.ui.inspector-model-test]
             [repulse.inserts-test]
@@ -78,6 +79,7 @@
                   'repulse.audio-clock-test
                   'repulse.ui.slider-model-test
                   'repulse.ui.status-model-test
+                  'repulse.ui.outline-model-test
                   'repulse.ui.selection-test
                   'repulse.ui.inspector-model-test
                   'repulse.inserts-test

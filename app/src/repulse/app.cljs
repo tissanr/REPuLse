@@ -331,6 +331,28 @@
                                              :when (not= name (:active p))]
                                          [name (:entries (outline/extract (.parse parser code) code))])]
                             (outline/project-definition others kind text)))})
+      ;; Phase WS6: {track-kw buffer-name} for :track entries of the other
+      ;; buffers (first in tab order wins); parses are memoised per code string.
+      (let [memo (atom {})]
+        (buffers/add-switch-hook! #(reset! memo {}))
+        (reset! outline-panel/other-tracks-fn
+                (fn []
+                  (let [p (buffers/current-project)]
+                    (reduce
+                      (fn [acc {:keys [name code]}]
+                        (if (= name (:active p))
+                          acc
+                          (let [[c r] (get @memo name)
+                                r (if (= c code)
+                                    r
+                                    (let [r (vec (keep #(when (= :track (:kind %)) (:name %))
+                                                       (:entries (outline/extract (.parse parser code) code))))]
+                                      (swap! memo assoc name [code r])
+                                      r))]
+                            (reduce (fn [a tn] (let [k (keyword (subs tn 1))]
+                                                 (if (contains? a k) a (assoc a k name))))
+                                    acc r))))
+                      {} (:buffers p))))))
       ;; Test/debug handles (used by e2e/outline.spec.ts, e2e/workspace.spec.ts).
       (set! (.-__REPULSE_EDITOR__ js/window) view)
       (set! (.-__REPULSE_APP__ js/window)
