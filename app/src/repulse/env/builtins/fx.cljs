@@ -52,53 +52,61 @@
       (js/console.info LOOSE-FX-HINT)
       LOOSE-FX-HINT)))
 
+(defn- report-warnings!
+  "Record each {:message :arg} warning through warn! with the source range of
+   its argument (fallback: the effect keyword)."
+  [warn! warnings effect-arg]
+  (when warn!
+    (doseq [{:keys [message arg]} warnings]
+      (let [src (or (some-> arg leval/source-of) (leval/source-of effect-arg))]
+        (warn! (merge {:message message} (select-keys src [:from :to])))))))
+
 (defn make-builtins
-  "No ctx dependencies — all state accessed via fx/audio modules directly."
-  [_ctx]
-  {"fx"
-   (fn [& raw-args]
-     (let [args'    (mapv leval/deep-unwrap raw-args)
-           last-arg (last args')
-           per-track? (and (> (count args') 1)
-                           (core/pattern? last-arg))]
-       (if per-track?
-         ;; ── Per-track mode: annotate pattern with FX metadata ──────────
-         (let [fx-args     (butlast args')
-               pat         last-arg
-               effect-name (effect-name (first fx-args))
-               rest-fx     (rest fx-args)
-               params      (if (keyword? (first rest-fx))
-                             ;; All named: (fx :reverb :wet 0.3)
-                             (into {} (map (fn [[k v]] [(cljs.core/name k) v])
-                                          (partition 2 rest-fx)))
-                             ;; Positional first, then optional named: (fx :delay 0.25 :feedback 0.4)
-                             (let [named (rest rest-fx)]
-                               (into (when (seq rest-fx) {"value" (first rest-fx)})
-                                     (when (keyword? (first named))
-                                       (map (fn [[k v]] [(cljs.core/name k) v])
-                                            (partition 2 named))))))]
-           (update pat :track-fx (fnil conj []) {:name effect-name :params (or params {})}))
-         ;; ── Global chain mode: apply to master chain ─────────────────
-         (do
-           (when-not (:in? @master-run) (swap! master-run update :loose inc))
-           (let [first-arg (first args')]
-             (cond
-               ;; QA3 A4: fx/global-op! records these while an evaluation
-               ;; runs; they apply only when it succeeds.
-               (= first-arg :off)
-               (fx/global-op! [:bypass (effect-name (second args')) true])
+  "ctx — {:warn! f} (optional): records eval warnings for unknown fx parameters
+   and values (Phase FX1, D4). Other state is accessed via the fx/audio modules."
+  [ctx]
+  (let [warn! (:warn! ctx)]
+    {"fx"
+     (fn [& raw-args]
+       (let [args'      (mapv leval/deep-unwrap raw-args)
+             last-arg   (last args')
+             per-track? (and (> (count args') 1)
+                             (core/pattern? last-arg))]
+         (if per-track?
+           ;; ── Per-track mode: annotate pattern with FX metadata ──────────
+           (let [raw-fx      (butlast raw-args)
+                 pat         last-arg
+                 effect-name (effect-name (first args'))
+                 {:keys [pairs warnings]} (fx/prepare-fx-args effect-name (rest raw-fx))]
+             (report-warnings! warn! warnings (first raw-args))
+             (update pat :track-fx (fnil conj [])
+                     {:name effect-name :params (into {} pairs)}))
+           ;; ── Global chain mode: apply to master chain ─────────────────
+           (do
+             (when-not (:in? @master-run) (swap! master-run update :loose inc))
+             (let [first-arg (first args')]
+               (cond
+                 ;; QA3 A4: fx/global-op! records these while an evaluation
+                 ;; runs; they apply only when it succeeds.
+                 (= first-arg :off)
+                 (fx/global-op! [:bypass (effect-name (second args')) true])
 
-               (= first-arg :on)
-               (fx/global-op! [:bypass (effect-name (second args')) false])
+                 (= first-arg :on)
+                 (fx/global-op! [:bypass (effect-name (second args')) false])
 
-               (= first-arg :remove)
-               (fx/global-op! [:remove (effect-name (second args'))])
+                 (= first-arg :remove)
+                 (fx/global-op! [:remove (effect-name (second args'))])
 
-               :else
-               (let [effect-name (effect-name first-arg)
-                     rest-args   (rest args')]
-                 (if (keyword? (first rest-args))
-                   (doseq [[k v] (partition 2 rest-args)]
-                     (fx/global-op! [:set effect-name (cljs.core/name k) v]))
-                   (fx/global-op! [:set effect-name "value" (first rest-args)])))))
-           nil))))})
+                 :else
+                 (let [effect-name (effect-name first-arg)
+                       rest-raw    (rest raw-args)]
+                   (if (empty? rest-raw)
+                     (if-let [w (fx/needs-param-warning (fx/find-plugin effect-name) effect-name)]
+                       (report-warnings! warn! [{:message w :arg nil}] (first raw-args))
+                       ;; no descriptor: unchanged pre-FX1 behaviour
+                       (fx/global-op! [:set effect-name "value" nil]))
+                     (let [{:keys [pairs warnings]} (fx/prepare-fx-args effect-name rest-raw)]
+                       (report-warnings! warn! warnings (first raw-args))
+                       (doseq [[k v] pairs]
+                         (fx/global-op! [:set effect-name k v])))))))
+             nil))))}))

@@ -136,7 +136,7 @@ const CHAIN_CATEGORIES = [
     title: "Effects",
     items: [
       withDetail("reverb", "(fx :reverb ¦0.3)", "(fx :reverb mix) — add reverb to this pattern"),
-      withDetail("delay", "(fx :delay ¦0.35)", "(fx :delay mix) — add rhythmic delay"),
+      withDetail("delay", "(fx :delay ¦0.35)", "(fx :delay mix) — add rhythmic delay; :time s or :sync cycles"),
       withDetail("filter", "(fx :filter ¦1200)", "(fx :filter cutoff) — lowpass the pattern"),
       withDetail("chorus", "(fx :chorus ¦0.35)", "(fx :chorus mix) — thicken with chorus"),
       withDetail("phaser", "(fx :phaser ¦0.4)", "(fx :phaser mix) — moving phase sweep"),
@@ -149,6 +149,14 @@ const CHAIN_CATEGORIES = [
       withDetail("bitcrusher", "(fx :bitcrusher ¦0.35)", "(fx :bitcrusher mix) — lo-fi crush"),
       withDetail("compressor", "(fx :compressor ¦0.5)", "(fx :compressor amount) — tighten dynamics"),
       withDetail("dattorro", "(fx :dattorro ¦0.35)", "(fx :dattorro mix) — spacious algorithmic reverb"),
+      withDetail("eq", "(fx :eq :low ¦3 :high 2)", "(fx :eq :low dB :mid dB :high dB) — parametric EQ"),
+      withDetail("limiter", "(fx :limiter ¦-1)", "(fx :limiter ceiling) — peak limiter; put it on the master: (master (fx :limiter -1))"),
+      withDetail("gate", "(fx :gate ¦-40)", "(fx :gate threshold) — noise gate, cuts what is below the threshold"),
+      withDetail("flanger", "(fx :flanger ¦0.6)", "(fx :flanger mix) — jet-like sweeping comb"),
+      withDetail("vibrato", "(fx :vibrato ¦20)", "(fx :vibrato cents) — pitch wobble"),
+      withDetail("auto-pan", "(fx :auto-pan ¦1)", "(fx :auto-pan depth) — sweep left and right"),
+      withDetail("ring-mod", "(fx :ring-mod ¦0.5 :freq 220)", "(fx :ring-mod mix :freq Hz) — metallic ring modulation"),
+      withDetail("width", "(fx :width ¦1.4)", "(fx :width w) — stereo width, 0 = mono, 2 = extra wide"),
     ],
   },
   {

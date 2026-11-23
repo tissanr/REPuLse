@@ -2890,12 +2890,17 @@ impl AudioEngine {
     }
 }
 
-/// Final dry sample: clamped to ±1; a non-finite value (QA2 safety net, not
-/// reached by valid input) is written as silence.
+/// Safety bound of the dry output (Phase FX1, Q2): ±8 (+18 dBFS). It only stops
+/// runaway values; overs above ±1 reach the effect chain (a master limiter can
+/// catch them) and are clipped by the audio output or the WAV writer, not here.
+pub const OUT_BOUND: f32 = 8.0;
+
+/// Final dry sample: clamped to ±OUT_BOUND; a non-finite value (QA2 safety net,
+/// not reached by valid input) is written as silence.
 #[inline]
 fn clamp_out(x: f32) -> f32 {
     if x.is_finite() {
-        x.clamp(-1.0, 1.0)
+        x.clamp(-OUT_BOUND, OUT_BOUND)
     } else {
         0.0
     }
@@ -2984,6 +2989,37 @@ mod transition_tests {
 #[cfg(test)]
 mod engine_tests {
     use super::AudioEngine;
+
+    fn peak(buf: &[f32]) -> f32 {
+        buf.iter().fold(0.0f32, |m, s| m.max(s.abs()))
+    }
+
+    #[test]
+    fn fx1_output_bound_is_eight_not_one() {
+        // Four in-phase sines at amp 1: the sum exceeds ±1 and is no longer
+        // clipped there (Q2), but stays within the ±8 safety bound.
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        for _ in 0..4 {
+            eng.trigger_v2("440", 0.0, 1.0, 0.001, 1.0, 0.0);
+        }
+        let buf = eng.process_block_raw(4410, 0.0);
+        let p = peak(&buf);
+        assert!(p > 1.0, "summed voices should pass ±1, peak {p}");
+        assert!(p <= 8.0, "safety bound is ±8, peak {p}");
+    }
+
+    #[test]
+    fn fx1_single_voice_below_one_is_unchanged() {
+        // A single voice at amp 0.5 never reaches ±1, so the old ±1 clamp was a
+        // no-op for it and the render is bit-identical to before.
+        let mut eng = AudioEngine::new_for_test(44100.0);
+        eng.trigger_v2("440", 0.0, 0.5, 0.001, 1.0, 0.0);
+        let buf = eng.process_block_raw(4410, 0.0);
+        let p = peak(&buf);
+        assert!(p > 0.01 && p < 1.0, "peak {p}");
+        let clamped: Vec<f32> = buf.iter().map(|s| s.clamp(-1.0, 1.0)).collect();
+        assert_eq!(buf, clamped);
+    }
 
     fn rms(buf: &[f32]) -> f32 {
         let sum: f32 = buf.iter().map(|s| s * s).sum();

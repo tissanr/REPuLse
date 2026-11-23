@@ -354,7 +354,12 @@
          "</div></div>")))
 
 (defn- fx-block [fx-entries]
-  (let [names  (mapv #(str/replace (:name %) #"^:" "") fx-entries)
+  (let [;; Phase FX1: list the effects in signal order (fx/default-order), not
+        ;; code order; each row keeps the link to its own form
+        rank       (fn [e] (let [n (str/replace (:name e) #"^:" "")]
+                             (fx/chain-rank (if (= n "dattorro") "dattorro-reverb" n))))
+        fx-entries (vec (sort-by rank fx-entries))
+        names  (mapv #(str/replace (:name %) #"^:" "") fx-entries)
         active (filter :active? @fx/chain)
         found  (mapv (fn [n] (some #(when (= n (:name %)) %) active)) names)
         rows   (im/fx-rows (mapv (fn [n e]

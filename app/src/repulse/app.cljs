@@ -512,7 +512,17 @@
                "/plugins/distort.js"
                "/plugins/amp-sim.js"
                "/plugins/waveshape.js"
-               "/plugins/cab.js"]]
+               "/plugins/cab.js"
+               ;; Phase FX1 — the chain is sorted by fx/default-order, so the
+               ;; order of this list does not matter
+               "/plugins/gate.js"
+               "/plugins/eq.js"
+               "/plugins/flanger.js"
+               "/plugins/vibrato.js"
+               "/plugins/ring-mod.js"
+               "/plugins/auto-pan.js"
+               "/plugins/width.js"
+               "/plugins/limiter.js"]]
     (when-not (contains? @loaded-plugins url)
       (-> (plugin-loading/dynamic-import! url)
           (.then (fn [m]
