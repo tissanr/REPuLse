@@ -78,7 +78,8 @@
                :share!       share!
                :env-atom     env-atom
                :evaluate-ref evaluate-ref
-               :seen-tracks  seen-tracks}]
+               :seen-tracks  seen-tracks
+               :warn!        record-eval-warning!}]
       (samples/init!)
       (reset! env-atom
               (merge (assoc (leval/make-env (make-stop-fn) audio/set-bpm!)

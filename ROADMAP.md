@@ -4,7 +4,7 @@
 
 | Milestone | Delivered | Still open |
 |---|---|---|
-| **M1** Tidal-Lisp core | 12 / 14 | KIT1, FX1 — both 🤖👂 |
+| **M1** Tidal-Lisp core | 12 / 14 | KIT1, FX1 (implemented, listen check open) — both 🤖👂 |
 | **M2** Full songs | 9 / 10 | WS6 |
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
@@ -12,8 +12,9 @@
 - **Next for the unattended pipeline:** QA3 → QA4 (quality track, added
   2026-11-20 from a code review; QA1 and QA2 delivered), then WS6. After them, every remaining phase on the
   critical path needs a human (🤖👂 or 🧑).
-- **Next for a human session:** FX1 (owner questions answered 2026-11-23; ready to build,
-  listen check after) and KIT1 (spec is an outline, expand first); N1 opens M3. TL7c's listen check runs in the next release test round.
+- **Next for a human session:** the FX1 listen check (all parts implemented, PR on `dev`;
+  decides whether `:spring` stays and sets the reverb trims) and KIT1 (spec is an outline,
+  expand first); N1 opens M3. TL7c's listen check runs in the next release test round.
 - **Side track open:** DOC1, TEST2, UI1, R3, PLUG1, O2, PL1; quality track QA5 (🧑),
   QA6 (🤖👂), QA7 (🧑).
 
@@ -1031,6 +1032,27 @@ delay, and the missing modulation and stereo effects. All are track-level plugin
 - Space: `(fx :reverb :type :room|:hall|:plate|:spring|:gated|:reverse :decay … :size … :damp … :predelay …)` via impulse-response generators (today `reverb` has only `wet`); `(fx :delay :sync 3/16 :mode :ping-pong …)`, positional value = wet (was time), multi-tap, filters in the feedback path
 - Modulation & stereo: `flanger`, `vibrato`, `auto-pan`, `ring-mod`, `width`
 - All effects work per track and in offline export; acceptance by offline-render measurements plus a human listen
+
+**Implemented (2026-11-23) — not delivered until the listen check (🤖👂) has passed:**
+- Groundwork: a `params` descriptor per plugin drives the `fx` built-in (rationals,
+  keywords and lists converted; unknown names and values are eval warnings such as
+  `fx :reverb has no parameter :room — parameters: wet, dry, type, decay, size, damp,
+  predelay`); positional + named values also at top level; `setTempo(cycleDur, origin)` for
+  global, per-track and offline instances; the master chain is sorted by `fx/default-order`
+  (limiter always last), and the master inspector lists it in that order.
+- New effects: `eq`, `limiter` (5 ms look-ahead worklet), `gate` (worklet), `flanger`
+  (worklet), `vibrato`, `auto-pan` (equal power, `:sync`), `ring-mod`, `width` (`:haas`).
+  `filter` gets all 8 types, `gain` and an exact bypass. `reverb` gets 7 seeded IR types
+  (`lib/reverb-ir.js`) with `decay`, `size`, `damp`, `predelay`, debounced and crossfaded.
+  `delay` gets `:sync`, `:mode`, `:taps`, `:lowcut`/`:highcut`; its feedback loop now holds
+  one DelayNode minus a render quantum, so repeats are sample-exact (before, each repeat came
+  128 samples late).
+- Changed behaviour: `(fx :delay 0.4)` sets the wet level (Q3) — track chains that wrote
+  `(fx :delay 0.25 …)` for the time now write `(fx :delay :time 0.25 …)`. The engine's output
+  bound is ±8 instead of ±1 (Q2); the limiter is opt-in (Q1).
+- Tests: 45 Playwright tests in `e2e/fx-effects.spec.ts` (bench A1–A12, B1–B15, C1–C10, X1;
+  app B16, X2–X4, limiter export), 2 Rust tests, CLJS tests for the parser, descriptor rules,
+  chain order, tempo and the slider tables.
 
 See full spec: [PROMPTS/PHASE-FX1.md](PROMPTS/PHASE-FX1.md)
 

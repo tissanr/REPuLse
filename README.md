@@ -64,8 +64,9 @@ and **when** — not **how** synthesis works internally.
   also `size`, `delay-feedback`, `delay-sync` (delay time in cycles)
 - **Inline sliders:** `(amp (slider 0.7 0 1))` evaluates to `0.7` and is drawn as a draggable
   bar in the editor; dragging rewrites the number in the code (`Cmd/Ctrl+K S` wraps/unwraps)
-- **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`, `(fx :cab :ir :4x12)`;
-  group the global chain with `(master (fx :delay 0.25) (fx :reverb 0.3))`
+- **Effects:** `(fx :reverb :type :hall :wet 0.4)`, `(fx :delay :sync 3/16 :mode :ping-pong :wet 0.3)`,
+  `(fx :cab :ir :4x12)`, flanger, vibrato, auto-pan, ring-mod, width; mix with EQ, gate and a
+  limiter: `(master (fx :eq :high 2) (fx :limiter -1))`
 - **Performance:** named tracks you can mute, solo and replace live; MIDI in/out; WAV, stem
   and MIDI export
 - **Code is the source of truth:** Alt+Enter plays exactly the tracks the code declares

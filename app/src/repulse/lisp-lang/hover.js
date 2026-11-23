@@ -1349,6 +1349,47 @@ const DOCS = {
     description: "Speaker cabinet impulse response convolution. :ir chooses :1x12, :2x12, :4x12, or :di (dry passthrough). :mix blends dry/wet from 0.0–1.0. Pairs well with (fx :amp-sim ...) or (fx :distort ...).",
     example: "(->> (seq :e2 :_ :e2 :g2) (synth :saw) (fx :amp-sim :gain 30 :stages 3 :tonestack :mid-scoop) (fx :cab :ir :4x12))",
   },
+  // --- Phase FX1 effects (hover on the keyword in (fx :name …)) ---
+  "eq": {
+    signature: "(fx :eq [:low dB] [:low-freq Hz] [:mid dB] [:mid-freq Hz] [:mid-q Q] [:mid2 dB] [:mid2-freq Hz] [:mid2-q Q] [:high dB] [:high-freq Hz])",
+    description: "Parametric EQ: low shelf, two peaking bands, high shelf. Gains −24…24 dB (default 0, i.e. flat). :low-freq 20–1000 Hz (100), :mid-freq 100–8000 Hz (1000), :mid2-freq 200–16000 Hz (3000), :high-freq 1000–20000 Hz (8000), :mid-q / :mid2-q 0.1–10 (1). A shelf reaches half its gain at its corner frequency. No positional value.",
+    example: "(->> (seq :c2 :_ :eb2 :_) (synth :saw) (fx :eq :low 3 :low-freq 80 :mid -4 :mid-freq 400))",
+  },
+  "limiter": {
+    signature: "(fx :limiter ceiling [:release s])",
+    description: "Look-ahead peak limiter: no output sample exceeds :ceiling (−24…0 dBFS, default −1). :release 0.01–1 s (0.1) is the recovery time after a peak. Delays the signal by 5 ms. Inactive until named; put it last on the master.",
+    example: "(master (fx :limiter -1))",
+  },
+  "gate": {
+    signature: "(fx :gate threshold [:attack s] [:hold s] [:release s] [:range dB])",
+    description: "Noise gate: opens above :threshold (−80…0 dBFS, default −40), stays open for :hold (0–2 s, 0.05) after the level drops, then closes over :release (0.005–2 s, 0.1). :attack 0.0001–0.1 s (0.001). :range −80…0 dB (−80 ≈ silent; −12 makes it an expander).",
+    example: "(->> (seq :_ :sd :_ :sd) (fx :reverb 0.6) (fx :gate :threshold -30 :release 0.05))",
+  },
+  "flanger": {
+    signature: "(fx :flanger wet [:rate Hz] [:depth N] [:delay s] [:feedback N])",
+    description: "Flanger: a short modulated delay with feedback. wet 0–1 (default 0; the dry signal stays at 1). :rate 0.01–10 Hz (0.25), :depth 0–1 (0.7) sweeps the delay between delay·(1 − depth) and delay·(1 + depth), :delay 0.0005–0.01 s (0.002), :feedback −0.95…0.95 (0; negative inverts the comb).",
+    example: "(->> (seq :c3 :g3) (synth :saw) (fx :flanger :rate 0.25 :depth 0.7 :feedback 0.6 :wet 0.8))",
+  },
+  "vibrato": {
+    signature: "(fx :vibrato depth [:rate Hz])",
+    description: "Pitch vibrato on the whole track: depth 0–100 cents up and down (default 20), :rate 0.5–20 Hz (5). Inactive until named.",
+    example: "(->> (seq :a4) (synth :saw) (fx :vibrato :rate 5 :depth 50))",
+  },
+  "auto-pan": {
+    signature: "(fx :auto-pan depth [:rate Hz] [:sync cycles] [:shape kw])",
+    description: "Equal-power auto-pan: depth 0–1 (default 1 = fully left to fully right), :rate 0.01–20 Hz (1), :sync length of one sweep in cycles (wins over :rate, locked to the cycle grid), :shape :sine (default), :tri or :square. Total power stays constant. Inactive until named.",
+    example: "(->> (fast 8 (seq :hh)) (fx :auto-pan :sync 1))",
+  },
+  "ring-mod": {
+    signature: "(fx :ring-mod mix [:freq Hz] [:shape kw])",
+    description: "Ring modulator: multiplies the signal by a carrier. mix 0–1 crossfades dry → modulated (default 0). :freq 0.1–5000 Hz (440), :shape :sine (default), :tri, :square or :saw.",
+    example: "(->> (seq :a4 :e4) (synth :saw) (fx :ring-mod :freq 220 :mix 1))",
+  },
+  "width": {
+    signature: "(fx :width width [:haas ms])",
+    description: "Stereo width: 0 = mono, 1 = unchanged (default), 2 = side level doubled. Above 1 raises out-of-phase content and reduces mono compatibility. :haas 0–30 ms delays the right channel and widens mono material. Per track it only widens what is already stereo (panned events) unless :haas is set.",
+    example: "(master (fx :width 1.4))",
+  },
   "chebyshev": {
     signature: "(chebyshev N)",
     description: "Generate a Chebyshev polynomial curve of order N (1–8) for use with (fx :waveshape). Order N adds primarily the Nth harmonic. Use as a :curve value.",
@@ -1546,10 +1587,30 @@ const DOCS = {
  * Find a BuiltinName or Symbol node at the given position.
  * Returns { from, to, word } or null.
  */
+/** Is `node` (a Keyword) the effect name of an (fx …) form, i.e. the argument
+ * right after `fx`? Then its hover shows the effect's doc (Phase FX1). */
+function isFxEffectKeyword(state, node) {
+  const list = node.parent;
+  if (!list || list.name !== "List") return false;
+  const args = [];
+  for (let c = list.firstChild; c; c = c.nextSibling) {
+    if (c.name === "OpenParen" || c.name === "CloseParen" || c.name === "LineComment") continue;
+    args.push(c);
+  }
+  return args.length >= 2 &&
+    state.sliceDoc(args[0].from, args[0].to) === "fx" &&
+    args[1].from === node.from;
+}
+
 function wordAt(state, pos) {
   const tree = syntaxTree(state);
   let node = tree.resolveInner(pos, 0);
   while (node) {
+    if (node.name === "Keyword" && isFxEffectKeyword(state, node)) {
+      // `:limiter` in (fx :limiter -1) → "limiter"; :dattorro is the reverb alias
+      const name = state.sliceDoc(node.from + 1, node.to);
+      return { from: node.from, to: node.to, word: name === "dattorro" ? "dattorro-reverb" : name };
+    }
     if (node.name === "BuiltinName" || node.name === "Symbol") {
       const word = state.sliceDoc(node.from, node.to);
       return { from: node.from, to: node.to, word };

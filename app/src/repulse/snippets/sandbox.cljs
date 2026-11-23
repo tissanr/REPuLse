@@ -82,19 +82,11 @@
         last-arg (last args')
         per-track? (and (> (count args') 1) (core/pattern? last-arg))]
     (when per-track?
-      (let [fx-args     (butlast args')
-            pat         last-arg
-            effect-name (cljs.core/name (first fx-args))
-            rest-fx     (rest fx-args)
-            params      (if (keyword? (first rest-fx))
-                          (into {} (map (fn [[k v]] [(cljs.core/name k) v])
-                                        (partition 2 rest-fx)))
-                          (let [named (rest rest-fx)]
-                            (into (when (seq rest-fx) {"value" (first rest-fx)})
-                                  (when (keyword? (first named))
-                                    (map (fn [[k v]] [(cljs.core/name k) v])
-                                         (partition 2 named))))))]
-        (update pat :track-fx (fnil conj []) {:name effect-name :params (or params {})})))))
+      (let [effect-name (cljs.core/name (first args'))
+            ;; shared parser (Phase FX1); previews record no warnings
+            {:keys [pairs]} (fx/prepare-fx-args effect-name (rest (butlast raw-args)))]
+        (update last-arg :track-fx (fnil conj [])
+                {:name effect-name :params (into {} pairs)})))))
 
 (defn preview-env
   [{:keys [on-track]}]

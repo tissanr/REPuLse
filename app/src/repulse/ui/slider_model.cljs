@@ -29,13 +29,53 @@
 
 ;; FX slider config: {effect-name {param-name {:min :max :step}}}
 (def FX-SLIDER-PARAMS
-  {"reverb"          {"wet"      {:min 0   :max 1    :step 0.01}}
+  {"reverb"          {"wet"      {:min 0   :max 1    :step 0.01}
+                      "decay"    {:min 0.1 :max 10   :step 0.1}
+                      "size"     {:min 0   :max 1    :step 0.01}
+                      "damp"     {:min 0   :max 1    :step 0.01}
+                      "predelay" {:min 0   :max 0.25 :step 0.005}}
    "dattorro-reverb" {"wet"      {:min 0   :max 1    :step 0.01}}
-   "delay"           {"time"     {:min 0   :max 2    :step 0.01}
+   "delay"           {"time"     {:min 0   :max 4    :step 0.01}
+                      "sync"     {:min 0   :max 2    :step 0.0625}
                       "feedback" {:min 0   :max 0.95 :step 0.01}
-                      "wet"      {:min 0   :max 1    :step 0.01}}
+                      "wet"      {:min 0   :max 1    :step 0.01}
+                      "lowcut"   {:min 20  :max 2000 :step 1}
+                      "highcut"  {:min 500 :max 20000 :step 1}}
    "filter"          {"freq"     {:min 20  :max 8000 :step 1}
-                      "q"        {:min 0.1 :max 20   :step 0.1}}
+                      "q"        {:min 0.1 :max 20   :step 0.1}
+                      "gain"     {:min -24 :max 24   :step 0.5}}
+   ;; Phase FX1
+   "eq"              {"low"       {:min -24  :max 24    :step 0.5}
+                      "low-freq"  {:min 20   :max 1000  :step 1}
+                      "mid"       {:min -24  :max 24    :step 0.5}
+                      "mid-freq"  {:min 100  :max 8000  :step 1}
+                      "mid-q"     {:min 0.1  :max 10    :step 0.1}
+                      "mid2"      {:min -24  :max 24    :step 0.5}
+                      "mid2-freq" {:min 200  :max 16000 :step 1}
+                      "mid2-q"    {:min 0.1  :max 10    :step 0.1}
+                      "high"      {:min -24  :max 24    :step 0.5}
+                      "high-freq" {:min 1000 :max 20000 :step 1}}
+   "limiter"         {"ceiling"   {:min -24  :max 0     :step 0.1}
+                      "release"   {:min 0.01 :max 1     :step 0.01}}
+   "gate"            {"threshold" {:min -80  :max 0     :step 0.5}
+                      "attack"    {:min 0    :max 0.1   :step 0.001}
+                      "hold"      {:min 0    :max 2     :step 0.01}
+                      "release"   {:min 0.01 :max 2     :step 0.01}
+                      "range"     {:min -80  :max 0     :step 1}}
+   "flanger"         {"wet"       {:min 0    :max 1     :step 0.01}
+                      "depth"     {:min 0    :max 1     :step 0.01}
+                      "rate"      {:min 0.01 :max 10    :step 0.01}
+                      "delay"     {:min 0.0005 :max 0.01 :step 0.0005}
+                      "feedback"  {:min -0.95 :max 0.95 :step 0.01}}
+   "vibrato"         {"depth"     {:min 0    :max 100   :step 1}
+                      "rate"      {:min 0.5  :max 20    :step 0.1}}
+   "auto-pan"        {"depth"     {:min 0    :max 1     :step 0.01}
+                      "rate"      {:min 0.01 :max 20    :step 0.01}
+                      "sync"      {:min 0    :max 4     :step 0.125}}
+   "ring-mod"        {"mix"       {:min 0    :max 1     :step 0.01}
+                      "freq"      {:min 0.1  :max 5000  :step 0.1}}
+   "width"           {"width"     {:min 0    :max 2     :step 0.01}
+                      "haas"      {:min 0    :max 30    :step 0.5}}
    "chorus"          {"wet"      {:min 0   :max 1    :step 0.01}
                       "rate"     {:min 0.1 :max 10   :step 0.1}}
    "phaser"          {"wet"      {:min 0   :max 1    :step 0.01}
@@ -67,13 +107,20 @@
 ;; FX select config: {effect-name {param-name [option-name ...]}}
 (def FX-SELECT-PARAMS
   {"amp-sim" {"tonestack" ["neutral" "bright" "dark" "mid-scoop" "mid-hump"]}
-   "cab" {"ir" ["1x12" "2x12" "4x12" "di"]}})
+   "cab" {"ir" ["1x12" "2x12" "4x12" "di"]}
+   ;; Phase FX1
+   "filter"   {"type" ["lowpass" "highpass" "bandpass" "notch"
+                       "lowshelf" "highshelf" "peaking" "allpass"]}
+   "reverb"   {"type" ["classic" "room" "hall" "plate" "spring" "gated" "reverse"]}
+   "delay"    {"mode" ["stereo" "mono" "ping-pong"]}
+   "auto-pan" {"shape" ["sine" "tri" "square"]}
+   "ring-mod" {"shape" ["sine" "tri" "square" "saw"]}})
 
 ;; Which getParams key corresponds to the positional (fx :name NUMBER) form
 (def FX-PRIMARY-PARAM
   {"reverb"          "wet"
    "dattorro-reverb" "wet"
-   "delay"           "time"
+   "delay"           "wet"      ; Phase FX1, Q3 (was "time")
    "filter"          "freq"
    "chorus"          "wet"
    "phaser"          "wet"
@@ -84,7 +131,15 @@
    "cab"             "mix"
    "bitcrusher"      "wet"
    "sidechain"       "amount"
-   "compressor"      "wet"})
+   "compressor"      "wet"
+   ;; Phase FX1 (no entry for eq: it takes no positional value)
+   "limiter"         "ceiling"
+   "gate"            "threshold"
+   "flanger"         "wet"
+   "vibrato"         "depth"
+   "auto-pan"        "depth"
+   "ring-mod"        "mix"
+   "width"           "width"})
 
 ;;; Formatting
 

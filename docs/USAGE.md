@@ -3489,8 +3489,8 @@ Error: too many buffers (max 32)
 ## Effect plugins
 
 REPuLse has a built-in effect chain between the synthesis engine and the audio output.
-Fifteen effects are loaded automatically at startup, all silent/inactive by default.
-Control them with the `fx` built-in.
+Twenty-three effects are loaded automatically at startup. All of them except the master
+`compressor` are silent/inactive until the code names them. Control them with the `fx` built-in.
 
 ### `fx` — effect control
 
@@ -3511,6 +3511,31 @@ Control them with the `fx` built-in.
 ; Remove an effect from the chain
 (fx :remove :delay)
 ```
+
+A positional value and named parameters can be combined, at top level as inside a track:
+`(fx :reverb 0.4 :dry 1)` sets both. Rationals such as `3/16` and keywords such as `:hall`
+work for every parameter of the effects listed below.
+
+**Unknown parameters and values are reported.** The effects added or changed in Phase FX1
+(`eq`, `limiter`, `gate`, `filter`, `reverb`, `delay`, `flanger`, `vibrato`, `auto-pan`,
+`ring-mod`, `width`) know their parameters. A wrong name or value is not sent; the output line
+ends with a warning and the editor underlines the parameter:
+
+```
+(fx :reverb :room 0.8)
+  → Warning: fx :reverb has no parameter :room — parameters: wet, dry, type, decay, size, damp, predelay
+(fx :reverb :type :cathedral :wet 0.4)
+  → Warning: fx :reverb :type has no value :cathedral — values: classic, room, hall, plate, spring, gated, reverse
+(fx :eq 3)
+  → Warning: fx :eq takes no positional value — parameters: low, low-freq, mid, mid-freq, mid-q, mid2, mid2-freq, mid2-q, high, high-freq
+(fx :delay :time :fast)
+  → Warning: fx :delay :time expects a number — got :fast
+(fx :limiter)
+  → Warning: fx :limiter needs a parameter — parameters: ceiling, release
+```
+
+Effect names themselves are not checked (effects load asynchronously at startup):
+`(fx :flangr 0.5)` stays silent.
 
 ### `master` — the global chain in one block
 
@@ -3577,50 +3602,192 @@ To remove a per-track effect, re-evaluate the `track` form without the `(fx ...)
 
 > **Warning:** `fx` **must** be inside a `->>` pipeline to act as a per-track effect. Writing it as a bare argument — `(track :k (fx :reverb 0.3) (seq :bd :sd))` — will instead modify the **global** effect chain, not the track's private chain.
 
+### Mixing
+
+EQ the tracks that clash, then EQ and limit the sum on the master:
+
+```lisp
+(bpm 120)
+(track :kick  (seq :bd :_ :bd :_))
+(track :bass  (->> (seq :c2 :_ :eb2 :_) (synth :saw)
+                   (fx :eq :low 3 :low-freq 80 :mid -4 :mid-freq 400 :mid-q 1.5)))
+(track :hats  (->> (fast 8 (seq :hh)) (fx :eq :low -12 :low-freq 400 :high 2)))
+(track :snare (->> (seq :_ :sd :_ :sd) (fx :gate :threshold -35 :release 0.08)))
+(master
+  (fx :eq :high 2 :high-freq 8000)
+  (fx :limiter -1))
+```
+
+The `limiter` is off until you name it. Put it on the master, where it is always last in the
+chain: no output sample then exceeds its ceiling, however loud the tracks get. It delays the
+signal by 5 ms; on the master that is inaudible, on a single track it moves that track 5 ms late
+against the others.
+
+Since FX1 the synthesis engine no longer clips its output at ±1 (it keeps a ±8 safety bound),
+so a hot synth mix reaches the master chain unclipped and a limiter can catch it. Without a
+limiter the overs are clipped by the audio output, and `(export …)` still clips at ±1 when it
+writes the WAV.
+
 ### Built-in effects
 
 #### `reverb` — convolution reverb
 
-Stereo convolution reverb using a procedurally generated impulse response.
+Stereo convolution reverb with seven generated room types. The impulse response is
+regenerated (debounced, cached and crossfaded) when `type`, `decay`, `size` or `damp` change,
+so changing them while it plays does not cut the tail.
 
 | Parameter | Key | Default | Range |
 |-----------|-----|---------|-------|
-| Wet mix   | `wet` / positional | `0.3` | 0–1 |
+| Wet mix   | `wet` / positional | `0` | 0–1 |
+| Dry level | `dry` | `0.8` | 0–1 |
+| Type      | `type` | `:classic` | `:classic` `:room` `:hall` `:plate` `:spring` `:gated` `:reverse` |
+| Decay     | `decay` | per type | 0.1–10 s — see the type table |
+| Size      | `size` | per type | 0–1: spacing of the first reflections and build-up time |
+| Damping   | `damp` | per type | 0–1: how fast the highs die away (0 = not at all) |
+| Pre-delay | `predelay` | `0` | 0–0.25 s: gap before the reverb starts |
+
+| Type | `decay` means | default `decay` | default `size` | default `damp` |
+|---|---|---|---|---|
+| `classic` | length of the response (the reverb before FX1) | 2.5 | — | 0 |
+| `room` | reverberation time | 0.6 | 0.3 | 0.5 |
+| `hall` | reverberation time | 3.0 | 0.8 | 0.35 |
+| `plate` | reverberation time | 1.8 | — | 0.2 |
+| `spring` | reverberation time; `size` = echo spacing | 2.0 | 0.5 | 0 |
+| `gated` | gate time: the tail stops abruptly after it | 0.3 | — | 0.2 |
+| `reverse` | swell length: the reverb rises and stops | 1.0 | — | 0.2 |
+
+Parameters you don't set follow the type. For `room`, `hall` and `plate`, `decay` is the
+reverberation time of the low end; strong damping makes the full-band tail a little shorter.
 
 ```lisp
-(fx :reverb 0.4)
+(fx :reverb 0.4)                                          ; the classic reverb, wet 0.4
+(fx :reverb :type :hall :decay 3.5 :damp 0.4 :predelay 0.02 :wet 0.3)
+(track :snare (->> (seq :_ :sd :_ :sd) (fx :reverb :type :gated :decay 0.4 :wet 0.6)))
+(track :snare (->> (seq :_ :sd :_ :sd) (fx :reverb :type :reverse :decay 0.8 :wet 0.5)))
 ```
+
+The size parameter is `size`; `room` is not a reverb parameter (it is the per-event send
+level, see [Sends & orbits](#sends--orbits)).
 
 #### `delay` — tape delay
 
-Stereo feedback delay with a tempo-synced default time.
+Stereo feedback delay with tempo sync, three modes, multi-tap and filters in the repeats.
 
 | Parameter | Key | Default | Description |
 |-----------|-----|---------|-------------|
-| Wet mix   | `wet` / positional | `0.0` | Overall delay level |
-| Delay time | `time` | `0.375` s | Delay in seconds |
-| Feedback  | `feedback` | `0.35` | Repeat amount (max 0.95) |
+| Wet mix   | `wet` / positional | `0` | Echo level |
+| Delay time | `time` | `0.375` s | Delay in seconds (0.001–4) |
+| Sync      | `sync` | unset | Delay time in cycles, e.g. `3/16`; wins over `time` while set |
+| Feedback  | `feedback` | `0.35` | Repeat amount (0–0.95) |
+| Mode      | `mode` | `:stereo` | `:stereo` (each side echoes on its own side), `:mono` (centred echoes), `:ping-pong` (echoes alternate left, right, left …) |
+| Taps      | `taps` | unset | Up to 4 positions in cycles; wins over `time` and `sync`. The longest tap feeds back, so the whole pattern repeats |
+| Low cut   | `lowcut` | `20` Hz (off) | High-pass in the repeats (20–2000 Hz) |
+| High cut  | `highcut` | `20000` Hz (off) | Low-pass in the repeats (500–20000 Hz): each repeat gets darker |
 
 ```lisp
-(fx :delay 0.4)
-(fx :delay :wet 0.4 :time 0.25 :feedback 0.5)
+(fx :delay 0.4)                                            ; wet 0.4, 375 ms
+(fx :delay :wet 0.4 :time 0.25 :feedback 0.5)              ; time in seconds
+(fx :delay :sync 3/16 :mode :ping-pong :feedback 0.5 :wet 0.35)
+(fx :delay :taps [1/8 3/8] :feedback 0 :wet 0.6)          ; two echoes per hit
+(fx :delay :time 0.3 :feedback 0.7 :highcut 1500 :wet 0.4) ; dub-style darkening repeats
 ```
+
+- **The positional value is the wet level** (since FX1). Before FX1 `(fx :delay 0.25)` set the
+  time and was silent on its own; a session that used it for the time now writes
+  `(fx :delay :time 0.25 …)` (or `:sync`).
+- **Sync follows the tempo.** With `:sync` (or `:taps`) a BPM change moves the echoes to the new
+  grid: the delay time glides there over 50 ms, which bends the repeats briefly, as on a tape
+  delay. At 120 BPM `:sync 3/16` is 375 ms, at 90 BPM 500 ms.
+- **Always write taps as a vector**: `:taps [1/8]`. A bare `:taps 1/8` reads as the two taps 1
+  and 8.
+- Changing `mode`, `taps` or switching the cuts on or off rebuilds the delay and may click.
+- Times longer than 4 s are clamped to 4 s.
 
 #### `filter` — biquad filter
 
-A `BiquadFilterNode` with configurable type, cutoff, and resonance.
+A `BiquadFilterNode` with configurable type, cutoff, resonance and gain.
 
 | Parameter | Key | Default | Description |
 |-----------|-----|---------|-------------|
-| Cutoff freq | `freq` / positional | `20000` Hz | Filter cutoff (20000 = fully open) |
-| Resonance   | `q`   | `1.0` | Q / resonance |
-| Filter type | `type` | `"lowpass"` | `"lowpass"` `"highpass"` `"bandpass"` `"notch"` |
+| Cutoff freq | `freq` / positional | `20000` Hz | Filter cutoff or centre (20–20000; 20000 = fully open) |
+| Resonance   | `q`   | `1.0` | Q / resonance (0.001–30) |
+| Filter type | `type` | `:lowpass` | `:lowpass` `:highpass` `:bandpass` `:notch` `:lowshelf` `:highshelf` `:peaking` `:allpass` (keyword or string) |
+| Gain        | `gain` | `0` dB | −24…24 dB, for `:lowshelf`, `:highshelf` and `:peaking` |
 
 ```lisp
-(fx :filter 800)                          ; lowpass at 800 Hz
-(fx :filter :freq 1200 :q 4)             ; resonant lowpass
-(fx :filter :freq 500 :type "highpass")  ; highpass
+(fx :filter 800)                              ; lowpass at 800 Hz
+(fx :filter :freq 1200 :q 4)                 ; resonant lowpass
+(fx :filter :freq 500 :type :highpass)       ; highpass
+(fx :filter :type :peaking :freq 3000 :gain 12 :q 2)   ; nasal boost
 ```
+
+`(fx :off :filter)` is an exact bypass for every type (before FX1 a bypassed high-pass was
+close to silent).
+
+#### `eq` — parametric EQ
+
+Low shelf, two peaking bands and a high shelf. Flat (an exact identity) at its defaults. No
+positional value.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Low shelf gain | `low` | `0` dB | −24…24 dB |
+| Low shelf corner | `low-freq` | `100` Hz | 20–1000 Hz |
+| Mid band gain | `mid` | `0` dB | −24…24 dB |
+| Mid band centre | `mid-freq` | `1000` Hz | 100–8000 Hz |
+| Mid band Q | `mid-q` | `1` | 0.1–10 |
+| Second mid gain | `mid2` | `0` dB | −24…24 dB |
+| Second mid centre | `mid2-freq` | `3000` Hz | 200–16000 Hz |
+| Second mid Q | `mid2-q` | `1` | 0.1–10 |
+| High shelf gain | `high` | `0` dB | −24…24 dB |
+| High shelf corner | `high-freq` | `8000` Hz | 1000–20000 Hz |
+
+A shelf reaches half its gain at its corner frequency and the full gain about two octaves
+beyond it.
+
+```lisp
+(track :bass (->> (seq :c2 :_ :eb2 :_) (synth :saw) (fx :eq :low 9 :low-freq 120)))
+(track :bass (->> (seq :c2 :_ :eb2 :_) (synth :saw) (fx :eq :mid -12 :mid-freq 800 :mid-q 2)))
+(master (fx :eq :high 2 :high-freq 8000))
+```
+
+#### `limiter` — look-ahead peak limiter
+
+No output sample exceeds the ceiling. Inactive until named (it is not on by default).
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Ceiling | `ceiling` / positional | `-1` dBFS | −24…0 dBFS |
+| Release | `release` | `0.1` s | 0.01–1 s: time to recover after a peak |
+
+```lisp
+(master (fx :limiter -1))
+(master (fx :limiter :ceiling -3 :release 0.05))
+```
+
+The limiter looks 5 ms ahead, so it delays the signal by 5 ms. It is always last in the chain.
+The ceiling applies to sample values, not to inter-sample (true) peaks.
+
+#### `gate` — noise gate
+
+Opens above the threshold, stays open for `hold` after the level drops, then closes. No
+latency. Inactive until named.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Threshold | `threshold` / positional | `-40` dBFS | −80…0 dBFS |
+| Attack | `attack` | `0.001` s | 0.0001–0.1 s: opening time |
+| Hold | `hold` | `0.05` s | 0–2 s |
+| Release | `release` | `0.1` s | 0.005–2 s: closing time |
+| Range | `range` | `-80` dB | −80…0 dB: gain while closed (−80 ≈ silent; −12 makes it an expander) |
+
+```lisp
+(track :snare (->> (seq :_ :sd :_ :sd) (fx :gate :threshold -35 :release 0.08)))
+(track :snare (->> (seq :_ :sd :_ :sd) (fx :reverb 0.6) (fx :gate :threshold -30 :release 0.05)))
+```
+
+The gate sits before the other effects in the master chain; per track it is where you write it,
+so a gate after a reverb cuts the reverb tail.
 
 #### `compressor` — dynamics compressor
 
@@ -3710,6 +3877,38 @@ Amplitude modulation at low frequencies — the sound pulses rhythmically.
 (fx :tremolo :depth 0.8 :rate 6)
 (fx :tremolo :shape "square")
 ```
+
+#### `flanger` — flanger
+
+A short modulated delay with feedback: the "jet" sweep. The dry signal stays at 1; `wet`
+adds the delayed signal (as in `chorus`).
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Wet mix | `wet` / positional | `0` | 0–1 |
+| Rate | `rate` | `0.25` Hz | 0.01–10 Hz: sweep speed |
+| Depth | `depth` | `0.7` | 0–1: the delay moves between `delay·(1 − depth)` and `delay·(1 + depth)` |
+| Delay | `delay` | `0.002` s | 0.0005–0.010 s: centre delay |
+| Feedback | `feedback` | `0` | −0.95…0.95: resonance; negative values invert the comb |
+
+```lisp
+(track :pad (->> (seq :c3 :g3) (synth :saw) (fx :flanger :rate 0.25 :depth 0.7 :feedback 0.6 :wet 0.8)))
+```
+
+#### `vibrato` — pitch vibrato
+
+Wobbles the pitch of the whole track. Fully wet while active; inactive until named.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Depth | `depth` / positional | `20` cents | 0–100 cents up and down |
+| Rate | `rate` | `5` Hz | 0.5–20 Hz |
+
+```lisp
+(track :lead (->> (seq :a4) (synth :saw) (fx :vibrato :rate 5 :depth 50)))
+```
+
+For a per-note vibrato use the per-event `vib` parameter instead.
 
 #### `overdrive` — soft-clip distortion
 
@@ -3894,17 +4093,75 @@ so the duck is perfectly in time regardless of BPM, with zero look-ahead latency
 > over `release` seconds. The automation is written directly onto the Web Audio gain
 > parameter, so it is sample-accurate.
 
+#### `auto-pan` — equal-power auto-pan
+
+Moves the sound between left and right at constant power (no level dip in the middle).
+Inactive until named.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Depth | `depth` / positional | `1` | 0–1 (1 = fully left to fully right) |
+| Rate | `rate` | `1` Hz | 0.01–20 sweeps per second |
+| Sync | `sync` | unset | Length of one sweep in cycles; wins over `rate` while set and locks to the cycle grid |
+| Shape | `shape` | `:sine` | `:sine` `:tri` `:square` |
+
+```lisp
+(track :hats (->> (fast 8 (seq :hh)) (fx :auto-pan :sync 1)))    ; centre → right → centre → left, once per cycle
+(track :hats (->> (fast 8 (seq :hh)) (fx :auto-pan :rate 0.5 :shape :tri)))
+```
+
+Each sweep starts in the centre moving right. A synced auto-pan follows BPM changes: it
+restarts on the next sweep boundary of the new grid.
+
+#### `ring-mod` — ring modulator
+
+Multiplies the signal by a carrier: metallic, bell-like sum and difference tones.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Mix | `mix` / positional | `0` | 0–1: crossfade from dry to modulated |
+| Frequency | `freq` | `440` Hz | 0.1–5000 Hz |
+| Shape | `shape` | `:sine` | `:sine` `:tri` `:square` `:saw` |
+
+```lisp
+(track :lead (->> (seq :a4 :e4) (synth :saw) (fx :ring-mod :freq 220 :mix 1)))
+```
+
+#### `width` — stereo width
+
+Scales the side (L − R) signal: 0 = mono, 1 = unchanged, 2 = side level doubled. `haas`
+delays the right channel and widens mono material.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Width | `width` / positional | `1` | 0–2 |
+| Haas delay | `haas` | `0` ms | 0–30 ms |
+
+```lisp
+(master (fx :width 1.4))
+(track :hats (->> (seq :hh :_ :hh :_) (fx :width :haas 12)))
+```
+
+- Values above 1 raise the level of out-of-phase content and make the mix less mono-compatible.
+- **Per track, `width` only widens what is already stereo.** A track's sound arrives in the
+  centre unless its events are panned (`(pan …)`), and a centred sound has no side signal to
+  scale. Use `(pan …)` on the events or `:haas`. On the master it works wherever tracks are
+  panned.
+
 ### Effect chain order
 
-The default signal chain is:
+The master signal chain is:
 ```
-synthesis → compressor → reverb → delay → filter → dattorro-reverb
-         → chorus → phaser → tremolo → overdrive → bitcrusher → sidechain
-         → distort → amp-sim → waveshape → cab → output
+synthesis → gate → eq → compressor → reverb → delay → filter → dattorro-reverb
+         → chorus → flanger → vibrato → phaser → tremolo → ring-mod
+         → overdrive → bitcrusher → sidechain → distort → amp-sim → waveshape → cab
+         → [plugins you load] → auto-pan → width → limiter → output
 ```
 
-`cab` sits after the distortion-family effects so amp chains can finish with speaker
-coloration.
+The order is fixed, whatever order the effects are written in (or load in): gate and EQ before
+the compressor, the stereo tools and the limiter last. `cab` sits after the distortion-family
+effects so amp chains can finish with speaker coloration. Per-track chains run in the order
+written in the `->>` pipeline.
 
 Use `(fx :remove :name)` to take an effect out of the chain entirely.
 Use `(fx :off :name)` / `(fx :on :name)` for transparent bypass without removing.

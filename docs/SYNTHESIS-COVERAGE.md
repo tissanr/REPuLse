@@ -268,12 +268,12 @@ effect plugins (`(fx …)`, global chain or per track) and no per-event effects 
 | Filter envelope per event | ✅ | TL7c | `lp-env` … `bp-release` |
 | DJ filter (one knob LP↔HP) | ✅ | TL7c | `djf` |
 | Vowel / formant filter | ✅ | TL7c | `vowel` (`:a :e :i :o :u`) |
-| Shelving, peaking, all-pass types on `filter` | 🆕 | FX1 | Native `BiquadFilterNode` types, not exposed |
+| Shelving, peaking, all-pass types on `filter` | ✅ | FX1 | `(fx :filter :type :peaking :gain 6 …)`; all 8 `BiquadFilterNode` types |
 | Ladder filter (24 dB/oct, self-oscillating) | ⏸ | FX2 | |
 | Comb filter | ⏸ | FX2 | |
 | Tuned resonator bank | ⏸ | FX2 | |
 | Auto-wah / envelope filter | ⏸ | FX2 | |
-| Parametric EQ (shelves + peaking bands) | 🆕 | FX1 | FUTURE-FEATURES backlog row |
+| Parametric EQ (shelves + peaking bands) | ✅ | FX1 | `(fx :eq :low … :mid … :mid2 … :high …)` |
 
 ### Dynamics
 
@@ -282,8 +282,8 @@ effect plugins (`(fx …)`, global chain or per track) and no per-event effects 
 | Compressor | ✅ | — | `(fx :compressor …)`, `DynamicsCompressorNode` |
 | Sidechain ducking | ✅ | — | `(fx :sidechain :trigger :bd …)`, pattern-triggered |
 | Per-orbit ducking | ❓ | — | `duck`: deferred by TL7c; `(fx :sidechain …)` covers track ducking |
-| Limiter (output ceiling) | 🆕 | FX1 | The engine hard-clips at ±1 today |
-| Noise gate / expander | 🆕 | FX1 | |
+| Limiter (output ceiling) | ✅ | FX1 | `(fx :limiter -1)`, 5 ms look-ahead worklet; the engine bound is ±8 since FX1 |
+| Noise gate / expander | ✅ | FX1 | `(fx :gate …)` with hold and `:range` (expander) |
 | Transient shaper | ⏸ | FX2 | |
 | Multiband compressor | ⏸ | FX2 | |
 | De-esser | 💤 | — | Vocal-recording tool; no audio input in REPuLse |
@@ -313,9 +313,9 @@ effect plugins (`(fx …)`, global chain or per track) and no per-event effects 
 | Chorus | ✅ | — | `(fx :chorus …)` |
 | Phaser | ✅ | — | `(fx :phaser …)` |
 | Tremolo | ✅ | — | `(fx :tremolo …)` |
-| Flanger | 🆕 | FX1 | |
-| Vibrato (pitch modulation of a whole track) | 🆕 | FX1 | Per-event `vib` is TL7c |
-| Ring modulator | 🆕 | FX1 | FUTURE-FEATURES backlog row; `(* a b)` exists inside `defsynth` |
+| Flanger | ✅ | FX1 | `(fx :flanger …)`, worklet with feedback |
+| Vibrato (pitch modulation of a whole track) | ✅ | FX1 | `(fx :vibrato …)`; per-event `vib` is TL7c |
+| Ring modulator | ✅ | FX1 | `(fx :ring-mod …)`; `(* a b)` also exists inside `defsynth` |
 | Rotary speaker | ⏸ | FX2 | Parity row `leslie` is undecided; FX2 settles it |
 | Frequency shifter | ⏸ | FX2 | |
 
@@ -324,13 +324,13 @@ effect plugins (`(fx …)`, global chain or per track) and no per-event effects 
 | Effect | Status | Phase | Notes |
 |---|---|---|---|
 | Pan per event | ✅ | — | `pan`, `jux` |
-| Convolution reverb | 🟡 | FX1 | `(fx :reverb …)`: one generated impulse response, no size/decay/damping control |
+| Convolution reverb | ✅ | FX1 | `(fx :reverb …)` with `type`, `decay`, `size`, `damp`, `predelay` |
 | Plate reverb | ✅ | — | `(fx :dattorro-reverb …)` with decay, damping, pre-delay |
 | Reverb send per event | 📋 | TL7b | `room`, `size`, `orbit` |
-| Room / hall / spring / gated / reverse reverb | 🆕 | FX1 | |
+| Room / hall / spring / gated / reverse reverb | ✅ | FX1 | `(fx :reverb :type …)`; `:spring` pending the FX1 listen check (D7) |
 | Shimmer reverb | ⏸ | FX2 | Needs the pitch shifter |
-| Auto-pan | 🆕 | FX1 | |
-| Stereo width (mid/side), Haas widener | 🆕 | FX1 | |
+| Auto-pan | ✅ | FX1 | `(fx :auto-pan …)`, equal power, `:sync` |
+| Stereo width (mid/side), Haas widener | ✅ | FX1 | `(fx :width … :haas …)` |
 | Multichannel panning | 💤 | — | Parity doc: ⛔ (SuperDirt multichannel) |
 | Effect routing (reorder, parallel, sends) | ⏸ | P2 | |
 
@@ -338,11 +338,11 @@ effect plugins (`(fx …)`, global chain or per track) and no per-event effects 
 
 | Effect | Status | Phase | Notes |
 |---|---|---|---|
-| Feedback delay | 🟡 | FX1 | `(fx :delay …)`: time in seconds only, mono feedback path |
+| Feedback delay | ✅ | FX1 | `(fx :delay …)` with `:mode`, `:lowcut`/`:highcut` in the repeats |
 | Delay send per event | 📋 | TL7b | `delay`, `delay-time`, `delay-feedback` |
-| Tempo-synced delay time | 🟡 | TL7c, FX1 | `delay-sync` per event ✅ (TL7c); `:sync` on the track effect (FX1) |
-| Ping-pong delay | 🆕 | FX1 | |
-| Multi-tap delay | 🆕 | FX1 | |
+| Tempo-synced delay time | ✅ | TL7c, FX1 | `delay-sync` per event (TL7c); `(fx :delay :sync 3/16)` on the track effect (FX1) |
+| Ping-pong delay | ✅ | FX1 | `(fx :delay :mode :ping-pong …)` |
+| Multi-tap delay | ✅ | FX1 | `(fx :delay :taps [1/8 3/8] …)` |
 | Tape delay (filtered, saturating, wobbling repeats) | ⏸ | FX2 | |
 
 ### Pitch, time & spectral

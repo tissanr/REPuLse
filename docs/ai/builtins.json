@@ -2656,10 +2656,15 @@
     "examples": [
       "(fx :reverb 0.4)",
       "(fx :delay :wet 0.3 :time 0.25)",
-      "(->> (seq :bd :_ :bd :_) (fx :filter 1000))"
+      "(->> (seq :bd :_ :bd :_) (fx :filter 1000))",
+      "(fx :reverb :type :hall :decay 3 :wet 0.3)",
+      "(master (fx :limiter -1))"
     ],
     "see-also": [
       "track",
+      "master",
+      "eq",
+      "limiter",
       "distort",
       "amp-sim",
       "cab"
@@ -6830,6 +6835,156 @@
     ],
     "detail": "(sample-banks) — list all registered bank names",
     "description": "List all registered sample bank names."
+  },
+  "eq": {
+    "category": "effect",
+    "signature": "(fx :eq [:low dB] [:low-freq Hz] [:mid dB] [:mid-freq Hz] [:mid-q Q] [:mid2 dB] [:mid2-freq Hz] [:mid2-q Q] [:high dB] [:high-freq Hz])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(->> (seq :c2 :_ :eb2 :_) (synth :saw) (fx :eq :low 3 :low-freq 80 :mid -4 :mid-freq 400 :mid-q 1.5))",
+      "(master (fx :eq :high 2 :high-freq 8000))"
+    ],
+    "see-also": [
+      "limiter",
+      "gate",
+      "fx",
+      "master"
+    ],
+    "detail": "effect — parametric EQ: low/high shelf, two peaking bands (fx :eq :low 3 :high 2)",
+    "description": "Parametric EQ: low shelf, two peaking bands, high shelf. Gains −24…24 dB (default 0, i.e. flat). :low-freq 20–1000 Hz (100), :mid-freq 100–8000 Hz (1000), :mid2-freq 200–16000 Hz (3000), :high-freq 1000–20000 Hz (8000), :mid-q / :mid2-q 0.1–10 (1). A shelf reaches half its gain at its corner frequency. No positional value."
+  },
+  "limiter": {
+    "category": "effect",
+    "signature": "(fx :limiter ceiling [:release s])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(master (fx :limiter -1))",
+      "(master (fx :eq :high 2) (fx :limiter :ceiling -1 :release 0.1))"
+    ],
+    "see-also": [
+      "eq",
+      "gate",
+      "fx",
+      "master"
+    ],
+    "detail": "effect — look-ahead peak limiter (fx :limiter -1); ceiling dBFS, 5 ms latency",
+    "description": "Look-ahead peak limiter: no output sample exceeds :ceiling (−24…0 dBFS, default −1). :release 0.01–1 s (0.1) is the recovery time after a peak. Delays the signal by 5 ms. Inactive until named; put it last on the master."
+  },
+  "gate": {
+    "category": "effect",
+    "signature": "(fx :gate threshold [:attack s] [:hold s] [:release s] [:range dB])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(->> (seq :_ :sd :_ :sd) (fx :gate :threshold -35 :release 0.08))",
+      "(->> (seq :_ :sd :_ :sd) (fx :reverb 0.6) (fx :gate :threshold -30 :range -12))"
+    ],
+    "see-also": [
+      "limiter",
+      "eq",
+      "fx"
+    ],
+    "detail": "effect — noise gate (fx :gate -40); threshold dBFS, hold, release, range",
+    "description": "Noise gate: opens above :threshold (−80…0 dBFS, default −40), stays open for :hold (0–2 s, 0.05) after the level drops, then closes over :release (0.005–2 s, 0.1). :attack 0.0001–0.1 s (0.001). :range −80…0 dB (−80 ≈ silent; −12 makes it an expander)."
+  },
+  "flanger": {
+    "category": "effect",
+    "signature": "(fx :flanger wet [:rate Hz] [:depth N] [:delay s] [:feedback N])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(->> (seq :c3 :g3) (synth :saw) (fx :flanger :rate 0.25 :depth 0.7 :feedback 0.6 :wet 0.8))"
+    ],
+    "see-also": [
+      "vibrato",
+      "auto-pan",
+      "fx"
+    ],
+    "detail": "effect — flanger with feedback (fx :flanger 0.6 :feedback 0.6)",
+    "description": "Flanger: a short modulated delay with feedback. wet 0–1 (default 0; the dry signal stays at 1). :rate 0.01–10 Hz (0.25), :depth 0–1 (0.7) sweeps the delay between delay·(1 − depth) and delay·(1 + depth), :delay 0.0005–0.01 s (0.002), :feedback −0.95…0.95 (0; negative inverts the comb)."
+  },
+  "vibrato": {
+    "category": "effect",
+    "signature": "(fx :vibrato depth [:rate Hz])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(->> (seq :a4) (synth :saw) (fx :vibrato :rate 5 :depth 50))"
+    ],
+    "see-also": [
+      "flanger",
+      "vib",
+      "fx"
+    ],
+    "detail": "effect — pitch vibrato (fx :vibrato 20); depth in cents, :rate Hz",
+    "description": "Pitch vibrato on the whole track: depth 0–100 cents up and down (default 20), :rate 0.5–20 Hz (5). Inactive until named."
+  },
+  "auto-pan": {
+    "category": "effect",
+    "signature": "(fx :auto-pan depth [:rate Hz] [:sync cycles] [:shape kw])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(->> (fast 8 (seq :hh)) (fx :auto-pan :sync 1))",
+      "(->> (fast 8 (seq :hh)) (fx :auto-pan :rate 0.5 :shape :tri))"
+    ],
+    "see-also": [
+      "width",
+      "pan",
+      "fx"
+    ],
+    "detail": "effect — equal-power auto-pan (fx :auto-pan 1 :sync 1)",
+    "description": "Equal-power auto-pan: depth 0–1 (default 1 = fully left to fully right), :rate 0.01–20 Hz (1), :sync length of one sweep in cycles (wins over :rate, locked to the cycle grid), :shape :sine (default), :tri or :square. Total power stays constant. Inactive until named."
+  },
+  "ring-mod": {
+    "category": "effect",
+    "signature": "(fx :ring-mod mix [:freq Hz] [:shape kw])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(->> (seq :a4 :e4) (synth :saw) (fx :ring-mod :freq 220 :mix 1))"
+    ],
+    "see-also": [
+      "flanger",
+      "fx"
+    ],
+    "detail": "effect — ring modulator (fx :ring-mod 0.5 :freq 220)",
+    "description": "Ring modulator: multiplies the signal by a carrier. mix 0–1 crossfades dry → modulated (default 0). :freq 0.1–5000 Hz (440), :shape :sine (default), :tri, :square or :saw."
+  },
+  "width": {
+    "category": "effect",
+    "signature": "(fx :width width [:haas ms])",
+    "returns": "nil",
+    "side-effects": [
+      "audio"
+    ],
+    "examples": [
+      "(master (fx :width 1.4))",
+      "(->> (seq :hh :_ :hh :_) (fx :width :haas 12))"
+    ],
+    "see-also": [
+      "auto-pan",
+      "pan",
+      "fx"
+    ],
+    "detail": "effect — stereo width 0–2 (fx :width 1.4); :haas ms",
+    "description": "Stereo width: 0 = mono, 1 = unchanged (default), 2 = side level doubled. Above 1 raises out-of-phase content and reduces mono compatibility. :haas 0–30 ms delays the right channel and widens mono material. Per track it only widens what is already stereo (panned events) unless :haas is set."
   },
   "+": {
     "category": "util",

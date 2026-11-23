@@ -1,5 +1,7 @@
 (ns repulse.fx
-  (:require [repulse.audio :as audio]
+  (:require [clojure.string :as str]
+            [repulse.audio :as audio]
+            [repulse.lisp.util :as util]
             [repulse.specs :as specs]))
 
 ;; Ordered vector of {:name "reverb" :plugin js-obj :input node :output node}
@@ -50,10 +52,76 @@
           (.connect (:output a) (:input b)))
         (.connect (:output (last effects)) anl)))))
 
+;;; ── Chain order (Phase FX1, D12) ─────────────────────────────────────────
+
+(def default-order
+  "Documented master-chain order. Plugins load asynchronously, so add-effect!
+   sorts by this instead of relying on the order the imports resolve."
+  ["gate" "eq" "compressor" "reverb" "delay" "filter" "dattorro-reverb"
+   "chorus" "flanger" "vibrato" "phaser" "tremolo" "ring-mod"
+   "overdrive" "bitcrusher" "sidechain" "distort" "amp-sim" "waveshape" "cab"
+   ;; user-loaded plugins sort here
+   "auto-pan" "width" "limiter"])
+
+(def ^:private order-index
+  (into {} (map-indexed (fn [i n] [n i]) default-order)))
+
+(defn chain-rank
+  "Position of effect-name in default-order; an unknown (user-loaded) plugin
+   ranks between cab and auto-pan."
+  [effect-name]
+  (or (get order-index effect-name)
+      (- (get order-index "auto-pan") 0.5)))
+
+(defn sort-chain
+  "Stable sort of chain entries by chain-rank of their :name."
+  [entries]
+  (vec (sort-by (comp chain-rank :name) entries)))
+
+;;; ── Tempo (Phase FX1, D1) ────────────────────────────────────────────────
+
+(defn- current-cycle-dur []
+  (:cycle-dur @audio/scheduler-state))
+
+(defn call-set-tempo!
+  "Call plugin.setTempo(cycleDur, origin) when the plugin has it."
+  [^js plugin cycle-dur origin]
+  (when (and plugin cycle-dur (fn? (.-setTempo plugin)))
+    (try (.setTempo plugin cycle-dur origin)
+         (catch :default e
+           (js/console.warn "[REPuLse] setTempo failed:" e)))))
+
+(defn- all-plugins
+  "Every live plugin instance: the global chain and every track chain."
+  []
+  (concat (keep :plugin @chain)
+          (for [[_ {:keys [fx-chain]}] @audio/track-nodes
+                {:keys [plugin]} fx-chain
+                :when plugin]
+            plugin)))
+
+(defn notify-tempo!
+  "Tell every live plugin instance the new cycle duration (origin 0: the real-time
+   scheduler places cycle c at c × cycle-dur)."
+  [cycle-dur]
+  (doseq [p (all-plugins)]
+    (call-set-tempo! p cycle-dur 0)))
+
+(defn tempo-watch-fn
+  "Watch fn on audio/scheduler-state: notify only when :cycle-dur changes."
+  [_ _ o n]
+  (when (not= (:cycle-dur o) (:cycle-dur n))
+    (notify-tempo! (:cycle-dur n))))
+
+(defonce ^:private tempo-watch
+  (add-watch audio/scheduler-state ::fx-tempo
+             (fn [k r o n] (tempo-watch-fn k r o n))))
+
 (defn add-effect! [^js plugin]
   (let [ac    (audio/get-ctx)
         nodes (validate-effect-nodes! (.-name plugin) (.createNodes plugin ac))]
-    (swap! chain conj (make-effect-entry (.-name plugin) plugin nodes))
+    (call-set-tempo! plugin (current-cycle-dur) 0)
+    (swap! chain #(sort-chain (conj % (make-effect-entry (.-name plugin) plugin nodes))))
     (rewire!)))
 
 (defn remove-effect! [effect-name]
@@ -85,6 +153,129 @@
   (when-let [entry (some #(when (= effect-name (:name %)) %) @chain)]
     (.bypass ^js (:plugin entry) enabled)
     (swap! chain (fn [c] (mapv #(if (= effect-name (:name %)) (assoc % :bypassed? enabled) %) c)))))
+
+;;; ── fx arguments and parameter descriptors (Phase FX1, D4) ──────────────
+
+(defn- key-arg? [x] (keyword? (util/unwrap x)))
+
+(defn parse-fx-args
+  "(fx :name 0.4 :dry 1) → [[\"value\" 0.4] [\"dry\" 1]] — ordered pairs,
+   positional first when present. args are the arguments after the effect name
+   (raw or unwrapped); values are deep-unwrapped. Each pair carries the raw key
+   argument (the positional value itself for \"value\") as {:arg x} metadata, so
+   callers can find its source range. Used by both fx built-ins."
+  [args]
+  (let [args (vec args)
+        named (fn [xs]
+                (vec (for [[k v] (partition 2 xs)
+                           :when (key-arg? k)]
+                       (with-meta [(name (util/unwrap k)) (util/deep-unwrap v)]
+                         {:arg k}))))]
+    (cond
+      (empty? args) []
+      (key-arg? (first args)) (named args)
+      :else (into [(with-meta ["value" (util/deep-unwrap (first args))]
+                     {:arg (first args)})]
+                  (named (rest args))))))
+
+(defn- descriptor [^js plugin]
+  (when plugin
+    (let [d (.-params plugin)]
+      (when (and d (object? d)) d))))
+
+(defn- param-names
+  "Descriptor keys in order, without \"value\"."
+  [^js d]
+  (vec (remove #{"value"} (js/Object.keys d))))
+
+(defn- show-val [v]
+  (cond
+    (keyword? v) (str v)
+    (string? v)  (pr-str v)
+    :else        (pr-str v)))
+
+(defn- valid-number? [n]
+  (and (number? n) (not (js/isNaN n))))
+
+(defn- ->list [v]
+  (let [v (util/deep-unwrap v)]
+    (cond
+      (or (vector? v) (seq? v)) (into-array (map util/->num v))
+      (array? v)                (into-array (map util/->num v))
+      :else                     #js [(util/->num v)])))
+
+(defn prepare-param
+  "→ {:name n :value v :warning msg-or-nil :send? bool}. A plugin without a
+   `params` descriptor gets name and value unchanged, :send? true (the
+   behaviour before FX1)."
+  [^js plugin effect-name pname v]
+  (if-let [d (descriptor plugin)]
+    (let [params   (param-names d)
+          plist    (str/join ", " params)
+          kind     (aget d pname)
+          skip     (fn [msg] {:name pname :value v :warning msg :send? false})]
+      (cond
+        (= pname "value")
+        (if-let [target (aget d "value")]
+          (prepare-param plugin effect-name target v)
+          (skip (str "fx :" effect-name " takes no positional value — parameters: " plist)))
+
+        (nil? kind)
+        (skip (str "fx :" effect-name " has no parameter :" pname " — parameters: " plist))
+
+        (= kind "number")
+        (let [n (util/->num v)]
+          (if (valid-number? n)
+            {:name pname :value n :warning nil :send? true}
+            (skip (str "fx :" effect-name " :" pname " expects a number — got " (show-val v)))))
+
+        (= kind "list")
+        {:name pname :value (->list v) :warning nil :send? true}
+
+        (array? kind)
+        (let [s (cond (keyword? v) (name v)
+                      (string? v)  v
+                      :else        nil)]
+          (if (and s (some #(= s %) kind))
+            {:name pname :value s :warning nil :send? true}
+            (skip (str "fx :" effect-name " :" pname " has no value " (show-val v)
+                       " — values: " (str/join ", " kind)))))
+
+        :else
+        {:name pname :value v :warning nil :send? true}))
+    {:name pname :value v :warning nil :send? true}))
+
+(defn needs-param-warning
+  "Warning for (fx :limiter) with no parameters, when the plugin has a
+   descriptor; nil otherwise."
+  [^js plugin effect-name]
+  (when-let [d (descriptor plugin)]
+    (str "fx :" effect-name " needs a parameter — parameters: "
+         (str/join ", " (param-names d)))))
+
+(defn find-plugin
+  "The registered (global chain) plugin for effect-name, or nil."
+  [effect-name]
+  (some #(when (= effect-name (:name %)) (:plugin %)) @chain))
+
+(defn prepare-fx-args
+  "parse-fx-args + prepare-param for effect-name. → {:pairs [[n v] …] (only the
+   ones to send) :warnings [{:message :arg} …]}. :arg is the raw argument whose
+   source range marks the warning (nil → the effect keyword)."
+  [effect-name args]
+  (let [plugin (find-plugin effect-name)
+        pairs  (parse-fx-args args)]
+    (if (and (empty? pairs) (needs-param-warning plugin effect-name))
+      {:pairs [] :warnings [{:message (needs-param-warning plugin effect-name) :arg nil}]}
+      (reduce (fn [acc pair]
+                (let [[pname v] pair
+                      {:keys [name value warning send?]} (prepare-param plugin effect-name pname v)]
+                  (cond-> acc
+                    send?   (update :pairs conj [name value])
+                    warning (update :warnings conj {:message warning
+                                                    :arg (:arg (meta pair))}))))
+              {:pairs [] :warnings []}
+              pairs))))
 
 ;;; ── Per-track FX chains ───────────────────────────────────────────────────
 
@@ -127,6 +318,7 @@
     (let [ac     (audio/get-ctx)
           ^js fresh (instantiate-plugin (:plugin entry))
           nodes  (validate-effect-nodes! effect-name (.createNodes fresh ac))]
+      (call-set-tempo! fresh (current-cycle-dur) 0)
       (swap! audio/track-nodes update-in [track-name :fx-chain]
              conj (dissoc (make-effect-entry effect-name fresh nodes) :active?))
       (rewire-track! track-name))))

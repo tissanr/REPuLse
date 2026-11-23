@@ -446,9 +446,6 @@
             ;; WS2: one-time console hint for master + top-level (fx …)
             (b-fx/loose-fx-hint!)
 
-            ;; WS3: clamped (slider …) values
-            (report-slider-warnings! slider-diags last-output set-output!)
-
             ;; ── Legacy :_ track hot-swap ──────────────────────────────────────
             ;; When the last form is not a pattern (e.g. (defsynth lfo ...) follows
             ;; (def bass ...)), the scheduler's :_ track is never updated because
@@ -477,7 +474,12 @@
                 (when (reconcile! declared)
                   (set-playing! false)
                   (when-not (string? val)
-                    (set-output! "nothing to play" :success))))))
+                    (set-output! "nothing to play" :success)))))
+
+            ;; WS3: clamped (slider …) values; FX1: unknown fx parameters and
+            ;; values. Last, so no later status line ("nothing to play")
+            ;; overwrites them.
+            (report-slider-warnings! slider-diags last-output set-output!))
 
           ;; ── Continuous signals with no rhythm ─────────────────────────────
           (report-structureless-signals! (sort (conj @builtins/seen-tracks :_))

@@ -134,7 +134,8 @@ test('(stop) resets orbit settings to their defaults', async ({ page }) => {
     const create = proto.createDelay;
     proto.createDelay = function patched(this: BaseAudioContext, max?: number) {
       const d = create.call(this, max);
-      if (max === 4) found.push(d);
+      // the (fx :delay …) plugin also uses 4 s delays since FX1: skip its nodes
+      if (max === 4 && !/\/plugins\//.test(new Error().stack ?? '')) found.push(d);
       return d;
     };
   });

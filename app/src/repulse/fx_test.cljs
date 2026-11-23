@@ -1,5 +1,6 @@
 (ns repulse.fx-test
   (:require [cljs.test :refer [deftest is testing]]
+            [repulse.audio :as audio]
             [repulse.core :as core]
             [repulse.env.builtins.fx :as b-fx]
             [repulse.fx :as fx]
@@ -300,3 +301,161 @@
     (fx/notify-plugins! [p] {:note :c4} 2.0)
     (fx/notify-plugins! [p] 440 3.0)
     (is (= [["bd" 1.5] ["c4" 2.0]] @seen))))
+
+;;; ── Phase FX1 — chain order, parameter descriptors, tempo ─────────────
+
+(defn- fx1-node []
+  #js {:connect (fn [_] nil) :disconnect (fn [] nil)})
+
+(defn- fake-effect
+  "A plugin stub named nm; calls are logged into log as [nm method args…]."
+  ([nm log] (fake-effect nm log nil))
+  ([nm log params]
+   (let [p #js {:name        nm
+                :createNodes (fn [_] #js {:inputNode (fx1-node) :outputNode (fx1-node)})
+                :setParam    (fn [k v] (swap! log conj [nm :set k v]))
+                :setTempo    (fn [cd origin] (swap! log conj [nm :tempo cd origin]))
+                :resetParams (fn [] nil)
+                :destroy     (fn [] nil)}]
+     (when params (set! (.-params p) params))
+     p)))
+
+(defn- with-fake-audio
+  "Run f with stub audio nodes, an empty chain and cycle-dur 2.0."
+  [f]
+  (let [saved-chain @fx/chain
+        saved-gain  @audio/master-gain
+        saved-tap   @audio/master-tap
+        saved-cd    (:cycle-dur @audio/scheduler-state)]
+    (try
+      (reset! fx/chain [])
+      (reset! audio/master-gain (fx1-node))
+      (reset! audio/master-tap (fx1-node))
+      (swap! audio/scheduler-state assoc :cycle-dur 2.0)
+      (with-redefs [audio/get-ctx (fn [] #js {})]
+        (f))
+      (finally
+        (reset! fx/chain saved-chain)
+        (reset! audio/master-gain saved-gain)
+        (reset! audio/master-tap saved-tap)
+        (swap! audio/scheduler-state assoc :cycle-dur saved-cd)))))
+
+(deftest fx1-chain-order-is-independent-of-load-order
+  (with-fake-audio
+   (fn []
+     (let [log (atom [])]
+       (doseq [nm ["limiter" "width" "auto-pan" "my-plugin" "cab" "flanger"
+                   "chorus" "delay" "reverb" "compressor" "eq" "gate"]]
+         (fx/add-effect! (fake-effect nm log)))
+       (is (= ["gate" "eq" "compressor" "reverb" "delay" "chorus" "flanger" "cab"
+               "my-plugin" "auto-pan" "width" "limiter"]
+              (mapv :name @fx/chain)))))))
+
+(deftest fx1-chain-rank-unknown-between-cab-and-auto-pan
+  (is (< (fx/chain-rank "cab") (fx/chain-rank "user-thing") (fx/chain-rank "auto-pan")))
+  (is (= (fx/chain-rank "a") (fx/chain-rank "b")))
+  (testing "sort is stable for equal ranks"
+    (is (= ["x" "y"] (mapv :name (fx/sort-chain [{:name "x"} {:name "y"}]))))))
+
+(deftest fx1-parse-fx-args
+  (is (= [["value" 0.4] ["dry" 1]] (fx/parse-fx-args [0.4 :dry 1])))
+  (is (= [["wet" 0.3] ["time" [1 4]]] (fx/parse-fx-args [:wet 0.3 :time [1 4]])))
+  (is (= [["value" 0.4]] (fx/parse-fx-args [0.4])))
+  (is (= [] (fx/parse-fx-args []))))
+
+(def ^:private reverb-desc
+  #js {:value "wet" :wet "number" :dry "number"
+       :type #js ["classic" "room" "hall" "plate" "spring" "gated" "reverse"]
+       :decay "number" :size "number" :damp "number" :predelay "number"})
+
+(deftest fx1-prepare-param-rules
+  (let [rev #js {:params reverb-desc}
+        eq  #js {:params #js {:low "number" :low-freq "number"}}
+        dly #js {:params #js {:value "wet" :wet "number" :time "number" :taps "list"}}
+        old #js {}]
+    (testing "positional value renamed to the descriptor's target"
+      (is (= {:name "wet" :value 0.4 :warning nil :send? true}
+             (fx/prepare-param rev "reverb" "value" 0.4))))
+    (testing "positional value without a target"
+      (is (= {:name "value" :value 3 :send? false
+              :warning "fx :eq takes no positional value — parameters: low, low-freq"}
+             (fx/prepare-param eq "eq" "value" 3))))
+    (testing "unknown parameter"
+      (is (= "fx :reverb has no parameter :room — parameters: wet, dry, type, decay, size, damp, predelay"
+             (:warning (fx/prepare-param rev "reverb" "room" 0.8))))
+      (is (false? (:send? (fx/prepare-param rev "reverb" "room" 0.8)))))
+    (testing "numbers: rationals convert, non-numbers warn"
+      (is (= 0.1875 (:value (fx/prepare-param dly "delay" "time" [3 16]))))
+      (is (= "fx :delay :time expects a number — got :fast"
+             (:warning (fx/prepare-param dly "delay" "time" :fast)))))
+    (testing "enum: keyword or string, unknown value warns"
+      (is (= "hall" (:value (fx/prepare-param rev "reverb" "type" :hall))))
+      (is (= "room" (:value (fx/prepare-param rev "reverb" "type" "room"))))
+      (is (= "fx :reverb :type has no value :cathedral — values: classic, room, hall, plate, spring, gated, reverse"
+             (:warning (fx/prepare-param rev "reverb" "type" :cathedral)))))
+    (testing "list: vector elements through ->num, a single value is a one-element list"
+      (is (= [0.125 0.375] (vec (:value (fx/prepare-param dly "delay" "taps" [[1 8] [3 8]])))))
+      (is (= [1 8] (vec (:value (fx/prepare-param dly "delay" "taps" [1 8])))))
+      (is (= [0.5] (vec (:value (fx/prepare-param dly "delay" "taps" 0.5))))))
+    (testing "plugins without a descriptor are unchanged"
+      (is (= {:name "value" :value [1 4] :warning nil :send? true}
+             (fx/prepare-param old "delay" "value" [1 4])))
+      (is (= {:name "anything" :value :x :warning nil :send? true}
+             (fx/prepare-param old "x" "anything" :x))))
+    (testing "needs a parameter"
+      (is (= "fx :reverb needs a parameter — parameters: wet, dry, type, decay, size, damp, predelay"
+             (fx/needs-param-warning rev "reverb")))
+      (is (nil? (fx/needs-param-warning old "reverb"))))))
+
+(deftest fx1-global-fx-positional-and-named-and-warnings
+  (let [saved @fx/chain
+        log   (atom [])
+        warns (atom [])
+        env   (merge (leval/make-env (fn [] nil) (fn [_] nil))
+                     (b-fx/make-builtins {:warn! #(swap! warns conj %)}))]
+    (try
+      (reset! fx/chain [{:name "reverb" :plugin (fake-effect "reverb" log reverb-desc)
+                         :active? false :bypassed? false}])
+      (testing "(fx :reverb 0.4 :dry 1) sets both parameters at top level"
+        (lisp/eval-string "(fx :reverb 0.4 :dry 1)" env)
+        (is (= [["reverb" :set "wet" 0.4] ["reverb" :set "dry" 1]] @log)))
+      (testing "unknown parameter: warning on the keyword, nothing sent"
+        (reset! log []) (reset! warns [])
+        (lisp/eval-string "(fx :reverb :room 0.8)" env)
+        (is (= [] @log))
+        (is (= [{:message "fx :reverb has no parameter :room — parameters: wet, dry, type, decay, size, damp, predelay"
+                 :from 12 :to 17}]
+               @warns)))
+      (testing "keyword enum is sent as a string; bad value warns, rest still applies"
+        (reset! log []) (reset! warns [])
+        (lisp/eval-string "(fx :reverb :type :cathedral :wet 0.4)" env)
+        (is (= [["reverb" :set "wet" 0.4]] @log))
+        (is (= 1 (count @warns))))
+      (testing "(fx :reverb) with a descriptor warns on the effect keyword"
+        (reset! log []) (reset! warns [])
+        (lisp/eval-string "(fx :reverb)" env)
+        (is (= [] @log))
+        (is (= {:from 4 :to 11} (select-keys (first @warns) [:from :to]))))
+      (testing "per-track form gets converted params"
+        (reset! warns [])
+        (let [r (lisp/eval-string "(->> (seq :bd) (fx :reverb :type :hall 0.5))" env)]
+          (is (not (lisp/eval-error? r)))))
+      (testing "per-track form: positional renamed, rational converted"
+        (let [r   (lisp/eval-string "(->> (seq :bd) (fx :reverb 1/2 :type :hall))" env)
+              fxm (first (:track-fx (:result r)))]
+          (is (= {"wet" 0.5 "type" "hall"} (:params fxm)))))
+      (finally (reset! fx/chain saved)))))
+
+(deftest fx1-set-tempo-on-add-and-on-cycle-dur-change
+  (with-fake-audio
+   (fn []
+     (let [log (atom [])]
+       (fx/add-effect! (fake-effect "delay" log))
+       (is (= [["delay" :tempo 2.0 0]] @log))
+       (reset! log [])
+       (fx/tempo-watch-fn nil nil {:cycle-dur 2.0 :x 1} {:cycle-dur 2.0 :x 2})
+       (is (= [] @log) "other keys do not notify")
+       (fx/tempo-watch-fn nil nil {:cycle-dur 2.0} {:cycle-dur 2.6667})
+       (is (= [["delay" :tempo 2.6667 0]] @log))
+       (testing "plugins without setTempo are skipped"
+         (is (nil? (fx/call-set-tempo! #js {} 2.0 0))))))))

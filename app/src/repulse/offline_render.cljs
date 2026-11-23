@@ -125,13 +125,15 @@
 
 (defn- build-instance!
   "Instantiate effect-name's registered plugin in the offline context (decision
-   2 / E7): fresh instance → init(offline host) → createNodes → validate.
+   2 / E7): fresh instance → init(offline host) → createNodes → validate →
+   setTempo(cycle-dur, pre-roll-secs) (FX1, D1: cycle 0 starts after the pre-roll).
    → {:name :plugin :input :output}. Throws a fallback error on failure."
-  [effect-name ^js plugin ^js offline host]
+  [effect-name ^js plugin ^js offline host cycle-dur]
   (try
     (let [^js fresh (fx/instantiate-plugin plugin)]
       (when (fn? (.-init fresh)) (.init fresh host))
       (let [^js nodes (fx/validate-effect-nodes! effect-name (.createNodes fresh offline))]
+        (fx/call-set-tempo! fresh cycle-dur pre-roll-secs)
         {:name   effect-name
          :plugin fresh
          :input  (.-inputNode nodes)
@@ -169,7 +171,7 @@
    master? false (SK1 stems, K5): unity master gain straight to the destination,
    no global chain; the plan's entries are only used to look track-FX plugins up.
    → {:master node :instances [inst…] :track-dests {kw node}}."
-  [^js offline sr plan tracks master?]
+  [^js offline sr plan tracks master? cycle-dur]
   (let [master   (.createGain offline)
         _        (set! (.. master -gain -value)
                        (if-let [^js mg (and master? @audio/master-gain)]
@@ -178,7 +180,7 @@
         host     (offline-host offline sr master)
         global   (if master?
                    (vec (for [{:keys [name plugin] :as entry} (:build plan)]
-                          (let [inst (build-instance! name plugin offline host)]
+                          (let [inst (build-instance! name plugin offline host cycle-dur)]
                             (replay-global-params! entry (:plugin inst))
                             inst)))
                    [])
@@ -190,7 +192,7 @@
                                      (for [{:keys [name params]} (:track-fx pat)
                                            :let [p (get by-name name)]
                                            :when p]
-                                       (let [inst (build-instance! name p offline host)]
+                                       (let [inst (build-instance! name p offline host cycle-dur)]
                                          ;; same as fx/apply-track-effects!: metadata params only
                                          (doseq [[k v] params]
                                            (.setParam ^js (:plugin inst) k v))
@@ -265,7 +267,7 @@
         (if (nil? (.-audioWorklet offline))
           (js/Promise.reject (fallback-error "AudioWorklet unavailable offline"))
           (-> (js/Promise.resolve nil)
-              (.then (fn [_] (build-graph! offline sr plan plan-tracks master?)))
+              (.then (fn [_] (build-graph! offline sr plan plan-tracks master? cycle-dur)))
               (.then
                (fn [{:keys [master instances track-dests]}]
                  (-> (audio/init-offline-worklet! offline master)
