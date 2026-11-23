@@ -433,6 +433,18 @@ after you stop typing.
 - **Playing section** — while a song plays, the sounding section is marked `▶` in cyan with a
   thin progress line. Tracks show `■` (muted, dimmed) or a cyan `•` when audible in the playing
   section, and are dimmed when they rest in it. `▾` / `▸` folds the song's sections.
+- **Run state (what you hear)** — outside a song every `track` row shows whether it runs:
+  a cyan `•` when it plays, `■` (dimmed) when it is muted, and a dimmed row without a glyph
+  (tooltip `not running`) when it is not scheduled. `(clear!)`, `(clear! :a)` and `(stop)`
+  therefore dim rows instead of removing them; Alt+Enter brings the `•` back. The code is
+  never changed. While a song plays, the section logic below applies instead.
+- **running group** — audible tracks that the active buffer does not declare are listed under
+  a `running` divider after the fx and master groups, each with `•` or `■`: a track started
+  from the command bar shows `not in code`, a bare pattern shows `_` / `anonymous`, and a
+  track declared in another project buffer shows that buffer's name — click it to switch there
+  and jump to the form (`Shift+F12` returns). `:__preview__` tracks are never listed. These
+  rows are not selectable and have no inspector. The group disappears when it is empty, e.g.
+  after `(upd)` retires a command-bar track.
 - **fx group** — top-level `(fx …)` forms are listed together in one `fx` group after all other
   rows (`fx  fx  1`, then `:reverb  L4`). Select the group to inspect every top-level effect,
   or one child to inspect just that effect. `fx` calls inside a `track` or `->>` are not listed

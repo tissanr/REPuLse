@@ -1557,7 +1557,8 @@ header h1 {
 .ol-row.ol-playing.ol-cursor::before { background: #56b6c2; }
 .ol-row.ol-muted { opacity: .55; }
 .ol-row.ol-muted .ol-kind, .ol-row.ol-muted .ol-name { color: #3a4868; }
-.ol-row.ol-off .ol-name { color: #5a6a8a; }
+.ol-row.ol-off .ol-name, .ol-row.ol-off .ol-kind, .ol-row.ol-off .ol-line { color: #5a6a8a; }
+.ol-row[data-track] .ol-meta, .ol-row[data-act="goto-buffer"] .ol-meta { font-style: normal; }
 .ol-glyph {
   width: 18px; flex-shrink: 0; text-align: center; color: #5a6a8a;
   font-size: 8px; font-weight: 700;
