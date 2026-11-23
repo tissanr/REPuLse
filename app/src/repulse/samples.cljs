@@ -625,11 +625,15 @@
   (second (re-find #"^([A-Z][a-z]+)" name)))
 
 (defn format-banks
-  "Returns a human-readable grouped string of all registered sample banks."
-  []
-  (let [all (sort (keys @registry))]
+  "Returns a human-readable grouped string of all registered sample banks.
+   With a filter string/keyword, only banks whose name contains it (case-insensitive)."
+  ([] (format-banks nil))
+  ([flt]
+  (let [q   (some-> flt name str/lower-case)
+        all (sort (filter #(or (nil? q) (str/includes? (str/lower-case %) q))
+                          (keys @registry)))]
     (if (empty? all)
-      "No sample banks loaded yet."
+      (if q (str "No sample banks match \"" q "\".") "No sample banks loaded yet.")
       (let [simple   (filterv #(not (str/includes? % "_")) all)
             compound (filterv #(str/includes? % "_") all)
             by-mfr   (group-by #(or (mfr-of %) "misc") compound)
@@ -653,4 +657,4 @@
                                    (str "  " model ": " (str/join "  " insts))))
                                (sort (keys by-model))))))))
         (str (count all) " sample banks\n\n"
-             (str/join "\n\n" @sections))))))
+             (str/join "\n\n" @sections)))))))

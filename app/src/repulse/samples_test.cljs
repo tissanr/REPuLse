@@ -173,3 +173,12 @@
     (is (= "hard1.wav" (samples/pick-url :kit_sd 3 {:fixed-take true})))
     (reset! samples/layers lo)
     (reset! samples/registry ro)))
+
+(deftest format-banks-filter
+  (let [ro @samples/registry]
+    (reset! samples/registry {"tk_bd" ["a.wav"] "tk_sd" ["b.wav"] "bd" ["c.wav"]})
+    (is (str/includes? (samples/format-banks "tk") "tk"))
+    (is (not (str/includes? (samples/format-banks "tk") "general")))
+    (is (str/includes? (samples/format-banks :TK) "2 sample banks"))
+    (is (str/includes? (samples/format-banks "zzz") "No sample banks match"))
+    (reset! samples/registry ro)))

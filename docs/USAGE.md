@@ -2199,7 +2199,7 @@ by folder name. Each folder becomes one bank:
 (samples! "https://raw.githubusercontent.com/algorave-dave/samples/main/samples.json")
 ```
 
-**`sample-banks`** — returns a sorted list of every registered bank name (built-ins
+**`sample-banks`** — (`(sample-banks "tk")` lists only banks whose name contains `tk`) returns a sorted list of every registered bank name (built-ins
 plus anything loaded via `samples!`):
 
 ```lisp
