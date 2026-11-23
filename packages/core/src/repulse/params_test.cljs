@@ -6,11 +6,11 @@
 (def ^:private one-cycle
   (core/span (core/int->rat 0) (core/int->rat 1)))
 
-;;; ── combine ──────────────────────────────────────────────────────────
+;;; ── app-right ────────────────────────────────────────────────────────
 
-(deftest combine-pairs-overlapping-events
+(deftest app-right-pairs-overlapping-events
   (let [evs (core/query
-              (core/combine vector
+              (core/app-right vector
                             (core/seq* [1 2])
                             (core/seq* [:a :b]))
               one-cycle)
@@ -19,10 +19,10 @@
     (is (= [1 :a] (first vals)))
     (is (= [2 :b] (second vals)))))
 
-(deftest combine-pure-pairs-with-all-events
+(deftest app-right-pure-pairs-with-all-events
   ;; pure 99 covers the full cycle — every note event pairs with it
   (let [evs (core/query
-              (core/combine vector
+              (core/app-right vector
                             (core/pure 99)
                             (core/seq* [:x :y :z]))
               one-cycle)

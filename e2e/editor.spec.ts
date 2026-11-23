@@ -1,10 +1,11 @@
 import { expect, type Page, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 
 // Phase TEST3 — editor behaviour of the full app page: completion, hover docs,
 // syntax classes, Ctrl/Cmd+K S, comment toggle and Alt+Enter.
 //
-// Hover docs come from app/src/repulse/lisp-lang/hover.js (the spec text says
-// builtin_meta.edn, but the tooltip reads hover.js).
+// Hover docs are generated from app/src/repulse/content/builtin_meta.edn into
+// app/src/repulse/lisp-lang/builtins.generated.js (npm run gen:ai-docs); hover.js reads them.
 
 declare global {
   interface Window {
@@ -101,6 +102,50 @@ test('E3: master is highlighted like fx, slider like amp', async ({ page }) => {
   expect(classes.slider).toBe(classes.amp);
   expect(classes.master).toBe(classes.slider); // all four are BuiltinName tokens
   expect(classes.kick).not.toBe(classes.fx); // a user symbol is styled differently
+});
+
+// Phase QA4 — hover docs and highlighting come from builtin_meta.edn (via docs/ai/builtins.json,
+// generated from the same file), including names that had no hover text before.
+test('E2b: hover shows the :signature from builtin_meta.edn for defn, legato and slice', async ({ page }) => {
+  const meta = JSON.parse(readFileSync('docs/ai/builtins.json', 'utf8')) as Record<string, { signature: string }>;
+  const text = '(defn twice [p] (fast 2 p))\n(legato 0.5 (seq :bd))\n(slice 4 "0 2" (seq :bd))\n(play :x 1)';
+  await load(page);
+  await setText(page, text, text.length);
+  const hover = async (needle: string, offset = 2) => {
+    const { x, y } = await page.evaluate(([n, o]) => {
+      const v = window.__REPULSE_EDITOR__;
+      const r = v.coordsAtPos(v.state.doc.toString().indexOf(n as string) + (o as number));
+      return { x: r.left + 1, y: (r.top + r.bottom) / 2 };
+    }, [needle, offset] as const);
+    await page.mouse.move(0, 0);
+    await page.mouse.move(x, y, { steps: 4 });
+  };
+  for (const name of ['defn', 'legato', 'slice']) {
+    await hover(`(${name} `, 2);
+    await expect(page.locator('.cm-tooltip-hover .repulse-hover-sig')).toHaveText(meta[name].signature);
+  }
+  expect(meta.play).toBeUndefined();
+  await hover('(play ', 2);
+  await page.waitForTimeout(600);
+  await expect(page.locator('.cm-tooltip-hover .repulse-hover-sig')).toHaveCount(0);
+});
+
+test('E3b: samples!, + and not= are BuiltinName tokens like amp', async ({ page }) => {
+  const text = '(samples! "x")\n(+ 1 2)\n(not= a b)\n(keys m)\n(amp 1 (seq :c4))\n(def kick 1)';
+  await load(page);
+  // the cursor sits at the end, outside every form, so no widget replaces a token
+  await setText(page, text, text.length);
+  const classes = await page.evaluate(() => {
+    const out: Record<string, string> = {};
+    for (const s of Array.from(document.querySelectorAll('#editor-container .cm-line span'))) {
+      const t = s.textContent ?? '';
+      if (['samples!', '+', 'not=', 'keys', 'amp', 'kick'].includes(t) && !(t in out)) out[t] = s.className;
+    }
+    return out;
+  });
+  expect(classes.amp).toBeTruthy();
+  for (const n of ['samples!', '+', 'not=', 'keys']) expect(classes[n]).toBe(classes.amp);
+  expect(classes.kick).not.toBe(classes.amp); // a user symbol is styled differently
 });
 
 test('E4: Ctrl/Cmd+K S wraps numbers in (slider …) and unwraps again', async ({ page }) => {

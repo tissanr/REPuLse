@@ -1,5 +1,6 @@
 (ns repulse.theory
-  (:require [repulse.core :as core]))
+  (:require [repulse.core :as core]
+            [repulse.edit-distance :as edit-distance]))
 
 ;;; ── Note name parsing ────────────────────────────────────────────────
 
@@ -150,16 +151,14 @@
   []
   (sort (keys chord-intervals)))
 
-(declare edit-distance)
-
 (defn- unknown-name-error
   "\"scale: unknown scale :majr — did you mean :major?\", or with no close
    match \" — known: <sorted list>\"."
   [fname what v names]
   (let [n    (if (keyword? v) (name v) (str v))
         best (when (seq names)
-               (apply min-key #(edit-distance n (name %)) names))
-        hint (when (and best (<= (edit-distance n (name best)) 3)) best)]
+               (apply min-key #(edit-distance/levenshtein n (name %)) names))
+        hint (when (and best (<= (edit-distance/levenshtein n (name best)) 3)) best)]
     (ex-info (str fname ": unknown " what " " (pr-str v)
                   (if hint
                     (str " — did you mean " hint "?")
@@ -187,14 +186,6 @@
   sc)
 
 ;;; ── Helpers ──────────────────────────────────────────────────────────
-
-(defn- deg-val
-  "Numeric value of a number or [n d] rational; nil otherwise."
-  [x]
-  (cond (number? x) x
-        (and (vector? x) (= 2 (count x)) (number? (first x)) (number? (second x)))
-        (/ (first x) (second x))
-        :else nil))
 
 (defn- ->midi [x]
   (cond (number? x) x
@@ -232,8 +223,8 @@
 (defn- scale* [name root pat]
   (let [semis (scale-semis "scale" name)
         r     (note->midi (check-root! "scale" root))
-        f     (fn [v] (if-let [d (deg-val v)] (midi->note (degree->midi semis r d)) v))]
-    (core/fmap #(if (and (map? %) (deg-val (:note %))) (update % :note f) (f %)) pat)))
+        f     (fn [v] (if-let [d (core/as-number v)] (midi->note (degree->midi semis r d)) v))]
+    (core/fmap #(if (and (map? %) (core/as-number (:note %))) (update % :note f) (f %)) pat)))
 
 (defn scale
   "Map 0-based scale degrees in pat to note keywords. Degree 0 is the root;
@@ -249,7 +240,7 @@
   (let [[name root] (cond (and (vector? sc) (keyword? (first sc))) [(first sc) (or (second sc) :c)]
                           :else [sc :c])
         semis (scale-semis "scale-transpose" name)
-        n     (int (js/Math.floor (deg-val n)))
+        n     (int (js/Math.floor (core/as-number n)))
         rpc   (mod (note->midi root) 12)
         step  (fn [m]
                 (let [rel (- m rpc)
@@ -257,7 +248,7 @@
                       pc  (- rel (* 12 oct))
                       idx (last (keep-indexed (fn [i s] (when (<= s pc) i)) semis))]
                   (degree->midi semis (+ rpc (* 12 oct)) (+ idx n))))
-        f     (fn [v] (cond (deg-val v)        (+ (deg-val v) n)
+        f     (fn [v] (cond (core/as-number v)        (+ (core/as-number v) n)
                             (note-keyword? v)  (midi->note (step (note->midi v)))
                             :else              v))]
     (core/fmap #(if (and (map? %) (:note %)) (update % :note f) (f %)) pat)))
@@ -288,7 +279,7 @@
               (if (= sign "-") (- semis) semis))))))))
 
 (defn- transpose* [n pat]
-  (let [n     (deg-val n)
+  (let [n     (core/as-number n)
         ratio (js/Math.pow 2 (/ n 12))
         shift (fn [v] (cond (number? v)       (* v ratio)
                             (note-keyword? v) (midi->note (+ (note->midi v) n))
@@ -391,19 +382,6 @@
   (when-let [{:keys [root intervals bass]} (parse-chord-symbol v)]
     (vec (concat (when bass [bass]) (map #(+ root %) intervals)))))
 
-(defn- edit-distance [a b]
-  (let [a (vec a) b (vec b)]
-    (peek
-     (reduce (fn [prev i]
-               (reduce (fn [row j]
-                         (conj row (min (inc (peek row))
-                                        (inc (nth prev (inc j)))
-                                        (+ (nth prev j) (if (= (nth a i) (nth b j)) 0 1)))))
-                       [(inc i)]
-                       (range (count b))))
-             (vec (range (inc (count b))))
-             (range (count a))))))
-
 (defn chord-symbol-error
   "Error message for an unparseable chord symbol, with a did-you-mean hint."
   [v]
@@ -411,7 +389,7 @@
         [_ root suffix] (re-matches #"([A-G][#b]?)(.*)" text)
         best (when suffix
                (->> (for [[aliases _] chord-qualities, a aliases :when (seq a)]
-                      [(edit-distance suffix a) a])
+                      [(edit-distance/levenshtein suffix a) a])
                     (reduce (fn [b c] (if (and (<= (first c) 2) (or (nil? b) (< (first c) (first b)))) c b))
                             nil)))]
     (str "unknown chord symbol \"" text "\""
@@ -488,7 +466,7 @@
      (fan-out #(some->> (voice-symbol % a mode offset) (mapv midi->note)) pat))))
 
 (defn- root-notes* [oct pat]
-  (let [o (int (js/Math.floor (deg-val oct)))]
+  (let [o (int (js/Math.floor (core/as-number oct)))]
     (fan-out #(when-let [{:keys [root]} (parse-chord-symbol %)]
                 [(midi->note (+ (mod root 12) (* 12 (inc o))))])
              pat)))

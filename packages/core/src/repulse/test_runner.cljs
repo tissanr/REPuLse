@@ -1,6 +1,7 @@
 (ns repulse.test-runner
   (:require [cljs.test :as test]
             [repulse.core-test]
+            [repulse.edit-distance-test]
             [repulse.theory-test]
             [repulse.params-test]
             [repulse.envelope-test]
@@ -21,6 +22,7 @@
             [repulse.ui.timeline-test]
             [repulse.outline-test]
             [repulse.lisp-patcher-test]
+            [repulse.content.builtin-meta-test]
             [repulse.project-test]
             [repulse.history-test]
             [repulse.project-eval-test]
@@ -50,7 +52,8 @@
     (set! (.-exitCode js/process) 1)))
 
 (defn main []
-  (test/run-tests 'repulse.core-test 'repulse.theory-test 'repulse.params-test
+  (test/run-tests 'repulse.core-test 'repulse.edit-distance-test
+                  'repulse.content.builtin-meta-test 'repulse.theory-test 'repulse.params-test
                   'repulse.envelope-test 'repulse.song-test
                   'repulse.lisp.eval-test 'repulse.lisp.mini-test
                   'repulse.lisp.integration-test

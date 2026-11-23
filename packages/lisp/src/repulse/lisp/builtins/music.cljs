@@ -4,13 +4,11 @@
   (:require [clojure.string :as str]
             [repulse.core :as core]
             [repulse.theory :as theory]
+            [repulse.lisp.builtins.common :refer [numeric-token?]]
             [repulse.lisp.util :as u]))
 
 (defn- eval-error [msg]
   (ex-info msg {:type :eval-error}))
-
-(defn- numeric-token? [tok]
-  (boolean (re-matches #"-?\d+(\.\d+)?(/\d+)?" tok)))
 
 (defn- check-chord-literal!
   "For a string argument, throw an eval error for the first token that is not

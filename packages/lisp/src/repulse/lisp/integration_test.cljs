@@ -3,7 +3,8 @@
             [clojure.string :refer [includes?]]
             [repulse.core :as core]
             [repulse.lisp.core :as lisp]
-            [repulse.lisp.eval :as leval]))
+            [repulse.lisp.eval :as leval]
+            [repulse.theory :as theory]))
 
 ;;; Helpers
 
@@ -1326,7 +1327,7 @@
 
 ;;; ── Phase TL5: layering, pitch & harmony ────────────────────────────
 
-(defn- note->m [v] (repulse.theory/note->midi v))
+(defn- note->m [v] (theory/note->midi v))
 
 (defn- rows
   "Onsets of cycle c as [value start end] sorted by start, then value order of
@@ -1517,7 +1518,7 @@
   (is (= 6 (count (rows "(->> (seq :c3 :e3 :g3) (superimpose (add 12)))")))))
 
 (deftest tl5-jux-flip
-  (let [r (fn [code c] (set (map (fn [[v s e]] [(:note v) (:pan v) (core/rat- s [c 1])]) (rows code c))))]
+  (let [r (fn [code c] (set (map (fn [[v s _]] [(:note v) (:pan v) (core/rat- s [c 1])]) (rows code c))))]
     (is (= #{[:a -1 [0 1]] [:b -1 [1 2]] [:b 1 [0 1]] [:a 1 [1 2]]} (r "(jux-flip rev (seq :a :b))" 0)))
     (is (= #{[:a 1 [0 1]] [:b 1 [1 2]] [:b -1 [0 1]] [:a -1 [1 2]]} (r "(jux-flip rev (seq :a :b))" 1)))
     (is (= #{[:a -0.5 [0 1]] [:b -0.5 [1 2]] [:b 0.5 [0 1]] [:a 0.5 [1 2]]} (r "(jux-flip-by 0.5 rev (seq :a :b))" 0)))))
@@ -1653,3 +1654,13 @@
   (testing "slice/splice take the highlight from the index pattern"
     (is (= [{:from 14 :to 15} {:from 16 :to 17}]
            (mapv :source (onsets (eval-pat "(slice 8 (seq 0 3) (sound :breaks152 0))") 0))))))
+
+;;; ── Phase QA4: typo hints scale with the typed name's length ────────
+
+(deftest qa4-typo-hints
+  (is (= "Undefined symbol: palindrom — did you mean palindrome?"
+         (err-msg "(palindrom (seq :bd))")))
+  (is (= "Undefined symbol: stakc — did you mean stack?"
+         (err-msg "(stakc :bd)")))
+  (testing "a short typo is not matched to a name two edits away"
+    (is (= "Undefined symbol: sqe" (err-msg "(sqe :bd)")))))

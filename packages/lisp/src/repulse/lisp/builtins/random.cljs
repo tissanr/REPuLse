@@ -4,26 +4,10 @@
    when-pat, whenmod, apply-n — thin Lisp wrappers over repulse.core.
    brand and berlin are bare signal values registered in builtins.signals."
   (:require [repulse.core :as core]
+            [repulse.lisp.builtins.common :refer [xf step->pat n+p n+f+p]]
             [repulse.lisp.util :as u]))
 
-(defn- xf
-  "Wrap a Lisp function argument so SourcedVals never reach core."
-  [f]
-  (let [f (u/unwrap f)]
-    (fn [p] (u/unwrap (f p)))))
-
-(defn- step->pat [x]
-  (let [v (u/unwrap x)]
-    (if (core/pattern? v) v (core/pure v (u/source-of x)))))
-
 (defn- p1 [f] (fn [p] (f (u/unwrap p))))
-
-(defn- n+p
-  "(f n pat) with curried (f n); n patternable."
-  [f]
-  (fn
-    ([n]   (let [n (u/pat-arg n)] (fn [p] (f n (u/unwrap p)))))
-    ([n p] (f (u/pat-arg n) (u/unwrap p)))))
 
 (defn- f+p
   "(f fn pat) with curried (f fn)."
@@ -31,13 +15,6 @@
   (fn
     ([g]   (let [g (xf g)] (fn [p] (f g (u/unwrap p)))))
     ([g p] (f (xf g) (u/unwrap p)))))
-
-(defn- n+f+p
-  "(f n fn pat) with curried (f n fn); n patternable."
-  [f]
-  (fn
-    ([n g]   (let [n (u/pat-arg n) g (xf g)] (fn [p] (f n g (u/unwrap p)))))
-    ([n g p] (f (u/pat-arg n) (xf g) (u/unwrap p)))))
 
 (defn- when-on
   "A Lisp fn of the cycle number (Tidal when), or a patternable boolean."
