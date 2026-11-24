@@ -152,6 +152,12 @@ AudioEngine::stop_all(&mut self)
 - `stop_all()` — clears all voices and pending events immediately
 - `invalid_drops()`, `queue_cap_drops()`, `voice_cap_drops()`, `nonfinite_kills()` —
   saturating counters of dropped events and killed voices (not reset by `stop_all`)
+- `meter_next(slot)` — Phase VIZ1: the next triggered event (any trigger kind) is
+  metered on slot 0–15 (any other value: not metered). `worklet.js` calls it right
+  before a trigger whose message carries a `meter` field.
+- `meter_snapshot()` / `meter_snapshot_len()` — Phase VIZ1: fills a pre-allocated
+  buffer and returns a pointer to it: per slot the last 2048 mono dry samples (oldest
+  first), then 16 peaks (decaying 20 dB/s), then 16 RMS values. No allocation.
 
 ### Synthesized voices
 
@@ -479,6 +485,37 @@ inputNode ─┬─── dry GainNode ─────────────�
 
 When `wet = 0` (default for delay, dattorro-reverb) the effect is inaudible but
 in the chain; the dry signal passes unchanged.
+
+### Per-track meters (Phase VIZ1)
+
+The track panel and the in-code visualizers (`scope`, `spectrum`, the panel's
+`level`) show each track's own audio, measured on two paths and summed on the main
+thread by `audio/track-audio`:
+
+```
+JS voices of track T ──► T's tap (GainNode, gain 1) ──► T's first FX input | masterGain
+                              └──► T's AnalyserNode (fftSize 2048, dead end)
+
+WASM voices ──► engine: each voice also adds its mono dry sample to its track's
+                meter slot (0–15, assigned per track in audio/meter-slots)
+                → 16 rings × 2048 samples + peak, in the render loop, no allocation
+
+main thread ──{type "meter-req" buf}──► worklet  (≤ 30×/s, only while an audio view
+            ◄──{type "meter"   buf}───          is visible; the Float32Array is
+                                                 transferred both ways, ping-pong)
+```
+
+The tap only replaces the node a JS voice connects to; WASM eligibility is still
+decided on the track's original destination (the worklet plays a voice only when it
+would go straight to the master gain). The two sources are not sample-aligned, which
+is acceptable because a track almost always plays one kind of voice. Offline renders
+(export, TEST1) have no taps and send no meter slots.
+
+Event views (`pianoroll`, `punchcard`, `spiral`, the panel's `punch` / `roll`) need
+no audio: they query the track's pattern around `audio/heard-cycle-pos` (the cycle at
+`currentTime − outputLatency`) and cache the result per track and integer cycle
+window (`repulse.ui.timeline`). One animation loop draws the panel and every visible
+inline canvas.
 
 ---
 

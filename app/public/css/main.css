@@ -2857,3 +2857,8 @@ footer {
   border: 1px solid #1e2a45;
   cursor: pointer;
 }
+
+/* Phase VIZ1: inline visualizers — a block widget under the track's form */
+.cm-inline-viz { padding: 3px 0 3px 4px; }
+.cm-inline-viz-canvas { display: block; width: 100%; max-width: 900px; height: 64px;
+  border: 1px solid #1a2438; border-radius: 4px; background: #060b16; }

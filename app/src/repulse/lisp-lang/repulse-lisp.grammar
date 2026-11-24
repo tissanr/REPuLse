@@ -89,7 +89,8 @@ Map    { OpenBrace expr* CloseBrace }
     "pw-rate" | "pw-depth" | "sync" | "tune" | "tone" | "glide" | "accent" | "lp-rate" |
     "lp-depth" | "pulse" | "supersaw" | "acid" | "reese" | "sub-bass" | "fm-bass" |
     "wobble" | "lead" | "sync-lead" | "pluck" | "theremin" | "reed" | "pad" | "strings" |
-    "sweep-pad" | "brass-pad" | "trumpet-cup"
+    "sweep-pad" | "brass-pad" | "trumpet-cup" | "pianoroll" | "punchcard" | "spiral" |
+    "scope" | "spectrum"
     // END GENERATED BuiltinName
   }
 

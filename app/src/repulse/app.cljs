@@ -13,6 +13,7 @@
             [repulse.ui.status-head :as status-head]
             [repulse.ui.inspector :as inspector]
             [repulse.ui.inline-slider :as inline-slider]
+            [repulse.ui.inline-viz :as inline-viz]
             [repulse.ui.selection-highlight :as selection-highlight]
             [repulse.ui.dialog :as dialog]
             [repulse.ui.modal-stack :as modal-stack]
@@ -312,6 +313,7 @@
                              #js [outline-panel/extension goto/extension
                                   selection-highlight/extension
                                   inline-slider/extension
+                                  inline-viz/extension
                                   assistant-panel/extension])
           view      (editor/make-view container (editor/make-state "" exts))]
       (reset! editor/editor-view view)
@@ -373,6 +375,17 @@
                                          (tempo/time-at-cycle st (:cycle st))))
                  :audibleCycle  (fn [] (audio/audible-cycle))
                  :timelineQueries (fn [] @timeline/query-count)
+                 ;; Phase VIZ1 (e2e/viz.spec.ts): last drawn summary of a view
+                 ;; (source "inline" or "panel"), a track's own audio, the
+                 ;; heard cycle position.
+                 :vizSummary (fn [track kind source]
+                               (clj->js (get @timeline/summaries
+                                             [(keyword track) (keyword kind) (or source "inline")])))
+                 :trackAudio (fn [track]
+                               (let [{:keys [rms peak slot]} (audio/track-audio (keyword track))]
+                                 #js {:rms rms :peak peak :slot slot}))
+                 :heardCycle (fn [] (audio/heard-cycle-pos))
+                 :requestMeters (fn [] (audio/request-meters!))
                  :timelineCycle   (fn [] @timeline/last-cycle)
                  :pendingDisconnects (fn [] (count @audio/pending-disconnects))
                  ;; QA3 (e2e/qa3-keyboard.spec.ts): the share button needs a
@@ -573,7 +586,7 @@
   (add-watch midi/cc-mappings           ::workspace (fn [_ _ _ _] (outline-panel/schedule-render!)))
 
   (timeline/render-track-panel!)
-  (timeline/start-playhead-raf!))
+  (timeline/start-viz-raf!))
 
 (defn reload []
   ;; Hot-reload hook: reset env so new/changed built-in bindings take effect

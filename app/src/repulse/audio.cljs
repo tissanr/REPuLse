@@ -40,8 +40,17 @@
 (defonce recorder-node (atom nil))
 (defonce ^:private recorder-ready-promise (atom nil))
 
-;; Per-track audio routing: keyword → {:gain-node GainNode :fx-chain [...]}
+;; Per-track audio routing: keyword → {:gain-node GainNode :fx-chain [...]
+;;                                    :tap GainNode :analyser AnalyserNode}
+;; Phase VIZ1: JS voices of a track enter through :tap (unity gain), which
+;; feeds the track's first FX input (else master-gain) and, on the side, the
+;; track's AnalyserNode (a dead end). WASM voices are metered in the engine.
 (defonce track-nodes (atom {}))
+
+;; Phase VIZ1: track → WASM meter slot 0–15, or -1 when all 16 are taken.
+(def n-meter-slots 16)
+(def meter-len 2048)
+(defonce meter-slots (atom {}))
 
 (def ^:private public-base-url
   (let [document (.-document js/globalThis)
@@ -81,6 +90,8 @@
     (reset! master-tap tap)
     (reset! analyser-node anl)))
 
+(declare on-meter-buffer!)
+
 (defn- init-worklet!
   "Register the AudioWorkletProcessor. The main thread fetches the WASM bytes
    and transfers them as an ArrayBuffer; the worklet uses initSync to compile
@@ -103,6 +114,7 @@
                                "ready" (do (reset! worklet-ready? true)
                                            (js/console.log "[REPuLse] audio backend: audioworklet+wasm"))
                                "error" (js/console.warn "[REPuLse] Worklet WASM error:" (.-message d))
+                               "meter" (on-meter-buffer! (.-buf ^js d))
                                nil))))
                    ;; Fetch raw WASM bytes on the main thread and transfer the
                    ;; ArrayBuffer to the worklet.  The worklet uses initSync()
@@ -186,14 +198,44 @@
 
 ;;; Per-track routing helpers
 
+(defn assign-meter-slot
+  "Pure. slots {track slot}: the lowest free slot 0..n for track (its current
+   one if it has one), or -1 when all are taken."
+  [slots track n]
+  (or (get slots track)
+      (let [used (set (vals slots))]
+        (or (first (remove used (range n))) -1))))
+
+(defn- ensure-meter-slot! [track-name]
+  (when track-name
+    (swap! meter-slots (fn [m] (assoc m track-name
+                                      (assign-meter-slot m track-name n-meter-slots))))))
+
+(defn- free-meter-slot! [track-name]
+  (swap! meter-slots dissoc track-name))
+
 (defn- ensure-track-node!
-  "Create a GainNode for a track if it doesn't exist; connect it to masterGain."
+  "Create a GainNode, a VIZ1 tap and its AnalyserNode for a track if they
+   don't exist; connect the gain and the tap to masterGain."
   [ac track-name]
   (when (and track-name (not (get @track-nodes track-name)))
-    (let [gain (doto (.createGain ac)
-                 (-> .-gain (.setValueAtTime 1.0 (.-currentTime ac))))]
+    (let [now  (.-currentTime ac)
+          gain (doto (.createGain ac)
+                 (-> .-gain (.setValueAtTime 1.0 now)))
+          tap  (doto (.createGain ac)
+                 (-> .-gain (.setValueAtTime 1.0 now)))
+          anl  (doto (.createAnalyser ac)
+                 (aset "fftSize" meter-len)
+                 (aset "smoothingTimeConstant" 0))]
       (.connect gain @master-gain)
-      (swap! track-nodes assoc track-name {:gain-node gain :fx-chain []}))))
+      (.connect tap anl)
+      (.connect tap @master-gain)
+      (swap! track-nodes assoc track-name {:gain-node gain :fx-chain []
+                                           :tap tap :analyser anl}))))
+
+(defn- disconnect-track-node! [{:keys [gain-node tap analyser]}]
+  (doseq [n [gain-node tap analyser] :when n]
+    (try (.disconnect n) (catch :default _))))
 
 ;;; Offline graphs (Phase EXP1)
 ;; OfflineAudioContext → {:master-gain node :worklet-node node :track-dests {kw node}}
@@ -234,6 +276,21 @@
       (if (offline-context? ac)
         (.-destination ac)
         (or @master-gain (.-destination ac))))))
+
+(defn- track-tap
+  "Phase VIZ1: where a JS voice of track-name connects — the track's tap
+   (which forwards to dest) in the real-time graph, else dest itself."
+  [ac track-name dest]
+  (or (when (and track-name (not (offline-context? ac)))
+        (get-in @track-nodes [track-name :tap]))
+      dest))
+
+(defn- meter-slot-for
+  "Phase VIZ1: the WASM meter slot of track-name in the real-time graph, or nil."
+  [ac track-name]
+  (when (and track-name (not (offline-context? ac)))
+    (let [s (get @meter-slots track-name)]
+      (when (and s (>= s 0)) s))))
 
 ;;; Synthesized voices (JS fallback when AudioWorklet is unavailable)
 
@@ -559,10 +616,11 @@
   "Send a trigger message to the AudioWorklet. Returns true if worklet is ready.
    dest must be the target's master gain — the worklet always outputs there and
    cannot be redirected (decision E1: same rule offline and in real time)."
-  [{:keys [node ready? master]} value t dest]
+  [{:keys [node ready? master meter]} value t dest]
   (when (and ready? node (= dest master))
     (.. ^js node -port
-        (postMessage #js {:type "trigger" :value value :time t}))
+        (postMessage (cond-> #js {:type "trigger" :value value :time t}
+                       meter (doto (aset "meter" meter)))))
     true))
 
 (defn- worklet-trigger-v3!
@@ -572,12 +630,12 @@
    gate = event length in seconds or nil). ins, snd, pm nil sends the smaller
    trigger_v2 message. Returns true if ready. dest must be the target's master
    gain — the worklet always outputs there."
-  [{:keys [node ready? master]} value t amp attack decay pan ins snd pm gate dest]
+  [{:keys [node ready? master meter]} value t amp attack decay pan ins snd pm gate dest]
   (when (and ready? node (= dest master))
     (when debug? (js/console.log "[REPuLse] triggering WASM:" value "at t=" t "amp=" amp))
     (.. ^js node -port
         (postMessage
-          (if (or ins snd pm)
+          (cond-> (if (or ins snd pm)
             ;; Slot layout = lib.rs trigger_v3 (appended, never reordered):
             ;; 0–3 voice · 4–11 inserts · 12–14 room delay orbit · 15–40 TL7c.
             ;; 41–43 SYN6 cutoff LFO (after TL7c's slots).
@@ -591,7 +649,9 @@
                                         c?          (into (inserts/wasm-slots-tl7c ins pm gate))
                                         lfo         (into [(:rate lfo) (:phase lfo) (:depth lfo)]))))})
             #js {:type "trigger_v2" :value value :time t
-                 :amp amp :attack attack :decay decay :pan pan})))
+                 :amp amp :attack attack :decay decay :pan pan})
+            ;; Phase VIZ1: the track's meter slot (worklet → engine.meter_next)
+            meter (doto (aset "meter" meter)))))
     true))
 
 ;;; Per-event inserts on the JS path (Phase TL7a) — native nodes only, no DSP.
@@ -876,8 +936,12 @@
                     t0
                     (cond-> (+ t0 nud) (offline-context? ac) (max 0)))
          offline? (and (offline-context? ac) (nil? (offline-graph ac)))
-         wt       (when-not offline? (worklet-target ac))
+         wt       (when-not offline?
+                    (assoc (worklet-target ac) :meter (meter-slot-for ac track-name)))
          dest     (output-for-track ac track-name)
+         ;; VIZ1: JS voices enter through the track's tap; dest stays the
+         ;; WASM-eligibility check (worklet-trigger! needs it = master).
+         jd       (track-tap ac track-name dest)
          ins      (let [ins (inserts/insert-params value)
                         ;; SYN6 C3: cutoff LFO rides on the low-pass.
                         lfo (when (map? value) (voices/lp-lfo value t (:cycle-dur timing)))]
@@ -891,7 +955,7 @@
          ;; Destination for a JS voice sounding dur seconds. Only called on the
          ;; fallback branches, so a worklet event never builds a node chain; WASM
          ;; eligibility is still decided on the original dest.
-         js-dest  (fn [dur] (event-output ac t ins snd dest dur 1.0 gate track-name))]
+         js-dest  (fn [dur] (event-output ac t ins snd jd dur 1.0 gate track-name))]
      ;; TL7b: size / delay-time / delay-feedback set the event's orbit, whichever
      ;; path plays the voice (and even when its own sends are 0). Rests carry
      ;; the keys too but are not events.
@@ -908,12 +972,12 @@
        (let [synth-def (synth/lookup-synth (:synth value))]
          ;; The defsynth's own envelope sets its length (unknown here); 30 s
          ;; bounds the cleanup so long pads are never cut.
-         (synth/play-synth! ac t synth-def value (event-output ac t ins snd dest 30.0 af gate track-name)))
+         (synth/play-synth! ac t synth-def value (event-output ac t ins snd jd 30.0 af gate track-name)))
 
        ;; Bare defsynth name — (seq :lfo-sine) triggers a parameterless synth,
        ;; e.g. a bus writer. Note names keep their meaning.
        (and (keyword? value) (not (theory/note-keyword? value)) (synth/lookup-synth value))
-       (synth/play-synth! ac t (synth/lookup-synth value) {} dest)
+       (synth/play-synth! ac t (synth/lookup-synth value) {} jd)
 
        ;; Parameter map {:note … :amp … :attack … :decay … :pan … :synth …}
        ;; from amp/attack/decay/release/pan/saw/square/noise/fm transformers
@@ -1003,7 +1067,7 @@
            (samples/play! ac t bank n amp-v pan-v extra
                           (js-dest (when ins (sample-length ac bank n extra))))
            (if offline?
-             (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)
+             (make-sine ac t 440 1.5 1.0 0.001 0.0 jd)
              (or (worklet-trigger-v3! wt (name bank) t amp-v 0.001 1.5 pan-v ins snd pm gate dest)
                  (make-sine ac t 440 1.5 amp-v 0.001 pan-v (js-dest 1.5))))))
 
@@ -1012,20 +1076,20 @@
        (if (theory/note-keyword? value)
          (let [hz (theory/note->hz value)]
            (if offline?
-             (make-sine ac t hz 1.5 1.0 0.001 0.0 dest)
+             (make-sine ac t hz 1.5 1.0 0.001 0.0 jd)
              (or (worklet-trigger! wt (str hz) t dest)
-                 (make-sine ac t hz 1.5 1.0 0.001 0.0 dest))))
+                 (make-sine ac t hz 1.5 1.0 0.001 0.0 jd))))
          (let [route (voices/drum-route value @samples/active-bank-prefix samples/has-bank?)]
            (case (:kind route)
-             :sample     (samples/play! ac t (:bank route) 0 1.0 0.0 {} dest)
+             :sample     (samples/play! ac t (:bank route) 0 1.0 0.0 {} jd)
              :synth-drum (or (when-not offline?
                                (worklet-trigger! wt (voices/drum-string (:name route) nil) t dest))
-                             (js-kit ac t (:name route) nil 1.0 0.0 dest))
+                             (js-kit ac t (:name route) nil 1.0 0.0 jd))
              ;; :unknown — 440 Hz sine
              (if offline?
-               (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)
+               (make-sine ac t 440 1.5 1.0 0.001 0.0 jd)
                (or (worklet-trigger! wt (name value) t dest)
-                   (make-sine ac t 440 1.5 1.0 0.001 0.0 dest))))))
+                   (make-sine ac t 440 1.5 1.0 0.001 0.0 jd))))))
 
        ;; Map with :synth :noise — no :note key
        (and (map? value) (= (:synth value) :noise))
@@ -1041,11 +1105,11 @@
        ;; Number — frequency in Hz
        (number? value)
        (if offline?
-         (make-sine ac t value 1.5 1.0 0.001 0.0 dest)
+         (make-sine ac t value 1.5 1.0 0.001 0.0 jd)
          (or (worklet-trigger! wt (str value) t dest)
-             (make-sine ac t value 1.5 1.0 0.001 0.0 dest)))
+             (make-sine ac t value 1.5 1.0 0.001 0.0 jd)))
 
-       :else (make-sine ac t 440 1.5 1.0 0.001 0.0 dest)))))
+       :else (make-sine ac t 440 1.5 1.0 0.001 0.0 jd)))))
 
 ;;; Offline WASM worklet (Phase EXP1, decision E11)
 
@@ -1336,14 +1400,7 @@
         ;; MIDI note output — triggered by :midi-ch key added via (midi-out ch pat)
         (when-let [midi-ch (:midi-ch (:value ev))]
           (let [value    (:value ev)
-                hz       (cond
-                           (:freq value) (:freq value)
-                           (and (:note value) (theory/note-keyword? (:note value)))
-                           (theory/note->hz (:note value))
-                           (number? (:note value)) (:note value)
-                           (theory/note-keyword? value) (theory/note->hz value)
-                           (number? value) value
-                           :else nil)
+                hz       (voices/played-hz value)
                 note-num (when hz (midi/hz->midi (double hz)))
                 amp-v    (float (:amp value 1.0))
                 velocity (min 127 (max 0 (Math/round (* amp-v 127))))
@@ -1643,11 +1700,12 @@
     (js/clearInterval id))
   (clear-visuals!)
   ;; Disconnect and clean up all per-track nodes
-  (doseq [[_ {:keys [gain-node fx-chain]}] @track-nodes]
-    (try (.disconnect gain-node) (catch :default _))
+  (doseq [[_ {:keys [fx-chain] :as tn}] @track-nodes]
+    (disconnect-track-node! tn)
     (doseq [{:keys [plugin]} fx-chain]
       (try (.destroy ^js plugin) (catch :default _))))
   (reset! track-nodes {})
+  (reset! meter-slots {})
   ;; QA3 A5: every per-event JS chain goes with the tracks
   (disconnect-entries! @pending-disconnects)
   (reset! pending-disconnects [])
@@ -1729,12 +1787,13 @@
                 (fn []
                   (swap! retiring dissoc track-name)
                   (disconnect-track-chains! track-name)
-                  (try (.disconnect g) (catch :default _))
+                  (disconnect-track-node! tn)
                   (doseq [{:keys [plugin]} (:fx-chain tn)]
                     (try (.destroy ^js plugin) (catch :default _)))
                   ;; Only drop the entry when it still is this node.
                   (when (identical? g (get-in @track-nodes [track-name :gain-node]))
-                    (swap! track-nodes dissoc track-name))
+                    (swap! track-nodes dissoc track-name)
+                    (free-meter-slot! track-name))
                   (finish!))
                 wait-ms)))
       (do (disconnect-track-chains! track-name)
@@ -1751,6 +1810,7 @@
     (revive-retiring! ac track-name)
     (clear-query-errors! track-name)
     (ensure-track-node! ac track-name)
+    (ensure-meter-slot! track-name)
     (arm-transitions! track-name pattern ac)
     (swap! scheduler-state update :tracks assoc track-name pattern)
     ;; The latest evaluation's callbacks win even while the scheduler already
@@ -1776,10 +1836,11 @@
     (swap! retiring dissoc track-name))
   ;; Disconnect and remove per-track node and its FX chain
   (when-let [tn (get @track-nodes track-name)]
-    (try (.disconnect (:gain-node tn)) (catch :default _))
+    (disconnect-track-node! tn)
     (doseq [{:keys [plugin]} (:fx-chain tn)]
       (try (.destroy ^js plugin) (catch :default _)))
     (swap! track-nodes dissoc track-name))
+  (free-meter-slot! track-name)
   (swap! scheduler-state (fn [s]
     (-> s
         (update :tracks dissoc track-name)
@@ -1793,6 +1854,8 @@
   (stop!)
   (let [ac (get-ctx)]
     (.resume ac)
+    (ensure-track-node! ac :_)
+    (ensure-meter-slot! :_)
     (arm-transitions! :_ pattern ac)
     (let [now         (.-currentTime ac)
           start-cycle (int (Math/floor (tempo/cycle-at-time @scheduler-state now)))]
@@ -1818,6 +1881,89 @@
   (let [state @scheduler-state]
     (when-let [ac (and (:playing? state) @ctx)]
       (max 0 (int (Math/floor (tempo/cycle-at-time state (.-currentTime ac))))))))
+
+;;; Heard clock & per-track meters (Phase VIZ1)
+
+(defonce ^:private last-heard (atom nil))
+
+(defn- output-latency-s [^js ac]
+  (clock/latency-s {:output-latency (.-outputLatency ac)
+                    :base-latency   (.-baseLatency ac)}))
+
+(defn heard-cycle-pos
+  "Phase VIZ1: the float cycle position the listener hears now —
+   tempo/cycle-at-time at currentTime minus the output latency. While stopped
+   it stays at the last heard position (nil before the first play)."
+  []
+  (let [state @scheduler-state
+        ac    @ctx]
+    (if (and (:playing? state) ac)
+      (let [c (max 0 (tempo/cycle-at-time state (- (.-currentTime ac) (output-latency-s ac))))]
+        (reset! last-heard c)
+        c)
+      @last-heard)))
+
+;; Ping-pong meter buffers: :latest holds the last snapshot from the worklet
+;; (rings, peaks, RMS — lib.rs meter_snapshot layout), :spare is sent with the
+;; next request. One request is in flight at a time.
+(def ^:private meter-snapshot-len (+ (* n-meter-slots meter-len) (* 2 n-meter-slots)))
+(defonce ^:private meter-bufs
+  (atom {:latest nil :spare nil :in-flight? false :at 0}))
+
+(defn- on-meter-buffer! [^js buf]
+  (when buf
+    (swap! meter-bufs (fn [{:keys [latest] :as m}]
+                        (assoc m :latest buf :spare (or latest (:spare m)) :in-flight? false)))))
+
+(defn request-meters!
+  "Phase VIZ1: ask the worklet for a meter snapshot, at most ~30×/s and only
+   one at a time. Call while an audio view (scope, spectrum, level) is visible."
+  []
+  (when-let [^js node (and @worklet-ready? @worklet-node)]
+    (let [now (.now js/performance)
+          {:keys [in-flight? at spare latest]} @meter-bufs]
+      (when (or (not in-flight?) (> (- now at) 1000)) ; a lost reply never blocks
+        (when (>= (- now at) 33)
+          (let [buf (or spare (js/Float32Array. meter-snapshot-len))]
+            (swap! meter-bufs assoc :spare nil :in-flight? true :at now
+                   :latest (or latest (js/Float32Array. meter-snapshot-len)))
+            (.. node -port (postMessage #js {:type "meter-req" :buf buf} #js [(.-buffer buf)]))))))))
+
+;; Per-track scratch buffers for track-audio: {track {:out f32 :tap f32}}
+(defonce ^:private audio-scratch (atom {}))
+
+(defn- scratch [track-name]
+  (or (get @audio-scratch track-name)
+      (let [b {:out (js/Float32Array. meter-len) :tap (js/Float32Array. meter-len)}]
+        (swap! audio-scratch assoc track-name b)
+        b)))
+
+(defn track-audio
+  "Phase VIZ1: a track's own audio right now — {:samples Float32Array(2048)
+   :peak :rms :slot} — the sum of its JS tap (AnalyserNode) and its WASM meter
+   ring. The two sources are not sample-aligned (a track almost always plays
+   one kind of voice). :slot -1 = no WASM meter (more than 16 tracks). The
+   samples buffer is reused between calls."
+  [track-name]
+  (let [{:keys [out tap]} (scratch track-name)
+        ^js anl (get-in @track-nodes [track-name :analyser])
+        slot    (get @meter-slots track-name)
+        ^js lat (:latest @meter-bufs)
+        ring?   (and lat slot (>= slot 0))
+        ring-pk (if ring? (aget lat (+ (* n-meter-slots meter-len) slot)) 0)]
+    (if anl
+      (.getFloatTimeDomainData anl tap)
+      (.fill tap 0))
+    (let [base (if ring? (* slot meter-len) 0)]
+      (loop [i 0 sq 0.0 pk 0.0]
+        (if (< i meter-len)
+          (let [v (+ (aget tap i) (if ring? (aget lat (+ base i)) 0))]
+            (aset out i v)
+            (recur (inc i) (+ sq (* v v)) (max pk (Math/abs v))))
+          {:samples out
+           :rms     (Math/sqrt (/ sq meter-len))
+           :peak    (max pk ring-pk)
+           :slot    (or slot -1)})))))
 
 ;;; Tap tempo
 

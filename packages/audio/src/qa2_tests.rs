@@ -319,6 +319,7 @@ fn nonfinite_voice_is_killed() {
         inserts_b: None,
         sends: Sends::OFF,
         dead: false,
+        meter: 3,
     });
     // a healthy voice keeps playing next to it
     e.trigger("440", 0.0);

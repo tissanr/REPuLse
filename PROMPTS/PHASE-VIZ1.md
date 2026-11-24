@@ -159,7 +159,10 @@ extra keys survive `track` but are dropped by any combinator that builds a new p
      slot 0–15 (`meter-slots` atom; slot `-1` = unmetered, shown as "no meter: more
      than 16 tracks"). The slot travels in a new `trigger_v3` params slot appended to the
      layout: **slot 44** if nothing else has been appended by then, otherwise the next
-     free one; document it in the layout comment. In the
+     free one; document it in the layout comment. *(Implemented differently: the slot
+     travels as a `meter` field on every trigger message and the worklet calls
+     `engine.meter_next(slot)` before the trigger, so `trigger` / `trigger_v2` events —
+     bare note and drum keywords — are metered too without padding 44 slots.)* In the
      render loop each voice's dry output is also summed into a pre-allocated mono
      `slot_bus[16][128]`; per slot the engine keeps a 2048-sample ring and a running
      peak/RMS. No allocation in the render path.

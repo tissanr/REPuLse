@@ -1,319 +1,220 @@
 (ns repulse.ui.timeline
-  "Canvas track visualization rendering and RAF animation.
-   Responsibility: render a compact viz toolbar, draw scheduler tracks in multiple
-   modes, preserve track muting, and animate while playback is active.
-   Exports: render-track-panel!, start-playhead-raf!"
-  (:require [repulse.core :as core]
-            [repulse.audio :as audio]
+  "Track panel and visualizer runtime (Phase VIZ1).
+   Responsibility: the track panel under the editor (mode toolbar, track mute
+   buttons, one row per track) and the single animation loop that draws it and
+   every registered inline visualizer canvas (repulse.ui.inline-viz).
+
+   Every view is honest: event views draw the exact pattern events around the
+   heard position (audio/heard-cycle-pos — the output latency included), audio
+   views draw the track's own measured audio (audio/track-audio). Drawing is
+   done by repulse.ui.viz-draw, the arithmetic by repulse.ui.viz-model.
+   Exports: render-track-panel!, start-viz-raf!, register-canvas!,
+            unregister-canvas!, draw-canvas!, summaries, query-count, last-cycle."
+  (:require [repulse.audio :as audio]
             [repulse.song :as song]
+            [repulse.ui.viz-model :as vm]
+            [repulse.ui.viz-draw :as vd]
             [repulse.ui.html :refer [escape-html]]))
 
 (defn- el [id] (.getElementById js/document id))
 
-(def ^:private modes
-  [{:id "wave" :label "∿ wave"}
-   {:id "spec" :label "⊞ spec"}
-   {:id "loud" :label "◐ loud"}
-   {:id "beat" :label "║ beat"}
-   {:id "roll" :label "⊟ roll"}
-   {:id "seg"  :label "▬ seg"}])
+;;; ── Panel modes ──────────────────────────────────────────────────────────
 
-(defonce ^:private viz-mode (atom "wave"))
-(defonce ^:private phase (atom 0))
-(defonce ^:private last-ts (atom nil))
+(def modes
+  [{:id "punch" :label "▦ punch" :kind :punchcard :opts {:cycles 1 :labels true}}
+   {:id "roll"  :label "⊟ roll"  :kind :pianoroll :opts {:cycles 4 :playhead 0.5 :fold true}}
+   {:id "scope" :label "∿ scope" :kind :scope     :opts {:scale 1 :trigger true}}
+   {:id "spec"  :label "⊞ spec"  :kind :spectrum  :opts {:log true}}
+   {:id "level" :label "◐ level" :kind :level     :opts {}}])
+
+(defonce ^:private viz-mode (atom "punch"))
 (defonce ^:private raf-started? (atom false))
-(defonce ^:private energy-cache (atom {}))
 
-;; QA3 A2: per-track query cache {track-name {:pattern p :cycle c :muted? m :data d}}
-;; — a track is queried at most once per cycle (and again when its pattern or
-;; mute state changes), not every animation frame.
+(def track-colors ["#e94560" "#56b6c2" "#e5c07b" "#c678dd" "#98c379" "#d19a66"])
+
+;;; ── Event query cache ────────────────────────────────────────────────────
+;; {[track c0 c1] {:pattern p :events laid-out}} — a track is queried again
+;; only when the integer cycles of a view's window or its pattern change.
 (defonce ^:private events-cache (atom {}))
-;; Test handles: track-events calls so far, and the cycle of the last draw.
+(defonce ^:private used-keys (atom #{}))
+;; Test handles: pattern queries so far, and the cycle of the last draw.
 (defonce query-count (atom 0))
 (defonce last-cycle (atom nil))
+;; Test handle: {[track-name kind source] summary} of the last drawn views
+;; (source "panel" or "inline").
+(defonce summaries (atom {}))
 
-(def ^:private track-colors ["#e94560" "#56b6c2" "#e5c07b" "#c678dd" "#98c379" "#d19a66"])
-(def ^:private energy-resolution 512)
-
-(defn track-events [track-name pattern cycle color muted?]
-  (let [sp {:start [cycle 1] :end [(inc cycle) 1]}
-        evs (try (vec (core/query pattern sp)) (catch :default _ []))]
-    {:name track-name
-     :cycle cycle
-     :color color
-     :muted? muted?
-     :events (mapv (fn [ev]
-                     (let [part (:part ev)
-                           value (:value ev)
-                           pos (- (core/rat->float (:start part)) cycle)
-                           dur (- (core/rat->float (:end part))
-                                  (core/rat->float (:start part)))]
-                       {:pos (mod pos 1)
-                        :dur (max 0.01 dur)
-                        :value value}))
-                   evs)}))
-
-(defn song-resting-tracks
-  "In song mode: the set of tracks that do not play in the song bar of the
-   scheduler cycle `audible` (default: the cycle before the next one to
-   schedule) — drawn like muted tracks. nil without an active song."
-  ([state] (song-resting-tracks state (dec (:cycle state))))
-  ([{:keys [tracks] :as state} audible]
-   (when-let [{s :song origin :origin} (:song state)]
-     (let [q      (when origin (song/wrap-bar s (- audible origin)))
-           active (if q (song/active-tracks-at-bar s q) #{})]
-       (set (remove active (keys tracks)))))))
-
-(defn- cached-track-events
-  "track-events through events-cache (QA3 A2)."
-  [track-name pattern cycle color muted?]
-  (let [c (get @events-cache track-name)]
-    (if (and c (identical? pattern (:pattern c)) (= cycle (:cycle c)) (= muted? (:muted? c)))
-      (assoc (:data c) :color color)
-      (let [d (track-events track-name pattern cycle color muted?)]
+(defn- window-events [track-name pattern from to]
+  (let [c0  (Math/floor from)
+        c1  (max (inc c0) (Math/ceil to))
+        k   [track-name c0 c1]
+        hit (get @events-cache k)]
+    (swap! used-keys conj k)
+    (if (and hit (identical? pattern (:pattern hit)))
+      (:events hit)
+      (let [evs (try (vm/layout-events (vm/query-window pattern c0 c1))
+                     (catch :default _ []))]
         (swap! query-count inc)
-        (swap! events-cache assoc track-name {:pattern pattern :cycle cycle :muted? muted? :data d})
-        d))))
+        (swap! events-cache assoc k {:pattern pattern :events evs})
+        evs))))
 
-(defn- active-track-data []
-  (let [{:keys [tracks muted] :as state} @audio/scheduler-state
-        ;; QA3 A2: the bar the listener hears, not the next one to schedule
-        cycle   (or (audio/audible-cycle) (:cycle state))
-        resting (or (song-resting-tracks state cycle) #{})]
-    (swap! events-cache select-keys (keys tracks))
-    (reset! last-cycle cycle)
-    (mapv (fn [[idx [track-name pattern]]]
-            (cached-track-events track-name pattern cycle
-                                 (nth track-colors (mod idx (count track-colors)))
-                                 (or (contains? muted track-name)
-                                     (contains? resting track-name))))
-          (map-indexed vector (sort-by (comp name first) tracks)))))
+;;; ── Level history ────────────────────────────────────────────────────────
+;; {track [[ms rms] …]} — the last 4 s of per-frame RMS values.
+(defonce ^:private level-history (atom {}))
 
-(defn- draw-label! [ctx x y {:keys [name color muted?]}]
-  (set! (.-fillStyle ctx) (if muted? "#3a4868" color))
-  (set! (.-font ctx) "10px JetBrains Mono, monospace")
-  (set! (.-textBaseline ctx) "top")
-  (.fillText ctx (str ":" (cljs.core/name name)) (+ x 7) (+ y 5)))
+(defn- push-level! [track-name rms]
+  (let [now (.now js/performance)]
+    (swap! level-history update track-name
+           (fn [h] (let [h (conj (or h []) [now rms])]
+                     (if (> (- now (ffirst h)) 4000)
+                       (vec (drop-while #(> (- now (first %)) 4000) h))
+                       h))))))
 
-(defn- clear-row! [ctx x y w h]
-  (set! (.-fillStyle ctx) "#060b16")
-  (.fillRect ctx x y w h)
-  (set! (.-strokeStyle ctx) "#0e1628")
-  (set! (.-lineWidth ctx) 1)
-  (.beginPath ctx)
-  (.moveTo ctx x (+ y (/ h 2)))
-  (.lineTo ctx (+ x w) (+ y (/ h 2)))
-  (.stroke ctx))
+;;; ── Track data ───────────────────────────────────────────────────────────
 
-(defn- event-energy [events t]
-  (reduce (fn [acc {:keys [pos dur]}]
-            (let [d (mod (- t pos) 1)
-                  inside? (< d dur)
-                  pulse (if inside?
-                          (* 0.92 (js/Math.exp (* -10 (/ d dur))))
-                          (if (< d 0.08) (* 0.35 (js/Math.exp (* -50 d))) 0))]
-              (max acc pulse)))
-          0.06
-          events))
+(defn- pattern-heard
+  "Heard position in a track's pattern time: in song mode the song bar
+   (wrapped like the scheduler does), else the cycle itself."
+  [state heard]
+  (if-let [{s :song origin :origin} (:song state)]
+    (if origin
+      (let [rel (- heard origin)
+            bar (Math/floor rel)
+            q   (song/wrap-bar s bar)]
+        (if q (+ q (- rel bar)) rel))
+      heard)
+    heard))
 
-(defn energy-curve [events]
-  (mapv (fn [i]
-          (event-energy events (/ i energy-resolution)))
-        (range energy-resolution)))
+(defn- track-entries
+  "Sorted running tracks: [{:name :pattern :color :muted?} …]."
+  [state heard]
+  (let [{:keys [tracks muted]} state
+        resting (or (when heard (vm/song-resting-tracks state (Math/floor heard))) #{})]
+    (vec (map-indexed
+          (fn [idx [track-name pattern]]
+            {:name    track-name
+             :pattern pattern
+             :color   (nth track-colors (mod idx (count track-colors)))
+             :muted?  (or (contains? muted track-name) (contains? resting track-name))})
+          (sort-by (comp name first) tracks)))))
 
-(defn sample-energy [curve t]
-  (let [n (count curve)
-        x (* (mod t 1) n)
-        i (int (js/Math.floor x))
-        frac (- x i)
-        a (nth curve i)
-        b (nth curve (mod (inc i) n))]
-    (+ a (* (- b a) frac))))
+(defn- track-data
+  "The track-data map viz-draw expects for one view of one track."
+  [{:keys [name pattern] :as entry} kind opts state heard]
+  (let [ph (pattern-heard state heard)]
+    (cond
+      (contains? vm/event-kinds kind)
+      (let [[from to] (if (= kind :pianoroll)
+                        (vm/window ph opts)
+                        (vm/grid-window ph (:cycles opts 1)))]
+        (assoc entry :heard ph :from from :to to
+               :events (window-events name pattern from to)))
 
-(defn- energy-key [{:keys [name cycle events]}]
-  [name cycle events])
+      :else
+      (let [a (audio/track-audio name)]
+        (when (= kind :level) (push-level! name (:rms a)))
+        (assoc entry :heard ph :audio a
+               :history (mapv second (get @level-history name)))))))
 
-(defn- track-energy-curve [tr]
-  (let [key (energy-key tr)]
-    (or (get @energy-cache key)
-        (let [curve (energy-curve (:events tr))]
-          (swap! energy-cache assoc key curve)
-          curve))))
+;;; ── Panel ────────────────────────────────────────────────────────────────
 
-(defn- prune-energy-cache! [tracks]
-  (let [live-keys (set (map energy-key tracks))]
-    (swap! energy-cache select-keys live-keys)))
+(defn- current-mode []
+  (or (some #(when (= (:id %) @viz-mode) %) modes) (first modes)))
 
-(defn- draw-wave! [ctx x y w h tr live? ph]
-  (clear-row! ctx x y w h)
-  (let [cy (+ y (/ h 2))
-        curve (track-energy-curve tr)
-        color (if (:muted? tr) "#3a4868" (:color tr))]
-    (.beginPath ctx)
-    (doseq [px (range 0 (inc w))]
-      (let [t (mod (+ (/ px w) (if live? (* ph 0.12) 0)) 1)
-            amp (sample-energy curve t)
-            yy (+ cy (* (js/Math.sin (+ (* t 56) (* ph 2))) amp h 0.38))]
-        (if (zero? px)
-          (.moveTo ctx (+ x px) yy)
-          (.lineTo ctx (+ x px) yy))))
-    (set! (.-strokeStyle ctx) color)
-    (set! (.-lineWidth ctx) 1.5)
-    (set! (.-shadowColor ctx) color)
-    (set! (.-shadowBlur ctx) (if (:muted? tr) 0 6))
-    (.stroke ctx)
-    (set! (.-shadowBlur ctx) 0)
-    (draw-label! ctx x y tr)))
+(defn- draw-panel! [state heard]
+  (when-let [^js canvas (el "track-viz-canvas")]
+    (let [ctx     (.getContext canvas "2d")
+          w       (.-width canvas)
+          h       (.-height canvas)
+          entries (track-entries state heard)
+          {:keys [kind opts]} (current-mode)
+          opts    (merge (vm/default-opts kind) opts)]
+      (if (or (empty? entries) (nil? heard))
+        (vd/draw-placeholder! ctx 0 0 w h "viz waits for active tracks")
+        (let [row-h (max 28 (Math/floor (/ h (count entries))))]
+          (doseq [[idx entry] (map-indexed vector entries)]
+            (let [y  (* idx row-h)
+                  td (track-data entry kind opts state heard)
+                  sm (vd/draw! kind ctx 0 y w row-h td opts)]
+              (swap! summaries assoc [(:name entry) kind "panel"]
+                     (assoc sm :heard (:heard td) :muted? (:muted? entry)))
+              (when (< idx (dec (count entries)))
+                (set! (.-fillStyle ctx) vd/grid-color)
+                (.fillRect ctx 0 (+ y row-h) w 1))))))
+      (contains? vm/audio-kinds kind))))
 
-(defn- draw-spec! [ctx x y w h tr live? ph]
-  (clear-row! ctx x y w h)
-  (let [curve (track-energy-curve tr)
-        color (:color tr)
-        bars 56
-        bw (/ w bars)]
-    (doseq [i (range bars)]
-      (let [t (mod (+ (/ i bars) (if live? (* ph 0.16) 0)) 1)
-            e (sample-energy curve t)
-            fall (js/Math.exp (* -3 (/ i bars)))
-            bh (max 1 (* h (+ (* e 0.72) (* fall 0.18))))
-            alpha (if (:muted? tr) "44" "cc")]
-        (set! (.-fillStyle ctx)
-              (if (:muted? tr) "#26314c" (str color alpha)))
-        (.fillRect ctx (+ x (* i bw)) (- (+ y h) bh 3) (max 1 (- bw 1)) bh)))
-    (draw-label! ctx x y tr)))
+;;; ── Inline canvases (registered by repulse.ui.inline-viz) ────────────────
+;; id → {:canvas el :track kw :visible? bool}
+(defonce ^:private canvases (atom {}))
 
-(defn- draw-loud! [ctx x y w h tr live? ph]
-  (clear-row! ctx x y w h)
-  (let [curve (track-energy-curve tr)
-        color (if (:muted? tr) "#3a4868" (:color tr))
-        bottom (+ y h -1)]
-    (.beginPath ctx)
-    (.moveTo ctx x bottom)
-    (doseq [px (range 0 (inc w))]
-      (let [t (mod (+ (/ px w) (if live? (* ph 0.1) 0)) 1)
-            e (sample-energy curve t)]
-        (.lineTo ctx (+ x px) (- bottom (* e h 0.88)))))
-    (.lineTo ctx (+ x w) bottom)
-    (.closePath ctx)
-    (let [g (.createLinearGradient ctx x y x (+ y h))]
-      (.addColorStop g 0 (str color "aa"))
-      (.addColorStop g 1 (str color "08"))
-      (set! (.-fillStyle ctx) g)
-      (.fill ctx))
-    (draw-label! ctx x y tr)))
+(defn register-canvas! [id canvas track-name]
+  (swap! canvases assoc id {:canvas canvas :track track-name :visible? true}))
 
-(defn- draw-beat! [ctx x y w h tr live? ph]
-  (clear-row! ctx x y w h)
-  (let [color (if (:muted? tr) "#3a4868" (:color tr))
-        cy (+ y (* h 0.72))
-        offset (if live? (mod (* ph 0.18 w) w) 0)]
-    (doseq [i (range 32)]
-      (let [x0 (+ x (mod (- (* i (/ w 16)) offset) w))
-            strong? (zero? (mod i 4))
-            mid? (zero? (mod i 2))
-            hh (* h (cond strong? 0.62 mid? 0.34 :else 0.18))]
-        (set! (.-strokeStyle ctx) (str color (if strong? "ee" (if mid? "88" "44"))))
-        (set! (.-lineWidth ctx) (if strong? 1.5 1))
-        (.beginPath ctx)
-        (.moveTo ctx x0 cy)
-        (.lineTo ctx x0 (- cy hh))
-        (.stroke ctx)))
-    (doseq [{:keys [pos dur]} (:events tr)]
-      (set! (.-fillStyle ctx) (str color "dd"))
-      (.fillRect ctx (+ x (* pos w)) (+ y 4) (max 2 (* dur w)) 5))
-    (draw-label! ctx x y tr)))
+(defn set-canvas-visible! [id visible?]
+  (swap! canvases (fn [m] (if (contains? m id) (assoc-in m [id :visible?] visible?) m))))
 
-(defn value-pitch [v idx]
-  (cond
-    (map? v) (value-pitch (or (:note v) (:freq v) (:sample v) (:synth v) (:value v)) idx)
-    (number? v) (mod (js/Math.abs v) 12)
-    (keyword? v) (let [n (name v)]
-                   (mod (reduce + (map #(.charCodeAt n %) (range (count n)))) 12))
-    :else (mod idx 12)))
+(defn unregister-canvas! [id]
+  (swap! canvases dissoc id))
 
-(defn- draw-roll! [ctx x y w h tr _live? _ph]
-  (clear-row! ctx x y w h)
-  (let [color (if (:muted? tr) "#3a4868" (:color tr))
-        row-h (/ h 12)]
-    (doseq [r (range 12)]
-      (when (contains? #{1 3 6 8 10} r)
-        (set! (.-fillStyle ctx) "#09111e")
-        (.fillRect ctx x (+ y (* r row-h)) w row-h))
-      (set! (.-strokeStyle ctx) "#111a2e")
-      (.beginPath ctx)
-      (.moveTo ctx x (+ y (* r row-h)))
-      (.lineTo ctx (+ x w) (+ y (* r row-h)))
-      (.stroke ctx))
-    (doseq [[idx {:keys [pos dur value]}] (map-indexed vector (:events tr))]
-      (let [pitch (value-pitch value idx)
-            yy (+ y (* (- 11 pitch) row-h) 1)
-            xx (+ x (* pos w))
-            ww (max 2 (- (* dur w) 1))]
-        (set! (.-fillStyle ctx) (str color "cc"))
-        (.fillRect ctx xx yy ww (max 2 (- row-h 1)))))
-    (draw-label! ctx x y tr)))
+(def not-playing-text "not playing — evaluate to start")
 
-(defn- draw-seg! [ctx x y w h tr _live? _ph]
-  (clear-row! ctx x y w h)
-  (let [color (if (:muted? tr) "#3a4868" (:color tr))]
-    (doseq [[idx {:keys [pos dur value]}] (map-indexed vector (:events tr))]
-      (let [xx (+ x (* pos w))
-            ww (max 10 (* dur w))
-            label (cond
-                    (keyword? value) (str value)
-                    (map? value) (or (some-> (:sample value) str)
-                                     (some-> (:note value) str)
-                                     (str "event " (inc idx)))
-                    :else (str value))]
-        (set! (.-fillStyle ctx) (str color "1f"))
-        (.fillRect ctx (+ xx 1) (+ y 8) (- ww 2) (- h 16))
-        (set! (.-strokeStyle ctx) (str color "66"))
-        (.strokeRect ctx (+ xx 1) (+ y 8) (- ww 2) (- h 16))
-        (set! (.-fillStyle ctx) (str color "cc"))
-        (set! (.-font ctx) "9px JetBrains Mono, monospace")
-        (set! (.-textBaseline ctx) "middle")
-        (.fillText ctx label (+ xx 6) (+ y (/ h 2)) (max 0 (- ww 10)))))
-    (draw-label! ctx x y tr)))
+(defn track-vizzes
+  "The :viz entries of a running track's pattern ([{:kind :opts}] ≤ 3), or nil."
+  [track-name]
+  (seq (:viz (get-in @audio/scheduler-state [:tracks track-name]))))
 
-(defn- draw-empty! [ctx w h]
-  (set! (.-fillStyle ctx) "#060b16")
-  (.fillRect ctx 0 0 w h)
-  (set! (.-fillStyle ctx) "#2a3a55")
-  (set! (.-font ctx) "11px JetBrains Mono, monospace")
-  (set! (.-textBaseline ctx) "middle")
-  (.fillText ctx "viz waits for active tracks" 12 (/ h 2)))
+(defn draw-canvas!
+  "Draw one inline canvas: its track's visualizers stacked, or the
+   not-playing placeholder. → true when it drew an audio view."
+  [{:keys [^js canvas track]} state heard]
+  (let [ctx    (.getContext canvas "2d")
+        dpr    (or (.-devicePixelRatio js/window) 1)
+        cw     (max 1 (.-clientWidth canvas))
+        vizzes (track-vizzes track)
+        total  (if vizzes (reduce + (map #(get-in % [:opts :height] 64) vizzes)) 0)]
+    (when (and vizzes (not= (str total "px") (.. canvas -style -height)))
+      (set! (.. canvas -style -height) (str total "px")))
+    (let [ch (max 1 (.-clientHeight canvas))]
+      (when (or (not= (.-width canvas) (Math/round (* cw dpr)))
+                (not= (.-height canvas) (Math/round (* ch dpr))))
+        (set! (.-width canvas) (Math/round (* cw dpr)))
+        (set! (.-height canvas) (Math/round (* ch dpr))))
+      (.setTransform ctx dpr 0 0 dpr 0 0)
+      (let [entry (some #(when (= track (:name %)) %) (track-entries state heard))]
+        (if (or (nil? vizzes) (nil? entry) (nil? heard))
+          (do (vd/draw-placeholder! ctx 0 0 cw ch not-playing-text)
+              false)
+          (loop [[{:keys [kind opts]} & more] vizzes y 0 audio? false]
+            (if-not kind
+              audio?
+              (let [hh (get opts :height 64)
+                    td (track-data entry kind opts state heard)
+                    sm (vd/draw! kind ctx 0 y cw hh td opts)]
+                (swap! summaries assoc [track kind "inline"]
+                       (assoc sm :heard (:heard td) :muted? (:muted? entry)))
+                (recur more (+ y hh) (or audio? (contains? vm/audio-kinds kind)))))))))))
 
-(defn- draw-viz! []
-  (when-let [canvas (el "track-viz-canvas")]
-    (let [ctx (.getContext canvas "2d")
-          data (active-track-data)
-          w (.-width canvas)
-          h (.-height canvas)
-          live? (audio/playing?)
-          ph @phase]
-      (if (empty? data)
-        (draw-empty! ctx w h)
-        (let [row-h (max 28 (js/Math.floor (/ h (count data))))]
-          (prune-energy-cache! data)
-          (doseq [[idx tr] (map-indexed vector data)]
-            (let [y (* idx row-h)]
-              (case @viz-mode
-                "spec" (draw-spec! ctx 0 y w row-h tr live? ph)
-                "loud" (draw-loud! ctx 0 y w row-h tr live? ph)
-                "beat" (draw-beat! ctx 0 y w row-h tr live? ph)
-                "roll" (draw-roll! ctx 0 y w row-h tr live? ph)
-                "seg"  (draw-seg! ctx 0 y w row-h tr live? ph)
-                (draw-wave! ctx 0 y w row-h tr live? ph))
-              (when (< idx (dec (count data)))
-                (set! (.-strokeStyle ctx) "#0e1628")
-                (.beginPath ctx)
-                (.moveTo ctx 0 (+ y row-h))
-                (.lineTo ctx w (+ y row-h))
-                (.stroke ctx)))))))))
+;;; ── Frame ────────────────────────────────────────────────────────────────
+
+(defn- draw-all! []
+  (let [state  @audio/scheduler-state
+        heard  (audio/heard-cycle-pos)]
+    (reset! used-keys #{})
+    (when heard (reset! last-cycle (max 0 (Math/floor heard))))
+    (let [panel-audio? (draw-panel! state heard)
+          inline-audio? (reduce (fn [acc [_ c]]
+                                  (if (and (:visible? c) (.-isConnected ^js (:canvas c)))
+                                    (or (draw-canvas! c state heard) acc)
+                                    acc))
+                                false @canvases)]
+      (swap! events-cache select-keys @used-keys)
+      (swap! level-history select-keys (keys (:tracks state)))
+      (when (and (:playing? state) (or panel-audio? inline-audio?))
+        (audio/request-meters!)))))
 
 (defn render-track-panel! []
   (when-let [panel (el "track-panel")]
-    (let [data (active-track-data)]
+    (let [entries (track-entries @audio/scheduler-state nil)]
       (set! (.-innerHTML panel)
             (str "<div class=\"viz-toolbar\">"
                  "<span class=\"viz-label\">viz</span>"
@@ -325,7 +226,7 @@
                                (escape-html label)
                                "</button>"))
                         modes))
-                 (when (seq data)
+                 (when (seq entries)
                    (str "<div class=\"viz-track-mutes\">"
                         (apply str
                           (map (fn [{:keys [name color muted?]}]
@@ -339,7 +240,7 @@
                                         " title=\"mute — writes :mute into the code\"")
                                       " data-name=\"" (escape-html (cljs.core/name name))
                                       "\">:" (escape-html (cljs.core/name name)) "</button>"))
-                               data))
+                               entries))
                         "</div>"))
                  "</div>"
                  "<canvas id=\"track-viz-canvas\" class=\"track-viz-canvas\" width=\"1600\" height=\"126\"></canvas>"))
@@ -354,19 +255,22 @@
         (.addEventListener btn "click"
           (fn []
             (js/window._repulseMuteToggle (.. btn -dataset -name)))))
-      (draw-viz!))))
+      (draw-all!))))
 
-(defn start-playhead-raf! []
+(defn start-viz-raf!
+  "The one animation loop for the panel and every inline visualizer. Draws
+   only while playing; render-track-panel! (and inline-viz on mount) draw the
+   stopped state."
+  []
   (when-not @raf-started?
     (reset! raf-started? true)
-    (letfn [(frame [ts]
-              (when @last-ts
-                (when (audio/playing?)
-                  (swap! phase + (* (- ts @last-ts) 0.001))))
-              (reset! last-ts ts)
-              ;; QA3 A2: animate only while playing; render-track-panel! draws
-              ;; the stopped state once.
+    (letfn [(frame [_ts]
               (when (audio/playing?)
-                (draw-viz!))
+                (draw-all!))
               (js/requestAnimationFrame frame))]
       (js/requestAnimationFrame frame))))
+
+(defn redraw!
+  "Draw everything once (used by inline-viz after mounting a canvas)."
+  []
+  (draw-all!))

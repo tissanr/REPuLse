@@ -23,6 +23,7 @@
             [repulse.env.builtins :as builtins]
             [repulse.env.builtins.fx :as b-fx]
             [repulse.env.builtins.tracks :as b-tracks]
+            [repulse.env.builtins.viz :as b-viz]
             [repulse.tracks-model :as tracks-model]
             [repulse.song :as song]
             [repulse.song-transport :as song-transport]
@@ -68,6 +69,7 @@
   (song-transport/reset-pending!)
   (b-fx/reset-master-run!)
   (reset! builtins/eval-warnings [])
+    (b-viz/reset-calls!)
   (try
     (builtins/ensure-env!)
     (let [env    @builtins/env-atom
@@ -84,7 +86,8 @@
     (finally
       (song-transport/reset-pending!)
       (b-fx/reset-master-run!)
-      (reset! builtins/eval-warnings []))))
+      (reset! builtins/eval-warnings [])
+    (b-viz/reset-calls!))))
 
 (declare track-flag-patch-and-eval!)
 
@@ -338,6 +341,7 @@
     (reset! builtins/seen-tracks #{})
     ;; Clear the per-evaluation eval warnings (Phase WS3: slider clamps)
     (reset! builtins/eval-warnings [])
+    (b-viz/reset-calls!)
     ;; Clear the per-evaluation (master …) state (Phase WS2)
     (b-fx/reset-master-run!)
     ;; Clear tracks/song/play-from/export collected by the previous evaluation
