@@ -133,3 +133,19 @@
     (is (= [0 1.5] (sm/wrap-range "amp" 1.5)))
     (is (= [0 2] (sm/wrap-range "fast" 2)))
     (is (= [0 1] (sm/wrap-range nil 0.5)))))
+
+(deftest fx1-effect-tables
+  (testing "every FX1 effect has sliders; each primary param has a slider"
+    (doseq [nm ["eq" "limiter" "gate" "flanger" "vibrato" "auto-pan" "ring-mod" "width"]]
+      (is (seq (get sm/FX-SLIDER-PARAMS nm)) nm))
+    (doseq [[nm p] sm/FX-PRIMARY-PARAM]
+      (is (contains? (get sm/FX-SLIDER-PARAMS nm) p) (str nm " " p))))
+  (testing "the delay's positional value is the wet level (Q3); eq has none"
+    (is (= "wet" (get sm/FX-PRIMARY-PARAM "delay")))
+    (is (nil? (get sm/FX-PRIMARY-PARAM "eq"))))
+  (testing "select options"
+    (is (= ["classic" "room" "hall" "plate" "spring" "gated" "reverse"]
+           (get-in sm/FX-SELECT-PARAMS ["reverb" "type"])))
+    (is (= 8 (count (get-in sm/FX-SELECT-PARAMS ["filter" "type"]))))
+    (is (= ["stereo" "mono" "ping-pong"] (get-in sm/FX-SELECT-PARAMS ["delay" "mode"])))
+    (is (= ["sine" "tri" "square" "saw"] (get-in sm/FX-SELECT-PARAMS ["ring-mod" "shape"])))))

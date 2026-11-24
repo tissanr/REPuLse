@@ -336,3 +336,15 @@
                 (catch :default e (:item-source (ex-data e))))))
     (testing ":all is fine for automate"
       (is (some? (build-song [(song/make-automation :all :amp 0.5 {})]))))))
+
+(deftest qa1-song-onsets-on-error
+  (let [boom   (core/pattern (fn [_] (throw (ex-info "boom" {}))))
+        tracks (assoc tracks-m :kick boom)
+        errors (atom [])]
+    (testing "with on-error, a throwing track adds no events and the others play"
+      (is (= [:hats :hats :hats :hats]
+             (mapv :track (song/song-onsets M tracks #{} 0
+                                            (fn [t e] (swap! errors conj [t (ex-message e)]))))))
+      (is (= [[:kick "boom"]] @errors)))
+    (testing "without on-error the error propagates"
+      (is (thrown-with-msg? js/Error #"boom" (song/song-onsets M tracks #{} 0))))))

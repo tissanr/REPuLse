@@ -1,5 +1,6 @@
 (ns repulse.theory
-  (:require [repulse.core :as core]))
+  (:require [repulse.core :as core]
+            [repulse.edit-distance :as edit-distance]))
 
 ;;; ── Note name parsing ────────────────────────────────────────────────
 
@@ -85,7 +86,9 @@
 (defn- resolve-intervals
   "Convert a vector of interval names to semitone offsets."
   [ivs]
-  (mapv #(get interval->semitones % 0) ivs))
+  (mapv #(or (get interval->semitones %)
+             (throw (ex-info (str "unknown interval " (pr-str %)) {:type :eval-error})))
+        ivs))
 
 ;;; ── Scale tables ─────────────────────────────────────────────────────
 
@@ -141,15 +144,48 @@
    :sus2     [1 2   5           ]   ; suspended 2nd
    :sus4     [1 4   5           ]}) ; suspended 4th
 
-;;; ── Helpers ──────────────────────────────────────────────────────────
+;;; ── Name checks (QA1) ────────────────────────────────────────────────
 
-(defn- deg-val
-  "Numeric value of a number or [n d] rational; nil otherwise."
-  [x]
-  (cond (number? x) x
-        (and (vector? x) (= 2 (count x)) (number? (first x)) (number? (second x)))
-        (/ (first x) (second x))
-        :else nil))
+(defn chord-names
+  "Sorted list of known chord names for (chord :name root)."
+  []
+  (sort (keys chord-intervals)))
+
+(defn- unknown-name-error
+  "\"scale: unknown scale :majr — did you mean :major?\", or with no close
+   match \" — known: <sorted list>\"."
+  [fname what v names]
+  (let [n    (if (keyword? v) (name v) (str v))
+        best (when (seq names)
+               (apply min-key #(edit-distance/levenshtein n (name %)) names))
+        hint (when (and best (<= (edit-distance/levenshtein n (name best)) 3)) best)]
+    (ex-info (str fname ": unknown " what " " (pr-str v)
+                  (if hint
+                    (str " — did you mean " hint "?")
+                    (str " — known: " (apply str (interpose " " names)))))
+             {:type :eval-error})))
+
+(defn check-root!
+  "Throw unless root is a note keyword (:c4, :eb3, :fs). Returns root."
+  [fname root]
+  (when-not (note-keyword? root)
+    (throw (ex-info (str fname ": unknown root " (pr-str root)
+                         " — expected a note like :c4, :eb3 or :fs")
+                    {:type :eval-error})))
+  root)
+
+(defn check-scale-name!
+  "Throw unless sc is a known scale keyword or a non-empty interval vector."
+  [fname sc]
+  (cond
+    (vector? sc) (when (empty? sc)
+                   (throw (ex-info (str fname ": the interval vector is empty")
+                                   {:type :eval-error})))
+    (contains? scale-intervals sc) nil
+    :else (throw (unknown-name-error fname "scale" sc (scale-names))))
+  sc)
+
+;;; ── Helpers ──────────────────────────────────────────────────────────
 
 (defn- ->midi [x]
   (cond (number? x) x
@@ -172,10 +208,11 @@
 
 ;;; ── Scales ───────────────────────────────────────────────────────────
 
-(defn- scale-semis [name]
+(defn- scale-semis [fname name]
+  (check-scale-name! fname name)
   (if (vector? name)
     name
-    (resolve-intervals (get scale-intervals name [1 2 3 4 5 6 7]))))
+    (resolve-intervals (get scale-intervals name))))
 
 (defn- degree->midi [semis root-midi d]
   (let [n   (count semis)
@@ -184,10 +221,10 @@
     (+ root-midi (* 12 oct) (nth semis (- d (* oct n))))))
 
 (defn- scale* [name root pat]
-  (let [semis (scale-semis name)
-        r     (note->midi root)
-        f     (fn [v] (if-let [d (deg-val v)] (midi->note (degree->midi semis r d)) v))]
-    (core/fmap #(if (and (map? %) (deg-val (:note %))) (update % :note f) (f %)) pat)))
+  (let [semis (scale-semis "scale" name)
+        r     (note->midi (check-root! "scale" root))
+        f     (fn [v] (if-let [d (core/as-number v)] (midi->note (degree->midi semis r d)) v))]
+    (core/fmap #(if (and (map? %) (core/as-number (:note %))) (update % :note f) (f %)) pat)))
 
 (defn scale
   "Map 0-based scale degrees in pat to note keywords. Degree 0 is the root;
@@ -202,8 +239,8 @@
 (defn- scale-transpose* [n sc pat]
   (let [[name root] (cond (and (vector? sc) (keyword? (first sc))) [(first sc) (or (second sc) :c)]
                           :else [sc :c])
-        semis (scale-semis name)
-        n     (int (js/Math.floor (deg-val n)))
+        semis (scale-semis "scale-transpose" name)
+        n     (int (js/Math.floor (core/as-number n)))
         rpc   (mod (note->midi root) 12)
         step  (fn [m]
                 (let [rel (- m rpc)
@@ -211,7 +248,7 @@
                       pc  (- rel (* 12 oct))
                       idx (last (keep-indexed (fn [i s] (when (<= s pc) i)) semis))]
                   (degree->midi semis (+ rpc (* 12 oct)) (+ idx n))))
-        f     (fn [v] (cond (deg-val v)        (+ (deg-val v) n)
+        f     (fn [v] (cond (core/as-number v)        (+ (core/as-number v) n)
                             (note-keyword? v)  (midi->note (step (note->midi v)))
                             :else              v))]
     (core/fmap #(if (and (map? %) (:note %)) (update % :note f) (f %)) pat)))
@@ -242,7 +279,7 @@
               (if (= sign "-") (- semis) semis))))))))
 
 (defn- transpose* [n pat]
-  (let [n     (deg-val n)
+  (let [n     (core/as-number n)
         ratio (js/Math.pow 2 (/ n 12))
         shift (fn [v] (cond (number? v)       (* v ratio)
                             (note-keyword? v) (midi->note (+ (note->midi v) n))
@@ -267,8 +304,10 @@
    (chord :major :c4)    ; C E G stacked"
   ([chord-kw root] (chord chord-kw root nil))
   ([chord-kw root source]
-   (let [root-midi (note->midi root)
-         semitones (resolve-intervals (get chord-intervals chord-kw [1 3 5]))]
+   (when-not (contains? chord-intervals chord-kw)
+     (throw (unknown-name-error "chord" "chord" chord-kw (chord-names))))
+   (let [root-midi (note->midi (check-root! "chord" root))
+         semitones (resolve-intervals (get chord-intervals chord-kw))]
      (core/stack* (mapv #(core/pure (midi->note (+ root-midi %)) source) semitones)))))
 
 (def chord-qualities
@@ -343,19 +382,6 @@
   (when-let [{:keys [root intervals bass]} (parse-chord-symbol v)]
     (vec (concat (when bass [bass]) (map #(+ root %) intervals)))))
 
-(defn- edit-distance [a b]
-  (let [a (vec a) b (vec b)]
-    (peek
-     (reduce (fn [prev i]
-               (reduce (fn [row j]
-                         (conj row (min (inc (peek row))
-                                        (inc (nth prev (inc j)))
-                                        (+ (nth prev j) (if (= (nth a i) (nth b j)) 0 1)))))
-                       [(inc i)]
-                       (range (count b))))
-             (vec (range (inc (count b))))
-             (range (count a))))))
-
 (defn chord-symbol-error
   "Error message for an unparseable chord symbol, with a did-you-mean hint."
   [v]
@@ -363,7 +389,7 @@
         [_ root suffix] (re-matches #"([A-G][#b]?)(.*)" text)
         best (when suffix
                (->> (for [[aliases _] chord-qualities, a aliases :when (seq a)]
-                      [(edit-distance suffix a) a])
+                      [(edit-distance/levenshtein suffix a) a])
                     (reduce (fn [b c] (if (and (<= (first c) 2) (or (nil? b) (< (first c) (first b)))) c b))
                             nil)))]
     (str "unknown chord symbol \"" text "\""
@@ -440,7 +466,7 @@
      (fan-out #(some->> (voice-symbol % a mode offset) (mapv midi->note)) pat))))
 
 (defn- root-notes* [oct pat]
-  (let [o (int (js/Math.floor (deg-val oct)))]
+  (let [o (int (js/Math.floor (core/as-number oct)))]
     (fan-out #(when-let [{:keys [root]} (parse-chord-symbol %)]
                 [(midi->note (+ (mod root 12) (* 12 (inc o))))])
              pat)))

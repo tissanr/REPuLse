@@ -3,6 +3,7 @@
             [repulse.fx :as fx]
             [repulse.midi :as midi]
             [repulse.samples :as samples]
+            [repulse.voices :as voices]
             [repulse.plugins :as plugins]
             [repulse.session :as session]
             [repulse.plugins.compressor :as compressor-plugin]
@@ -14,6 +15,8 @@
             [repulse.ui.inline-slider :as inline-slider]
             [repulse.ui.selection-highlight :as selection-highlight]
             [repulse.ui.dialog :as dialog]
+            [repulse.ui.modal-stack :as modal-stack]
+            [repulse.tempo :as tempo]
             [repulse.ui.goto :as goto]
             [repulse.ui.buffers :as buffers]
             [repulse.project :as project]
@@ -28,6 +31,7 @@
             [repulse.ui.auth-button :as auth-button]
             [repulse.auth :as auth]
             [repulse.env.builtins :as builtins]
+            [repulse.lisp.eval :as leval]
             [repulse.eval-orchestrator :as eo]
             [repulse.offline-render :as offline-render]
             [repulse.song-transport :as song-transport]
@@ -36,7 +40,8 @@
             [repulse.snippets :as snippets]
             [repulse.ui.assistant-panel :as assistant-panel]
             [clojure.string :as str]
-            ["./lisp-lang/providers.js" :refer [setBankNamesProvider setFxNamesProvider]]
+            ["./lisp-lang/providers.js" :refer [setBankNamesProvider setFxNamesProvider
+                                                setVoiceNamesProvider setDrumNamesProvider]]
             ["@codemirror/commands" :refer [selectAll]]
             ["./lisp-lang/parser.js" :refer [parser]]
             ["@vercel/speed-insights" :refer [injectSpeedInsights]]))
@@ -87,7 +92,9 @@
   (when-let [dot (el "playing-dot")]
     (if playing?
       (.add (.-classList dot) "active")
-      (.remove (.-classList dot) "active")))
+      (.remove (.-classList dot) "active"))
+    ;; QA3 D: text alternative of the status dot
+    (.setAttribute dot "aria-label" (if playing? "playing" "stopped")))
   (when-let [btn (el "play-btn")]
     (set! (.-textContent btn) (if playing? "■ stop" "▶ play"))
     (if playing?
@@ -174,16 +181,16 @@
                "    <h1>REP<span class=\"brand-cyan\">u</span>Lse</h1>"
                "  </div>"
                "  <div class=\"header-controls nav-actions\">"
-               "    <button id=\"tap-btn\" class=\"tap-btn\">tap</button>"
-               "    <button id=\"snippet-toggle-btn\" class=\"snippet-toggle-btn\">lib</button>"
-               "    <button id=\"history-toggle-btn\" class=\"history-toggle-btn\">hist</button>"
+               "    <button id=\"tap-btn\" class=\"tap-btn\" aria-label=\"tap tempo\">tap</button>"
+               "    <button id=\"snippet-toggle-btn\" class=\"snippet-toggle-btn\" aria-label=\"snippet library\">lib</button>"
+               "    <button id=\"history-toggle-btn\" class=\"history-toggle-btn\" aria-label=\"evaluation history\">hist</button>"
                "    <button id=\"share-btn\" class=\"share-btn\">share</button>"
                "  </div>"
                "  <div class=\"nav-spacer\"></div>"
                "  <div class=\"auth-slot\"></div>"
                "  <div class=\"transport-controls\">"
                "    <button id=\"play-btn\" class=\"play-btn\">&#9654; play</button>"
-               "    <div id=\"playing-dot\" class=\"playing-dot\"></div>"
+               "    <div id=\"playing-dot\" class=\"playing-dot\" role=\"img\" aria-label=\"stopped\"></div>"
                "  </div>"
                "</header>"
                "<div class=\"main-area app-shell\">"
@@ -201,7 +208,7 @@
                "      <div class=\"console-history\">"
                "        <div class=\"console-line console-line-out\">"
                "          <span class=\"console-prefix\">=&gt;</span>"
-               "          <span id=\"output\" class=\"output\">ready &mdash; Alt+Enter or click play</span>"
+               "          <span id=\"output\" class=\"output\" aria-live=\"polite\" aria-atomic=\"true\">ready &mdash; Alt+Enter or click play</span>"
                "        </div>"
                "      </div>"
                "      <div class=\"console-input-row\">"
@@ -260,6 +267,11 @@
   (assistant-panel/init!)
   (builtins/ensure-env!)
   (setBankNamesProvider (fn [] (clj->js (samples/bank-names))))
+  ;; SYN6: (synth :su… offers :supersaw / :sub-bass; :synth_bd for the kit.
+  (let [voice-names (clj->js (sort (map name voices/synth-voices)))
+        drum-names  (clj->js voices/drum-voices)]
+    (setVoiceNamesProvider (fn [] voice-names))
+    (setDrumNamesProvider (fn [] drum-names)))
   (setFxNamesProvider   (fn [] (clj->js (mapv :name @fx/chain))))
 
   ;; Register global mute-toggle for the track panel's button click handlers.
@@ -319,6 +331,28 @@
                                              :when (not= name (:active p))]
                                          [name (:entries (outline/extract (.parse parser code) code))])]
                             (outline/project-definition others kind text)))})
+      ;; Phase WS6: {track-kw buffer-name} for :track entries of the other
+      ;; buffers (first in tab order wins); parses are memoised per code string.
+      (let [memo (atom {})]
+        (buffers/add-switch-hook! #(reset! memo {}))
+        (reset! outline-panel/other-tracks-fn
+                (fn []
+                  (let [p (buffers/current-project)]
+                    (reduce
+                      (fn [acc {:keys [name code]}]
+                        (if (= name (:active p))
+                          acc
+                          (let [[c r] (get @memo name)
+                                r (if (= c code)
+                                    r
+                                    (let [r (vec (keep #(when (= :track (:kind %)) (:name %))
+                                                       (:entries (outline/extract (.parse parser code) code))))]
+                                      (swap! memo assoc name [code r])
+                                      r))]
+                            (reduce (fn [a tn] (let [k (keyword (subs tn 1))]
+                                                 (if (contains? a k) a (assoc a k name))))
+                                    acc r))))
+                      {} (:buffers p))))))
       ;; Test/debug handles (used by e2e/outline.spec.ts, e2e/workspace.spec.ts).
       (set! (.-__REPULSE_EDITOR__ js/window) view)
       (set! (.-__REPULSE_APP__ js/window)
@@ -328,6 +362,27 @@
                  ;; a track's GainNode (to watch the retire ramp).
                  :tracks     (fn [] (clj->js (sort (map name (keys (:tracks @audio/scheduler-state))))))
                  :cycle      (fn [] (:cycle @audio/scheduler-state))
+                 ;; Phase QA4 (e2e/builtins-meta.spec.ts): every name bound in the
+                 ;; full env plus the special forms, sorted.
+                 :builtinNames (fn [] (clj->js (sort (into (set (filter string? @builtins/builtin-names))
+                                                           leval/special-forms))))
+                 ;; Phase QA3 (e2e/qa3-robustness.spec.ts): start time of the
+                 ;; next cycle to schedule, the cycle sounding now, timeline
+                 ;; query counter / last drawn cycle, pending JS node chains.
+                 :nextCycleTime (fn [] (let [st @audio/scheduler-state]
+                                         (tempo/time-at-cycle st (:cycle st))))
+                 :audibleCycle  (fn [] (audio/audible-cycle))
+                 :timelineQueries (fn [] @timeline/query-count)
+                 :timelineCycle   (fn [] @timeline/last-cycle)
+                 :pendingDisconnects (fn [] (count @audio/pending-disconnects))
+                 ;; QA3 (e2e/qa3-keyboard.spec.ts): the share button needs a
+                 ;; login; tests open the submit modal directly.
+                 :openSubmitModal (fn [] (snippet-submit-modal/open!))
+                 ;; QA3 (e2e/snippets-lib.spec.ts): re-fetch the library
+                 :reloadSnippets  (fn [] (snippets/reload!))
+                 ;; Phase QA1 (e2e/robust-playback.spec.ts): onsets scheduled
+                 ;; for a track since the last stop.
+                 :onsetCount (fn [track] (get @audio/scheduled-counts (keyword track) 0))
                  :trackGainNode (fn [track] (get-in @audio/track-nodes [(keyword track) :gain-node]))
                  :audioTime  (fn [] (.-currentTime (audio/get-ctx)))
                  :selection  (fn [] (clj->js @outline-panel/selection))
@@ -392,10 +447,27 @@
       (first-visit/first-visit-setup! editor/editor-view set-output!)))
 
   ;; ── Session save watchers ────────────────────────────────────────────────
-  (add-watch audio/scheduler-state      :session-save (fn [_ _ _ _] (session/schedule-save!)))
-  (add-watch fx/chain                   :session-save (fn [_ _ _ _] (session/schedule-save!)))
+  ;; QA3 A3: the scheduler changes every bar (:cycle) — save only when the
+  ;; persisted part (the tempo) changed. fx/chain is not watched: the session
+  ;; stores no FX state (the code is the source of truth).
+  (add-watch audio/scheduler-state      :session-save
+             (fn [_ _ o n] (when (session/project-relevant-change? o n) (session/schedule-save!))))
   (add-watch samples/active-bank-prefix :session-save (fn [_ _ _ _] (session/schedule-save!)))
   (add-watch samples/loaded-sources     :session-save (fn [_ _ _ _] (session/schedule-save!)))
+  ;; Persist the restored / first-visit session once (an unchanged session is
+  ;; not rewritten) and flush a pending save when the page goes away.
+  (session/schedule-save!)
+  (.addEventListener js/window "pagehide" session/flush-save!)
+
+  ;; QA3: storage full → say so once
+  (reset! session/on-save-error
+          #(set-output! "session not saved — browser storage is full. Export the project to keep your work." :warning))
+  ;; QA3 A6: a sample that fails to load is reported once per URL
+  (reset! samples/on-load-error
+          (fn [bank reason]
+            (set-output! (str "sample :" (name bank) " failed to load (" reason
+                              ") — it stays silent until reload")
+                         :warning)))
 
   ;; Global keyboard shortcuts — capture phase so we fire before any child handler
   (.addEventListener js/document "keydown"
@@ -405,8 +477,17 @@
               editor-dom (.-dom view)
               cmd-dom    (el "cmd-container")
               in-editor? (.contains editor-dom target)
-              in-cmd?    (and cmd-dom (.contains cmd-dom target))]
+              in-cmd?    (and cmd-dom (.contains cmd-dom target))
+              ;; QA3 C: text fields outside both editors keep their keys
+              field?     (and (instance? js/Element target)
+                              (or (contains? #{"INPUT" "TEXTAREA" "SELECT"} (.-tagName target))
+                                  (= "true" (.getAttribute target "contenteditable")))
+                              (not in-editor?) (not in-cmd?))]
           (cond
+            ;; QA3 C: a modal (dialog, submit modal) owns the keyboard
+            (or (modal-stack/any-open?) field?)
+            nil
+
             ;; Alt/Option+Enter — evaluate the project (from main) from anywhere.
             (and (.-altKey e) (= "Enter" (.-key e)))
             (do (.preventDefault e)
@@ -458,7 +539,17 @@
                "/plugins/distort.js"
                "/plugins/amp-sim.js"
                "/plugins/waveshape.js"
-               "/plugins/cab.js"]]
+               "/plugins/cab.js"
+               ;; Phase FX1 — the chain is sorted by fx/default-order, so the
+               ;; order of this list does not matter
+               "/plugins/gate.js"
+               "/plugins/eq.js"
+               "/plugins/flanger.js"
+               "/plugins/vibrato.js"
+               "/plugins/ring-mod.js"
+               "/plugins/auto-pan.js"
+               "/plugins/width.js"
+               "/plugins/limiter.js"]]
     (when-not (contains? @loaded-plugins url)
       (-> (plugin-loading/dynamic-import! url)
           (.then (fn [m]

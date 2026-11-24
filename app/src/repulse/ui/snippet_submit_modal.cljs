@@ -2,7 +2,10 @@
   "Modal for submitting the current editor code as a community snippet.
    Exports: init!, open!, close!"
   (:require [repulse.api :as api]
+            [repulse.audio :as audio]
             [repulse.snippets :as snippets]
+            [repulse.ui.a11y :as a11y]
+            [repulse.ui.modal-stack :as modal-stack]
             [repulse.ui.editor :as editor]
             [repulse.ui.html :refer [escape-html]]
             [clojure.string :as cstr]))
@@ -12,6 +15,7 @@
 (defonce ^:private visible?      (atom false))
 (defonce ^:private submitting?   (atom false))
 (defonce ^:private selected-tags (atom #{}))   ; set of lowercase strings
+(defonce ^:private opener        (atom nil))   ; element focused before open! (QA3)
 
 ;;; DOM helpers
 
@@ -119,14 +123,25 @@
 ;;; Close
 
 (defn close! []
-  (reset! visible? false)
-  (reset! submitting? false)
-  (when-let [overlay (el "snippet-submit-overlay")]
-    (.add (.-classList overlay) "hidden")))
+  (let [was-open? @visible?]
+    (reset! visible? false)
+    (reset! submitting? false)
+    (modal-stack/remove! :snippet-submit)
+    (when-let [overlay (el "snippet-submit-overlay")]
+      (.add (.-classList overlay) "hidden"))
+    ;; QA3: focus returns to where it was before the modal opened
+    (when was-open?
+      (let [^js o @opener]
+        (reset! opener nil)
+        (when (and o (.-isConnected o) (fn? (.-focus o)))
+          (.focus o))))))
 
 ;;; Open
 
 (defn open! []
+  (when-not @visible?
+    (reset! opener (.-activeElement js/document)))
+  (modal-stack/push! :snippet-submit)
   (reset! visible? true)
   (reset! submitting? false)
   (reset! selected-tags #{})
@@ -148,7 +163,7 @@
     ;; Render tag chips (loaded tags available after snippets/load!)
     (render-tag-section!)
     ;; Focus title
-    (js/setTimeout #(when-let [t (el "ssm-title")] (.focus t)) 50)))
+    (when-let [t (el "ssm-title")] (.focus t))))
 
 ;;; Submit
 
@@ -157,8 +172,9 @@
     (let [title (cstr/trim (or (some-> (el "ssm-title") .-value) ""))
           desc  (cstr/trim (or (some-> (el "ssm-desc")  .-value) ""))
           tags  (vec @selected-tags)
+          ;; QA3: the same range as (bpm …) — audio/coerce-bpm (20–640)
           bpm   (let [v (some-> (el "ssm-bpm") .-value js/parseInt)]
-                  (when (and v (not (js/isNaN v)) (pos? v)) v))
+                  (when (and v (not (js/isNaN v)) (pos? v)) (audio/coerce-bpm v)))
           code  (current-code)]
       (cond
         (empty? title)
@@ -203,10 +219,11 @@
     (set! (.-id overlay) "snippet-submit-overlay")
     (set! (.-className overlay) "snippet-submit-overlay hidden")
     (set! (.-innerHTML overlay)
-          (str "<div class=\"snippet-submit-modal\" id=\"snippet-submit-modal\">"
+          (str "<div class=\"snippet-submit-modal\" id=\"snippet-submit-modal\""
+               " role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"ssm-title-label\">"
                "  <div class=\"ssm-header\">"
-               "    <span class=\"ssm-title-label\">Share as snippet</span>"
-               "    <button class=\"ssm-close-btn\" id=\"ssm-close-btn\">&times;</button>"
+               "    <span class=\"ssm-title-label\" id=\"ssm-title-label\">Share as snippet</span>"
+               "    <button type=\"button\" class=\"ssm-close-btn\" id=\"ssm-close-btn\" aria-label=\"Close\">&times;</button>"
                "  </div>"
                "  <div class=\"ssm-body\">"
                "    <label for=\"ssm-title\" class=\"ssm-label\">Title <span class=\"ssm-required\">*</span></label>"
@@ -216,14 +233,14 @@
                "    <span id=\"ssm-tags-label\" class=\"ssm-label\">Tags</span>"
                "    <div id=\"ssm-tag-section\" class=\"ssm-tag-section\" role=\"group\" aria-labelledby=\"ssm-tags-label\"></div>"
                "    <label for=\"ssm-bpm\" class=\"ssm-label\">BPM</label>"
-               "    <input id=\"ssm-bpm\" class=\"ssm-input ssm-bpm-input\" type=\"number\" min=\"20\" max=\"300\" placeholder=\"120\" />"
+               "    <input id=\"ssm-bpm\" class=\"ssm-input ssm-bpm-input\" type=\"number\" min=\"20\" max=\"640\" placeholder=\"120\" />"
                "    <span id=\"ssm-code-preview-label\" class=\"ssm-label\">Code preview</span>"
                "    <pre id=\"ssm-code-preview\" class=\"ssm-code-preview\" aria-labelledby=\"ssm-code-preview-label\"></pre>"
                "    <div id=\"ssm-error\" class=\"ssm-error\"></div>"
                "  </div>"
                "  <div class=\"ssm-footer\">"
-               "    <button class=\"ssm-btn ssm-cancel-btn\" id=\"ssm-cancel-btn\">cancel</button>"
-               "    <button class=\"ssm-btn ssm-submit-btn\" id=\"ssm-submit-btn\">submit</button>"
+               "    <button type=\"button\" class=\"ssm-btn ssm-cancel-btn\" id=\"ssm-cancel-btn\">cancel</button>"
+               "    <button type=\"button\" class=\"ssm-btn ssm-submit-btn\" id=\"ssm-submit-btn\">submit</button>"
                "  </div>"
                "</div>"))
     (.appendChild js/document.body overlay)
@@ -239,8 +256,12 @@
         (when (= (.-target e) overlay)
           (close!))))
 
-    ;; Escape → close
-    (.addEventListener js/document "keydown"
+    ;; QA3: keys stay in the modal — Escape closes it (and only it: the
+    ;; snippet panel behind stays open), Tab cycles inside.
+    (.addEventListener overlay "keydown"
       (fn [^js e]
-        (when (and @visible? (= "Escape" (.-key e)))
-          (close!))))))
+        (case (.-key e)
+          "Escape" (do (.preventDefault e) (close!))
+          "Tab"    (when-let [box (el "snippet-submit-modal")] (a11y/trap-tab! e box))
+          nil)
+        (.stopPropagation e)))))

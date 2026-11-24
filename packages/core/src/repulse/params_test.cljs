@@ -6,11 +6,11 @@
 (def ^:private one-cycle
   (core/span (core/int->rat 0) (core/int->rat 1)))
 
-;;; ── combine ──────────────────────────────────────────────────────────
+;;; ── app-right ────────────────────────────────────────────────────────
 
-(deftest combine-pairs-overlapping-events
+(deftest app-right-pairs-overlapping-events
   (let [evs (core/query
-              (core/combine vector
+              (core/app-right vector
                             (core/seq* [1 2])
                             (core/seq* [:a :b]))
               one-cycle)
@@ -19,10 +19,10 @@
     (is (= [1 :a] (first vals)))
     (is (= [2 :b] (second vals)))))
 
-(deftest combine-pure-pairs-with-all-events
+(deftest app-right-pure-pairs-with-all-events
   ;; pure 99 covers the full cycle — every note event pairs with it
   (let [evs (core/query
-              (core/combine vector
+              (core/app-right vector
                             (core/pure 99)
                             (core/seq* [:x :y :z]))
               one-cycle)
@@ -567,3 +567,38 @@
     (is (= {:note :c2 :lpf 300 :lp-env 4 :lp-decay 0.2 :penv 12 :vib 6 :vowel :a
             :postgain 0.5 :nudge 0.01 :delay-sync [3 16]}
            (:value (first (core/query p one-cycle)))))))
+
+;;; ── Phase SYN6 ───────────────────────────────────────────────────────
+
+(def ^:private syn6-controls
+  [[params/unison :unison] [params/detune :detune] [params/spread :spread]
+   [params/sub-osc :sub-osc] [params/pw :pw] [params/pw-rate :pw-rate]
+   [params/pw-depth :pw-depth] [params/sync :sync] [params/tune :tune]
+   [params/tone :tone] [params/glide :glide] [params/accent :accent]
+   [params/lp-rate :lp-rate] [params/lp-depth :lp-depth]])
+
+(deftest syn6-controls-set-their-key
+  (is (= 14 (count syn6-controls)))
+  (doseq [[f kw] syn6-controls]
+    (testing (name kw)
+      (is (= {:note :c4 kw 3} (:value (first (core/query (f 3 (core/pure :c4)) one-cycle)))))
+      (is (= {:note :hh kw 0.5}
+             (:value (first (core/query ((f 0.5) (core/pure :hh)) one-cycle))))
+          "transformer arity")
+      (is (= [0 7] (mapv (comp kw :value)
+                         (core/query (f (core/seq* [0 7]) (core/seq* [:lt :lt])) one-cycle)))
+          "patterned")
+      (is (= [0 0.25 0.5 0.75]
+             (mapv (comp kw :value)
+                   (core/query (f core/saw (core/seq* [:hh :hh :hh :hh])) one-cycle)))
+          "signal sampled at onset"))))
+
+;;; ── Phase QA1: echo / stut caps ─────────────────────────────────────
+
+(deftest qa1-echo-cap
+  (let [msg (fn [f] (try (f) nil (catch :default e (ex-message e))))]
+    (is (= 64 (count (core/query-onsets (params/echo 64 [1 8] 0.5 (core/pure :bd)) one-cycle))))
+    (is (= "echo: times = 100 exceeds the limit of 64"
+           (msg #(params/echo 100 [1 8] 0.5 (core/pure :bd)))))
+    (is (= "stut: times = 65 exceeds the limit of 64"
+           (msg #(params/stut 65 0.5 [1 8] (core/pure :bd)))))))

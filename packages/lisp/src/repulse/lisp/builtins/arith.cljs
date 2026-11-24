@@ -16,23 +16,13 @@
 
 (def ^:private modes #{:in :out :mix :squeeze})
 
-(defn- num-val
-  "Numeric value of an amount: numbers as-is, rationals [n d] as floats, else nil."
-  [a]
-  (cond
-    (number? a) a
-    (and (vector? a) (= 2 (count a)) (number? (first a)) (number? (second a))
-         (not (zero? (second a))))
-    (/ (first a) (second a))
-    :else nil))
-
 (defn- numeric-op
   "Lift a binary number fn to event values. Note keywords go through MIDI note
    numbers and back (:c3 + 12 → :c4); maps apply the op to :note; anything
    non-numeric (rests, drum names) passes through unchanged."
   [f]
   (fn [v amt]
-    (if-let [a (num-val amt)]
+    (if-let [a (core/as-number amt)]
       (let [app (fn [x]
                   (cond
                     (number? x)               (f x a)

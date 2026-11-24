@@ -9,6 +9,7 @@
             [repulse.lisp.core :as lisp]
             [repulse.lisp.eval :as leval]
             [repulse.preview-track :as preview-track]
+            [repulse.snippets.preview-policy :as policy]
             [repulse.samples :as samples]
             [repulse.synth :as synth]
             [repulse.tracks-model :as tracks-model]))
@@ -41,9 +42,10 @@
   (reset! synth/synth-defs (:synth-defs snap))
   (reset! samples/active-bank-prefix (:bank-prefix snap))
   (let [{:keys [cycle-dur muted]} (:scheduler snap)]
-    (swap! audio/scheduler-state assoc
-           :cycle-dur cycle-dur
-           :muted (or muted #{})))
+    ;; QA3 A1: through set-bpm! so the tempo anchor keeps time continuous.
+    (when (and cycle-dur (not= cycle-dur (:cycle-dur @audio/scheduler-state)))
+      (audio/set-bpm! (/ 240.0 cycle-dur)))
+    (swap! audio/scheduler-state assoc :muted (or muted #{})))
   (doseq [{:keys [name active? bypassed?]} (:fx-active snap)]
     (swap! fx/chain
            (fn [chain]
@@ -82,25 +84,34 @@
         last-arg (last args')
         per-track? (and (> (count args') 1) (core/pattern? last-arg))]
     (when per-track?
-      (let [fx-args     (butlast args')
-            pat         last-arg
-            effect-name (cljs.core/name (first fx-args))
-            rest-fx     (rest fx-args)
-            params      (if (keyword? (first rest-fx))
-                          (into {} (map (fn [[k v]] [(cljs.core/name k) v])
-                                        (partition 2 rest-fx)))
-                          (let [named (rest rest-fx)]
-                            (into (when (seq rest-fx) {"value" (first rest-fx)})
-                                  (when (keyword? (first named))
-                                    (map (fn [[k v]] [(cljs.core/name k) v])
-                                         (partition 2 named))))))]
-        (update pat :track-fx (fnil conj []) {:name effect-name :params (or params {})})))))
+      (let [effect-name (cljs.core/name (first args'))
+            ;; shared parser (Phase FX1); previews record no warnings
+            {:keys [pairs]} (fx/prepare-fx-args effect-name (rest (butlast raw-args)))]
+        (update last-arg :track-fx (fnil conj [])
+                {:name effect-name :params (into {} pairs)})))))
+
+(defn- deny
+  "QA3 B: a stand-in for a built-in that previews may not run."
+  [name]
+  (fn [& _]
+    (throw (ex-info (policy/denial-message name) {:type :eval-error}))))
+
+(defn- apply-policy
+  "Replace every string key of env that previews may not call (policy/allowed?)
+   by a function that throws."
+  [env]
+  (reduce-kv (fn [m k _]
+               (if (and (string? k) (not (policy/allowed? k)))
+                 (assoc m k (deny k))
+                 m))
+             env env))
 
 (defn preview-env
   [{:keys [on-track]}]
   (builtins/ensure-env!)
   (let [env (fork-env @builtins/env-atom)]
-    (assoc env
+    (apply-policy
+     (assoc env
            :*register-synth-fn* synth/register-synth!
            "track"
            ;; WS5: trailing :mute / :solo flags are accepted; a :mute track
@@ -138,7 +149,9 @@
            "snippet" (fn [& _] "snippet insertion is disabled during preview")
            "demo" (fn [& _] "demo loading is disabled during preview")
            "tutorial" (fn [& _] "tutorial loading is disabled during preview")
-           "load-gist" (fn [& _] "gist loading is disabled during preview"))))
+           "load-gist" (fn [& _] "gist loading is disabled during preview")
+           ;; QA3 B: previews never touch the master chain
+           "master" (fn [& _] "preview: master block ignored")))))
 
 (defn eval-string [code opts]
   (lisp/eval-string code (preview-env opts)))

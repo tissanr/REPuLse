@@ -1,6 +1,7 @@
 (ns repulse.test-runner
   (:require [cljs.test :as test]
             [repulse.core-test]
+            [repulse.edit-distance-test]
             [repulse.theory-test]
             [repulse.params-test]
             [repulse.envelope-test]
@@ -21,6 +22,7 @@
             [repulse.ui.timeline-test]
             [repulse.outline-test]
             [repulse.lisp-patcher-test]
+            [repulse.content.builtin-meta-test]
             [repulse.project-test]
             [repulse.history-test]
             [repulse.project-eval-test]
@@ -34,11 +36,15 @@
             [repulse.audio-clock-test]
             [repulse.ui.slider-model-test]
             [repulse.ui.status-model-test]
+            [repulse.ui.outline-model-test]
             [repulse.ui.selection-test]
             [repulse.ui.inspector-model-test]
             [repulse.inserts-test]
             [repulse.orbits-test]
-            [repulse.tracks-model-test]))
+            [repulse.tracks-model-test]
+            [repulse.voices-test]
+            [repulse.audio-scheduler-test]
+            [repulse.snippets.preview-policy-test]))
 
 ;; Without this the process exits 0 even when tests fail, so `npm test` (and CI)
 ;; would pass regardless of the result.
@@ -47,7 +53,8 @@
     (set! (.-exitCode js/process) 1)))
 
 (defn main []
-  (test/run-tests 'repulse.core-test 'repulse.theory-test 'repulse.params-test
+  (test/run-tests 'repulse.core-test 'repulse.edit-distance-test
+                  'repulse.content.builtin-meta-test 'repulse.theory-test 'repulse.params-test
                   'repulse.envelope-test 'repulse.song-test
                   'repulse.lisp.eval-test 'repulse.lisp.mini-test
                   'repulse.lisp.integration-test
@@ -72,8 +79,12 @@
                   'repulse.audio-clock-test
                   'repulse.ui.slider-model-test
                   'repulse.ui.status-model-test
+                  'repulse.ui.outline-model-test
                   'repulse.ui.selection-test
                   'repulse.ui.inspector-model-test
                   'repulse.inserts-test
                   'repulse.orbits-test
-                  'repulse.tracks-model-test))
+                  'repulse.tracks-model-test
+                  'repulse.voices-test
+                  'repulse.audio-scheduler-test
+                  'repulse.snippets.preview-policy-test))

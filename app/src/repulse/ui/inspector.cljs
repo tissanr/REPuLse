@@ -100,11 +100,13 @@
 (defn- inline-html
   "WS3 ≋ toggle: on = the param is an inline (slider …) in the code."
   [param {:keys [on? pos]}]
-  (str "<span class=\"ins-inl" (when on? " on") "\" data-act=\"inline\""
+  (str "<button type=\"button\" class=\"ins-inl" (when on? " on") "\" data-act=\"inline\""
        " data-param=\"" (escape-html param) "\" data-pos=\"" pos "\""
        " title=\"" (if on?
                      "shown as inline slider in code — click to unwrap"
-                     "wrap in (slider …) in code  ⌘K S") "\">≋</span>"))
+                     "wrap in (slider …) in code  ⌘K S") "\""
+       " aria-label=\"" (if on? "unwrap inline slider" "wrap in inline slider") "\""
+       " aria-pressed=\"" (boolean on?) "\">≋</button>"))
 
 (defn- slider-html
   "label + custom slider + value. ids: {:key :track :fx :param :at :inline};
@@ -163,8 +165,8 @@
 
 (defn- jump-html [from]
   (when from
-    (str "<span class=\"ins-jump\" data-act=\"jump\" data-from=\"" from "\""
-         " title=\"Go to code  F12\">↗ L" (line-of from) "</span>")))
+    (str "<button type=\"button\" class=\"ins-jump\" data-act=\"jump\" data-from=\"" from "\""
+         " title=\"Go to code  F12\">↗ L" (line-of from) "</button>")))
 
 (def anon-flag-tooltip
   "Phase WS5: the anonymous :_ track has no form to put :mute / :solo on."
@@ -352,7 +354,12 @@
          "</div></div>")))
 
 (defn- fx-block [fx-entries]
-  (let [names  (mapv #(str/replace (:name %) #"^:" "") fx-entries)
+  (let [;; Phase FX1: list the effects in signal order (fx/default-order), not
+        ;; code order; each row keeps the link to its own form
+        rank       (fn [e] (let [n (str/replace (:name e) #"^:" "")]
+                             (fx/chain-rank (if (= n "dattorro") "dattorro-reverb" n))))
+        fx-entries (vec (sort-by rank fx-entries))
+        names  (mapv #(str/replace (:name %) #"^:" "") fx-entries)
         active (filter :active? @fx/chain)
         found  (mapv (fn [n] (some #(when (= n (:name %)) %) active)) names)
         rows   (im/fx-rows (mapv (fn [n e]
@@ -394,7 +401,7 @@
              "<span class=\"ins-kind ins-kind-" (str/replace kind " " "-") "\">" (escape-html kind) "</span>"
              "<span class=\"ins-title\">" (escape-html title) "</span>"
              (jump-html from)
-             "<kbd class=\"ol-kbd ins-esc\" data-act=\"close\" title=\"close  Esc\">esc</kbd>"
+             "<button type=\"button\" class=\"ol-kbd ins-esc\" data-act=\"close\" title=\"close  Esc\" aria-label=\"close inspector\">esc</button>"
              "</div>"
              "<div class=\"ins-body\">" (body-html ids idx) "</div>"
              "<div class=\"ins-resize\" title=\"drag to resize\"></div>")))))

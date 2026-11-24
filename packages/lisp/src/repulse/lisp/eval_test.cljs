@@ -486,3 +486,98 @@
       ;; :source differs by construction (the tokens sit at other offsets)
       (is (= (map #(dissoc % :source) a) (map #(dissoc % :source) b)))
       (is (every? #(= 0.7 (:amp (:value %))) a)))))
+
+;;; ── Phase QA1: threading, arity, recur, reader errors ───────────────
+
+(defn- qa1-eval
+  "Evaluate code in a fresh env → {:result v} or {:error msg :source {:from :to}}."
+  [code]
+  (let [r (lisp/eval-string code (make-test-env))]
+    (if (lisp/eval-error? r)
+      {:error (:message r) :source (:source r)}
+      r)))
+
+(defn- per-cycle-count [pat]
+  (count (core/query-onsets pat one-cycle)))
+
+(deftest qa1-threading-rewrite
+  (testing "keyword steps"
+    (is (= 1 (leval/unwrap (:result (qa1-eval "(-> {:a 1} :a)"))))))
+  (testing "-> puts the value first, ->> last"
+    (is (= -1 (leval/unwrap (:result (qa1-eval "(-> 1 (- 2))")))))
+    (is (= 1 (leval/unwrap (:result (qa1-eval "(->> 1 (- 2))"))))))
+  (testing "macros expand inside a thread"
+    (is (= 2 (per-cycle-count
+              (:result (qa1-eval "(defmacro twice [p] `(fast 2 ~p)) (->> (seq :bd) (twice))"))))))
+  (testing "an error in a step underlines that step's head"
+    ;;                      0123456789012345678
+    (let [r (qa1-eval "(->> (seq 1) (fast :x))")]
+      (is (= "Expected a number, got :x" (:error r)))
+      (is (= {:from 14 :to 18} (:source r)))))
+  (testing "a thread needs an argument"
+    (is (= "->> needs at least one argument" (:error (qa1-eval "(->>)"))))
+    (is (= "-> needs at least one argument" (:error (qa1-eval "(->)"))))))
+
+(deftest qa1-closure-arity
+  (is (= "f expects 1 argument, got 0" (:error (qa1-eval "(def x 5) (defn f [x] x) (f)"))))
+  (is (= "f expects 2 arguments, got 3" (:error (qa1-eval "(defn f [a b] a) (f 1 2 3)"))))
+  (is (= "fn expects 1 argument, got 2" (:error (qa1-eval "((fn [a] a) 1 2)"))))
+  (is (= "f expects at least 1 argument, got 0" (:error (qa1-eval "(defn f [a & r] a) (f)"))))
+  (is (= [2 3] (map leval/unwrap (:result (qa1-eval "((fn [a & r] r) 1 2 3)")))))
+  (is (nil? (:result (qa1-eval "((fn [a & r] r) 1)"))))
+  (is (= "m expects 1 argument, got 2" (:error (qa1-eval "(defmacro m [p] p) (m 1 2)")))))
+
+(deftest qa1-recur-outside-loop
+  (let [r (qa1-eval "(recur 1)")]
+    (is (= "recur outside loop" (:error r)))
+    (is (= {:from 0 :to 9} (:source r))))
+  (testing "a fn body inside loop is not a recur target"
+    (is (= "recur outside loop" (:error (qa1-eval "(loop [i 0] ((fn [] (recur 1))))")))))
+  (testing "loop/recur still works"
+    (is (= 3 (leval/unwrap (:result (qa1-eval "(loop [i 0] (if (< i 3) (recur (+ i 1)) i))")))))))
+
+(deftest qa1-not-a-function-text
+  (is (= "\"a\" is not a function" (:error (qa1-eval "(\"a\" 1)")))))
+
+(deftest qa1-map-filter-eager
+  (testing "errors inside map/filter surface at the call"
+    (is (some? (:error (qa1-eval "(map (fn [v] (nope v)) [1 2])"))))
+    (is (some? (:error (qa1-eval "(filter (fn [v] (nope v)) [1 2])"))))))
+
+(deftest qa1-reader-errors
+  (is (= {:error "Invalid rational 1/0 — the denominator is 0" :source {:from 0 :to 3}}
+         (qa1-eval "1/0")))
+  (is (= {:error "Invalid number 1.2.3" :source {:from 0 :to 5}} (qa1-eval "1.2.3")))
+  (is (= {:error "Unterminated string — missing closing \"" :source {:from 0 :to 1}}
+         (qa1-eval "\"abc\\"))))
+
+(deftest qa1-theory-at-eval
+  (is (= "scale: unknown scale :majr — did you mean :major?"
+         (:error (qa1-eval "(scale :majr :c4 (seq 0))"))))
+  (is (= "chord: unknown chord :majr — did you mean :major?"
+         (:error (qa1-eval "(chord :majr :c4)"))))
+  (is (= "scale: unknown root :zz — expected a note like :c4, :eb3 or :fs"
+         (:error (qa1-eval "(scale :major :zz (seq 0))"))))
+  (is (= "scale: the interval vector is empty" (:error (qa1-eval "(scale [] :c4 (seq 0))")))))
+
+(deftest qa1-limits-at-eval
+  (is (= "run: n = 1025 exceeds the limit of 1024" (:error (qa1-eval "(run 1025)"))))
+  (is (= "apply-n: n = 65 exceeds the limit of 64" (:error (qa1-eval "(apply-n 65 rev (seq 1 2))"))))
+  (is (= "echo: times = 100 exceeds the limit of 64" (:error (qa1-eval "(echo 100 1/8 0.5 (seq :bd))"))))
+  (is (= "! count = 100000000 exceeds the limit of 1024 in mini-notation at position 2"
+         (:error (qa1-eval "(~ \"bd!100000000\")"))))
+  (let [r (qa1-eval "(~ \"bd ] sd\")")]
+    (is (= "Unexpected \"]\" in mini-notation at position 3" (:error r)))
+    ;; only the ] is underlined: (~ " is 4 chars, so position 3 → 7
+    (is (= {:from 7 :to 8} (:source r))))
+  (testing "a mini-notation error in a patterned argument"
+    ;;        0123456789012
+    (let [r (qa1-eval "(fast \"<1 2\" (seq :bd))")]
+      (is (= "Expected > in mini-notation at position 4" (:error r)))
+      (is (= {:from 10 :to 11} (:source r))))))
+
+(deftest qa1-arrange-and-every-at-eval
+  (is (= "arrange: duration must be positive, got 0"
+         (:error (qa1-eval "(arrange [[(seq :a) 0]])"))))
+  (is (= "every: n must be at least 1, got 0" (:error (qa1-eval "(every 0 rev (seq 1 2))"))))
+  (is (= "every: n must be at least 1, got 1/2" (:error (qa1-eval "(every 1/2 rev (seq 1 2))")))))

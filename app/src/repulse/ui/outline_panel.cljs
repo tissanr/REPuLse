@@ -17,9 +17,11 @@
             [repulse.bus :as bus]
             [repulse.samples :as samples]
             [repulse.ui.status-model :as sm]
+            [repulse.ui.outline-model :as om]
             [repulse.ui.selection :as sel]
             [repulse.ui.selection-highlight :as sel-hl]
             [repulse.ui.goto :as goto]
+            [repulse.ui.a11y :as a11y]
             [repulse.ui.html :refer [escape-html]]
             ["@codemirror/view" :refer [EditorView keymap]]
             ["@codemirror/state" :refer [Prec]]
@@ -38,6 +40,10 @@
          "0" false
          (<= (.-innerWidth js/window) 760))
        (catch :default _ (<= (.-innerWidth js/window) 760))))
+
+;; Phase WS6: (fn [] → {track-kw buffer-name}) for :track entries of the
+;; non-active project buffers; set by app.cljs.
+(defonce other-tracks-fn (atom (constantly {})))
 
 (defonce entries     (atom []))
 (defonce partial?    (atom false))
@@ -120,7 +126,7 @@
   "One outline row.  opts: :glyph :indent :cursor? :playing? :progress :muted? :off?
    :dots (vector of colours) :meta :fold? :id (selection id) :sel? :row-act"
   [{:keys [kind name from to line indent cursor? playing? progress muted? off?
-           glyph glyph-class dots meta fold? id sel? row-act]}]
+           glyph glyph-class dots meta fold? id sel? row-act title attrs]}]
   (str "<div class=\"ol-row"
        (when cursor? " ol-cursor")
        (when playing? " ol-playing")
@@ -130,6 +136,11 @@
        "\" data-from=\"" from "\" data-to=\"" to "\""
        (when id (str " data-id=\"" (escape-html id) "\""))
        (when row-act (str " data-act=\"" row-act "\""))
+       (when title (str " title=\"" (escape-html title) "\""))
+       (when attrs attrs)
+       ;; QA3 D: clickable rows are keyboard controls (Tab + Enter/Space)
+       (when (or id row-act) " role=\"button\" tabindex=\"0\"")
+       (when (= row-act "fold") (str " aria-expanded=\"" (boolean @song-open?) "\""))
        ">"
        "<span class=\"ol-glyph" (when glyph-class (str " " glyph-class)) "\""
        (when fold? " data-act=\"fold\"") ">" (or glyph "") "</span>"
@@ -145,7 +156,7 @@
          (str "<span class=\"ol-dots\">"
               (apply str (map #(str "<span class=\"ol-dot\" style=\"background:" % "\"></span>") dots))
               "</span>"))
-       "<span class=\"ol-line\">L" line "</span>"
+       (when line (str "<span class=\"ol-line\">L" line "</span>"))
        (when sel? "<span class=\"ol-sel-mark\">›</span>")
        (when playing?
          (str "<div class=\"ol-progress\" style=\"width:calc((100% - 18px) * "
@@ -186,7 +197,8 @@
                         ["sources" (count sources)]])]
     (when (seq parts)
       (str "<div class=\"ol-session" (when @session-open? " open") "\">"
-           "<div class=\"ol-session-head\" data-act=\"session\">"
+           "<div class=\"ol-session-head\" data-act=\"session\" role=\"button\" tabindex=\"0\""
+           " aria-expanded=\"" (boolean @session-open?) "\">"
            "<span class=\"ol-session-glyph\">" (if @session-open? "▾" "▸") "</span>"
            "<span class=\"ol-session-title\">session</span>"
            "<span class=\"ol-session-sum\">" (escape-html (apply str (interpose " · " parts))) "</span>"
@@ -240,7 +252,8 @@
 (defn- rail-html [song-entry playing-idx]
   (let [secs  (:children song-entry)
         total (reduce + 0 (map #(or (:bars %) 1) secs))]
-    (str "<div class=\"ol-rail\" data-act=\"expand\" title=\"Show outline  "
+    (str "<div class=\"ol-rail\" data-act=\"expand\" role=\"button\" tabindex=\"0\""
+         " aria-expanded=\"false\" aria-label=\"show outline\" title=\"Show outline  "
          (if (mac?) "⌘⇧O" "Ctrl+Shift+O") "\">"
          "<div class=\"ol-rail-btn\">›</div>"
          "<div class=\"ol-rail-label\">outline</div>"
@@ -273,11 +286,15 @@
         line     #(if doc (line-of doc (min % (.-length doc))) 0)
         sel-set  (set @selection)
         fxs      (filterv #(= :fx (:kind %)) es)
-        mst      (first (filter #(= :master (:kind %)) es))]
+        mst      (first (filter #(= :master (:kind %)) es))
+        running  (set (keys (:tracks state)))
+        run-rows (om/running-rows running muted
+                                  (set (map #(keyword (subs % 1)) (track-names es)))
+                                  (try (@other-tracks-fn) (catch :default _ {})))]
     (if @collapsed?
       (rail-html song-e play-idx)
       (str (header-html n)
-           (if (empty? es)
+           (if (and (empty? es) (empty? run-rows))
              (empty-html)
              (str "<div class=\"ol-list\">"
                   (apply str
@@ -309,15 +326,19 @@
                                                                (if (= [":all"] (:tracks s)) tnames (:tracks s)))})))
                                      (:children e)))))
                           :track
-                          (let [m?   (contains? muted (keyword (subs (:name e) 1)))
-                                in?  (and sec-trk (or (= [":all"] sec-trk) (some #{(:name e)} sec-trk)))
-                                aud? (and playing (not m?) in?)]
+                          (let [kw    (keyword (subs (:name e) 1))
+                                st    (when-not playing (om/track-state kw running muted))
+                                m?    (if playing (contains? muted kw) (= st :muted))
+                                in?   (and sec-trk (or (= [":all"] sec-trk) (some #{(:name e)} sec-trk)))
+                                aud?  (if playing (and (not m?) in?) (= st :playing))]
                             (row-html {:kind :track :name (:name e) :from (:from e) :to (:to e)
                                        :line (line (:from e))
                                        :id (sel/entry-id e nil)
                                        :sel? (contains? sel-set (sel/entry-id e nil))
                                        :cursor? (= cur-from (:from e))
-                                       :muted? m? :off? (and playing (not in?))
+                                       :muted? m?
+                                       :off? (if playing (not in?) (= st :stopped))
+                                       :title (when (= st :stopped) "not running")
                                        :glyph (cond m? "■" aud? "•") :glyph-class (when (or m? aud?) (if m? "ol-g-mute" "ol-g-aud"))}))
                           :fx ""   ; listed in the fx group below
                           :master ""   ; listed in the master group, always last
@@ -358,6 +379,27 @@
                                             :id id :sel? (contains? sel-set id)
                                             :cursor? (= cur-from (:from c))})))
                              (:children mst)))))
+                  (when (seq run-rows)
+                    (str "<div class=\"ol-group-divider\"></div>"
+                         (row-html {:kind :fx :name "running" :meta (str (count run-rows))})
+                         (apply str
+                           (map (fn [{:keys [kw state origin buffer]}]
+                                  (let [m? (= state :muted)
+                                        nm (if (= kw :_) "_" (str ":" (name kw)))]
+                                    (row-html {:kind :track :name nm :indent 12
+                                               :from 0 :to 0
+                                               :muted? m?
+                                               :row-act (when (= origin :buffer) "goto-buffer")
+                                               :attrs (when (= origin :buffer)
+                                                        (str " data-buffer=\"" (escape-html buffer)
+                                                             "\" data-track=\"" (escape-html nm) "\""))
+                                               :meta (case origin
+                                                       :buffer buffer
+                                                       :anonymous "anonymous"
+                                                       "not in code")
+                                               :glyph (if m? "■" "•")
+                                               :glyph-class (if m? "ol-g-mute" "ol-g-aud")})))
+                                run-rows))))
                   "</div>"))
            (session-html)
            (footer-html)))))
@@ -367,11 +409,14 @@
   (when-let [panel (.getElementById js/document "outline-panel")]
     (when-let [main (.getElementById js/document "outline-main")]
       (let [list-el (.querySelector main ".ol-list")
-            scroll  (when list-el (.-scrollTop list-el))]
+            scroll  (when list-el (.-scrollTop list-el))
+            ;; QA3 D: the outline re-renders every bar — keep keyboard focus
+            fk      (a11y/focus-key main)]
         (if @collapsed?
           (.add (.-classList panel) "collapsed")
           (.remove (.-classList panel) "collapsed"))
         (set! (.-innerHTML main) (render-html))
+        (a11y/restore-focus! main fk)
         (when scroll
           (when-let [l (.querySelector main ".ol-list")]
             (set! (.-scrollTop l) scroll)))))))
@@ -429,6 +474,11 @@
 
         (= act "session")
         (toggle-session!)
+
+        (= act "goto-buffer")
+        (when-let [view @view-ref]
+          (goto/goto-entry-in-buffer! view (.getAttribute act-el "data-buffer")
+                                      :keyword (.getAttribute act-el "data-track")))
 
         :else
         (when-let [row (.closest target ".ol-row[data-id]")]
@@ -516,6 +566,7 @@
   (reset! cursor-pos (.. view -state -selection -main -head))
   (re-extract! view)
   (when-let [panel (.getElementById js/document "outline-panel")]
-    (.addEventListener panel "click" on-click))
+    (.addEventListener panel "click" on-click)
+    (a11y/activate-on-key! panel))
   (.addEventListener js/document "keydown" on-doc-keydown)
   (render!))

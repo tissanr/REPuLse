@@ -4,15 +4,10 @@
             [repulse.core :as core]
             [repulse.params :as params]
             [repulse.lisp.mini :as mini]
+            [repulse.lisp.builtins.common :refer [xf numeric-token?]]
             [repulse.lisp.util :as u]))
 
 ;;; ── Phase TL5 helpers ───────────────────────────────────────────────
-
-(defn- xf
-  "Wrap a Lisp function argument so SourcedVals never reach core."
-  [f]
-  (let [f (u/unwrap f)]
-    (fn [p] (u/unwrap (f p)))))
 
 (defn- variadic-fs
   "Builtin (f fn … pat): the last argument is the pattern; if it is a function
@@ -32,9 +27,6 @@
     ([a b c]   (let [a (u/pat-arg a) b (u/pat-arg b) c (u/pat-arg c)]
                  (fn [p] (f a b c (u/unwrap p)))))
     ([a b c p] (f (u/pat-arg a) (u/pat-arg b) (u/pat-arg c) (u/unwrap p)))))
-
-(defn- numeric-token? [tok]
-  (boolean (re-matches #"-?\d+(\.\d+)?(/\d+)?" tok)))
 
 (defn- mode-error [x]
   (ex-info (str "arp: unknown mode " (pr-str x) " — known: "
@@ -137,4 +129,4 @@
               (let [src         (u/source-of s)
                     base-offset (when src (inc (:from src)))]
                 (mini/parse (u/unwrap s) base-offset)))
-   "alt"    (fn [& pats] (mini/alt* (mapv u/unwrap pats)))})
+   "alt"    (fn [& pats] (core/cat* (mapv u/unwrap pats)))})

@@ -13,7 +13,8 @@
        (str "loading " url' "…")))
 
    "sample-banks"
-   (fn [] (samples/format-banks))
+   (fn ([] (samples/format-banks))
+       ([flt] (samples/format-banks (leval/unwrap flt))))
 
    "bank"
    (fn [prefix]

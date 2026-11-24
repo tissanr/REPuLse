@@ -102,6 +102,19 @@
 (defn- entries-of [state]
   (:entries (outline/extract (syntaxTree state) (.toString (.-doc state)))))
 
+(defn goto-entry-in-buffer!
+  "Switch to project buffer `buffer`, find its first `kind` entry named `text`
+   and reveal it.  Pushes the jump so Shift+F12 returns.  Returns true on a
+   jump.  Needs the `cross-buffer` hooks (nil → no-op)."
+  [view buffer kind text]
+  (when-let [{:keys [switch!]} @cross-buffer]
+    (push-jump! (.-state view))
+    (switch! buffer)
+    (when-let [entry (outline/definition-for (entries-of (.-state view)) kind text)]
+      (reveal! view (or (:name-from entry) (:from entry))
+               (:from entry) (:to entry)))
+    true))
+
 (defn goto-definition!
   "Jump to the definition of the name at pos — in the active buffer first,
    else in another project buffer.  Unknown names do nothing.

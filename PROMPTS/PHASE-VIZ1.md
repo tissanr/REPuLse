@@ -17,8 +17,9 @@ The track panel under the editor doesn't show what you hear. Three of its six mo
 (`wave`, `spec`, `loud`) never read the audio: they draw a fixed-frequency sine or bars,
 shaped by a made-up envelope that starts at each event's onset. The animation runs on
 wall-clock seconds times arbitrary factors, so it ignores the tempo. There's no playhead.
-The panel shows the cycle the scheduler is preparing, not the one you hear. `roll` places
-`:c3` on a row computed from the name's character codes. Found by the user on 2026-11-24.
+QA3 switched it to the integer cycle at `currentTime`, but that still ignores output
+latency. `roll` places `:c3` on a row computed from the name's character codes. Found by
+the user on 2026-11-24.
 
 This phase does two things:
 
@@ -50,10 +51,13 @@ This phase does two things:
 ### Track panel — `app/src/repulse/ui/timeline.cljs` (`repulse.ui.timeline`)
 
 - `modes`: `wave spec loud beat roll seg`; `viz-mode` atom (default `"wave"`).
-- `active-track-data` reads `@audio/scheduler-state` (`:tracks :muted :cycle`) and
-  calls `track-events`, which queries **one cycle**, `[cycle, cycle+1)`, using `:part`
-  times. `:cycle` is the cycle the lookahead scheduler is preparing, so it runs ahead of
-  what you hear.
+- `active-track-data` reads `@audio/scheduler-state` (`:tracks :muted`) and the cycle
+  from `audio/audible-cycle` (QA3 A2: the floor of `tempo/cycle-at-time state
+  currentTime`, so it handles tempo changes but not output latency). It calls
+  `cached-track-events` → `track-events`, which queries **one cycle**, `[cycle,
+  cycle+1)`, using `:part` times. `events-cache` (QA3) queries each track at most once per
+  cycle; `query-count` and `last-cycle` are test handles. Keep an equivalent cache and
+  equivalent handles.
 - `event-energy` / `energy-curve` / `energy-cache`: a synthetic envelope (`exp(-10·d/dur)`)
   per onset. `draw-wave!` multiplies it by `sin(t·56 + ph·2)`; `draw-spec!` draws it as
   bars; `draw-loud!` as a filled area. None of them read audio.
@@ -65,7 +69,7 @@ This phase does two things:
 - `song-resting-tracks` dims tracks that don't play in the current song bar.
 - `render-track-panel!` builds the toolbar (mode buttons, track mute buttons that call
   `js/window._repulseMuteToggle`) and a `1600×126` canvas `#track-viz-canvas`. It is
-  re-rendered from `app.cljs` (lines ~477, ~484) when tracks change.
+  re-rendered from `app.cljs` when tracks change.
 - `timeline_test.cljs` covers `track-events`, `energy-curve`, `sample-energy`,
   `value-pitch` and `song-resting-tracks`.
 
@@ -76,11 +80,12 @@ This phase does two things:
   included). `audio/clock-snapshot ac` takes the snapshot.
 - `schedule-visual! at-ms f` runs `f` on the animation frame nearest `at-ms`; the editor
   highlight and beat dot use it via `:on-event` / `:on-beat` in `schedule-event!`.
-- Cycle `c` starts at AudioContext time `c × cycle-dur` (`schedule-cycle!`,
-  free-running branch). In song mode, events are placed at `(origin + bar) × cycle-dur`
-  via `song/song-onsets s tracks muted bar`.
+- `repulse.tempo/cycle-at-time state t` maps an AudioContext time to a (float) cycle
+  position, tempo changes included; `audio/audible-cycle` floors it at `currentTime`.
+  In song mode, the song bar is that cycle minus the song's `:origin`
+  (`song/song-onsets`, `song/wrap-bar`).
 
-### Pitch of an event — `audio.cljs` `schedule-event!` (MIDI out, ~line 1080)
+### Pitch of an event — `audio.cljs` `schedule-event!` (MIDI-out branch)
 
 The MIDI-out branch already computes the pitch an event really plays: `:freq` → Hz;
 `:note` keyword → `theory/note->hz`; `:note` number → Hz; bare note keyword → Hz; **bare
@@ -92,7 +97,7 @@ Velocity is `(:amp value 1.0)`.
 - `track-nodes`: `kw → {:gain-node :fx-chain}`, created by `ensure-track-node!`.
 - `output-for-track ac track` returns the track's first FX input, else `master-gain`.
   **The track's `gain-node` is not on the voice path.**
-- `play-event` (~line 664): `dest = (output-for-track …)`. WASM voices are dispatched by
+- `play-event`: `dest = (output-for-track …)`. WASM voices are dispatched by
   `worklet-trigger!` / `worklet-trigger-v3!` **only when `dest` is the master gain**
   (decision E1). Otherwise JS voices are built and connected through
   `js-dest = (event-output ac t ins snd dest dur …)`. Sample playback is always JS.
@@ -105,8 +110,9 @@ Velocity is `(:amp value 1.0)`.
 ### WASM engine — `packages/audio/src/lib.rs`
 
 - `AudioEngine { voices: Vec<ActiveVoice>, pending, bus: Vec<f32>, … }`.
-- `trigger_v3(value, time, params: &[f32])`: params slots 0–14 (slot 14 = orbit,
-  TL7b); a missing trailing slot means its default.
+- `trigger_v3(value, time, params: &[f32])`: a fixed slot layout documented above the
+  method (0–14 filters/sends, 15–40 TL7c, 41–43 SYN6; later phases append, never
+  reorder). A missing trailing slot means its default.
 - `process_block_buses(n, t)` / `process_block_buses_raw`: renders into the
   pre-allocated `bus` (`[bus][frame][channel]`, `N_BUSES = 9`). The render path is
   allocation-free (CLAUDE.md, *WASM synthesis*).
@@ -130,10 +136,11 @@ extra keys survive `track` but are dropped by any combinator that builds a new p
 1. **Two sources, never synthesized.** Event views (`punchcard`, `pianoroll`, `spiral`)
    draw the exact queried events. Audio views (`scope`, `spectrum`, `level`) draw the
    track's measured audio. Nothing is generated from a made-up envelope.
-2. **One clock: heard time.** Every view derives its position from
-   `heard-cycle = (ctx.currentTime − latency-s) / cycle-dur` (free-running), or the
-   song bar from the same heard time (song mode). No `phase` atom, no wall-clock factors.
-   When stopped, views freeze at the last heard position.
+2. **One clock: heard time.** Every view derives its position from the float
+   `heard-cycle = tempo/cycle-at-time state (ctx.currentTime − latency-s)`. In song mode
+   the song bar comes from the same value. Add `audio/heard-cycle-pos` next to
+   `audible-cycle` and switch the panel's per-cycle cache to its floor. No `phase` atom,
+   no wall-clock factors. When stopped, views freeze at the last heard position.
 3. **Event views query a window, not one cycle.** For example, `pianoroll` defaults to
    4 cycles with the playhead at 0.5: `[heard − 2, heard + 2)`. Times come from
    `:whole` (fall back to `:part` for continuous events, drawn hatched). Queries are
@@ -150,7 +157,9 @@ extra keys survive `track` but are dropped by any combinator that builds a new p
      through the tap; **`dest` (and so WASM eligibility) is unchanged**.
    - *WASM voices*: the engine meters per **slot**. The main thread assigns each track a
      slot 0–15 (`meter-slots` atom; slot `-1` = unmetered, shown as "no meter: more
-     than 16 tracks"). The slot travels as `trigger_v3` params **slot 15**. In the
+     than 16 tracks"). The slot travels in a new `trigger_v3` params slot appended to the
+     layout: **slot 44** if nothing else has been appended by then, otherwise the next
+     free one; document it in the layout comment. In the
      render loop each voice's dry output is also summed into a pre-allocated mono
      `slot_bus[16][128]`; per slot the engine keeps a 2048-sample ring and a running
      peak/RMS. No allocation in the render path.
@@ -204,7 +213,8 @@ extra keys survive `track` but are dropped by any combinator that builds a new p
 
 No DOM, no audio. Unit-tested in `viz_model_test.cljs`:
 
-- `heard-cycle {:ctx-time :latency :cycle-dur}` → float.
+- `heard-cycle cycle-at-fn ctx-time latency` → float (`cycle-at-fn` is
+  `#(tempo/cycle-at-time state %)` in the app, a stub in tests).
 - `window [heard opts]` → `[from to]` cycle floats from `:cycles` / `:playhead`.
 - `layout-events [events]` → events with `:start :end` (floats, from `:whole`, `:part`
   fallback with `:continuous? true`), `:midi` (from `audio/event-hz` + `hz->midi`, nil
@@ -227,14 +237,15 @@ it there. Pure. Add a test next to the existing audio-clock tests.
   `tap → (first-fx input | master-gain)`.
 - In `play-event`, `js-dest` wraps `(track-tap track-name dest)` instead of `dest`.
   `dest` stays for the `worklet-trigger!` eligibility check (`(= dest master)`).
-- `fx.cljs`: wherever a track FX chain is (re)built (`add-track-effect!` ~line 94,
-  removal ~137/146), reconnect `tap`'s forward output to the new first input.
-- Cleanup paths (~1338, ~1462) disconnect `tap` and `analyser`.
+- `fx.cljs`: in `rewire-track!` (used by `add-track-effect!`,
+  `clear-track-effects!`, `apply-track-effects!`), reconnect `tap`'s forward output to the new first input.
+- Cleanup paths (`stop!`, `clear-track!`) disconnect `tap` and `analyser`.
 - Offline contexts: no taps (export and the TEST1 harness are unchanged).
 
 ### 4. Per-track meters (WASM voices) — `packages/audio/src/lib.rs`, `app/public/worklet.js`
 
-- `ActiveVoice` gets `meter_slot: i8` from params slot 15 (`-1` when missing).
+- `ActiveVoice` gets `meter_slot: i8` from the new params slot (decision 5; `-1` when
+  missing).
 - `AudioEngine` gets pre-allocated `slot_bus: [[f32; 128]; 16]`,
   `rings: [[f32; 2048]; 16]`, `ring_pos: [usize; 16]`, `peak: [f32; 16]`,
   `rms_acc: [f32; 16]`. In `process_block_buses_raw`, add each voice's mono dry sample
@@ -243,13 +254,14 @@ it there. Pure. Add a test next to the existing audio-clock tests.
 - `pub fn meter_snapshot(&self, out: &mut [f32])` writes 16 rings (in time order) then
   16 peaks and 16 RMS values. Allocation-free.
 - Rust tests (`npm run test:rust`): (a) a voice on slot 3 produces RMS > 0.001 in slot 3
-  and exactly 0 in every other slot; (b) a voice without slot 15 meters nowhere; (c)
+  and exactly 0 in every other slot; (b) a voice without the meter slot param meters
+  nowhere; (c)
   rendering 1000 blocks with metering leaves `voices`/`bus` capacities unchanged (no
   growth).
 - `worklet.js`: on `{type:"meter-req", buf}`, call `meter_snapshot` into `buf` (via the
   wasm memory view) and `port.postMessage({type:"meter", buf}, [buf.buffer])`.
-- `audio.cljs`: `meter-slots` atom (assign on `set-track!`, free on remove); pass slot
-  15 in `worklet-trigger-v3!`; `request-meters!` (≤30 Hz, only while a scope/spectrum/
+- `audio.cljs`: `meter-slots` atom (assign on `set-track!`, free on remove); pass the
+  meter slot param in `worklet-trigger-v3!`; `request-meters!` (≤30 Hz, only while a scope/spectrum/
   level view is visible) and `track-audio track-name` →
   `{:samples Float32Array(2048) :peak :rms}` merged from tap + ring.
 
@@ -317,7 +329,7 @@ it to the editor extensions in `ui/editor.cljs`.
 | `app/src/repulse/env/builtins.cljs` | Register viz built-ins |
 | `app/src/repulse/env/builtins/tracks.cljs` | Dropped-viz and max-3 warnings |
 | `app/src/repulse/eval_orchestrator.cljs` | Reset `viz-calls` per top-level form |
-| `app/src/repulse/audio.cljs` | `event-hz`, taps, `meter-slots`, slot 15, `request-meters!`, `track-audio`, cleanup |
+| `app/src/repulse/audio.cljs` | `event-hz`, taps, `meter-slots`, meter slot param, `request-meters!`, `track-audio`, cleanup |
 | `app/src/repulse/fx.cljs` | Reconnect taps when track FX chains change |
 | `packages/audio/src/lib.rs` | Meter slots, rings, `meter_snapshot`, tests |
 | `app/public/worklet.js` | `meter-req` / `meter` ping-pong |
@@ -338,7 +350,7 @@ it to the editor extensions in `ui/editor.cljs`.
 - `(seq :bd :sd :bd :sd)` → all `:midi nil`, drum lanes `["bd" "sd"]`.
 - `(seq 440 220)` → `:midi` 69 57 (bare numbers are Hz).
 - `(->> (seq :c4 :e4) (amp 0.2))` → `:alpha` 0.4 for both.
-- `heard-cycle {:ctx-time 10.05 :latency 0.05 :cycle-dur 2}` → 5.0.
+- `heard-cycle #(/ % 2) 10.05 0.05` → 5.0 (constant tempo, 2 s per cycle).
 - `window 5.0 {:cycles 4 :playhead 0.5}` → `[3.0 7.0]`.
 
 ### Checklist

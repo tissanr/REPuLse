@@ -210,17 +210,16 @@ ARCHITECTURE.md has the detailed module map and dependency rules.
    namespace's `*_test.cljs` file (e.g. `core_test.cljs`, `theory_test.cljs`). A new test
    namespace must also be added to `packages/core/src/repulse/test_runner.cljs`.
 3. **Make the editor and the AI assistant know it:**
-   1. Add the name to `BuiltinName` in `app/src/repulse/lisp-lang/repulse-lisp.grammar`
-   2. Run `npm run gen:grammar` — regenerates the committed `parser.js` and `parser.terms.js`
-   3. Add a `{ label, type, detail }` entry to `app/src/repulse/lisp-lang/completions.js`
-   4. Optionally add a richer tooltip to `app/src/repulse/lisp-lang/hover.js`
-   5. Add an entry to `app/src/repulse/content/builtin_meta.edn` (`category`, `returns`,
-      `side-effects`, at least one example, `see-also`)
-   6. Run `npm run gen:ai-docs` — regenerates `docs/ai/builtins.json`
+   1. Add an entry to `app/src/repulse/content/builtin_meta.edn` with every required key:
+      `:type`, `:detail`, `:signature`, `:doc`, `:category`, `:returns`, `:side-effects`,
+      `:examples` (at least one) and `:see-also`
+   2. Run `npm run gen:ai-docs` — it generates completions, hover docs, the grammar's
+      `BuiltinName` region, `parser.js`, `parser.terms.js` and `docs/ai/builtins.json`
 4. **Document it** in [USAGE.md](USAGE.md) with at least one example.
 
-Commit the grammar, `parser.js`, `parser.terms.js`, `completions.js`, `builtin_meta.edn` and
-`builtins.json` together — CI fails on grammar or AI-docs drift.
+Commit the `.edn` together with the generated files (`builtins.generated.js`, the grammar,
+`parser.js`, `parser.terms.js`, `builtins.json`) and never edit those by hand — CI fails on
+drift.
 
 ### Adding a synthesized voice
 
@@ -268,9 +267,9 @@ Every pull request and every push to `main` runs these jobs:
 | Test (cljs.test) | `ci.yml` | `npm test` |
 | Rust audio tests | `ci.yml` | `cargo test` in `packages/audio` |
 | Browser audio tests | `ci.yml` | `npm run test:e2e` (Playwright, Chromium) |
-| AI docs drift check | `ci.yml` | `npm run check:ai-docs` |
+| AI docs drift check | `ci.yml` | `npm run check:ai-docs` — regenerates `builtins.generated.js`, the grammar `BuiltinName` region, parser and `builtins.json`, then fails on any diff |
 | Release build | `ci.yml` | `npm run build:wasm && npx shadow-cljs release app` |
-| CLJS lint | `lint.yml` | `clj-kondo` on `packages/` and `app/src/` — fails on errors, reports warnings |
+| CLJS lint | `lint.yml` | `clj-kondo` 2025.10.23 on `packages/` and `app/src/` — fails on warnings and errors |
 | TypeScript type-check | `lint.yml` | `npm run typecheck` (the `api/` functions) |
 | Rust lint | `lint.yml` | `cargo test`, `cargo clippy -- -D warnings`, `cargo fmt --check` |
 | Grammar drift check | `lint.yml` | `npm run gen:grammar`, then fails if `parser.js` or `parser.terms.js` changed |

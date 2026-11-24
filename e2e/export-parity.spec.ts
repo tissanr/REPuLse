@@ -259,7 +259,10 @@ test('plugin worklets render offline (bitcrusher bits, dattorro reverb)', async 
   expect(h(c1.wav)).toBeGreaterThanOrEqual(0.05);
   expect(h(c0.wav)).toBeLessThanOrEqual(0.005);
 
-  const plate = (m: string) => `(bpm 240)\n(track :t (seq :hh :_ :_ :_))${m}\n(export 2)`;
+  // A snare, not a hat: since the synth kit is the default (2026-11-21) bare
+  // :hh is the synth hat, quieter than the old noise hat, and its reverb tail
+  // sat just below the 1e-3 bound. The snare also dies out before 0.3 s.
+  const plate = (m: string) => `(bpm 240)\n(track :t (seq :sd :_ :_ :_))${m}\n(export 2)`;
   const d1 = await exportBuffer(page, plate('\n(master (fx :dattorro-reverb 0.5))'));
   await expect(output(page)).toHaveText('exported all tracks — 2 cycles (offline)');
   const d0 = await exportBuffer(page, plate(''));
@@ -449,4 +452,135 @@ test('real-time capture keeps the downbeat across a main-thread stall', async ({
   console.log('stalled capture quarter-second windows', q);
   // Beat 1 (bd + c2) is about as loud as beat 3 (bd + g2); a lost downbeat is silence.
   expect(q[0]).toBeGreaterThan(0.5 * q[2]);
+});
+
+// ── Phase SYN6: the export renders the new WASM voices ─────────────────────
+
+/** Share of energy above `split` Hz in x (naive DFT, short windows only). */
+function shareAbove(x: number[], rate: number, split: number) {
+  const n = x.length;
+  let hi = 0;
+  let all = 0;
+  for (let k = 1; k < n / 2; k += 1) {
+    let re = 0;
+    let im = 0;
+    for (let i = 0; i < n; i += 1) {
+      const a = (2 * Math.PI * k * i) / n;
+      re += x[i] * Math.cos(a);
+      im -= x[i] * Math.sin(a);
+    }
+    const p = re * re + im * im;
+    all += p;
+    if ((k * rate) / n >= split) hi += p;
+  }
+  return hi / all;
+}
+
+const peakAbs = (w: Wav16) =>
+  [w.left, w.right].reduce((m, ch) => ch.reduce((a, s) => Math.max(a, Math.abs(s)), m), 0);
+
+test('SYN6 high saw exports band-limited (alias of the 13th harmonic ≥ 40 dB down)', async ({ page }) => {
+  await load(page);
+  const { wav } = await exportBuffer(page, '(bpm 240)\n(track :a (->> (seq :a7) (synth :saw)))\n(export 1)');
+  const r = wav.sampleRate;
+  const x = seg(mono(wav), r, 0, 0.4);
+  const alias = Math.abs(13 * 3520 - r);
+  const d = toDb(goertzel(x, r, 3520) / goertzel(x, r, alias));
+  console.log(`saw a7: alias at ${alias} Hz is ${d.toFixed(1)} dB below the note`);
+  expect(d).toBeGreaterThanOrEqual(40);
+});
+
+test('SYN6 (bank :synth) kick follows tune', async ({ page }) => {
+  await load(page);
+  const f0 = async (tune: string) => {
+    const { wav } = await exportBuffer(
+      page,
+      `(bank :synth)\n(bpm 240)\n(track :k (->> (seq :bd) (decay 2)${tune}))\n(export 1)`,
+    );
+    const r = wav.sampleRate;
+    const x = seg(mono(wav), r, 0.2, 0.7);
+    let best = { f: 0, m: -1 };
+    for (let f = 30; f <= 130; f += 0.5) {
+      const m = goertzel(x, r, f);
+      if (m > best.m) best = { f, m };
+    }
+    return best.f;
+  };
+  const plain = await f0('');
+  const up = await f0(' (tune 12)');
+  console.log('synth kick f0', plain, 'tuned', up);
+  expect(Math.abs(plain / 48 - 1)).toBeLessThanOrEqual(0.05);
+  expect(Math.abs(up / 96 - 1)).toBeLessThanOrEqual(0.05);
+});
+
+test('SYN6 closed hat chokes the open hat', async ({ page }) => {
+  await load(page);
+  const tail = async (pat: string) => {
+    const { wav } = await exportBuffer(page, `(bank :synth)\n(bpm 480)\n(track :h ${pat})\n(export 1)`);
+    return rms(seg(mono(wav), wav.sampleRate, 0.35, 0.45));
+  };
+  const choked = await tail('(->> (seq :oh :hh) (decay (seq 3 0.05)))');
+  const ref = await tail('(->> (seq :oh :_) (decay 3))');
+  const d = toDb(ref / Math.max(choked, 1e-9));
+  console.log('choke', ref, choked, `${d.toFixed(1)} dB`);
+  expect(d).toBeGreaterThanOrEqual(40);
+});
+
+test('SYN6 instruments: acid sweep, reese beat, strings swell, sync-lead formant', async ({ page }) => {
+  await load(page);
+  const one = async (code: string) =>
+    (await exportBuffer(page, `(bpm 120)\n(track :i ${code})\n(export 1)`)).wav;
+
+  const acid = await one('(->> (seq :c2) (synth :acid) (decay 2))');
+  const ra = acid.sampleRate;
+  const am = mono(acid);
+  // Windows are measured from the onset (the WAV starts a few ms before it).
+  const on = am.findIndex((v) => Math.abs(v) > 1e-4) / ra;
+  const early = shareAbove(seg(am, ra, on, on + 0.02), ra, 1000);
+  const late = shareAbove(seg(am, ra, on + 0.3, on + 0.32), ra, 1000);
+  console.log('acid share > 1 kHz', early, late, toDb(early / late));
+  expect(toDb(early / late)).toBeGreaterThanOrEqual(10);
+
+  const reese = await one('(->> (seq :a2) (synth :reese) (decay 6))');
+  const rr = reese.sampleRate;
+  const w = Math.round(0.01 * rr);
+  const lv = rmsPerWindow(seg(mono(reese), rr, 0.2, 2.0), w).map((v) => Math.log(Math.max(v, 1e-9)));
+  const n = lv.length;
+  const mx = (n - 1) / 2;
+  const my = lv.reduce((a, b) => a + b, 0) / n;
+  const slope =
+    lv.reduce((a, y, i) => a + (i - mx) * (y - my), 0) / lv.reduce((a, _, i) => a + (i - mx) ** 2, 0);
+  const resid = lv.map((y, i) => Math.exp(y - (my + slope * (i - mx))));
+  const depth = (Math.max(...resid) - Math.min(...resid)) / (Math.max(...resid) + Math.min(...resid));
+  console.log('reese modulation depth', depth);
+  expect(depth).toBeGreaterThanOrEqual(0.2);
+
+  const str = await one('(->> (seq :c4) (synth :strings))');
+  const rs = str.sampleRate;
+  const swell = rms(seg(mono(str), rs, 0.01, 0.03)) / rms(seg(mono(str), rs, 0.39, 0.41));
+  console.log('strings early/late RMS', swell);
+  expect(swell).toBeLessThan(0.25);
+
+  const sl = await one('(->> (seq :a3) (synth :sync-lead))');
+  const rl = sl.sampleRate;
+  const x = seg(mono(sl), rl, 0.05, 0.4);
+  const mags = Array.from({ length: 12 }, (_, i) => goertzel(x, rl, 220 * (i + 1)));
+  const strongest = mags.indexOf(Math.max(...mags)) + 1;
+  console.log('sync-lead strongest harmonic', strongest);
+  expect(strongest).toBeGreaterThan(3);
+});
+
+test('SYN6 every instrument preset sounds and stays below the clamp', async ({ page }) => {
+  test.setTimeout(240_000);
+  await load(page);
+  const presets = ['acid', 'reese', 'sub-bass', 'fm-bass', 'wobble', 'lead', 'sync-lead', 'pluck',
+    'theremin', 'reed', 'pad', 'strings', 'sweep-pad', 'brass-pad'];
+  for (const p of presets) {
+    const { wav } = await exportBuffer(page, `(bpm 120)\n(track :i (->> (seq :c3) (synth :${p})))\n(export 1)`);
+    const level = rms(mono(wav));
+    const pk = peakAbs(wav);
+    console.log(`preset ${p}: rms ${level.toFixed(4)} peak ${pk.toFixed(3)}`);
+    expect(level).toBeGreaterThan(1e-3);
+    expect(pk).toBeLessThan(0.99);
+  }
 });

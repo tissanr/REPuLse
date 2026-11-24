@@ -72,7 +72,9 @@ A **Pattern** is a pure function from a `TimeSpan` to a list of `Event`s.
 - **Pure functions by default.** Side effects only at the edges: audio output, DOM.
 - **Rational time everywhere.** Use rationals (`1/4`, `3N`) in `core`. Never
   `(/ 1.0 4.0)` for time values.
-- **No external CLJS libraries** in `core` or `lisp`. Only `cljs.core` and `cljs.test`.
+- **No third-party CLJS libraries** in `core` or `lisp`. Allowed: `cljs.core`, `cljs.test`
+  and the ClojureScript-bundled `clojure.string`, `clojure.set`, `cljs.reader` and
+  `cljs.spec.alpha`.
 - **No external Rust audio libraries** in `audio`. Only `web-sys` Web Audio bindings.
 - **Errors surface as typed values at the boundary.** Reader/evaluator internals may
   throw `ex-info`; `repulse.lisp.core/eval-string` converts failures into a typed
@@ -129,10 +131,22 @@ features (S2/S3): `vercel link` then `vercel env pull .env.local` (both gitignor
 Read before touching `packages/audio/src/lib.rs`.
 
 **Karplus-Strong delay buffer: pre-allocate max per voice.**
-Every `Voice::KarplusStrong` holds a fixed buffer sized for ~20 Hz (2205 samples at
-44.1 kHz, ~9 KB/voice). Wasteful on high notes, but keeps the AudioWorklet render
+Every `Voice::KarplusStrong` holds a fixed buffer sized for 20 Hz, `ks_buf_cap(sr) =
+ceil(sr / 20)` samples (2205 at 44.1 kHz, 4800 at 96 kHz, ~9–19 KB/voice), allocated
+when the event is triggered. Wasteful on high notes, but keeps the AudioWorklet render
 callback allocation-free. Do not move allocation into the render path without
 profiling first.
+
+**QA2: voices are built at trigger time; `render` never allocates.**
+`trigger*` validate and sanitise the event (`EventParams::sanitised`, `parse_freq`),
+build the complete `ActiveVoice` and insert it into the time-sorted `pending` queue
+(`VecDeque`, reserved at construction). `render` only pops due voices into `voices`
+(capacity `MAX_VOICES = 256`); the queue holds at most `MAX_PENDING = 8192`. Over a cap
+the event is dropped and counted (no voice stealing). A voice that produces a
+non-finite sample is removed. Output goes to the pre-allocated `out` / `bus` buffers
+(`render_block*` return pointers; `worklet.js` reads WASM memory through a cached view).
+`qa2_tests::render_is_allocation_free` (counting allocator in `alloc_count.rs`) and
+`golden_render_matches` (`src/golden/qa2.bin`, never re-recorded) guard this.
 
 **SYN1 plucked strings: body resonance EQ chain per instrument.**
 `Voice::KarplusStrong` carries `body_filters: Vec<Biquad>`, built by
@@ -201,17 +215,22 @@ A phase is delivered only when **all** of these hold:
 
 ### Rule 3 — New built-in names
 
-For any built-in that should be highlighted, autocompleted and known to the AI:
+`app/src/repulse/content/builtin_meta.edn` is the single source of built-in names. For any
+built-in that should be highlighted, autocompleted, shown on hover and known to the AI:
 
-1. Add it to `BuiltinName` in `app/src/repulse/lisp-lang/repulse-lisp.grammar`
-2. **Run `npm run gen:grammar`** — regenerates the committed `parser.js`
-   (skip this and the grammar change has no effect)
-3. Add a `{ label, type, detail }` entry to `app/src/repulse/lisp-lang/completions.js`
-4. Add an entry to `app/src/repulse/content/builtin_meta.edn` with `category`,
-   `returns`, `side-effects`, `examples` (≥1) and `see-also`
-5. **Run `npm run gen:ai-docs`** — regenerates `docs/ai/builtins.json`
-6. Commit grammar, `parser.js`, `completions.js`, `builtin_meta.edn` and
-   `builtins.json` together — CI fails on grammar or AI-docs drift.
+1. Add the entry to `builtin_meta.edn` with all required keys: `:type`
+   (`"function"`, `"keyword"` or `"variable"`), `:detail` (completion one-liner),
+   `:signature`, `:doc` (hover text), `:category`, `:returns`, `:side-effects`,
+   `:examples` (at least one; the first is the hover example) and `:see-also`.
+2. **Run `npm run gen:ai-docs`** — regenerates `builtins.generated.js` (completions and
+   hover), the marked `BuiltinName` region of the grammar, `parser.js`,
+   `parser.terms.js` and `docs/ai/builtins.json`.
+3. Commit the `.edn` together with the generated files. Never edit
+   `builtins.generated.js`, the `// BEGIN/END GENERATED BuiltinName` region or
+   `builtins.json` by hand — CI (`check:ai-docs`) fails on drift.
+
+A unit test (`builtin_meta_test`) and a Playwright spec (`e2e/builtins-meta.spec.ts`)
+fail when a name is bound in the evaluator but missing from the `.edn` (or the reverse).
 
 ### Rule 4 — Verify build tooling at session start
 

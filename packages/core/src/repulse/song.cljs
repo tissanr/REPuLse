@@ -287,15 +287,6 @@
        :section-bar  (- q (:start sec))
        :section-bars (:bars sec)})))
 
-(defn- shift-span [sp offset]
-  (when sp
-    (core/span (core/rat+ (:start sp) offset) (core/rat+ (:end sp) offset))))
-
-(defn- shift-event [ev offset]
-  (cond-> ev
-    (:whole ev) (update :whole shift-span offset)
-    (:part ev)  (update :part shift-span offset)))
-
 ;;; ── Automation and fills (SONG2) ──────────────────────────────────
 
 (defn ramp-value
@@ -379,26 +370,39 @@
    Each track pattern is queried in song time (bar q = (wrap-bar song bar)) and
    its events are shifted to bar `bar`. Fills replace a track's pattern in the
    last bars of a section; automation lanes rewrite event values (SONG2).
+   With `on-error` (fn [track-kw error]), a track whose query throws adds no
+   events and is reported through it; the other tracks are unaffected. Without
+   it, the error propagates.
    Returns [{:track kw :event ev} …]."
-  [song tracks muted bar]
-  (if-let [q (wrap-bar song bar)]
-    (let [sec    (section-at-bar song q)
-          fills  (into {} (comp (filter #(and (<= (:from %) q) (< q (:to %))))
-                                (map (juxt :track identity)))
-                       (:fills sec))
-          lanes  (filterv #(and (<= (:from %) q) (< q (:to %))) (:automations sec))
-          active (into (set (:tracks sec)) (keys fills))
-          offset (core/int->rat (- bar q))
-          sp     (core/cycle-span q)]
-      (vec
-       (for [t     (:tracks song)
-             :when (and (contains? active t) (not (contains? muted t)))
-             :let  [pat (if-let [f (get fills t)] (:pattern f) (get tracks t))
-                    tl  (when (seq lanes) (filterv #(or (= :all (:track %)) (= t (:track %))) lanes))]
-             :when (core/pattern? pat)
-             ev    (core/query-onsets pat sp)
-             :let  [ev (if (seq tl)
-                         (update ev :value #(apply-lanes tl % (:start (:whole ev))))
-                         ev)]]
-         {:track t :event (if (zero? (- bar q)) ev (shift-event ev offset))})))
-    []))
+  ([song tracks muted bar] (song-onsets song tracks muted bar nil))
+  ([song tracks muted bar on-error]
+   (if-let [q (wrap-bar song bar)]
+     (let [sec    (section-at-bar song q)
+           fills  (into {} (comp (filter #(and (<= (:from %) q) (< q (:to %))))
+                                 (map (juxt :track identity)))
+                        (:fills sec))
+           lanes  (filterv #(and (<= (:from %) q) (< q (:to %))) (:automations sec))
+           active (into (set (:tracks sec)) (keys fills))
+           offset (core/int->rat (- bar q))
+           sp     (core/cycle-span q)
+           track-onsets
+           (fn [t pat]
+             (let [tl (when (seq lanes) (filterv #(or (= :all (:track %)) (= t (:track %))) lanes))]
+               (mapv (fn [ev]
+                       (let [ev (if (seq tl)
+                                  (update ev :value #(apply-lanes tl % (:start (:whole ev))))
+                                  ev)]
+                         {:track t :event (if (zero? (- bar q)) ev (core/shift-event ev offset))}))
+                     (core/query-onsets pat sp))))]
+       (into []
+             (mapcat
+              (fn [t]
+                (let [pat (if-let [f (get fills t)] (:pattern f) (get tracks t))]
+                  (when (and (contains? active t) (not (contains? muted t))
+                             (core/pattern? pat))
+                    (if on-error
+                      (try (track-onsets t pat)
+                           (catch :default e (on-error t e) nil))
+                      (track-onsets t pat))))))
+             (:tracks song)))
+     [])))
