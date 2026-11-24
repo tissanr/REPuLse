@@ -330,3 +330,51 @@ test('project mode: a second buffer\'s track retires, and its mute patches that 
   await expectTracks(page, ['a']);
   expect(await muted(page)).toEqual([]);
 });
+
+test('tempo set outside the code (command bar, tap, BPM field) is written into (bpm …)', async ({ page }) => {
+  await load(page);
+  const cycleDur = () => page.evaluate(() => window.__REPULSE_APP__.cycleDur());
+  await evalText(page, '(bpm 120)\n(track :a (seq :bd :sd))');
+  await expectTracks(page, ['a']);
+
+  // command bar
+  await page.locator('#cmd-container .cm-content').click();
+  await page.keyboard.type('(bpm 480)');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => doc(page)).toBe('(bpm 480)\n(track :a (seq :bd :sd))');
+  expect(await cycleDur()).toBe(0.5);
+
+  // Alt+Enter keeps the tempo now
+  await altEnter(page);
+  await expect.poll(() => cycleDur()).toBe(0.5);
+
+  // one undo step restores the old number
+  await page.evaluate(() => window.__REPULSE_EDITOR__.focus());
+  await page.keyboard.press('ControlOrMeta+z');
+  expect(await doc(page)).toBe('(bpm 120)\n(track :a (seq :bd :sd))');
+
+  // BPM field: Enter and arrow keys
+  const bpm = page.locator('#status-head .sh-bpm');
+  await bpm.click();
+  await page.keyboard.type('90');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => doc(page)).toBe('(bpm 90)\n(track :a (seq :bd :sd))');
+  await bpm.focus();
+  await page.keyboard.press('ArrowUp');
+  await expect.poll(() => doc(page)).toBe('(bpm 91)\n(track :a (seq :bd :sd))');
+
+  // tap button: two taps set a tempo, the code follows
+  await page.locator('#tap-btn').click();
+  await page.waitForTimeout(500);
+  await page.locator('#tap-btn').click();
+  await expect.poll(() => doc(page)).toMatch(/^\(bpm \d+(\.\d)?\)\n\(track :a \(seq :bd :sd\)\)$/);
+  const tapped = Number((await doc(page)).match(/^\(bpm ([\d.]+)\)/)![1]);
+  expect(Math.abs(tapped - 240 / (await cycleDur()))).toBeLessThan(0.051);
+
+  // no (bpm …) in the code: inserted as the first line
+  await evalText(page, '(track :a (seq :bd :sd))');
+  await page.locator('#cmd-container .cm-content').click();
+  await page.keyboard.type('(bpm 100)');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => doc(page)).toBe('(bpm 100)\n(track :a (seq :bd :sd))');
+});

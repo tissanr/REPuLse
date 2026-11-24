@@ -529,6 +529,46 @@
   (evaluate* code nil)
   nil)
 
+;;; Tempo changes outside the code write the code
+
+(defn- bpm-target
+  "{:buffer name-or-nil :code str} to write the tempo into: the first buffer
+   holding a (bpm …) form, else the main buffer. Without a project (embed)
+   the editor's own doc."
+  []
+  (if (buffers/active-name)
+    (let [{:keys [main buffers]} (buffers/current-project)
+          has-bpm? #(patcher/find-param-num (:code %) 0 (count (:code %)) "bpm")]
+      (when-let [{:keys [name code]} (or (first (filter has-bpm? buffers))
+                                         (first (filter #(= main (:name %)) buffers)))]
+        {:buffer name :code code}))
+    (when-let [view @editor/editor-view]
+      {:buffer nil :code (.. view -state -doc (toString))})))
+
+(defn write-bpm-to-code!
+  "Write bpm into the code's (bpm …) form (inserted as the first line when
+   there is none) as one undo step, so the next Alt+Enter keeps the tempo set
+   by the BPM field, tap or command bar. Does not re-evaluate: the tempo is
+   already running."
+  [bpm]
+  (when-let [{:keys [buffer code]} (bpm-target)]
+    (when-let [{:keys [from to insert]} (patcher/bpm-edit code bpm)]
+      (let [spec #js {:changes     #js {:from from :to to :insert insert}
+                      :annotations #js [(.of isolateHistory "full")]}]
+        (if buffer
+          (buffers/dispatch-in! buffer spec)
+          (when-let [view @editor/editor-view] (.dispatch view spec)))))))
+
+(defn evaluate-command!
+  "Command bar and tap button: evaluate! and, when the evaluation changed the
+   tempo ((bpm n), (tap!)), write the new tempo into the code."
+  [code]
+  (let [before (audio/get-bpm)]
+    (evaluate! code)
+    (let [after (audio/get-bpm)]
+      (when (> (Math/abs (- after before)) 1e-9)
+        (write-bpm-to-code! after)))))
+
 (defn evaluate-whole!
   "Evaluate a whole single-buffer program and reconcile the tracks to it
    (Phase WS5) — the embed editor's Alt+Enter / play."

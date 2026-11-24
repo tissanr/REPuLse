@@ -481,8 +481,9 @@ The **status head** sits at the top of the outline column:
 - **BPM** — the current tempo (yellow, dashed underline). Click it to type a new tempo and press
   **Enter** (or click elsewhere); **Esc** cancels. Only whole numbers from 40 to 300 are
   accepted — anything else marks the field red and keeps it open. With the number focused,
-  **↑ / ↓** change it by 1 and **⇧↑ / ⇧↓** by 10. This sets the tempo directly (like `(bpm N)`)
-  without editing your code, so a `(bpm …)` in the buffer wins again on the next Alt+Enter.
+  **↑ / ↓** change it by 1 and **⇧↑ / ⇧↓** by 10. The new tempo is also written into the code:
+  the number in the first `(bpm …)` form changes (one undo step), or `(bpm N)` is added as the
+  first line when the code has none. So the next Alt+Enter keeps the tempo you set.
 - **Badges** — the active drum-machine bank prefix (when one is set) and the audio backend:
   `wasm` (AudioWorklet + Rust/WASM) or `js` (fallback).
 - **Song progress bar** — while the buffer has a `(song …)`, one segment per section, sized by
@@ -3002,6 +3003,12 @@ Default tempo is **120 BPM** (one cycle = one bar = 4 beats = 2 seconds).
 gap when you slow down, no burst of catch-up bars when you speed up. One cycle = one bar
 regardless of BPM. The tap button, MIDI clock sync and the status head's BPM field change the
 tempo the same way.
+
+A tempo set outside the buffer — `(bpm …)` or `(tap!)` in the command bar, the **tap** button or
+the status head's BPM field — is written back into the code: the number in the first `(bpm …)`
+form is replaced (a `(bpm (slider …))` value is clamped to the slider's range), or `(bpm N)` is
+inserted as the first line. Each change is one undo step. In a project the first buffer holding a
+`(bpm …)` form is edited, otherwise the main buffer. MIDI clock sync does not edit the code.
 
 ### `tap!` — tap tempo
 
