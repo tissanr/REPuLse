@@ -20,7 +20,7 @@ currently stand in for a missing synthesized sound.
 |---|---|
 | ✅ | Available today |
 | 🟡 | Partial: exists with a limit named in the row |
-| 📋 | Planned in an existing phase (TL7a–c, KIT1) |
+| 📋 | Planned in an existing phase |
 | ⏸ | Missing; specified in a deferred phase (SYN3–5, SYN7, FX2, P2), revisited after M2 |
 | 🆕 | Missing; scheduled in Milestone 1 by the phases added with this document (SYN6, FX1) |
 | 💤 | Missing and not scheduled; reason in the row |
@@ -94,7 +94,7 @@ parity questions) count only in *Total*. Counts updated 2026-11-20 after SYN6.
 | Filter envelope | ✅ | TL7c | `lp-env`, `lp-attack`, … (also `hp-*`, `bp-*`); gate = event length |
 | Pitch envelope | ✅ | TL7c | `penv`, `p-attack` …; tonal voices and samples; the SYN6 kit drums have their own sweeps |
 | Vibrato | ✅ | TL7c | `vib`, `vib-mod`; koto and mandolin presets have fixed vibrato |
-| Velocity | 📋 | TL7a, KIT1 | |
+| Velocity | ✅ | TL7a, KIT1 | `velocity`; picks the recording layer on layered kits (`JazzKit`, `StudioKit`) |
 | LFO on a synth parameter | 🟡 | — | Only through a control bus in `defsynth` |
 | Pattern-rate modulation (one value per event) | 🟡 | TL7a | Signals (`sine`, `saw`, `perlin`, …) drive `amp`, `pan`, `rate` today; filters follow in TL7a |
 | Session-time ramps | 🟡 | SONG2 | `tween` for `amp` and `pan` only; song-time automation planned |
@@ -131,8 +131,8 @@ sweeps, filtered noise and clusters of detuned square waves.
 | Timpani | Membrane modes | ⏸ | SYN7 | |
 | Tabla / hand drums | Membrane modes with pitch bend | ⏸ | SYN7 | Samples: `:tabla` |
 
-Recorded kits: Dirt-Samples and Tidal Drum Machines today, multisampled kits with
-velocity layers in KIT1.
+Recorded kits: Dirt-Samples, Tidal Drum Machines, and the multisampled kits `JazzKit`
+and `StudioKit` with velocity layers and round-robin (KIT1).
 
 ### Bass
 
@@ -327,7 +327,7 @@ effect plugins (`(fx …)`, global chain or per track) and no per-event effects 
 | Convolution reverb | ✅ | FX1 | `(fx :reverb …)` with `type`, `decay`, `size`, `damp`, `predelay` |
 | Plate reverb | ✅ | — | `(fx :dattorro-reverb …)` with decay, damping, pre-delay |
 | Reverb send per event | 📋 | TL7b | `room`, `size`, `orbit` |
-| Room / hall / spring / gated / reverse reverb | ✅ | FX1 | `(fx :reverb :type …)`; `:spring` pending the FX1 listen check (D7) |
+| Room / hall / spring / gated / reverse reverb | ✅ | FX1 | `(fx :reverb :type …)`; `:spring` kept after the FX1 listen check (D7) |
 | Shimmer reverb | ⏸ | FX2 | Needs the pitch shifter |
 | Auto-pan | ✅ | FX1 | `(fx :auto-pan …)`, equal power, `:sync` |
 | Stereo width (mid/side), Haas widener | ✅ | FX1 | `(fx :width … :haas …)` |
