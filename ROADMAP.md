@@ -4,7 +4,7 @@
 
 | Milestone | Delivered | Still open |
 |---|---|---|
-| **M1** Tidal-Lisp core | 12 / 14 | KIT1, FX1 (implemented, listen check open) — both 🤖👂 |
+| **M1** Tidal-Lisp core | 12 / 15 | KIT1, FX1 (implemented, listen check open), MST1 — all 🤖👂 |
 | **M2** Full songs | 10 / 11 | VIZ1 (🤖👂) |
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
@@ -13,6 +13,8 @@
   visualizers, added 2026-11-24). It can be implemented unattended but is delivered only
   after a human watch-and-listen check. WS6 and the quality-track phases QA1–QA4 are
   delivered; every other remaining phase needs a human (🤖👂 or 🧑).
+- **Added 2026-11-24:** MST1 (master output stage & loudness): REPuLse plays 6–11 dB
+  quieter than streaming audio; three owner decisions (Q1–Q3) are open in its spec.
 - **Next for a human session:** the FX1 listen check (all parts implemented, PR on `dev`;
   decides whether `:spring` stays and sets the reverb trims) and KIT1 (spec expanded
   2026-11-23); N1 opens M3. TL7c's listen check runs in the next release test round.
@@ -84,6 +86,7 @@ without a human:
 | 9 | KIT1 | 📋 | High-quality drum kits | 🤖👂 | full | opus |
 | 9a | SYN6 | ✅ | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | full | opus |
 | 9b | FX1 | 📋 | Mixing, space & modulation effects | 🤖👂 | full | sonnet |
+| 9c | MST1 | 📋 | Master output stage & loudness (−14 LUFS, true-peak limiter, meter) | 🤖👂 | full | opus |
 | **M2** | | | **Full songs** | | | |
 | 10 | SONG1 | ✅ | Sections, song form & full-song render | 🤖 | full | opus |
 | 11 | SONG2 | ✅ | Song-time automation & transitions | 🤖 | full | sonnet |
@@ -1057,6 +1060,25 @@ delay, and the missing modulation and stereo effects. All are track-level plugin
   chain order, tempo and the slider tables.
 
 See full spec: [PROMPTS/PHASE-FX1.md](PROMPTS/PHASE-FX1.md)
+
+---
+
+## Phase MST1 — Master Output Stage & Loudness 📋 *planned*
+
+> **Milestone 1** · **Automation:** 🤖👂 auto + human check
+
+REPuLse plays at −20 to −25 dB RMS, 6–11 dB quieter than streaming audio (−14 LUFS). A
+fixed output stage at the end of the master chain brings typical patches to about
+−14 LUFS without clipping, with metering and a listening volume.
+
+**Key additions:**
+- Output stage in `audio.cljs` after `master-tap`: make-up gain → always-on true-peak limiter (−1 dBTP, new `output-limiter-processor.js`) → recorder → analyser → `monitor-gain`; also in mixdown exports (`offline_render.cljs`), not in stems
+- `app/src/repulse/loudness.cljs`: BS.1770 / EBU R128 LUFS (momentary, short-term, integrated) and true peak, tested against EBU Tech 3341 signals
+- `(master :gain db …)` for mix level into the limiter; new built-in `(volume db)` for listening level only (per browser, never in exports)
+- LUFS + true-peak readout in the status head and in the export message; default master compressor measured and re-tuned
+- Owner decisions open: Q1 default make-up + limiter, Q2 exports vs stems, Q3 where `volume` is stored
+
+See full spec: [PROMPTS/PHASE-MST1.md](PROMPTS/PHASE-MST1.md)
 
 ---
 
