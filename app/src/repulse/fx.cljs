@@ -363,8 +363,13 @@
           ^js fresh (instantiate-plugin (:plugin entry))
           nodes  (validate-effect-nodes! effect-name (.createNodes fresh ac))]
       (call-set-tempo! fresh (current-cycle-dur) 0)
+      ;; :source = the registered plugin it was cloned from, :params = the
+      ;; values set on it so far; apply-track-effects! reuses the instance
+      ;; while both still match.
       (swap! audio/track-nodes update-in [track-name :fx-chain]
-             conj (dissoc (make-effect-entry effect-name fresh nodes) :active?))
+             conj (-> (make-effect-entry effect-name fresh nodes)
+                      (dissoc :active?)
+                      (assoc :source (:plugin entry) :params {})))
       (rewire-track! track-name))))
 
 (defn clear-track-effects!
@@ -376,24 +381,67 @@
     (swap! audio/track-nodes assoc-in [track-name :fx-chain] [])
     (rewire-track! track-name)))
 
+(defn- set-track-param-at!
+  "Set a parameter on the effect at index i of a track's chain and record it."
+  [track-name i param-name value]
+  (when-let [entry (get-in @audio/track-nodes [track-name :fx-chain i])]
+    (.setParam ^js (:plugin entry) param-name value)
+    (swap! audio/track-nodes assoc-in [track-name :fx-chain i :params param-name] value)))
+
 (defn set-track-param!
   "Set a parameter on a named effect in a track's chain."
   [track-name effect-name param-name value]
   (when-let [tn (get @audio/track-nodes track-name)]
-    (when-let [entry (some #(when (= effect-name (:name %)) %) (:fx-chain tn))]
-      (.setParam ^js (:plugin entry) param-name value))))
+    (when-let [i (first (keep-indexed #(when (= effect-name (:name %2)) %1) (:fx-chain tn)))]
+      (set-track-param-at! track-name i param-name value))))
+
+(defn reusable-track-chain?
+  "Pure. True when the live chain `current` (track fx entries with :name
+   :source :params) can take the new metadata `wanted` ([{:name :params}])
+   by setting params only: same effects in the same order, each still cloned
+   from the registered plugin `source-of` returns for its name, with the same
+   param names (a dropped param would have to fall back to its default)."
+  [current wanted source-of]
+  (and (= (count current) (count wanted))
+       (every? true?
+               (map (fn [e {:keys [name params]}]
+                      (and (= name (:name e))
+                           (some? (:source e))
+                           (identical? (:source e) (source-of name))
+                           (= (set (keys (:params e))) (set (keys params)))))
+                    current wanted))))
+
+(defn- registered-plugin [effect-name]
+  (some #(when (= effect-name (:name %)) (:plugin %)) @chain))
 
 (defn apply-track-effects!
-  "Replace a track's FX chain from pattern metadata."
+  "Make a track's FX chain match pattern metadata. An unchanged chain keeps
+   its plugin instances and only gets the changed params: re-evaluating
+   (e.g. after an inspector slider drag) must not cut the voices already
+   routed into it. Any other change rebuilds the chain."
   [track-name track-fx]
-  (clear-track-effects! track-name)
-  (doseq [{:keys [name params]} track-fx]
-    (if-not (specs/track-fx-entry? {:name name :params params})
-      (js/console.warn "[REPuLse] Ignoring invalid track FX entry:" (pr-str {:name name :params params}))
+  (let [valid (filterv (fn [{:keys [name params]}]
+                         (or (specs/track-fx-entry? {:name name :params params})
+                             (do (js/console.warn "[REPuLse] Ignoring invalid track FX entry:"
+                                                  (pr-str {:name name :params params}))
+                                 false)))
+                       track-fx)
+        current (get-in @audio/track-nodes [track-name :fx-chain])]
+    (if (and (seq valid) (reusable-track-chain? current valid registered-plugin))
+      (doseq [[i {:keys [params]}] (map-indexed vector valid)
+              [k v] params
+              :when (not= v (get-in current [i :params k]))]
+        (set-track-param-at! track-name i k v))
       (do
-        (add-track-effect! track-name name)
-        (doseq [[k v] params]
-          (set-track-param! track-name name k v))))))
+        (clear-track-effects! track-name)
+        (doseq [{:keys [name params]} valid]
+          (let [n-of #(count (get-in @audio/track-nodes [track-name :fx-chain]))
+                n0   (n-of)]
+            (add-track-effect! track-name name)
+            ;; unknown effect name → nothing was added, nothing to set
+            (when (> (n-of) n0)
+              (doseq [[k v] params]
+                (set-track-param-at! track-name n0 k v)))))))))
 
 ;;; ── Sidechain event notification ─────────────────────────────────────────
 
