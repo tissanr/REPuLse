@@ -1,0 +1,726 @@
+{
+ "_base": "kits/",
+ "_format": "repulse-kit/1",
+ "JazzKit_bd": {
+  "layers": [
+   {
+    "v": 0.3,
+    "gain": 2.374,
+    "files": [
+     "JazzKit/bd/v1-1.flac",
+     "JazzKit/bd/v1-2.flac",
+     "JazzKit/bd/v1-3.flac"
+    ]
+   },
+   {
+    "v": 0.6,
+    "gain": 2.781,
+    "files": [
+     "JazzKit/bd/v2-1.flac",
+     "JazzKit/bd/v2-2.flac",
+     "JazzKit/bd/v2-3.flac"
+    ]
+   },
+   {
+    "v": 0.85,
+    "gain": 1.42,
+    "files": [
+     "JazzKit/bd/v3-1.flac",
+     "JazzKit/bd/v3-2.flac",
+     "JazzKit/bd/v3-3.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "JazzKit/bd/v4-1.flac",
+     "JazzKit/bd/v4-2.flac",
+     "JazzKit/bd/v4-3.flac"
+    ]
+   }
+  ]
+ },
+ "JazzKit_cr": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 0.554,
+    "files": [
+     "JazzKit/cr/v1-1.flac",
+     "JazzKit/cr/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 1.172,
+    "files": [
+     "JazzKit/cr/v2-1.flac",
+     "JazzKit/cr/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "JazzKit/cr/v3-1.flac",
+     "JazzKit/cr/v3-2.flac"
+    ]
+   }
+  ]
+ },
+ "JazzKit_hh": {
+  "layers": [
+   {
+    "v": 0.3,
+    "gain": 0.913,
+    "files": [
+     "JazzKit/hh/v1-1.flac",
+     "JazzKit/hh/v1-2.flac",
+     "JazzKit/hh/v1-3.flac"
+    ]
+   },
+   {
+    "v": 0.6,
+    "gain": 1.912,
+    "files": [
+     "JazzKit/hh/v2-1.flac",
+     "JazzKit/hh/v2-2.flac",
+     "JazzKit/hh/v2-3.flac"
+    ]
+   },
+   {
+    "v": 0.85,
+    "gain": 2.348,
+    "files": [
+     "JazzKit/hh/v3-1.flac",
+     "JazzKit/hh/v3-2.flac",
+     "JazzKit/hh/v3-3.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "JazzKit/hh/v4-1.flac",
+     "JazzKit/hh/v4-2.flac",
+     "JazzKit/hh/v4-3.flac"
+    ]
+   }
+  ],
+  "choke": "hat"
+ },
+ "JazzKit_ht": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 0.834,
+    "files": [
+     "JazzKit/ht/v1-1.flac",
+     "JazzKit/ht/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 0.98,
+    "files": [
+     "JazzKit/ht/v2-1.flac",
+     "JazzKit/ht/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "JazzKit/ht/v3-1.flac",
+     "JazzKit/ht/v3-2.flac"
+    ]
+   }
+  ]
+ },
+ "JazzKit_lt": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 1.194,
+    "files": [
+     "JazzKit/lt/v1-1.flac",
+     "JazzKit/lt/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 1.088,
+    "files": [
+     "JazzKit/lt/v2-1.flac",
+     "JazzKit/lt/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "JazzKit/lt/v3-1.flac",
+     "JazzKit/lt/v3-2.flac"
+    ]
+   }
+  ]
+ },
+ "JazzKit_oh": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 1.897,
+    "files": [
+     "JazzKit/oh/v1-1.flac",
+     "JazzKit/oh/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 3.431,
+    "files": [
+     "JazzKit/oh/v2-1.flac",
+     "JazzKit/oh/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "JazzKit/oh/v3-1.flac",
+     "JazzKit/oh/v3-2.flac"
+    ]
+   }
+  ],
+  "choke": "hat"
+ },
+ "JazzKit_ph": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 0.696,
+    "files": [
+     "JazzKit/ph/v1-1.flac",
+     "JazzKit/ph/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 1.163,
+    "files": [
+     "JazzKit/ph/v2-1.flac",
+     "JazzKit/ph/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "JazzKit/ph/v3-1.flac",
+     "JazzKit/ph/v3-2.flac"
+    ]
+   }
+  ],
+  "choke": "hat"
+ },
+ "JazzKit_rb": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 1.702,
+    "files": [
+     "JazzKit/rb/v1-1.flac",
+     "JazzKit/rb/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 1.504,
+    "files": [
+     "JazzKit/rb/v2-1.flac",
+     "JazzKit/rb/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "JazzKit/rb/v3-1.flac",
+     "JazzKit/rb/v3-2.flac"
+    ]
+   }
+  ]
+ },
+ "JazzKit_rd": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 1.191,
+    "files": [
+     "JazzKit/rd/v1-1.flac",
+     "JazzKit/rd/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 1.076,
+    "files": [
+     "JazzKit/rd/v2-1.flac",
+     "JazzKit/rd/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "JazzKit/rd/v3-1.flac",
+     "JazzKit/rd/v3-2.flac"
+    ]
+   }
+  ]
+ },
+ "JazzKit_rim": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 0.948,
+    "files": [
+     "JazzKit/rim/v1-1.flac",
+     "JazzKit/rim/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 0.825,
+    "files": [
+     "JazzKit/rim/v2-1.flac",
+     "JazzKit/rim/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "JazzKit/rim/v3-1.flac",
+     "JazzKit/rim/v3-2.flac"
+    ]
+   }
+  ]
+ },
+ "JazzKit_sd": {
+  "layers": [
+   {
+    "v": 0.3,
+    "gain": 1.284,
+    "files": [
+     "JazzKit/sd/v1-1.flac",
+     "JazzKit/sd/v1-2.flac",
+     "JazzKit/sd/v1-3.flac"
+    ]
+   },
+   {
+    "v": 0.6,
+    "gain": 1.793,
+    "files": [
+     "JazzKit/sd/v2-1.flac",
+     "JazzKit/sd/v2-2.flac",
+     "JazzKit/sd/v2-3.flac"
+    ]
+   },
+   {
+    "v": 0.85,
+    "gain": 1.73,
+    "files": [
+     "JazzKit/sd/v3-1.flac",
+     "JazzKit/sd/v3-2.flac",
+     "JazzKit/sd/v3-3.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "JazzKit/sd/v4-1.flac",
+     "JazzKit/sd/v4-2.flac",
+     "JazzKit/sd/v4-3.flac"
+    ]
+   }
+  ]
+ },
+ "StudioKit_bd": {
+  "layers": [
+   {
+    "v": 0.3,
+    "gain": 0.264,
+    "files": [
+     "StudioKit/bd/v1-1.flac",
+     "StudioKit/bd/v1-2.flac",
+     "StudioKit/bd/v1-3.flac"
+    ]
+   },
+   {
+    "v": 0.6,
+    "gain": 0.799,
+    "files": [
+     "StudioKit/bd/v2-1.flac",
+     "StudioKit/bd/v2-2.flac",
+     "StudioKit/bd/v2-3.flac"
+    ]
+   },
+   {
+    "v": 0.85,
+    "gain": 0.919,
+    "files": [
+     "StudioKit/bd/v3-1.flac",
+     "StudioKit/bd/v3-2.flac",
+     "StudioKit/bd/v3-3.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "StudioKit/bd/v4-1.flac",
+     "StudioKit/bd/v4-2.flac",
+     "StudioKit/bd/v4-3.flac"
+    ]
+   }
+  ]
+ },
+ "StudioKit_cr": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 0.787,
+    "files": [
+     "StudioKit/cr/v1-1.flac",
+     "StudioKit/cr/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 1.623,
+    "files": [
+     "StudioKit/cr/v2-1.flac",
+     "StudioKit/cr/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "StudioKit/cr/v3-1.flac",
+     "StudioKit/cr/v3-2.flac"
+    ]
+   }
+  ]
+ },
+ "StudioKit_hh": {
+  "layers": [
+   {
+    "v": 0.3,
+    "gain": 0.3,
+    "files": [
+     "StudioKit/hh/v1-1.flac",
+     "StudioKit/hh/v1-2.flac",
+     "StudioKit/hh/v1-3.flac"
+    ]
+   },
+   {
+    "v": 0.6,
+    "gain": 0.77,
+    "files": [
+     "StudioKit/hh/v2-1.flac",
+     "StudioKit/hh/v2-2.flac",
+     "StudioKit/hh/v2-3.flac"
+    ]
+   },
+   {
+    "v": 0.85,
+    "gain": 1.037,
+    "files": [
+     "StudioKit/hh/v3-1.flac",
+     "StudioKit/hh/v3-2.flac",
+     "StudioKit/hh/v3-3.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "StudioKit/hh/v4-1.flac",
+     "StudioKit/hh/v4-2.flac",
+     "StudioKit/hh/v4-3.flac"
+    ]
+   }
+  ],
+  "choke": "hat"
+ },
+ "StudioKit_ht": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 0.462,
+    "files": [
+     "StudioKit/ht/v1-1.flac",
+     "StudioKit/ht/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 0.775,
+    "files": [
+     "StudioKit/ht/v2-1.flac",
+     "StudioKit/ht/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "StudioKit/ht/v3-1.flac",
+     "StudioKit/ht/v3-2.flac"
+    ]
+   }
+  ]
+ },
+ "StudioKit_lt": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 0.514,
+    "files": [
+     "StudioKit/lt/v1-1.flac",
+     "StudioKit/lt/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 0.899,
+    "files": [
+     "StudioKit/lt/v2-1.flac",
+     "StudioKit/lt/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "StudioKit/lt/v3-1.flac",
+     "StudioKit/lt/v3-2.flac"
+    ]
+   }
+  ]
+ },
+ "StudioKit_mt": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 0.473,
+    "files": [
+     "StudioKit/mt/v1-1.flac",
+     "StudioKit/mt/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 0.774,
+    "files": [
+     "StudioKit/mt/v2-1.flac",
+     "StudioKit/mt/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "StudioKit/mt/v3-1.flac",
+     "StudioKit/mt/v3-2.flac"
+    ]
+   }
+  ]
+ },
+ "StudioKit_oh": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 1.447,
+    "files": [
+     "StudioKit/oh/v1-1.flac",
+     "StudioKit/oh/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 1.723,
+    "files": [
+     "StudioKit/oh/v2-1.flac",
+     "StudioKit/oh/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "StudioKit/oh/v3-1.flac",
+     "StudioKit/oh/v3-2.flac"
+    ]
+   }
+  ],
+  "choke": "hat"
+ },
+ "StudioKit_ph": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 0.22,
+    "files": [
+     "StudioKit/ph/v1-1.flac",
+     "StudioKit/ph/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 1.157,
+    "files": [
+     "StudioKit/ph/v2-1.flac",
+     "StudioKit/ph/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "StudioKit/ph/v3-1.flac",
+     "StudioKit/ph/v3-2.flac"
+    ]
+   }
+  ],
+  "choke": "hat"
+ },
+ "StudioKit_rb": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 0.42,
+    "files": [
+     "StudioKit/rb/v1-1.flac",
+     "StudioKit/rb/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 0.848,
+    "files": [
+     "StudioKit/rb/v2-1.flac",
+     "StudioKit/rb/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "StudioKit/rb/v3-1.flac",
+     "StudioKit/rb/v3-2.flac"
+    ]
+   }
+  ]
+ },
+ "StudioKit_rd": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 0.737,
+    "files": [
+     "StudioKit/rd/v1-1.flac",
+     "StudioKit/rd/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 1.676,
+    "files": [
+     "StudioKit/rd/v2-1.flac",
+     "StudioKit/rd/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "StudioKit/rd/v3-1.flac",
+     "StudioKit/rd/v3-2.flac"
+    ]
+   }
+  ]
+ },
+ "StudioKit_rim": {
+  "layers": [
+   {
+    "v": 0.4,
+    "gain": 0.32,
+    "files": [
+     "StudioKit/rim/v1-1.flac",
+     "StudioKit/rim/v1-2.flac"
+    ]
+   },
+   {
+    "v": 0.75,
+    "gain": 0.816,
+    "files": [
+     "StudioKit/rim/v2-1.flac",
+     "StudioKit/rim/v2-2.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "StudioKit/rim/v3-1.flac",
+     "StudioKit/rim/v3-2.flac"
+    ]
+   }
+  ]
+ },
+ "StudioKit_sd": {
+  "layers": [
+   {
+    "v": 0.3,
+    "gain": 0.507,
+    "files": [
+     "StudioKit/sd/v1-1.flac",
+     "StudioKit/sd/v1-2.flac",
+     "StudioKit/sd/v1-3.flac"
+    ]
+   },
+   {
+    "v": 0.6,
+    "gain": 0.79,
+    "files": [
+     "StudioKit/sd/v2-1.flac",
+     "StudioKit/sd/v2-2.flac",
+     "StudioKit/sd/v2-3.flac"
+    ]
+   },
+   {
+    "v": 0.85,
+    "gain": 1.051,
+    "files": [
+     "StudioKit/sd/v3-1.flac",
+     "StudioKit/sd/v3-2.flac",
+     "StudioKit/sd/v3-3.flac"
+    ]
+   },
+   {
+    "v": 1,
+    "gain": 1,
+    "files": [
+     "StudioKit/sd/v4-1.flac",
+     "StudioKit/sd/v4-2.flac",
+     "StudioKit/sd/v4-3.flac"
+    ]
+   }
+  ]
+ }
+}

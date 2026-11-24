@@ -80,7 +80,7 @@
   [offline pattern cycles cycle-dur]
   (js/Promise.all
    (into-array
-    (for [{:keys [t value dur]}
+    (for [{:keys [t value dur onset]}
           ;; SYN6 C4: glide like playback.
           (voices/glide-all
             (for [c  (range cycles)
@@ -88,10 +88,11 @@
                   :let [w (:whole ev)]]
               {:t     (* (core/rat->float (:start w)) cycle-dur)
                :dur   (* (core/rat->float (core/rat- (:end w) (:start w))) cycle-dur)
+               :onset (:start w)
                :value (:value ev)}))
           :let  [ret (when (>= t 0)
                        (audio/play-event offline t value nil
-                                         {:dur dur :cycle-dur cycle-dur}))]
+                                         {:dur dur :cycle-dur cycle-dur :onset onset}))]
           :when (and (some? ret) (fn? (.-then ^js ret)))]
       ret))))
 
@@ -288,6 +289,8 @@
              :audioReady audio-ready
              :captureSong capture-song
              :registerTestSample register-test-sample!
+             ;; KIT1: fetch a (fixture or real) manifest into the registry → Promise
+             :loadManifest (fn [url] (samples/load-manifest! url))
              ;; SYN6: (bank …) is an app built-in, not in the harness env.
              :setBankPrefix (fn [p] (samples/set-bank-prefix! p) true)})
   (set! (.-__REPULSE_TEST_READY__ js/window) true))

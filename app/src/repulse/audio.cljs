@@ -1,6 +1,5 @@
 (ns repulse.audio
-  (:require [clojure.string :as str]
-            [repulse.core :as core]
+  (:require [repulse.core :as core]
             [repulse.theory :as theory]
             [repulse.samples :as samples]
             [repulse.inserts :as inserts]
@@ -43,28 +42,7 @@
 ;; Per-track audio routing: keyword → {:gain-node GainNode :fx-chain [...]}
 (defonce track-nodes (atom {}))
 
-(def ^:private public-base-url
-  (let [document (.-document js/globalThis)
-        script-src (some-> document .-currentScript .-src)]
-    (.-href
-     (cond
-       ;; app build (/js/main.js) and TEST1 harness build (/test-js/main.js)
-       ;; both live one level below app/public
-       (and script-src (or (str/includes? script-src "/js/")
-                           (str/includes? script-src "/test-js/")))
-       (js/URL. "../" script-src)
-
-       script-src
-       (js/URL. "./" script-src)
-
-       document
-       (js/URL. "./" (.-baseURI document))
-
-       :else
-       (js/URL. "./" "http://localhost/")))))
-
-(defn- public-url [path]
-  (.-href (js/URL. path public-base-url)))
+(def ^:private public-url samples/public-url)
 
 (defn- build-master-chain! [ac]
   (let [gain (doto (.createGain ac)
@@ -813,14 +791,27 @@
        (schedule-disconnect! ac t (into (vec (mapcat :nodes stages)) sends) dur track-name)
        (:in (first stages))))))
 
+(defn- url-length
+  "Promise of how long the recording at url sounds for the event params in extra
+   (playback-plan :length), or nil when it cannot be loaded."
+  [ac url extra]
+  (-> (samples/get-buffer! url ac)
+      (.then (fn [buf] (:length (samples/playback-plan extra (.-duration buf)))))
+      (.catch (fn [_] nil))))
+
 (defn- sample-length
-  "Promise of how long sample n of bank sounds for the event params in extra
-   (playback-plan :length), or nil when the bank has no such sample."
+  "url-length of sample n of bank, or nil when the bank has no such sample."
   [ac bank n extra]
-  (when-let [url (samples/pick-url bank n extra)]
-    (-> (samples/get-buffer! url ac)
-        (.then (fn [buf] (:length (samples/playback-plan extra (.-duration buf)))))
-        (.catch (fn [_] nil)))))
+  (when-let [url (samples/get-url bank n)]
+    (url-length ac url extra)))
+
+(defn- play-layered-sample!
+  "KIT1: one hit of layered bank at velocity vel; amp-gain is amp × gain (no velocity).
+   Velocity 0 plays nothing. js-dest is play-event's output factory."
+  [ac t bank vel amp-gain pan extra ins js-dest]
+  (let [plan (samples/layered-plan ac bank vel amp-gain extra)]
+    (samples/play-planned! ac t bank plan pan extra
+                           (js-dest (when (and ins plan) (url-length ac (:url plan) extra))))))
 
 (defn- js-kit
   "JS fallback of a synthesized kit voice (SYN6 B4): the nearest JS voice
@@ -846,7 +837,7 @@
   ([value timing] (sample-extra value timing nil nil))
   ([value timing pitch! pm]
    (cond-> (merge (select-keys value (conj sample-param-keys :velocity))
-                  (select-keys timing [:dur :cycle-dur]))
+                  (select-keys timing [:dur :cycle-dur :onset]))
      pm (assoc :on-source (fn [src _t'] (pitch! src))))))
 
 (defn play-event
@@ -976,9 +967,13 @@
                (case (:kind route)
                  :sample
                  (let [bank  (:bank route)
-                       extra (assoc (sample-extra value timing pitch! pm) :seed t)]
-                   (samples/play! ac t bank 0 amp-v pan-v extra
-                                  (js-dest (when ins (sample-length ac bank 0 extra)))))
+                       extra (sample-extra value timing pitch! pm)]
+                   (if (samples/layered? bank)
+                     (play-layered-sample! ac t bank (:velocity value)
+                                           (* (:amp value 1.0) (inserts/gain-factor value))
+                                           pan-v extra ins js-dest)
+                     (samples/play! ac t bank 0 amp-v pan-v extra
+                                    (js-dest (when ins (sample-length ac bank 0 extra))))))
                  ;; SYN6 kit voice — the default drum kit (decision 2026-11-21,
                  ;; see voices/drum-route): tune / tone / decay travel in the string.
                  :synth-drum
@@ -998,7 +993,7 @@
        (let [{:keys [bank n]} value
              amp-v  (float (* (:amp value 1.0) af))
              pan-v  (float (:pan  value 0.0))
-             extra  (assoc (sample-extra value timing pitch! pm) :seed t :fixed-take true)]
+             extra  (sample-extra value timing pitch! pm)]
          (if (samples/has-bank? bank)
            (samples/play! ac t bank n amp-v pan-v extra
                           (js-dest (when ins (sample-length ac bank n extra))))
@@ -1017,7 +1012,10 @@
                  (make-sine ac t hz 1.5 1.0 0.001 0.0 dest))))
          (let [route (voices/drum-route value @samples/active-bank-prefix samples/has-bank?)]
            (case (:kind route)
-             :sample     (samples/play! ac t (:bank route) 0 1.0 0.0 {} dest)
+             :sample     (if (samples/layered? (:bank route))
+                           (samples/play-layered! ac t (:bank route) nil 1.0 0.0
+                                                  (select-keys timing [:onset]) dest)
+                           (samples/play! ac t (:bank route) 0 1.0 0.0 {} dest))
              :synth-drum (or (when-not offline?
                                (worklet-trigger! wt (voices/drum-string (:name route) nil) t dest))
                              (js-kit ac t (:name route) nil 1.0 0.0 dest))
@@ -1332,7 +1330,8 @@
     (when (> t (.-currentTime ac))
       (let [tween-st (get-in state [:tween-state track-name] {})
             value    (resolve-tweens (:value ev) tween-st t cycle-dur)]
-        (play-event ac t value track-name {:dur dur :cycle-dur cycle-dur})
+        (play-event ac t value track-name
+                    {:dur dur :cycle-dur cycle-dur :onset (:start (:whole ev))})
         ;; MIDI note output — triggered by :midi-ch key added via (midi-out ch pat)
         (when-let [midi-ch (:midi-ch (:value ev))]
           (let [value    (:value ev)

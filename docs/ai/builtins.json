@@ -3076,14 +3076,16 @@
     "returns": "Pattern",
     "side-effects": [],
     "examples": [
-      "(->> (seq :bd :sd :bd :sd) (velocity (seq 1 0.6)))"
+      "(->> (seq :bd :sd :bd :sd) (velocity (seq 1 0.6)))",
+      "(->> (seq :sd :sd :sd :sd) (velocity \"0.15 0.4 0.7 1\"))"
     ],
     "see-also": [
       "gain",
-      "amp"
+      "amp",
+      "bank"
     ],
-    "detail": "(velocity v pat) — per-event velocity 0–1; multiplies amp",
-    "description": "Per-event velocity 0–1 (default 1). Final voice level = amp × gain × velocity."
+    "detail": "(velocity v pat) — per-event velocity 0–1; multiplies amp, or picks the recording layer on kit banks",
+    "description": "Per-event velocity 0–1 (default 1). Final voice level = amp × gain × velocity. On layered kit banks ((bank :JazzKit), (bank :StudioKit)) it instead picks the recording layer and a level within it; velocity 0 is silent."
   },
   "room": {
     "category": "param",

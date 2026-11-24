@@ -1,0 +1,77 @@
+{
+ "kit": "JazzKit",
+ "format": "flac",
+ "adapter": "virtuosity",
+ "repo": "sfzinstruments/virtuosity_drums",
+ "branch": "master",
+ "instruments": {
+  "bd": {
+   "src": "Samples/mid/kick/mid_kick_snon",
+   "layers": 4,
+   "takes": 3
+  },
+  "sd": {
+   "src": "Samples/mid/snare/mid_snare_center",
+   "layers": 4,
+   "takes": 3
+  },
+  "rim": {
+   "src": "Samples/mid/snare/mid_snare_crossstick",
+   "layers": 3,
+   "takes": 2,
+   "level": -2
+  },
+  "hh": {
+   "src": "Samples/mid/hh/mid_hh_closed",
+   "layers": 4,
+   "takes": 3,
+   "choke": "hat",
+   "level": -4
+  },
+  "ph": {
+   "src": "Samples/mid/hh/mid_hh_pedal",
+   "layers": 3,
+   "takes": 2,
+   "choke": "hat",
+   "level": -4
+  },
+  "oh": {
+   "src": "Samples/mid/hh/mid_hh_open",
+   "layers": 3,
+   "takes": 2,
+   "choke": "hat",
+   "level": -3
+  },
+  "lt": {
+   "src": "Samples/mid/ltom/mid_ltom_center",
+   "layers": 3,
+   "takes": 2
+  },
+  "ht": {
+   "src": "Samples/mid/htom/mid_htom_center",
+   "layers": 3,
+   "takes": 2
+  },
+  "cr": {
+   "src": "Samples/mid/crash/mid_crash_crash",
+   "layers": 3,
+   "takes": 2,
+   "level": -3,
+   "maxSecs": 3
+  },
+  "rd": {
+   "src": "Samples/mid/ride/mid_ride_ride",
+   "layers": 3,
+   "takes": 2,
+   "level": -4,
+   "maxSecs": 3
+  },
+  "rb": {
+   "src": "Samples/mid/ride/mid_ride_bell",
+   "layers": 3,
+   "takes": 2,
+   "level": -3,
+   "maxSecs": 3
+  }
+ }
+}

@@ -1939,14 +1939,14 @@
               :see-also ["shape" "bitcrush"]}
 
  :velocity   {:type "function"
-              :detail "(velocity v pat) — per-event velocity 0–1; multiplies amp"
+              :detail "(velocity v pat) — per-event velocity 0–1; multiplies amp, or picks the recording layer on kit banks"
               :signature "(velocity v pat) or (velocity v)"
-              :doc "Per-event velocity 0–1 (default 1). Final voice level = amp × gain × velocity."
+              :doc "Per-event velocity 0–1 (default 1). Final voice level = amp × gain × velocity. On layered kit banks ((bank :JazzKit), (bank :StudioKit)) it instead picks the recording layer and a level within it; velocity 0 is silent."
               :category "param"
               :returns "Pattern"
               :side-effects []
-              :examples ["(->> (seq :bd :sd :bd :sd) (velocity (seq 1 0.6)))"]
-              :see-also ["gain" "amp"]}
+              :examples ["(->> (seq :bd :sd :bd :sd) (velocity (seq 1 0.6)))" "(->> (seq :sd :sd :sd :sd) (velocity \"0.15 0.4 0.7 1\"))"]
+              :see-also ["gain" "amp" "bank"]}
 
  ;; ── Phase TL7b: reverb & delay sends per orbit ─────────────────────────────
  :room       {:type "function"

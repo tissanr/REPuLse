@@ -113,6 +113,23 @@ Allowed licences: CC0, CC-BY, CC-BY-SA. Not allowed: NC, ND, "free for music
 production" EULAs without a redistribution grant, GPL (sample redistribution terms
 unclear for the app bundle).
 
+## Part 0 results (2026-11-23)
+
+- **Licences confirmed** from the LICENSE file in each source repository (texts are
+  reproduced in `app/public/kits/<Kit>/LICENSE.md`): Virtuosity Drums
+  (`sfzinstruments/virtuosity_drums`) is CC0 1.0 Universal; DRSKit
+  (`sfzinstruments/DrumGizmo.DRSKit`, SFZ port v1.0) is CC BY 4.0. Both pass the gate;
+  the Salamander fallback was not needed.
+- **Encoding: FLAC, not Ogg.** The dev machine's Homebrew `ffmpeg` has no `libvorbis`
+  (only the experimental native `vorbis` encoder), so decision 9's fallback applies. An
+  Ogg Vorbis, an Ogg Opus and a FLAC test file all decoded with `decodeAudioData` in
+  Playwright's Chromium, WebKit and Firefox, so the format is not the blocker; FLAC is
+  lossless and fits: cymbals are trimmed to 3 s, everything else is mono. JazzKit is
+  ≈ 5 MB. `build-kit.mjs` supports `"format": "ogg"` for machines that have libvorbis.
+- **Sources are cherry-picked over the GitHub API** (`--fetch`), not cloned: the full
+  repositories are 1.2 GB and 0.7 GB.
+- JazzKit has no `mt` (the source kit has two toms, both mapped to `lt`/`ht`).
+
 ## Formulas
 
 Shared by the pure namespace and its tests. Layers of an entry are sorted by `v`

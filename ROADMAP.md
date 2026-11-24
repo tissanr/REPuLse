@@ -2636,7 +2636,7 @@ openly licensed sources only (CC0 / CC-BY / CC-BY-SA; no proprietary Roland modu
 - `JazzKit` (Virtuosity Drums, CC0) and `StudioKit` (DRSKit, CC-BY 4.0), selected with
   `(bank :JazzKit)` — no new built-in
 
-**Partly implemented (not delivered):** layered manifest banks, velocity layer selection and time-seeded round-robin are in `samples.cljs`. The rest of the spec (kit manifest, hat choke, curated kits, preload) is still open.
+**Implemented, awaiting the human listen check (not delivered):** layered banks and the `repulse-kit/1` manifest (`repulse.kits`, `samples.cljs`), velocity layers, onset-seeded round-robin without immediate repeats, hat choke, background kit preload, the build script `scripts/kits/build-kit.mjs` and the two kits `JazzKit` / `StudioKit` in `app/public/kits/` (FLAC; libvorbis was unavailable). KIT1 is marked delivered once a human has done the listen check in the spec and chosen *ship* or *hold* per kit.
 
 See full spec: [PROMPTS/PHASE-KIT1.md](PROMPTS/PHASE-KIT1.md)
 

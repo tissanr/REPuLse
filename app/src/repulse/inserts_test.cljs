@@ -191,3 +191,9 @@
     (is (= [12.0 0.001 0.2 0.0 0.1] (subvec s 16 21)) "pitch env")
     (is (= [5.0 1.0 3 8 2.0] (subvec s 21 26)) "vib vib-mod vowel coarse postgain"))
   (is (= 0 (first (ins/wasm-slots-tl7c nil (ins/pitch-params {:vib 5}) nil))) "no gate = 0"))
+
+(deftest gain-factor-ignores-velocity
+  (is (= 1.0 (ins/gain-factor :bd)))
+  (is (= 1.0 (ins/gain-factor {:velocity 0.2})))
+  (is (= 0.5 (ins/gain-factor {:gain 0.5 :velocity 0.2})))
+  (is (= 2.0 (ins/gain-factor {:gain 9}))))

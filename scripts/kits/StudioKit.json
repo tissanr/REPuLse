@@ -1,0 +1,238 @@
+{
+ "kit": "StudioKit",
+ "format": "flac",
+ "adapter": "drs",
+ "repo": "sfzinstruments/DrumGizmo.DRSKit",
+ "branch": "master",
+ "samples": "DrumGizmo/DRSKit/Samples",
+ "instruments": {
+  "bd": {
+   "region": "DrumGizmo/DRSKit/Data/region/Kdrum_with_contact.txt",
+   "layers": 4,
+   "takes": 3,
+   "mics": {
+    "c": {
+     "Kdrum_front": 1,
+     "Kdrum_back": 0.5
+    },
+    "l": {
+     "OHL": 0.4,
+     "AmbL": 0.25
+    },
+    "r": {
+     "OHR": 0.4,
+     "AmbR": 0.25
+    }
+   }
+  },
+  "sd": {
+   "region": "DrumGizmo/DRSKit/Data/region/Snare.txt",
+   "layers": 4,
+   "takes": 3,
+   "mics": {
+    "c": {
+     "Snare_top": 1
+    },
+    "l": {
+     "OHL": 0.6,
+     "AmbL": 0.25
+    },
+    "r": {
+     "OHR": 0.6,
+     "AmbR": 0.25
+    }
+   }
+  },
+  "rim": {
+   "region": "DrumGizmo/DRSKit/Data/region/Snare_rim.txt",
+   "layers": 3,
+   "takes": 2,
+   "level": -2,
+   "mics": {
+    "c": {
+     "Snare_top": 1
+    },
+    "l": {
+     "OHL": 0.6,
+     "AmbL": 0.25
+    },
+    "r": {
+     "OHR": 0.6,
+     "AmbR": 0.25
+    }
+   }
+  },
+  "hh": {
+   "region": "DrumGizmo/DRSKit/Data/region/Hihat_closed.txt",
+   "layers": 4,
+   "takes": 3,
+   "choke": "hat",
+   "level": -3,
+   "mics": {
+    "c": {
+     "Hihat": 1
+    },
+    "l": {
+     "OHL": 0.5,
+     "AmbL": 0.25
+    },
+    "r": {
+     "OHR": 0.5,
+     "AmbR": 0.25
+    }
+   }
+  },
+  "ph": {
+   "region": "DrumGizmo/DRSKit/Data/region/Hihat_foot.txt",
+   "layers": 3,
+   "takes": 2,
+   "choke": "hat",
+   "level": -3,
+   "mics": {
+    "c": {
+     "Hihat": 1
+    },
+    "l": {
+     "OHL": 0.5,
+     "AmbL": 0.25
+    },
+    "r": {
+     "OHR": 0.5,
+     "AmbR": 0.25
+    }
+   }
+  },
+  "oh": {
+   "region": "DrumGizmo/DRSKit/Data/region/Hihat_open.txt",
+   "layers": 3,
+   "takes": 2,
+   "choke": "hat",
+   "level": -3,
+   "mics": {
+    "c": {
+     "Hihat": 1
+    },
+    "l": {
+     "OHL": 0.6,
+     "AmbL": 0.25
+    },
+    "r": {
+     "OHR": 0.6,
+     "AmbR": 0.25
+    }
+   },
+   "maxSecs": 2.5
+  },
+  "lt": {
+   "region": "DrumGizmo/DRSKit/Data/region/Tom3.txt",
+   "layers": 3,
+   "takes": 2,
+   "mics": {
+    "c": {
+     "Tom3": 1
+    },
+    "l": {
+     "OHL": 0.6,
+     "AmbL": 0.25
+    },
+    "r": {
+     "OHR": 0.6,
+     "AmbR": 0.25
+    }
+   }
+  },
+  "mt": {
+   "region": "DrumGizmo/DRSKit/Data/region/Tom2.txt",
+   "layers": 3,
+   "takes": 2,
+   "mics": {
+    "c": {
+     "Tom2": 1
+    },
+    "l": {
+     "OHL": 0.6,
+     "AmbL": 0.25
+    },
+    "r": {
+     "OHR": 0.6,
+     "AmbR": 0.25
+    }
+   }
+  },
+  "ht": {
+   "region": "DrumGizmo/DRSKit/Data/region/Tom1.txt",
+   "layers": 3,
+   "takes": 2,
+   "mics": {
+    "c": {
+     "Tom1": 1
+    },
+    "l": {
+     "OHL": 0.6,
+     "AmbL": 0.25
+    },
+    "r": {
+     "OHR": 0.6,
+     "AmbR": 0.25
+    }
+   }
+  },
+  "cr": {
+   "region": "DrumGizmo/DRSKit/Data/region/Crash_left_tip.txt",
+   "layers": 3,
+   "takes": 2,
+   "level": -3,
+   "mics": {
+    "l": {
+     "OHL": 1.0,
+     "AmbL": 0.4
+    },
+    "r": {
+     "OHR": 1.0,
+     "AmbR": 0.4
+    }
+   },
+   "maxSecs": 3
+  },
+  "rd": {
+   "region": "DrumGizmo/DRSKit/Data/region/Ride_tip.txt",
+   "layers": 3,
+   "takes": 2,
+   "level": -4,
+   "mics": {
+    "c": {
+     "Ride": 1
+    },
+    "l": {
+     "OHL": 0.7,
+     "AmbL": 0.25
+    },
+    "r": {
+     "OHR": 0.7,
+     "AmbR": 0.25
+    }
+   },
+   "maxSecs": 3
+  },
+  "rb": {
+   "region": "DrumGizmo/DRSKit/Data/region/Ride_tip_bell.txt",
+   "layers": 3,
+   "takes": 2,
+   "level": -3,
+   "mics": {
+    "c": {
+     "Ride": 1
+    },
+    "l": {
+     "OHL": 0.7,
+     "AmbL": 0.25
+    },
+    "r": {
+     "OHR": 0.7,
+     "AmbR": 0.25
+    }
+   },
+   "maxSecs": 3
+  }
+ }
+}
