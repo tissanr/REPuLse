@@ -1335,7 +1335,7 @@
               :examples ["(->> (seq :c4 :eb4) (synth :saw))"
                          "(->> (scale :minor :c3 (seq 0 2 4)) (synth :fm :index 3))"
                          "(->> (scale :minor :c3 (seq 0 3 5 7)) (synth :western))"
-                         "(->> (seq :c4 :_ :c4 :_) (synth :noise :color :pink) (decay 0.3))"
+                         "(->> (seq :c1 :c4 :c7) (synth :noise :color :lfsr) (decay 0.3))"
                          "(->> (chord :minor :a3) (synth :supersaw))"]
               :see-also ["noise" "fm" "supersaw" "unison" "acid" "pad" "western" "nylon" "harp" "koto" "pizz" "lute" "mandolin" "defsynth"]}
 
@@ -1631,14 +1631,14 @@
   :see-also ["itri" "tri2" "segment" "defsynth"]}
 
  :noise      {:type "function"
-              :detail "(noise) or (noise :color :pink) — noise burst: :white :pink :brown :dust :lfsr; (synth :noise pat) plays noise per note"
+              :detail "(noise) or (noise :color :pink) — unpitched noise burst: :white :pink :brown :dust :lfsr; rhythm via struct/euclidean/seq"
               :signature "(noise) or (noise :color :pink)"
-              :doc "A noise burst. The :color option picks :white, :pink, :brown, :dust or :lfsr. (synth :noise pat) plays noise per note."
+              :doc "An unpitched noise burst. The :color option picks :white, :pink, :brown, :dust or :lfsr (:density sets dust clicks per second). Give it a rhythm with (struct \"t*4\" (pure (noise))), euclidean or seq. Only :lfsr uses a pitch: in (synth :noise :color :lfsr pat) the note sets its clock (brightness); the other colours ignore notes."
               :category "source"
               :returns "Pattern"
               :side-effects []
-              :examples ["(noise)" "(->> (noise) (amp 0.5) (decay 0.1))" "(noise :color :pink)"]
-              :see-also ["synth" "fm"]}
+              :examples ["(noise)" "(->> (struct \"t*4\" (pure (noise :color :pink))) (decay 0.3))" "(->> (euclidean 3 8 (noise :color :dust :density 200)) (decay 0.3))" "(->> (seq :c1 :c7) (synth :noise :color :lfsr) (decay 0.3))"]
+              :see-also ["synth" "struct" "euclidean" "fm"]}
 
  :fm         {:type "function"
               :detail "(fm :c4 :index 3 :ratio 2) — FM synthesis pair"
