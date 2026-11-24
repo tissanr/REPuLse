@@ -1,17 +1,18 @@
 # REPuLse — Roadmap
 
-## Where we stand (updated 2026-11-20)
+## Where we stand (updated 2026-11-24)
 
 | Milestone | Delivered | Still open |
 |---|---|---|
 | **M1** Tidal-Lisp core | 11 / 14 | KIT1, SYN6, FX1 — all 🤖👂, need a human listen |
-| **M2** Full songs | 9 / 10 | WS6 |
+| **M2** Full songs | 9 / 11 | WS6, VIZ1 (🤖👂) |
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
 
 - **Next for the unattended pipeline:** QA1 → QA2 → QA3 → QA4 (quality track, added
-  2026-11-20 from a code review), then WS6. After them, every remaining phase on the
-  critical path needs a human (🤖👂 or 🧑).
+  2026-11-20 from a code review), then WS6. VIZ1 (honest track visuals, added
+  2026-11-24) can run unattended but is delivered only after a human watch-and-listen
+  check. After them, every remaining phase on the critical path needs a human (🤖👂 or 🧑).
 - **Next for a human session:** KIT1 (spec is an outline, expand first), SYN6 (Part C
   is unblocked by TL7c), FX1; N1 opens M3. TL7c's listen check runs in the next release
   test round.
@@ -94,6 +95,7 @@ without a human:
 | 13d | WS4 | ✅ | AI assistant rail | 🤖 | outline | sonnet |
 | 13e | WS5 | ✅ | Code is the source of truth: track reconciliation, `:mute`/`:solo` in code | 🤖 | full | opus |
 | 13f | WS6 | 📋 | Runtime-aware outline: run state per track, running group | 🤖 | full | sonnet |
+| 13g | VIZ1 | 📋 | Honest track visuals & in-code visualizers (`pianoroll`, `scope`, …) | 🤖👂 | full | opus |
 | **M3** | | | **Plays with others** | | | |
 | 14 | N1 | 📋 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
 | 15 | LIVE1 | 📋 | Companion bridge: Ableton Link & OSC | 🧑 | outline | opus |
@@ -2817,6 +2819,29 @@ is never changed.
   `outline-panel` render + `goto/goto-entry-in-buffer!`; no new built-ins
 
 See full spec: [PROMPTS/PHASE-WS6.md](PROMPTS/PHASE-WS6.md)
+
+---
+
+## Phase VIZ1 — Honest Track Visuals & In-Code Visualizers 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖👂 auto + human watch-and-listen check
+
+The track panel shows the exact pattern events or the track's real audio, timed by the
+heard clock, and five Strudel-style built-ins draw a live view of a track under its form
+in the code.
+
+**Key additions:**
+- Panel modes `punch roll scope spec level` replace the synthesized `wave spec loud beat
+  seg`; pure `repulse.ui.viz-model` (heard cycle, window, real pitch rows via a shared
+  `audio/event-hz`, drum lanes) and a shared `repulse.ui.viz-draw` renderer
+- Per-track audio: a JS `tap` + `AnalyserNode` per track for JS voices, and 16 meter slots
+  inside the WASM `AudioEngine` (`meter_snapshot`, `trigger_v3` params slot 15), read via
+  ping-pong transferable buffers
+- Built-ins `pianoroll`, `punchcard`, `spiral`, `scope`, `spectrum` (`(pianoroll pat)`,
+  `(pianoroll {:cycles 2} pat)`), shown inline by a CodeMirror block widget
+  (`repulse.ui.inline-viz`); warning when a combinator wraps the viz and drops it
+
+See full spec: [PROMPTS/PHASE-VIZ1.md](PROMPTS/PHASE-VIZ1.md)
 
 ---
 
