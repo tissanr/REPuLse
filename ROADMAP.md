@@ -4,7 +4,7 @@
 
 | Milestone | Delivered | Still open |
 |---|---|---|
-| **M1** Tidal-Lisp core | 12 / 14 | KIT1, FX1 (implemented, listen check open) — both 🤖👂 |
+| **M1** Tidal-Lisp core | 14 / 14 | — (complete) |
 | **M2** Full songs | 10 / 11 | VIZ1 (🤖👂) |
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
@@ -13,9 +13,8 @@
   visualizers, added 2026-11-24). It can be implemented unattended but is delivered only
   after a human watch-and-listen check. WS6 and the quality-track phases QA1–QA4 are
   delivered; every other remaining phase needs a human (🤖👂 or 🧑).
-- **Next for a human session:** the FX1 listen check (all parts implemented, PR on `dev`;
-  decides whether `:spring` stays and sets the reverb trims) and KIT1 (spec expanded
-  2026-11-23); N1 opens M3. TL7c's listen check runs in the next release test round.
+- **Next for a human session:** N1 opens M3. FX1 and KIT1 passed their listen checks on
+  2026-11-24, which completes M1. TL7c's listen check runs in the next release test round.
 - **Side track open:** DOC1, TEST2, UI1, R3, PLUG1, O2, PL1; quality track QA5 (🧑),
   QA6 (🤖👂), QA7 (🧑).
 
@@ -81,9 +80,9 @@ without a human:
 | 8 | TL7a | ✅ | Per-event filters, shape & crush | 🤖👂 | full | opus |
 | 8b | TL7b | ✅ | Reverb & delay sends per orbit | 🤖👂 | full | opus |
 | 8c | TL7c | ✅ | Vowel, envelopes & modulators | 🤖👂 | full | opus |
-| 9 | KIT1 | 📋 | High-quality drum kits | 🤖👂 | full | opus |
+| 9 | KIT1 | ✅ | High-quality drum kits | 🤖👂 | full | opus |
 | 9a | SYN6 | ✅ | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | full | opus |
-| 9b | FX1 | 📋 | Mixing, space & modulation effects | 🤖👂 | full | sonnet |
+| 9b | FX1 | ✅ | Mixing, space & modulation effects | 🤖👂 | full | sonnet |
 | **M2** | | | **Full songs** | | | |
 | 10 | SONG1 | ✅ | Sections, song form & full-song render | 🤖 | full | opus |
 | 11 | SONG2 | ✅ | Song-time automation & transitions | 🤖 | full | sonnet |
@@ -1022,7 +1021,7 @@ See full spec: [PROMPTS/PHASE-DST6.md](PROMPTS/PHASE-DST6.md)
 
 ---
 
-## Phase FX1 — Mixing, Space & Modulation Effects 📋 *planned*
+## Phase FX1 — Mixing, Space & Modulation Effects ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
@@ -1035,7 +1034,7 @@ delay, and the missing modulation and stereo effects. All are track-level plugin
 - Modulation & stereo: `flanger`, `vibrato`, `auto-pan`, `ring-mod`, `width`
 - All effects work per track and in offline export; acceptance by offline-render measurements plus a human listen
 
-**Implemented (2026-11-23) — not delivered until the listen check (🤖👂) has passed:**
+**Delivered (implemented 2026-11-23, listen check passed 2026-11-24):**
 - Groundwork: a `params` descriptor per plugin drives the `fx` built-in (rationals,
   keywords and lists converted; unknown names and values are eval warnings such as
   `fx :reverb has no parameter :room — parameters: wet, dry, type, decay, size, damp,
@@ -1055,6 +1054,8 @@ delay, and the missing modulation and stereo effects. All are track-level plugin
 - Tests: 45 Playwright tests in `e2e/fx-effects.spec.ts` (bench A1–A12, B1–B15, C1–C10, X1;
   app B16, X2–X4, limiter export), 2 Rust tests, CLJS tests for the parser, descriptor rules,
   chain order, tempo and the slider tables.
+- Listen check passed (project owner, 2026-11-24): `:spring` stays (D7); the reverb trims
+  stay as implemented.
 
 See full spec: [PROMPTS/PHASE-FX1.md](PROMPTS/PHASE-FX1.md)
 
@@ -2624,7 +2625,7 @@ See full spec: [PROMPTS/PHASE-TL7c.md](PROMPTS/PHASE-TL7c.md)
 
 ---
 
-## Phase KIT1 — High-Quality Drum Kits 📋 *planned*
+## Phase KIT1 — High-Quality Drum Kits ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
@@ -2638,7 +2639,16 @@ openly licensed sources only (CC0 / CC-BY / CC-BY-SA; no proprietary Roland modu
 - `JazzKit` (Virtuosity Drums, CC0) and `StudioKit` (DRSKit, CC-BY 4.0), selected with
   `(bank :JazzKit)` — no new built-in
 
-**Partly implemented (not delivered):** layered manifest banks, velocity layer selection and time-seeded round-robin are in `samples.cljs`. The rest of the spec (kit manifest, hat choke, curated kits, preload) is still open.
+**Delivered (PRs #223, #225; listen check passed 2026-11-24):**
+- `repulse.kits`: pure manifest parse/validate, `pick-layer`, `layer-scale`, `pick-take`
+- `samples.cljs`: `repulse-kit/1` manifest entries, layered playback, `kit-names`, a kits
+  section in `sample-banks`, `preload-kit!`; hat choke (closed hat cuts open hat)
+- Layered banks play via bare keywords and `:note` maps; `sound` picks a fixed take;
+  round-robin seeded by onset
+- `scripts/kits/build-kit.mjs`; `JazzKit` (Virtuosity Drums, CC0) and `StudioKit`
+  (DRSKit, CC-BY 4.0) in `app/public/kits`, selected with `(bank :JazzKit)`
+- Unit and e2e tests, USAGE "Drum kits" docs
+- Listen check passed (project owner, 2026-11-24): both kits ship
 
 See full spec: [PROMPTS/PHASE-KIT1.md](PROMPTS/PHASE-KIT1.md)
 
