@@ -5,7 +5,7 @@
 | Milestone | Delivered | Still open |
 |---|---|---|
 | **M1** Tidal-Lisp core | 14 / 15 | MST1 (🤖👂) |
-| **M2** Full songs | 10 / 11 | VIZ1 (🤖👂, implemented — watch-and-listen check open) |
+| **M2** Full songs | 10 / 12 | VIZ1 (🤖👂, implemented — watch-and-listen check open), DEMO1 (🤖👂) |
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
 
@@ -13,10 +13,13 @@
   from `builtin_meta.edn`, demos and tutorial, measured e2e coverage, fuzzing, added
   2026-11-27). VIZ1 is implemented (2026-11-24); WS6 and the quality-track phases
   QA1–QA4 are delivered; every other remaining phase needs a human (🤖👂 or 🧑).
+- **Added 2026-11-27:** DEMO1 (song demos): ten complete pieces built on real harmony
+  (ii–V–I, modulation, modes, odd meters, canon) that together use ≥ 55 % of the musical
+  built-ins; delivered after the owner's listen check.
 - **Added 2026-11-24:** MST1 (master output stage & loudness): REPuLse plays 6–11 dB
   quieter than streaming audio; three owner decisions (Q1–Q3) are open in its spec.
-- **Next for a human session:** the VIZ1 watch-and-listen check (PR on `dev`; it closes
-  M2), then N1 opens M3. FX1 and KIT1 passed their listen checks on 2026-11-24. TL7c's
+- **Next for a human session:** the VIZ1 watch-and-listen check (PR on `dev`), DEMO1
+  (the last open M2 phase), then N1 opens M3. FX1 and KIT1 passed their listen checks on 2026-11-24. TL7c's
   listen check runs in the next release test round.
 - **Side track open:** DOC1, TEST2, UI1, R3, PLUG1, O2, PL1; quality track QA5 (🧑),
   QA6 (🤖👂), QA7 (🧑).
@@ -100,6 +103,7 @@ without a human:
 | 13e | WS5 | ✅ | Code is the source of truth: track reconciliation, `:mute`/`:solo` in code | 🤖 | full | opus |
 | 13f | WS6 | ✅ | Runtime-aware outline: run state per track, running group | 🤖 | full | sonnet |
 | 13g | VIZ1 | 📋 | Honest track visuals & in-code visualizers (`pianoroll`, `scope`, …) | 🤖👂 | full | opus |
+| 13h | DEMO1 | 📋 | Song demos: real music that shows everything | 🤖👂 | full | opus |
 | **M3** | | | **Plays with others** | | | |
 | 14 | N1 | 📋 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
 | 15 | LIVE1 | 📋 | Companion bridge: Ableton Link & OSC | 🧑 | outline | opus |
@@ -3111,6 +3115,31 @@ in the code.
   flaky `per-event-inserts` hat-onset threshold fixed. `e2e/viz.spec.ts` now 11 tests.
 
 See full spec: [PROMPTS/PHASE-VIZ1.md](PROMPTS/PHASE-VIZ1.md)
+
+---
+
+## Phase DEMO1 — Song Demos: Real Music That Shows Everything 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖👂 auto + human check
+
+Ten complete song demos (1½–3 min, intro to ending) written with real harmony, which
+together show at least half of what REPuLse can do; the nine genre sketches stay as starters.
+
+**Key additions:**
+- `demo-templates` gains `:kind :song|:sketch`, `:key`, `:idea`, `:first-visit` and
+  `:buffers` (project demos); `(demo)` lists songs and sketches separately
+- Songs `:nocturne` (ii–V–I, tritone subs), `:anthem` (pop form, ♭VI–♭VII, key change up),
+  `:canon` (ground bass, 3-voice canon), `:bossa` (line cliché), `:blues` (12-bar),
+  `:cinema` (chromatic mediants, Picardy third), `:aurora` (generative Lydian),
+  `:lofi` (sample chops, borrowed iv), `:odyssey` (7/8, 5/4, quartal), `:sunrise`
+  (4-buffer trance project); each with `;; Theory:` / `;; Listen for:` / `;; Form:` lines
+- Coverage made measurable: ≥ 55 % of the 336 musical built-ins (today 18 %) with
+  per-category floors, `docs/DEMO-COVERAGE.md` via `npm run gen:demo-coverage`
+- `e2e/demos.spec.ts` checks the harmony on real events (key change +2, canon offset,
+  12-bar roots, Picardy third, 7/8 grid, no repeats in `:aurora`) and the levels (no clip,
+  ±4 dB RMS); owner listen check before delivery
+
+See full spec: [PROMPTS/PHASE-DEMO1.md](PROMPTS/PHASE-DEMO1.md)
 
 ---
 
