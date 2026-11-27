@@ -6,6 +6,7 @@
    captures).  Renders into #status-head.
    Exports: init!, render!, schedule-render!."
   (:require [repulse.audio :as audio]
+            [repulse.eval-orchestrator :as eo]
             [repulse.samples :as samples]
             [repulse.song-transport :as song-transport]
             [repulse.ui.status-model :as sm]
@@ -130,6 +131,7 @@
 (defn- commit! [^js input refocus?]
   (if-let [n (sm/parse-bpm (.-value input))]
     (do (audio/set-bpm! n)
+        (eo/write-bpm-to-code! n)
         (close-editor! refocus?))
     (.add (.-classList input) "sh-invalid")))
 
@@ -161,8 +163,10 @@
       (case key
         ("ArrowUp" "ArrowDown")
         (do (.preventDefault e)
-            (audio/set-bpm! (sm/step-bpm (current-bpm) (if (= key "ArrowUp") 1 -1)
-                                         (.-shiftKey e))))
+            (let [n (sm/step-bpm (current-bpm) (if (= key "ArrowUp") 1 -1)
+                                 (.-shiftKey e))]
+              (audio/set-bpm! n)
+              (eo/write-bpm-to-code! n)))
         ("Enter" " ")
         (do (.preventDefault e) (open-editor!))
         nil)

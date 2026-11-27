@@ -552,3 +552,26 @@
                           (when close (flag-edit-in-form doc args fl-text on?))))
                       (range (count toks)))]
     (when (map? r) r)))
+
+;;; Tempo in the code
+
+(defn fmt-bpm
+  "BPM as code text: whole numbers without a decimal point, otherwise one
+   decimal place (taps give fractional tempos)."
+  [bpm]
+  (let [r (/ (Math/round (* bpm 10)) 10)]
+    (if (== r (Math/round r)) (str (Math/round r)) (.toFixed r 1))))
+
+(defn bpm-edit
+  "doc, bpm → {:from :to :insert} that writes bpm into the first (bpm NUMBER)
+   form, (bpm (slider NUMBER lo hi)) included (clamped to its range); nil when
+   the form already holds that value. Without such a form, (bpm N) is inserted
+   as the first line."
+  [doc bpm]
+  (if-let [{:keys [from to slider]} (find-param-num doc 0 (count doc) "bpm")]
+    (let [{lo :min hi :max} slider
+          v    (if (and (number? lo) (number? hi)) (max lo (min hi bpm)) bpm)
+          text (fmt-bpm v)]
+      (when (not= text (subs doc from to))
+        {:from from :to to :insert text}))
+    {:from 0 :to 0 :insert (str "(bpm " (fmt-bpm bpm) ")\n")}))
