@@ -18,6 +18,8 @@
 - **Next for a human session:** the VIZ1 watch-and-listen check (PR on `dev`; it closes
   M2), then N1 opens M3. FX1 and KIT1 passed their listen checks on 2026-11-24. TL7c's
   listen check runs in the next release test round.
+- **Added 2026-11-27:** V1 (version 1 launch: domain, link previews, phone fallback,
+  issues #11 and #73, demo video, `1.0.0` release). 🧑; waits for MST1 and QA5 parts 1–3.
 - **Side track open:** DOC1, TEST2, UI1, R3, PLUG1, O2, PL1; quality track QA5 (🧑),
   QA6 (🤖👂), QA7 (🧑).
 
@@ -72,6 +74,8 @@ without a human:
 | 0e | QA5 | 📋 | Security & backend hardening | 🧑 | outline | opus |
 | 0f | QA6 | 📋 | Audio & MIDI timing quality | 🤖👂 | outline | opus |
 | 0g | QA7 | 📋 | CI, tooling & code structure | 🧑 | outline | sonnet |
+| **Release** | | | **Release track (no milestone, after M1 and M2)** | | | |
+| 0h | V1 | 📋 | Version 1 launch: public address, first impression & 1.0.0 release | 🧑 | full | sonnet |
 | **M1** | | | **Tidal-Lisp core** | | | |
 | 1 | TL1 | ✅ | Patterned arguments & pattern arithmetic | 🤖 | full | opus |
 | 2 | TL2 | ✅ | Continuous signals | 🤖 | full | sonnet |
@@ -130,6 +134,10 @@ callback, tempo changes breaking timing, and builtin lists drifting apart are th
 most likely to hurt a live set. QA5 (security, needs deployed previews and the live
 database), QA6 (needs ears and MIDI hardware) and QA7 (changes the pipeline's own CI gate)
 stay with a human.
+
+**Release track** (added 2026-11-27): V1 packages the delivered work as version 1. It
+runs after MST1 and the QA5 security parts, needs the owner throughout and adds no
+language features.
 
 **Side track** (not on the critical path, can run any time): DOC1, TEST2, UI1, R3,
 PLUG1, O2, PL1 (🧑, development tooling; the auto-phase pipeline never picks it).
@@ -1776,6 +1784,32 @@ Faster, stricter CI on a current Node, and files small enough to review.
 - Archive delivered phases out of `ROADMAP.md`; `AGENTS.md`/`GEMINI.md` point to CLAUDE.md
 
 See full spec: [PROMPTS/PHASE-QA7.md](PROMPTS/PHASE-QA7.md)
+
+---
+
+## Phase V1 — Version 1 Launch: Public Address, First Impression & 1.0.0 Release 📋 *planned*
+
+> **Release track** · **Automation:** 🧑 human-in-loop
+
+Make REPuLse showable to strangers: a real address, link previews, a phone fallback where
+play stays reachable, the two open GitHub issues fixed, a demo video and a tagged `1.0.0`.
+
+**Key additions:**
+- Custom production domain on the Vercel project, redirect from `repulse-ten.vercel.app`,
+  Supabase Site/Redirect URLs, GitHub OAuth app and QA5's `ALLOWED_ORIGINS` updated;
+  "Custom domain" section in `docs/DEPLOYMENT.md`
+- `index.html`: description, Open Graph and Twitter card tags, `og.png` (1200×630),
+  `<noscript>`; a no-Web-Audio message in `app.cljs`
+- Phone fallback: header fits at 320–375 px with ▶ play always visible, dismissible
+  "made for a desktop keyboard" banner (`ui/mobile_notice.cljs`), `press ▶ play` welcome
+  line on touch devices (`content/first_visit.cljs`); `e2e/mobile.spec.ts`
+- #73 snippet report/delete alignment (duplicate CSS rules in `main.css`); #11 Safari
+  WAV buzz re-checked on the post-EXP1 export paths
+- README Try-it link and demo video, manual Chrome/Firefox/Safari pass, `/test-protocol`
+  and `/create-release` → `v1.0.0`. Depends on MST1 and QA5 parts 1–3; six owner
+  decisions (D1–D6: domain, landing, phone, legal pages, video hosting, version)
+
+See full spec: [PROMPTS/PHASE-V1.md](PROMPTS/PHASE-V1.md)
 
 ---
 
