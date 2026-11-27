@@ -131,9 +131,12 @@
   (is (= [[] [:a] [] [:a] [:b] [] [:a] []] (vcs "a? | b" 0 8))))
 
 (deftest tl4-random-choice-errors
-  (is (= "| is only allowed at top level and inside [ ]" (parse-msg "<a | b>")))
-  (is (= "| is only allowed at top level and inside [ ]" (parse-msg "{a | b}")))
-  (is (= "Cannot mix , and | in one group" (parse-msg "[a, b | c]")))
+  (is (= "| is only allowed at top level and inside [ ] in mini-notation at position 0"
+         (parse-msg "<a | b>")))
+  (is (= "| is only allowed at top level and inside [ ] in mini-notation at position 0"
+         (parse-msg "{a | b}")))
+  (is (= "Cannot mix , and | in one group in mini-notation at position 6"
+         (parse-msg "[a, b | c]")))
   (is (nil? (parse-msg "[a | b] c"))))
 
 (deftest tl4-seed-numbering
@@ -257,3 +260,64 @@
            (try (mini/parse s) nil
                 (catch :default e (:type (ex-data e)))))
         s)))
+
+;;; ── Phase QA1: errors with positions, fractions, strict numbers ─────
+
+(defn- qa1-err [s offset]
+  (try (mini/parse s offset) nil
+       (catch :default e (assoc (select-keys (ex-data e) [:type :str-from :str-to :from :to])
+                                :message (ex-message e)))))
+
+(defn- onsets
+  "[[value whole-start whole-end] …] of onset events in cycles [0, n), as floats."
+  [pat n]
+  (->> (core/query-onsets pat (core/span [0 1] [n 1]))
+       (map (fn [{:keys [value whole]}]
+              [value (core/rat->float (:start whole)) (core/rat->float (:end whole))]))
+       (sort-by second)
+       vec))
+
+(deftest qa1-trailing-tokens
+  (is (= {:type :mini-parse-error :str-from 3 :str-to 4
+          :message "Unexpected \"]\" in mini-notation at position 3"}
+         (qa1-err "bd ] sd" nil)))
+  (is (= "Unexpected \">\" in mini-notation at position 3" (:message (qa1-err "bd > sd" nil))))
+  (is (= "Unexpected \"}\" in mini-notation at position 2" (:message (qa1-err "a }" nil))))
+  (is (= "Unexpected \")\" in mini-notation at position 1" (:message (qa1-err "a)" nil))))
+  (is (= "Unexpected \":\" in mini-notation at position 0" (:message (qa1-err ":bd" nil)))))
+
+(deftest qa1-error-ranges
+  (testing "base-offset adds :from/:to over the token"
+    (is (= {:from 13 :to 14} (select-keys (qa1-err "bd ] sd" 10) [:from :to]))))
+  (testing "end of input: position = length, underline the last character"
+    (let [e (qa1-err "bd [sd" 10)]
+      (is (= "Expected ] in mini-notation at position 6" (:message e)))
+      (is (= {:from 15 :to 16} (select-keys e [:from :to])))))
+  (testing "without base-offset there is no :from"
+    (is (nil? (:from (qa1-err "bd ] sd" nil))))))
+
+(deftest qa1-fractional-suffixes
+  (testing "* takes fractions"
+    (is (= [[:hh 0 2] [:hh 2 4]] (onsets (mini/parse "hh*0.5") 4)))
+    (is (= [[:bd 0 (/ 2 3)] [:bd (/ 2 3) (/ 4 3)]] (onsets (mini/parse "bd*1.5") 1)))
+    (is (= [[:bd 0 (/ 2 3)] [:bd (/ 2 3) (/ 4 3)]] (onsets (mini/parse "bd*3/2") 1))))
+  (testing "@ takes fractions"
+    (is (= [[:bd 0 0.6] [:sd 0.6 1]] (onsets (mini/parse "bd@1.5 sd") 1)))
+    (is (= [[:bd 0 0.6] [:sd 0.6 1]] (onsets (mini/parse "bd@3/2 sd") 1))))
+  (testing "a non-number after * or @ is an error"
+    (is (= "Expected a number after * in mini-notation at position 3"
+           (:message (qa1-err "bd*x sd" nil))))
+    (is (= "Expected a number after @ in mini-notation at position 3"
+           (:message (qa1-err "bd@2x" nil))))))
+
+(deftest qa1-strict-numbers
+  (is (= [:808bd] (values (mini/parse "808bd"))))
+  (is (= [:1e3] (values (mini/parse "1e3"))))
+  (is (= [:1x] (values (mini/parse "1x"))))
+  (is (= [1.5 -2 0.5] (values (mini/parse "1.5 -2 .5"))))
+  (is (= [[1 8]] (values (mini/parse "1/8")))))
+
+(deftest qa1-bang-cap
+  (is (= "! count = 100000000 exceeds the limit of 1024 in mini-notation at position 2"
+         (:message (qa1-err "bd!100000000" nil))))
+  (is (= 1024 (count (values (mini/parse "bd!1024"))))))

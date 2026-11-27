@@ -257,3 +257,102 @@ export function estimatePitch(
   }
   return 0;
 }
+
+// ── Phase FX1 — effect reference measurements ───────────────────────────
+
+/** Peak absolute sample in dBFS. */
+export function peakDb(x: ArrayLike<number>): number {
+  let p = 0;
+  for (let i = 0; i < x.length; i += 1) p = Math.max(p, Math.abs(x[i]));
+  return toDb(p);
+}
+
+/** Peak of the sample-wise difference a − b in dBFS (over the shorter length). */
+export function nullDb(a: ArrayLike<number>, b: ArrayLike<number>): number {
+  const n = Math.min(a.length, b.length);
+  let p = 0;
+  for (let i = 0; i < n; i += 1) p = Math.max(p, Math.abs(a[i] - b[i]));
+  return toDb(p);
+}
+
+/**
+ * Energy of x between f0 and f1 Hz in dB (sum of |X(k)|² over the bins of a
+ * Hann-windowed FFT zero-padded to the next power of two, normalised by length).
+ */
+export function bandEnergyDb(x: ArrayLike<number>, sampleRate: number, f0: number, f1: number): number {
+  let n = 1;
+  while (n < x.length) n <<= 1;
+  const re = new Float64Array(n);
+  const im = new Float64Array(n);
+  const len = x.length;
+  for (let i = 0; i < len; i += 1) {
+    const w = len > 1 ? 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (len - 1)) : 1;
+    re[i] = x[i] * w;
+  }
+  fftInPlace(re, im);
+  const k0 = Math.max(0, Math.floor((f0 * n) / sampleRate));
+  const k1 = Math.min(n / 2, Math.ceil((f1 * n) / sampleRate));
+  let e = 0;
+  for (let k = k0; k <= k1; k += 1) e += re[k] * re[k] + im[k] * im[k];
+  return 10 * Math.log10(Math.max(e / len, 1e-30));
+}
+
+/**
+ * RT60 by Schroeder backward integration: T30 (the time the energy decay
+ * curve takes from −5 to −35 dB) × 2.
+ */
+export function schroederRt60(x: ArrayLike<number>, sampleRate: number): number {
+  const n = x.length;
+  const edc = new Float64Array(n);
+  let acc = 0;
+  for (let i = n - 1; i >= 0; i -= 1) {
+    acc += x[i] * x[i];
+    edc[i] = acc;
+  }
+  const total = edc[0];
+  if (!(total > 0)) return 0;
+  let i5 = -1;
+  let i35 = -1;
+  for (let i = 0; i < n; i += 1) {
+    const db = 10 * Math.log10(edc[i] / total);
+    if (i5 < 0 && db <= -5) i5 = i;
+    if (i35 < 0 && db <= -35) {
+      i35 = i;
+      break;
+    }
+  }
+  if (i5 < 0 || i35 < 0) return Infinity;
+  return ((i35 - i5) / sampleRate) * 2;
+}
+
+/**
+ * Instantaneous frequency by zero crossings: one value per period (upward
+ * crossing to upward crossing, linearly interpolated), at the time of the
+ * period's end. → { t: seconds[], hz: number[] }.
+ */
+export function instFreq(x: ArrayLike<number>, sampleRate: number): { t: number[]; hz: number[] } {
+  const t: number[] = [];
+  const hz: number[] = [];
+  let last = -1;
+  for (let i = 1; i < x.length; i += 1) {
+    if (x[i - 1] < 0 && x[i] >= 0) {
+      const frac = x[i - 1] / (x[i - 1] - x[i]);
+      const pos = i - 1 + frac;
+      if (last >= 0) {
+        t.push(pos / sampleRate);
+        hz.push(sampleRate / (pos - last));
+      }
+      last = pos;
+    }
+  }
+  return { t, hz };
+}
+
+/** RMS of x between from and to seconds. */
+export function rmsBetween(x: ArrayLike<number>, sampleRate: number, from: number, to: number): number {
+  const a = Math.max(0, Math.round(from * sampleRate));
+  const b = Math.min(x.length, Math.round(to * sampleRate));
+  let s = 0;
+  for (let i = a; i < b; i += 1) s += x[i] * x[i];
+  return b > a ? Math.sqrt(s / (b - a)) : 0;
+}

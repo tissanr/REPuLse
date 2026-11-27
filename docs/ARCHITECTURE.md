@@ -129,16 +129,29 @@ Web Audio API node graph — it only generates raw `Float32Array` samples.
 
 ```rust
 AudioEngine::new(sample_rate: f32) -> AudioEngine
-AudioEngine::trigger(&mut self, value: &str, time: f64)
+AudioEngine::trigger(&mut self, value: &str, time: f64)          // also trigger_v2, trigger_v3
+AudioEngine::render_block(&mut self, n_samples: u32, current_time: f64) -> *const f32
+AudioEngine::render_block_buses(&mut self, n_samples: u32, current_time: f64) -> *const f32
 AudioEngine::process_block(&mut self, n_samples: u32, current_time: f64) -> Float32Array
 AudioEngine::stop_all(&mut self)
 ```
 
-- `trigger(value, time)` — enqueues a pending event at the given `AudioContext.currentTime`
-- `process_block(n, t)` — called once per audio render quantum (128 samples by default);
-  activates pending events whose scheduled time has arrived, sums all active voices,
-  prunes silent voices, and returns the mixed samples
+- `trigger(value, time)` — validates the event, **builds its voice** (buffers, filters,
+  seed) and inserts it into the pending queue, sorted by onset time. Non-finite times,
+  invalid frequencies (non-finite, ≤ 0, > 1 MHz) and unknown drum voices are dropped;
+  amp/attack/decay/pan are made finite and clamped (Phase QA2). At most 8192 events
+  wait in the queue.
+- `render_block(n, t)` — called once per audio render quantum (128 samples by default);
+  moves due voices from the queue into the active set (at most 256 voices sound at
+  once; no voice stealing), sums all active voices, prunes silent voices and voices
+  that produced a non-finite sample, and returns a pointer to the mixed samples in a
+  pre-allocated buffer in WASM memory. Performs no heap allocation.
+  `render_block_buses` does the same for the dry + orbit send buses.
+- `process_block(n, t)` / `process_block_buses(n, t)` — the same render, copied into
+  a new `Float32Array` (kept for compatibility; not used by `worklet.js`).
 - `stop_all()` — clears all voices and pending events immediately
+- `invalid_drops()`, `queue_cap_drops()`, `voice_cap_drops()`, `nonfinite_kills()` —
+  saturating counters of dropped events and killed voices (not reset by `stop_all`)
 
 ### Synthesized voices
 
@@ -206,8 +219,10 @@ dedicated audio render thread inside an `AudioWorkletGlobalScope`.
   received from the main thread, constructs `AudioEngine(sampleRate)`, posts `ready`
 - On `trigger` message: calls `engine.trigger(value, time)`
 - On `stop` message: calls `engine.stop_all()`
-- `process(_inputs, outputs)`: calls `engine.process_block(ch.length, currentTime)` and writes
-  the returned `Float32Array` directly into the output channel buffer
+- `process(_inputs, outputs)`: calls `engine.render_block(n, currentTime)` (or
+  `render_block_buses` for the 9-output node) and copies the samples from a cached
+  `Float32Array` view of WASM memory into the output channels. The view is rebuilt
+  only when the pointer changes or WASM memory grew — no typed array per block
 
 The WASM module is compiled on the main thread via `WebAssembly.compileStreaming` and sent
 via `postMessage` (structured-clone serialises `WebAssembly.Module`). This avoids the
@@ -414,9 +429,10 @@ Colour mapping (oneDark palette):
 | `; comments` | `tags.lineComment` | grey |
 | `( )` depth 0–5 | `.rainbow-1` … `.rainbow-6` | red / gold / green / cyan / purple / blue |
 
-Regenerate the parser after grammar edits:
+The `BuiltinName` token list is generated from `builtin_meta.edn` (between the
+`// BEGIN/END GENERATED BuiltinName` markers). Regenerate it and the parser with:
 ```bash
-npm run gen:grammar
+npm run gen:ai-docs
 ```
 
 ---
@@ -497,7 +513,7 @@ User types expression
         └── worklet-trigger!
                 │  MessagePort postMessage({type:"trigger", value, time})
                 ▼
-          worklet.js       AudioWorkletProcessor.process() → engine.process_block()
+          worklet.js       AudioWorkletProcessor.process() → engine.render_block_buses()
                 │
                 ▼
           packages/audio   Rust PCM engine sums voices → Float32Array → output buffer

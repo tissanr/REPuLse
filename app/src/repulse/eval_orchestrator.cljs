@@ -16,6 +16,7 @@
             [repulse.audio :as audio]
             [repulse.samples :as samples]
             [repulse.sound-check :as sound-check]
+            [repulse.voices :as voices]
             [repulse.orbits :as orbits]
             [repulse.synth :as synth]
             [repulse.fx :as fx]
@@ -77,7 +78,7 @@
           (if (core/pattern? val)
             (let [events (core/query val (core/cycle-span 0))]
               {:ok true :event-count (count events) :duration-bars 1})
-            {:ok true :event-count 0 :duration-bars 0 :value (pr-str val)}))))
+            {:ok true :event-count 0 :duration-bars 0 :value (pr-str (leval/deep-unwrap val))}))))
     (catch :default e
       {:ok false :error (.-message e)})
     (finally
@@ -108,7 +109,10 @@
          (fn []
            (editor/clear-highlights!)
            (set-playing!-fn false)
-           (set-output!-fn "song finished" :idle))))
+           (set-output!-fn "song finished" :idle)))
+  ;; QA1: a track whose query throws while playing is reported once.
+  (swap! audio/scheduler-state assoc :on-query-error
+         (fn [msg] (set-output!-fn msg :error))))
 
 ;;; Diagnostics
 
@@ -142,13 +146,23 @@
        (when (= gen @eval-generation)
          (let [tracks   (:tracks @audio/scheduler-state)
                pats     (keep #(get tracks %) track-names)
-               unknown  (sound-check/unknown-sounds
-                         pats
-                         #(or (synth/lookup-synth %)
-                              (samples/has-bank? (samples/resolve-keyword %)))
-                         (samples/bank-names))]
+               unknown  (concat
+                         (sound-check/unknown-sounds
+                          pats
+                          #(or (synth/lookup-synth %)
+                               (samples/has-bank? (samples/resolve-keyword %)))
+                          (samples/bank-names))
+                         ;; SYN6 D2: unknown (synth …) voices play a sine.
+                         (map #(assoc % :voice? true)
+                              (sound-check/unknown-voices
+                               pats
+                               #(or (contains? voices/synth-voices %)
+                                    (synth/lookup-synth %)))))]
            (when (seq unknown)
-             (let [msgs (map sound-check/warning-message unknown)]
+             (let [msgs (map #(if (:voice? %)
+                                (sound-check/voice-warning-message %)
+                                (sound-check/warning-message %))
+                             unknown)]
                (set-output! (str (when base-msg (str base-msg " — "))
                                  "Warning: " (cstr/join "; " msgs))
                             :warning)
@@ -193,7 +207,7 @@
   [track-names last-output set-output!]
   (let [tracks (:tracks @audio/scheduler-state)
         msgs   (orbits/orbit-warnings (keep #(get tracks %) track-names)
-                                      (fn [pat c] (core/query pat (core/cycle-span c)))
+                                      (fn [pat c] (vec (core/query pat (core/cycle-span c))))
                                       orbit-scan-cycles)]
     (when (seq msgs)
       (doseq [m msgs] (js/console.warn "[REPuLse]" m))
@@ -291,7 +305,23 @@
     (reset! declared-flags (into {} declared))
     (empty? declared)))
 
-(defn- evaluate* [code {:keys [project reconcile?]}]
+(declare evaluate-staged*)
+
+(defn- evaluate*
+  "QA3 A4: global (fx …) calls are staged while the code runs and applied only
+   when the evaluation succeeds (fx/commit-staging!); a failed or throwing
+   evaluation discards them. A nested evaluation joins the outer staging."
+  [code opts]
+  (if (some? @fx/staging)
+    (evaluate-staged* code (assoc opts ::nested? true))
+    (do (fx/begin-staging!)
+        (try
+          (evaluate-staged* code opts)
+          (finally
+            ;; no-op after commit-staging!; discards on error or throw
+            (fx/discard-staging!))))))
+
+(defn- evaluate-staged* [code {:keys [project reconcile?] :as opts}]
   (let [{:keys [on-beat make-stop-fn set-playing!]} @cbs
         ;; Remember the last output message so an unknown-sound warning can be
         ;; appended to it rather than replacing it.
@@ -301,9 +331,9 @@
                       ((:set-output! @cbs) msg status))]
     (swap! eval-generation inc)
     (builtins/ensure-env!)
-    ;; Reset global FX so removed or partial (fx ...) calls cannot inherit
-    ;; parameter values from an earlier evaluation.
-    (fx/reset-global-effects!)
+    ;; Global FX are no longer reset here (QA3 A4): they are reset by
+    ;; fx/commit-staging! once the evaluation succeeded, so removed or partial
+    ;; (fx ...) calls still cannot inherit values from an earlier evaluation.
     ;; Clear per-evaluation duplicate-track detector
     (reset! builtins/seen-tracks #{})
     ;; Clear the per-evaluation eval warnings (Phase WS3: slider clamps)
@@ -342,7 +372,32 @@
                                 (def-final? (if project (project/code-of project (:main project)) code)))
                            nil
                            :else v))
-              underscore? (volatile! false)]
+              underscore? (volatile! false)
+              ;; QA1 decision 3: query every new track (and a pattern result)
+              ;; for cycle 0 before anything starts. A throw is an eval error;
+              ;; nothing is activated or retired.
+              probe (sound-check/probe-error
+                     (cond-> @song-transport/pending-tracks
+                       (core/pattern? val) (conj [:_ val])
+                       (and (map? val) (not (core/pattern? val))
+                            (or (:note val) (:bank val) (:synth val)))
+                       (conj [:_ (core/pure val)])))]
+          (if probe
+            (let [{:keys [track message from to]} probe
+                  msg (if (= track :_)
+                        (str "pattern fails at cycle 0: " message)
+                        (str "track " track " fails at cycle 0: " message))
+                  src (if from
+                        {:from from :to to}
+                        (select-keys (get @song-transport/pending-track-srcs track) [:from :to]))]
+              (song-transport/reset-pending!)
+              (report-eval-error! {:message msg :source src} project set-output!)
+              {:ok? false :error msg})
+          (do
+          ;; QA3 A4: the evaluation succeeded — apply its staged global
+          ;; (fx …) calls (a whole program resets the master chain first).
+          (when-not (::nested? opts)
+            (fx/commit-staging! (boolean (or reconcile? @b-tracks/whole-buffer-upd))))
           (when project (reset! last-bases bases))
           ;; Clear stale diagnostics only when there is a real result.
           ;; A nil val means the command handled output itself (e.g. (upd), (stop))
@@ -406,13 +461,10 @@
               (set-output! val :success)
 
               :else
-              (set-output! (str "=> " (pr-str val)) :success))
+              (set-output! (str "=> " (pr-str (leval/deep-unwrap val))) :success))
 
             ;; WS2: one-time console hint for master + top-level (fx …)
             (b-fx/loose-fx-hint!)
-
-            ;; WS3: clamped (slider …) values
-            (report-slider-warnings! slider-diags last-output set-output!)
 
             ;; ── Legacy :_ track hot-swap ──────────────────────────────────────
             ;; When the last form is not a pattern (e.g. (defsynth lfo ...) follows
@@ -442,7 +494,12 @@
                 (when (reconcile! declared)
                   (set-playing! false)
                   (when-not (string? val)
-                    (set-output! "nothing to play" :success))))))
+                    (set-output! "nothing to play" :success)))))
+
+            ;; WS3: clamped (slider …) values; FX1: unknown fx parameters and
+            ;; values. Last, so no later status line ("nothing to play")
+            ;; overwrites them.
+            (report-slider-warnings! slider-diags last-output set-output!))
 
           ;; ── Continuous signals with no rhythm ─────────────────────────────
           (report-structureless-signals! (sort (conj @builtins/seen-tracks :_))
@@ -461,7 +518,7 @@
                                     (or (project/code-of project (:active project)) "")
                                     code)
                                   @last-output set-output!)
-          {:ok? true})))))
+          {:ok? true})))))))
 
 (defn evaluate!
   "Evaluate a single code string (command bar, (upd), tap, demos, …).

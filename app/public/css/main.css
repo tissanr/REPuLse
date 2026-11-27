@@ -1557,7 +1557,8 @@ header h1 {
 .ol-row.ol-playing.ol-cursor::before { background: #56b6c2; }
 .ol-row.ol-muted { opacity: .55; }
 .ol-row.ol-muted .ol-kind, .ol-row.ol-muted .ol-name { color: #3a4868; }
-.ol-row.ol-off .ol-name { color: #5a6a8a; }
+.ol-row.ol-off .ol-name, .ol-row.ol-off .ol-kind, .ol-row.ol-off .ol-line { color: #5a6a8a; }
+.ol-row[data-track] .ol-meta, .ol-row[data-act="goto-buffer"] .ol-meta { font-style: normal; }
 .ol-glyph {
   width: 18px; flex-shrink: 0; text-align: center; color: #5a6a8a;
   font-size: 8px; font-weight: 700;
@@ -2555,6 +2556,15 @@ footer {
   padding: 0 10px;
   color: #5a6a8a;
   border-top: 2px solid transparent;
+  cursor: pointer;
+}
+
+/* QA3 D: the tab is a wrapper; its name and close are real buttons */
+.buffer-tabs .buf-name {
+  padding: 0;
+  color: inherit;
+  font-weight: inherit;
+  align-self: stretch;
 }
 
 .buf-tab:hover {
@@ -2571,16 +2581,16 @@ footer {
   font-weight: bold;
 }
 
-.buf-close {
+.buffer-tabs .buf-close {
   color: #5a6a8a;
   padding: 0 2px;
 }
 
-.buf-close:hover {
+.buffer-tabs .buf-close:hover {
   color: #e94560;
 }
 
-.buf-close.confirm {
+.buffer-tabs .buf-close.confirm {
   color: #e94560;
   font-weight: bold;
 }
@@ -2807,4 +2817,43 @@ footer {
 .rp-dialog-ok.danger {
   color: #fff !important;
   background: #e94560 !important;
+}
+
+/* ── QA3 D: keyboard accessibility ─────────────────────────────────────── */
+
+/* Spans that became buttons look unchanged (zero specificity: the existing
+   class rules still win). */
+:where(button.ins-inl, button.ins-jump, button.ins-esc) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.ol-row[role="button"]:focus-visible,
+.ol-session-head:focus-visible,
+.ol-rail:focus-visible,
+.hist-entry:focus-visible,
+.hist-snap:focus-visible,
+.buffer-tabs button:focus-visible,
+.ins-inl:focus-visible,
+.ins-jump:focus-visible,
+.ins-esc:focus-visible,
+.snippet-retry-btn:focus-visible {
+  outline: 1px solid #56b6c2;
+  outline-offset: -1px;
+}
+
+.snippet-retry-btn {
+  margin-left: 6px;
+  padding: 0 6px;
+  font: inherit;
+  color: #56b6c2;
+  background: none;
+  border: 1px solid #1e2a45;
+  cursor: pointer;
 }

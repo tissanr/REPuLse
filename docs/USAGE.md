@@ -310,6 +310,19 @@ structure with `segment` or use it inside `pan`, `amp`, `range` and friends.
 (->> (seq :bd :sd) (rate 0.5))
 ```
 
+### ❌ Expecting one broken track to stop everything
+
+A track that fails while it plays — for example a patterned argument that sometimes
+gives a non-number — is **skipped in the cycles where it fails** and reported once on
+the output line, e.g. `Error in track :hats: Expected a number, got :x`. The other tracks
+keep playing. A track that already fails in cycle 0 is an eval error
+(`track :hats fails at cycle 0: …`) and nothing changes.
+
+```clojure
+(track :kick (seq :bd :bd :bd :bd))
+(track :hats (fast "<1 1 x>" (seq :hh)))   ; x is not a number — cycles 2, 5, 8 … skip :hats
+```
+
 ---
 
 ## The editor
@@ -325,14 +338,36 @@ open while something in the outline is selected), the **editor** (your program) 
 | **Ctrl+.** or **F9** | Run `(upd)` — apply changes without restarting running patterns; in a single-buffer project also stops tracks the buffer no longer declares |
 | **Escape** | Close the inspector (clear the outline selection); with nothing selected, jump to the command bar |
 | **F12** | With an outline selection: move the cursor to it; otherwise go to the definition under the cursor |
-| **Cmd+K S** / **Ctrl+K S** | Wrap the number under the cursor in (slider …), or unwrap the slider under the cursor |
+| **Cmd+K S** / **Ctrl+K S** | Wrap the number under the cursor in (slider …), or unwrap the slider under the cursor. Press K, release, then S; holding Cmd/Ctrl for both keys (**Cmd+K Cmd+S**) works too |
+
+| **Cmd+K I** / **Ctrl+K I** | Open the insert menu (the hover `+`) at the cursor: on an empty line, or with the cursor at a list's `(` (wrap) or `)` (chain) |
 | **Cmd+/** / **Ctrl+/** (German layout: **Cmd+Shift+7** / **Ctrl+Shift+7**) | Comment / uncomment the selected lines with `;` |
 | **Ctrl+A** / **Cmd+A** | Select all |
 | **Ctrl+Z** / **Cmd+Z** | Undo |
 | **Ctrl+Shift+Z** / **Cmd+Shift+Z** | Redo |
 
-The **footer line** shows the last result or error. The **dot** in the header pulses on each beat
-when a pattern is playing.
+The **footer line** shows the last result or error (screen readers announce it: it is a polite
+live region). The **dot** in the header pulses on each beat when a pattern is playing; its text
+alternative reads "playing" or "stopped".
+
+Global shortcuts (Alt+Enter, Ctrl+. / F9, Cmd/Ctrl+A) do nothing while a dialog or the
+snippet submit modal is open, and leave text fields outside the editors alone — Cmd/Ctrl+A in
+the snippet search box selects the search text, not the editor.
+
+#### Keyboard only
+
+Every control works without a mouse: **Tab** reaches it, **Enter** or **Space** activates it.
+
+| Where | Keys |
+|---|---|
+| Insert menu (**Cmd/Ctrl+K I**) | opens with the first entry focused; **↓ / ↑** move (wrapping), **Home / End** jump, **Enter / Space** insert the entry, **Esc** closes and returns to the editor |
+| Outline | rows, the session line and the collapsed rail are Tab stops; **Enter / Space** selects a row (like a click), folds the song or opens the session block |
+| History panel | evaluation entries and snapshots are Tab stops; **Enter / Space** selects one (shows its diff) |
+| Buffer tabs | each tab is a name button and a **×** button; **Enter** on **×** asks `delete?`, a second **Enter** deletes the buffer |
+| Inspector | `≋` (inline slider), `↗ L<n>` (go to code) and `esc` (close) are buttons |
+| Dialogs | **Tab** cycles inside the dialog, **Enter** activates the focused button (Enter on Cancel cancels), **Esc** cancels; focus returns to where it was |
+
+Keyboard focus survives the panels' redraws (the outline redraws every bar).
 
 The **▶ play** / **■ stop** button in the header evaluates the current editor content and
 toggles playback.
@@ -398,6 +433,18 @@ after you stop typing.
 - **Playing section** — while a song plays, the sounding section is marked `▶` in cyan with a
   thin progress line. Tracks show `■` (muted, dimmed) or a cyan `•` when audible in the playing
   section, and are dimmed when they rest in it. `▾` / `▸` folds the song's sections.
+- **Run state (what you hear)** — outside a song every `track` row shows whether it runs:
+  a cyan `•` when it plays, `■` (dimmed) when it is muted, and a dimmed row without a glyph
+  (tooltip `not running`) when it is not scheduled. `(clear!)`, `(clear! :a)` and `(stop)`
+  therefore dim rows instead of removing them; Alt+Enter brings the `•` back. The code is
+  never changed. While a song plays, the section logic below applies instead.
+- **running group** — audible tracks that the active buffer does not declare are listed under
+  a `running` divider after the fx and master groups, each with `•` or `■`: a track started
+  from the command bar shows `not in code`, a bare pattern shows `_` / `anonymous`, and a
+  track declared in another project buffer shows that buffer's name — click it to switch there
+  and jump to the form (`Shift+F12` returns). `:__preview__` tracks are never listed. These
+  rows are not selectable and have no inspector. The group disappears when it is empty, e.g.
+  after `(upd)` retires a command-bar track.
 - **fx group** — top-level `(fx …)` forms are listed together in one `fx` group after all other
   rows (`fx  fx  1`, then `:reverb  L4`). Select the group to inspect every top-level effect,
   or one child to inspect just that effect. `fx` calls inside a `track` or `->>` are not listed
@@ -651,6 +698,26 @@ A function body may contain multiple expressions; the last one is the return val
 ```lisp
 (lambda [x] (* x 2))        ; same as (fn [x] (* x 2))
 ```
+
+`& rest` collects any further arguments as a list (`nil` when there are none):
+
+```lisp
+((fn [a & more] more) 1 2 3)   ; => (2 3)
+((fn [a & more] more) 1)       ; => nil
+```
+
+The number of arguments is checked. A call with too few or too many is an error that
+names the function (`defn` name, otherwise `fn`):
+
+```lisp
+(defn f [x] x)
+(f)                  ; Error: f expects 1 argument, got 0
+((fn [a] a) 1 2)     ; Error: fn expects 1 argument, got 2
+(defn g [a & r] a)
+(g)                  ; Error: g expects at least 1 argument, got 0
+```
+
+`recur` only works inside `loop`; anywhere else it is the error `recur outside loop`.
 
 ### Conditionals — `if`
 
@@ -1426,6 +1493,26 @@ most significant bit first, argument order `n` then `bits`, default 16 bits for 
 `sew`, `stitch`, `binary` and `binary-n` have no curried form. Numeric arguments of all
 the functions above accept patterns or mini-notation strings, e.g. `(zoom 0 "<1 1/2>" pat)`.
 
+### Count limits
+
+Step and layer counts have an upper limit, so a typo cannot hang the tab. A literal
+argument over the limit is an eval error; a patterned one is reported when the cycle
+that uses it plays (the track is skipped in that cycle).
+
+| Limit | Applies to | Example error |
+|---|---|---|
+| **1024** steps / repeats | `run`, `euclidean` / `euclid-legato` / `euclid-legato-rot` steps, `ply`, `ply-with`, `ply-for-each`, `segment`, `chunk` / `chunk-back` / `fast-chunk` / `chunk-into` / `chunk-back-into`, mini-notation `!n` | `run: n = 1025 exceeds the limit of 1024` |
+| **64** layers / iterations | `apply-n`, `echo` / `stut` times, `echo-with` / `stutter` n | `echo: times = 100 exceeds the limit of 64` |
+
+```lisp
+(run 1024)                     ; fine — 1024 steps in one cycle
+(euclidean 3 100000000 :bd)    ; Error: euclidean: n = 100000000 exceeds the limit of 1024
+(apply-n 65 rev (seq 1 2))     ; Error: apply-n: n = 65 exceeds the limit of 64
+```
+
+`every` and `first-of` need `n` of at least 1: `(every 0 rev pat)` is the error
+`every: n must be at least 1, got 0`. A rational `n` is truncated (`(every 5/2 …)` = every 2).
+
 ---
 
 ## Combining patterns
@@ -1497,6 +1584,31 @@ floats.
 
 Mini-notation strings are also accepted directly wherever an argument is patternable:
 `(fast "<1 2>" pat)` ≡ `(fast (~ "<1 2>") pat)` (see [Patterned arguments](#patterned-arguments)).
+
+### Numbers, fractions and errors
+
+`*` and `@` take fractions and rationals; `!n` and `:n` take whole numbers:
+
+```lisp
+(~ "hh*0.5")         ; one hat every two cycles (whole length 2)
+(~ "bd*1.5")         ; onsets at 0 and 2/3 of the cycle
+(~ "bd*3/2")         ; same, exact rational
+(~ "bd@1.5 sd")      ; bd takes 0.6 of the cycle, sd 0.4
+```
+
+A token is a number only if the **whole token** is one: `1`, `-2`, `0.5`, `.5` or `3/8`.
+Anything else is a sound name — `"808bd"` is `:808bd` and `"1e3"` is `:1e3`. A
+non-number after `*`, `@` or `%` is an error.
+
+Errors give their position, counted from 0 inside the string, and only the offending
+token is underlined in the editor:
+
+```lisp
+(~ "bd ] sd")        ; Error: Unexpected "]" in mini-notation at position 3
+(~ "bd [sd")         ; Error: Expected ] in mini-notation at position 6
+(~ ":bd")            ; Error: Unexpected ":" in mini-notation at position 0
+(~ "bd*x")           ; Error: Expected a number after * in mini-notation at position 3
+```
 
 ### Mini-notation inside Lisp
 
@@ -1570,8 +1682,11 @@ per-track `(fx …)` chains and the global / `(master …)` chain all sound exac
   `(->> (seq :c4) (synth :epiano) (fx :reverb 0.4))` the e-piano is a plain tone through the
   reverb. To keep the FM e-piano and still add reverb, put the effect on the master:
   `(master (fx :reverb 0.4))`. Built-in drums and `(synth :saw)` / `:square` also use their JS
-  voices on an FX track (samples are unaffected). Routing WASM voices through per-track FX is
-  planned for a later phase.
+  voices on an FX track (samples are unaffected). On such a track the SYN6 features that
+  only exist in WASM are missing: hard `sync`, `pw-rate` / `pw-depth` movement, the hi-hat
+  choke and the drum models (the kit uses simplified voices); unison, `spread`, `sub-osc`,
+  `glide` and the cutoff LFO work. Routing WASM voices through per-track FX is planned for a
+  later phase.
 - One export at a time: `Error: an export is already running — (stop) cancels it`.
   `:realtime` only applies to the song: `(export 4 :realtime)` →
   `Error: :realtime only applies to (export :song)`. `(export 0)` →
@@ -1678,6 +1793,15 @@ Available scales: `:major` (`:ionian`), `:minor` (`:aeolian`), `:dorian`, `:phry
 `:blues`, `:harmonic-minor`, `:melodic-minor`, `:whole-tone`, `:chromatic`, `:hirajoshi`,
 `:phrygian-dominant`, `:lydian-dominant`, `:altered`, `:diminished`, `:bebop-dominant`.
 
+An unknown scale name or root is an error with a suggestion where one is close
+(patterned names are checked when the cycle plays):
+
+```lisp
+(scale :majr :c4 (seq 0))    ; Error: scale: unknown scale :majr — did you mean :major?
+(scale :major :zz (seq 0))   ; Error: scale: unknown root :zz — expected a note like :c4, :eb3 or :fs
+(scale [] :c4 (seq 0))       ; Error: scale: the interval vector is empty
+```
+
 ### `chord` — stacked chord voicings
 
 Returns a `stack` of the chord tones as note names — all voices sound simultaneously for
@@ -1698,7 +1822,9 @@ octave 4):
 ```
 
 Keyword chords: `:major`, `:minor`, `:major7`, `:minor7`, `:dom7`, `:m7b5` (half-diminished),
-`:dim`, `:dim7`, `:aug`, `:aug7`, `:maj7s11`, `:sus2`, `:sus4`.
+`:dim`, `:dim7`, `:aug`, `:aug7`, `:maj7s11`, `:sus2`, `:sus4`. Any other keyword is an
+error — `(chord :majr :c4)` gives `chord: unknown chord :majr — did you mean :major?`
+(it used to play C major silently).
 
 **Chord symbols** are a root `A`–`G` with an optional `#` or `b`, a quality, and an optional
 slash bass (`"C/E"` puts the E below the chord). 34 qualities are understood:
@@ -1862,12 +1988,15 @@ automatically from Strudel's CDN when the app starts. Samples are fetched and ca
 
 ### Keywords as sounds
 
-Any keyword is looked up as a sample bank name:
+The 18 drum names (`:bd :sd :hh :oh :cp :rim :lt :mt :ht :cb :cr :rd :sh :tb :cl :cg :zap
+:click`) play REPuLse's own [synth drum kit](#synth-drum-kit), the default kit. Any other
+keyword is looked up as a sample bank name:
 
 ```lisp
-(seq :bd :sd :hh :cp)     ; kick, snare, hi-hat, clap
-(seq :arpy :arpy :arpy)   ; arpeggio synth
-(seq :bass)               ; bass
+(seq :bd :sd :hh :cp)     ; kick, snare, hi-hat, clap — the synth kit
+(seq :arpy :arpy :arpy)   ; arpeggio synth (sample)
+(seq :bass)               ; bass (sample)
+(bank :dirt)              ; bare drum names play the Dirt-Samples drums instead
 ```
 
 If the sample bank doesn't exist, REPuLse falls back to the synthesis engine (a sine tone at 440 Hz).
@@ -1880,7 +2009,7 @@ sound name shows a warning in the output line and a yellow underline on each occ
 ;;    unknown sound :snare — did you mean :sd?
 ```
 
-The built-in drums are `:bd :sd :hh :oh`; common names from other tools (`:kick`, `:snare`,
+The built-in drums are the 18 names of the synth kit; common names from other tools (`:kick`, `:snare`,
 `:hat`/`:hihat`, `:openhat`) are suggested as their REPuLse equivalent, and other typos are
 matched against the loaded sample banks (`(sample-banks)` lists them). The check runs once per
 evaluation over the first four cycles of each track, and waits for sample manifests that are
@@ -1908,13 +2037,38 @@ Numbers are treated as Hz and played as a sine tone:
 Most sample banks contain multiple variations (different kit sounds). Use `sound` to pick one:
 
 ```lisp
-(sound :bd 0)     ; first bd sample (same as :bd alone)
+(sound :bd 0)     ; first bd sample (same as :bd under (bank :dirt))
 (sound :bd 3)     ; fourth bd sample
 (sound :arpy 5)   ; sixth arpy sample
 
 ; Use in sequences:
 (seq (sound :bd 0) (sound :bd 2) (sound :sd 1) :hh)
 ```
+
+### Layered banks — velocity layers and round-robin
+
+A bank in a JSON manifest (loaded with `samples!`) can be *layered*: instead of an
+array of files, give it layers, each the loudest velocity it covers (`vel-max`):
+
+```json
+{ "_base": "https://example.org/kit/",
+  "studio_sd": { "layers": [
+    { "vel-max": 0.4, "files": ["sd_soft_1.wav", "sd_soft_2.wav"] },
+    { "vel-max": 1.0, "files": ["sd_hard_1.wav", "sd_hard_2.wav"] } ] } }
+```
+
+```lisp
+(samples! "https://example.org/kit/manifest.json")
+(bank :studio)
+(->> (seq :sd :sd :sd :sd) (velocity "0.2 0.5 0.8 1"))   ; ghost note → accent
+```
+
+- **Layer:** the first layer whose `vel-max` ≥ the event's `velocity` (default 1); the
+  last layer if none. `velocity` still multiplies the amplitude.
+- **Round-robin:** within a layer the recording is chosen by the Tidal-compatible RNG
+  seeded with the event time in milliseconds — identical on every offline render.
+- Plain array banks work unchanged. Kits are selected with `(bank …)`; there is no
+  separate `kit` built-in (KIT1 spec decision 1).
 
 ### `bank` — drum machine prefix
 
@@ -1928,29 +2082,92 @@ Set a global prefix so bare keywords resolve to a named drum machine bank:
 (bank :RolandTR808)
 (seq :bd :sd :cp)
 
-; Clear — bare keywords use the default lookup:
+; The Dirt-Samples drums (the default before 2026-11-21):
+(bank :dirt)
+(seq :bd :sd :hh :sd)
+
+; Clear — bare drum names play the synth kit (see "Synth drum kit"):
 (bank nil)
 ```
 
 If the prefixed bank doesn't exist (e.g. a machine has no hi-hat), the keyword resolves
-via the standard fallback with no error. The active bank is shown as a badge in the status head
+via the standard fallback with no error: the synth kit for a drum name, else the plain
+sample bank. The active bank is shown as a badge in the status head
 (top of the outline column).
 
 The prefix is a session setting, like `bpm`: it persists across evaluations and page
 reloads until you change it or call `(bank nil)`. Removing a `(bank …)` line from the
 buffer does not clear it.
 
-### Built-in synthesis fallback
+### Synth drum kit
 
-These keywords always work even if samples haven't loaded yet — they are synthesized
-by the Rust/WASM engine (or the JS fallback if WASM is unavailable):
+REPuLse has a full synthesized drum kit, so a song needs no samples. Eighteen voices,
+named like the Tidal drum-machine samples so one pattern can switch between a sampled
+and the synthesized kit:
 
-| Keyword | Synthesis |
+| Name | Voice | Name | Voice |
+|---|---|---|---|
+| `:bd` | kick | `:cb` | cowbell |
+| `:sd` | snare | `:cr` | crash |
+| `:hh` | closed hi-hat | `:rd` | ride |
+| `:oh` | open hi-hat | `:sh` | shaker |
+| `:cp` | clap | `:tb` | tambourine |
+| `:rim` | rimshot | `:cl` | claves |
+| `:lt` `:mt` `:ht` | low / mid / high tom | `:cg` | conga |
+| `:zap` | laser zap | `:click` | click |
+
+> **The synth kit is the default drum kit** (since 2026-11-21). Bare drum names play it
+> without any `(bank …)`, even when sample banks of the same names have loaded, so drums
+> sound immediately, offline and identically in every export. Before this change, bare
+> `:bd :sd :hh …` played the Dirt-Samples drums once they had loaded; to get that sound
+> back, write `(bank :dirt)`.
+
+**Selecting a kit:**
+
+```lisp
+(~ "bd cp bd [cp rim]")           ; the synth kit — no bank needed
+
+(bank :dirt)                      ; the Dirt-Samples drums (the old default)
+(seq :bd :sd :hh :sd)
+
+(bank :RolandTR808)               ; a drum-machine sample kit …
+(seq :bd :synth_cp)               ; … with one synthesized clap
+
+(bank nil)                        ; back to the synth kit
+```
+
+| Form | Bare `:bd :sd :hh …` play |
 |---|---|
-| `:bd` | Sine sweep kick (150 → 40 Hz) |
-| `:sd` | Bandpass-filtered noise + sine crack |
-| `:hh` | Highpass-filtered noise, 45 ms (closed) |
-| `:oh` | Highpass-filtered noise, 350 ms (open) |
+| no `(bank …)`, `(bank nil)` or `(bank :synth)` | the synth kit |
+| `(bank :dirt)` | the Dirt-Samples bank of the same name (the synth kit while it is still loading) |
+| `(bank :RolandTR808)`, `(bank :AkaiLinn)`, … | that machine's sample; the synth kit for a drum the machine lacks |
+
+- `:synth_bd`, `:synth_cp`, … play one synthesized voice whatever bank is active.
+- `(sound :bd 2)` always plays a sample (here the third Dirt-Samples kick).
+- Keywords that are not drum names (`:arpy`, `:tabla`, `:sn`, …) play their sample bank
+  under every bank setting.
+- The four original engine drums (a sine-sweep kick, noise snare and hats — the
+  no-sample fallback before the synth kit existed) are no longer played by any pattern.
+
+**Shaping the drums** — `tune`, `tone` and `decay` act on the synthesized kit (samples
+ignore them). Each takes a number, a pattern or a signal:
+
+| Function | Range | Meaning |
+|---|---|---|
+| `tune` | −48…48 semitones | pitch of the drum |
+| `tone` | 0–1 | brightness: kick sweep and click, snare body ↔ noise, hat and cymbal high-pass, clap band, tambourine jingle; absent = the voice's default |
+| `decay` | seconds | length to silence (replaces the voice's own) |
+
+```lisp
+(bank :synth)
+(->> (seq :bd :bd :bd :bd) (tune (seq 0 0 -5 0)) (decay 0.8))
+(->> (fast 4 (seq :hh :hh :oh :hh)) (tone (range 0.2 0.9 sine)))
+(->> (seq :lt :mt :ht :lt) (tune 3))
+```
+
+**Hi-hat choke:** a closed or open hi-hat cuts a ringing open hat within about 15 ms,
+also across tracks. On a track with its own `(fx …)` the kit plays simplified JS
+voices (no choke, `tone` ignored).
 
 ### Loading external samples
 
@@ -1994,7 +2211,7 @@ by folder name. Each folder becomes one bank:
 (samples! "https://raw.githubusercontent.com/algorave-dave/samples/main/samples.json")
 ```
 
-**`sample-banks`** — returns a sorted list of every registered bank name (built-ins
+**`sample-banks`** — (`(sample-banks "tk")` lists only banks whose name contains `tk`) returns a sorted list of every registered bank name (built-ins
 plus anything loaded via `samples!`):
 
 ```lisp
@@ -2004,12 +2221,25 @@ plus anything loaded via `samples!`):
 > **Note:** the unauthenticated GitHub API allows 60 requests/hour per IP.
 > One `(samples! "github:…")` call uses exactly one API request.
 
+**Failed samples.** When a sample file cannot be fetched or decoded (a 404, a network error),
+it is not requested again until the page is reloaded, and the output line says so once per
+file, e.g.:
+
+```
+sample :qa failed to load (HTTP 404 Not Found) — it stays silent until reload
+```
+
+Decoded samples are kept in memory up to about 200 MB; beyond that the least recently played
+ones are dropped and fetched again when they next play.
+
 ---
 
 ## Available sample banks
 
 Sample banks are loaded from the **Dirt-Samples** and **Tidal Drum Machines** collections.
-They are available after a short initial network fetch.
+They are available after a short initial network fetch. The Dirt-Samples banks that share
+a name with the [synth kit](#synth-drum-kit) (`:bd :sd :hh :oh :cp :cr :cb :lt :mt :ht …`)
+play under `(bank :dirt)` or with `(sound :bd n)`; bare, those names play the synth kit.
 
 ### Dirt-Samples (classic TidalCycles sounds)
 
@@ -2088,6 +2318,10 @@ putting the pattern last:
 ; ≡ (decay 0.5 (attack 0.02 (amp 0.7 (seq :c4 :e4 :g4))))
 ```
 
+The `≡` is literal: `->>` and `->` rewrite the code into nested calls before evaluating
+it, like Clojure. So an error in a step underlines that step's function, macros work as
+steps, and a keyword works as a lookup step: `(-> {:a 1} :a)` → `1`.
+
 ### `amp` — amplitude (0.0–1.0)
 
 ```lisp
@@ -2110,9 +2344,10 @@ putting the pattern last:
 ```
 
 > **Note:** `decay`, `attack`, and `release` only affect **synthesised** sounds (note
-> keywords like `:c4`, `saw`, `square`, `sine`, `noise`). They are silently ignored for
-> **sample-based** sounds (drum keywords like `:bd`, `:sd`, `:hh`, or any `(bank …)`
-> pattern). To shorten a sample, use the `:end` key via `(->> pat (params {:end 0.5}))`
+> keywords like `:c4`, `saw`, `square`, `sine`, `noise`; `decay` also the
+> [synth drum kit](#synth-drum-kit)). They are silently ignored for
+> **sample-based** sounds (drum keywords under `(bank :dirt)` or a drum-machine `(bank …)`,
+> and other sample keywords). To shorten a sample, use the `:end` key via `(->> pat (params {:end 0.5}))`
 > instead.
 
 ### `release` — release time in seconds
@@ -2147,8 +2382,7 @@ one word:
      (synth :fm :index 4 :ratio 2)
      (amp 0.5) (attack 0.05) (decay 1.2))
 
-(->> (seq :_ :_ :_ :_)           ; timing/rest pattern drives noise hits
-     (synth :noise)
+(->> (struct "t ~ t t" (pure (noise :color :pink)))   ; noise has no pitch: t = burst
      (amp 0.5) (decay 0.08))
 ```
 
@@ -2156,10 +2390,14 @@ Available voices:
 
 | Voice                | Keyword      | Options                                                                           |
 |----------------------|--------------|-----------------------------------------------------------------------------------|
-| Sawtooth             | `:saw`       | —                                                                                 |
-| Pulse/square         | `:square`    | `:pw` 0.0–1.0 — duty cycle (default `0.5` = square wave)                        |
+| Sawtooth             | `:saw`       | Band-limited (no aliasing on high notes); [unison and oscillator parameters](#unison-and-oscillator-parameters) |
+| Pulse/square         | `:square`    | `:pw` 0.01–0.99 — duty cycle (default `0.5` = square wave); `pw-rate` / `pw-depth` move it |
+| Pulse (alias)        | `:pulse`     | Same voice as `:square`                                                           |
+| Triangle             | `:tri`       | Band-limited triangle — soft, flute-like                                          |
+| Sine                 | `:sine`      | Pure sine; takes the oscillator parameters (unison, sub-osc, glide)               |
+| Supersaw             | `:supersaw`  | `:saw` with `unison 7`, `detune 20`, `spread 0.7` — each overridable             |
 | FM synthesis         | `:fm`        | `:index` modulation depth (default `1.0`), `:ratio` mod/carrier ratio (default `2.0`) |
-| White noise          | `:noise`     | —                                                                                 |
+| Noise                | `:noise`     | `:color` `:white` (default) `:pink` `:brown` `:dust` `:lfsr`; `:density` dust impulses per second (1–2000, default 20). Noise has no pitch: every non-rest step plays a burst, the note is ignored — except by `:lfsr`, which takes its clock from it (see [Noise](#noise)) |
 | Steel-string guitar  | `:western`   | Karplus-Strong; hard pick attack, dreadnought body resonances                     |
 | Classical guitar     | `:nylon`     | Soft fingertip attack, darker timbre, treble rolloff above 3.5 kHz                |
 | Guitar (alias)       | `:guitar`    | Alias for `:western`                                                              |
@@ -2181,6 +2419,9 @@ tuning needed — just name the instrument:
 | Muted trumpet        | `:trumpet-muted` | Inharmonic ratio (√2), high index — lo-fi nasal grit                             |
 | Cup-muted trumpet    | `:trumpet-cup`   | Darker than open, brighter than harmon                                            |
 | Trombone             | `:trombone`      | Warm brass with slower 40ms attack                                                |
+| Synth brass          | `:synth-brass`   | Synthetic lo-fi brass, inharmonic ratio for grit                                  |
+| Harmon mute, stem out| `:harmon-out`    | Nasal peak around 1.1 kHz, heavy hi-cut                                           |
+| Harmon mute, stem in | `:harmon-in`     | More closed and buzzy than stem-out                                               |
 | Electric piano       | `:epiano`        | Rhodes-style; mod ratio 14×, metallic shimmer, fades naturally                   |
 | Bell                 | `:bell`          | Inharmonic ring (√2 ratio), 1.2s decay to silence                                |
 | Marimba              | `:marimba`       | Percussive; mod ratio 3.5×, 0.35s ring                                            |
@@ -2235,6 +2476,147 @@ The per-note forms `(fm :c4 :index 4)` and `(noise)` remain available when you n
 different voices on individual steps within the same `seq`. Pulse width of the square
 voice goes through `synth`: `(synth :square :pw 0.25 pat)`. (`saw` and `square` on their
 own are [signals](#signals--sine-saw-rand-perlin-segment-range); `(saw :c4)` is an error.)
+`(noise :color :pink)` takes the same options as `(synth :noise …)`.
+
+#### Noise
+
+Noise has no pitch. `(noise)` is one burst; give it a rhythm with `struct`, `euclidean`
+or `seq` instead of writing notes that would only act as triggers:
+
+```lisp
+(->> (struct "t*4" (pure (noise :color :pink))) (decay 0.3))      ; 4 soft bursts
+(->> (euclidean 3 8 (noise :color :dust :density 200)) (decay 0.3)) ; crackle, 3 of 8
+(->> (seq (noise) :_ (noise :color :brown) (noise)) (decay 0.2))   ; mixed colours
+```
+
+`struct` needs `(pure (noise …))`: the noise map is a value, not a pattern.
+
+| `:color` | Sound | Pitch |
+|---|---|---|
+| `:white` (default) | even hiss | ignored |
+| `:pink` | softer, less top end (−3 dB/octave) | ignored |
+| `:brown` | low rumble (−6 dB/octave) | ignored |
+| `:dust` | single random clicks, `:density` per second | ignored |
+| `:lfsr` | gritty digital ("chip") noise | **sets the clock** (16 × the note's frequency; without a note 8 kHz): low notes crunch, high notes hiss |
+
+`:lfsr` is the one colour where `(synth :noise …)` on notes is meaningful:
+
+```lisp
+(->> (seq :c1 :c3 :c5 :c7) (synth :noise :color :lfsr) (decay 0.3)) ; dull → bright
+```
+
+It changes the brightness, not a playable pitch — there is no melody in it.
+
+### Unison and oscillator parameters
+
+The oscillator voices (`:saw :square :pulse :tri :sine :supersaw`) take these per-event
+parameters. Like `amp`, each accepts a number, a pattern or a signal (sampled at the
+onset), and `(f v)` returns a transformer.
+
+| Function | Range | Default | Meaning |
+|---|---|---|---|
+| `unison` | 1–7 | 1 | number of oscillators; loudness stays about the same |
+| `detune` | 0–200 cents | 20 when `unison` > 1 | total width of the unison stack |
+| `spread` | 0–1 | 0 (supersaw 0.7) | stereo width of the stack; `0` = mono |
+| `sub-osc` | 0–1 | 0 | sine one octave below; `0.5` sits 6 dB under the note's fundamental |
+| `pw` | 0.01–0.99 | 0.5 | pulse width of `:square` / `:pulse` |
+| `pw-rate` | 0–20 Hz | 0 | pulse-width LFO rate |
+| `pw-depth` | 0–0.49 | 0 | pulse-width LFO depth |
+| `sync` | 1–16 | off | hard sync of `:saw` / `:pulse`: brighter formant, same pitch |
+| `glide` | 0–5 s | 0 | slide from the previous note of the track (see [Synth instruments](#synth-instruments)) |
+
+```lisp
+;; Wide supersaw chord
+(->> (chord :minor :a3) (synth :supersaw) (detune 18) (spread 0.8))
+
+;; Fat bass: three saws plus a sub-oscillator
+(->> (seq :a1 :a1 :c2 :e1) (synth :saw) (unison 3) (detune 12) (sub-osc 0.5))
+
+;; Pulse-width modulation, one sweep per second
+(->> (seq :c3) (synth :pulse) (pw 0.5) (pw-rate 1) (pw-depth 0.4) (decay 4))
+
+;; Hard sync: same pitch, each note brighter
+(->> (seq :c3 :c3 :c3 :c3) (synth :saw) (sync (seq 2 3 4.5 6)))
+```
+
+`sub-osc` is the sub-oscillator; `sub` stays the arithmetic function
+(`(sub 12 (seq :c4 :e4))`). Unison start phases are fixed, so every note of a unison bass
+has the same weight and offline renders are identical. `sync`, `pw-rate` and `pw-depth`
+need the WASM engine: on a track with its own `(fx …)` the voice plays its JS fallback
+with a static pulse width and no sync.
+
+### Synth instruments
+
+Named instruments built from the oscillator voices, the per-event filter and the
+envelopes. Each one is a set of ordinary parameters; any parameter you write yourself
+wins over the preset, e.g. `(->> (chord :major :f3) (synth :pad) (lpf 900))` uses 900 Hz.
+
+| Voice | Base | Character | Example |
+|---|---|---|---|
+| `:acid` | saw | squelchy resonant bass, fast filter envelope; reacts to `accent` | `(->> (seq :c2 :c2 :eb2 :g1) (synth :acid))` |
+| `:reese` | 2 saws, 30 cents | dark, beating bass | `(->> (seq :c2 :eb2 :g1 :bb1) (synth :reese))` |
+| `:sub-bass` | sine | clean sub with light saturation | `(->> (seq :c1 :_ :g1 :_) (synth :sub-bass))` |
+| `:fm-bass` | FM | plucky FM bass | `(->> (seq :c2 :c2 :eb2 :f2) (synth :fm-bass))` |
+| `:wobble` | 2 saws | cutoff LFO, 4 wobbles per cycle | `(->> (seq :a1) (synth :wobble) (decay 2))` |
+| `:lead` | saw | bright lead with vibrato | `(->> (seq :c4 :eb4 :g4 :bb4) (synth :lead))` |
+| `:sync-lead` | saw, sync 4.5 | hard-synced, bright and torn | `(->> (seq :c4 :g4) (synth :sync-lead))` |
+| `:pluck` | saw | short pluck, snappy filter envelope | `(->> (scale :minor :c4 (seq 0 2 4 7)) (synth :pluck))` |
+| `:theremin` | sine | portamento and wide vibrato | `(->> (seq :c4 :g4 :e4 :c5) (synth :theremin))` |
+| `:reed` | 2 pulses | nasal, band-passed | `(->> (seq :c4 :d4 :e4) (synth :reed))` |
+| `:pad` | 3 saws | slow attack, soft low-pass | `(->> (chord :major :f3) (synth :pad))` |
+| `:strings` | 5 saws | slow attack, string ensemble | `(->> (chord :minor7 :d3) (synth :strings))` |
+| `:sweep-pad` | 7 saws | slow filter sweep | `(->> (chord :minor :a2) (synth :sweep-pad))` |
+| `:brass-pad` | 3 saws | short filter swell, brassy | `(->> (chord :major :bb2) (synth :brass-pad))` |
+
+The preset values:
+
+| Voice | Oscillator | Filter | Filter envelope / LFO | Amp | Other |
+|---|---|---|---|---|---|
+| `:acid` | — | `lpf 400` `resonance 12` | `lp-env 3.5` `lp-attack 0.003` `lp-decay 0.18` | `attack 0.003` `decay 0.35` | — |
+| `:reese` | `unison 2` `detune 30` `spread 0.3` | `lpf 500` `resonance 1.5` | — | `attack 0.01` `decay 2.5` | — |
+| `:sub-bass` | — | — | — | `attack 0.005` `decay 0.8` | `shape 0.3` |
+| `:fm-bass` | `:index 3` `:ratio 1` | `lpf 300` `resonance 1` | `lp-env 3` `lp-attack 0.002` `lp-decay 0.12` | `attack 0.002` `decay 0.5` | — |
+| `:wobble` | `unison 2` `detune 15` | `lpf 400` `resonance 6` | `lp-rate 4` `lp-depth 2` | `attack 0.01` `decay 2.0` | — |
+| `:lead` | — | `lpf 2800` `resonance 2` | — | `attack 0.01` `decay 0.8` | `vib 5.5` `vib-mod 0.15` |
+| `:sync-lead` | `sync 4.5` | `lpf 6000` `resonance 1` | — | `attack 0.005` `decay 0.8` | — |
+| `:pluck` | — | `lpf 500` `resonance 1.2` | `lp-env 4` `lp-attack 0.001` `lp-decay 0.12` | `attack 0.001` `decay 0.4` | — |
+| `:theremin` | — | — | — | `attack 0.06` `decay 1.5` | `glide 0.08` `vib 5` `vib-mod 0.25` |
+| `:reed` | `pw 0.3` `unison 2` `detune 14` `spread 0.2` | `bpf 1100` `bpq 0.8` | — | `attack 0.03` `decay 1.2` | — |
+| `:pad` | `unison 3` `detune 18` `spread 0.6` | `lpf 1400` `resonance 0.8` | — | `attack 0.35` `decay 4.0` | — |
+| `:strings` | `unison 5` `detune 22` `spread 0.8` | `lpf 3200` `hpf 180` | — | `attack 0.3` `decay 4.0` | — |
+| `:sweep-pad` | `unison 7` `detune 20` `spread 0.9` | `lpf 300` `resonance 3` | `lp-env 4` `lp-attack 1.2` `lp-decay 2.0` | `attack 0.4` `decay 6.0` | — |
+| `:brass-pad` | `unison 3` `detune 10` `spread 0.4` | `lpf 500` `resonance 1` | `lp-env 2.5` `lp-attack 0.08` `lp-decay 0.6` | `attack 0.06` `decay 3.0` | — |
+
+`decay` is the time to silence, hence the long pad values.
+
+**`glide`** — portamento in seconds. A note slides from the previous note of the same
+track; in a chord, each voice slides from the nearest note of the previous chord.
+`(stop)` resets it, so the first note after a restart does not slide. Glide works on the
+oscillator voices and the instruments built on them (not on FM, string, drum or sample
+voices). `:theremin` glides by default; `(glide 0)` turns it off.
+
+```lisp
+;; Only the third note slides (C2 → E♭2)
+(->> (seq :c2 :c2 :eb2 :g1) (synth :acid) (glide (seq 0 0 0.06 0)))
+```
+
+**`accent`** — 0–1, for any voice: `amp × (1 + 0.5·accent)`; with a filter envelope the
+filter also opens further (`lp-env + 1.5·accent`) and closes faster.
+
+```lisp
+(->> (seq :c2 :c2 :c2 :c2) (synth :acid) (accent (seq 0 1 0 0)))
+```
+
+**`lp-rate` / `lp-depth`** — a cutoff LFO on the low-pass: `lp-rate` periods per cycle
+(0–64), `lp-depth` octaves (0–4). It is locked to the cycle, so a wobble stays in time
+across notes. Needs `lpf`.
+
+```lisp
+(->> (seq :a1 :a1) (synth :saw) (lpf 400) (resonance 6) (lp-rate 4) (lp-depth 2) (decay 2))
+```
+
+An unknown voice name still plays a sine, with a warning in the output line:
+`(->> (seq :c4) (synth :trii))` → `Warning: unknown synth voice :trii — did you mean :tri?`.
 
 ### Named voice presets
 
@@ -2285,7 +2667,7 @@ is `begin`–`end`:
 ### Sample slicing
 
 Cut, rearrange and time-fit samples the Tidal way. These work on **samples only**
-(`(sound :bank n)`, sample keywords such as `:bd` when a bank is loaded); synth voices
+(`(sound :bank n)`, sample keywords such as `:arpy`, or `:bd` under `(bank :dirt)`); synth voices
 ignore them.
 
 | Function | What it does | Event keys |
@@ -2462,7 +2844,7 @@ the cutoff; the curve is a straight line in octaves (an exponential sweep in Hz)
 ```
 
 Pitch modulation works on the tonal synth voices (`:sine` notes, `:saw`, `:square`, `:fm`
-and its presets such as `:epiano`) and on samples. The synthesized drums (`:bd :sd :hh :oh`),
+and its presets such as `:epiano`) and on samples. The synth kit drums (`:bd :sd :hh …`; use `tune`),
 `:noise`, the plucked voices (`:guitar`, `:nylon`, …) and `defsynth` voices ignore it.
 
 **Vowel, coarse, DJ filter:**
@@ -2643,7 +3025,11 @@ Default tempo is **120 BPM** (one cycle = one bar = 4 beats = 2 seconds).
 (stack (bpm 160) (seq :bd :sd)) ; set tempo and play together
 ```
 
-`bpm` takes effect immediately, even mid-playback. One cycle = one bar regardless of BPM.
+`bpm` takes effect at the next bar, even mid-playback: the bars already scheduled (about
+0.2 s ahead) keep the old tempo and the next bar starts exactly where the last one ends — no
+gap when you slow down, no burst of catch-up bars when you speed up. One cycle = one bar
+regardless of BPM. The tap button, MIDI clock sync and the status head's BPM field change the
+tempo the same way.
 
 ### `tap!` — tap tempo
 
@@ -2816,6 +3202,16 @@ solo, remove the `:solo` from the form (or press **S** again).
 ```
 
 Each entry is `[pattern cycles]`. After the total duration the arrangement loops.
+Durations may be fractional (`3/2`, `1.5`): a section that ends mid-cycle is cut there
+and the next one starts at that point. Notes never outlast their section: a note that
+would ring past the section's end is shortened to end there, so a pad does not overlap
+the next section. A duration of 0 or less is an error
+(`arrange: duration must be positive, got 0`).
+
+```lisp
+(arrange [[(seq :a) 3/2] [(seq :b) 1/2]])   ; a for 1½ cycles, b for ½, loop every 2
+                                            ; ≡ (slow 2 (~ "a@2 a b"))
+```
 
 ### `play-scenes` — one cycle per section
 
@@ -3133,7 +3529,8 @@ unique; a project has at most 32 buffers. Each buffer keeps its own undo history
 
 None of these actions open a browser pop-up, so playback keeps running while you use them.
 REPuLse's own confirmations (import, history, snippets, plugin loading) are in-page dialogs for
-the same reason: **Enter** confirms, **Esc** cancels.
+the same reason: **Enter** confirms (or activates the focused button — Enter on **Cancel**
+cancels), **Esc** cancels, **Tab** stays inside the dialog.
 
 ### `use`
 
@@ -3195,8 +3592,8 @@ Error: too many buffers (max 32)
 ## Effect plugins
 
 REPuLse has a built-in effect chain between the synthesis engine and the audio output.
-Fifteen effects are loaded automatically at startup, all silent/inactive by default.
-Control them with the `fx` built-in.
+Twenty-three effects are loaded automatically at startup. All of them except the master
+`compressor` are silent/inactive until the code names them. Control them with the `fx` built-in.
 
 ### `fx` — effect control
 
@@ -3217,6 +3614,31 @@ Control them with the `fx` built-in.
 ; Remove an effect from the chain
 (fx :remove :delay)
 ```
+
+A positional value and named parameters can be combined, at top level as inside a track:
+`(fx :reverb 0.4 :dry 1)` sets both. Rationals such as `3/16` and keywords such as `:hall`
+work for every parameter of the effects listed below.
+
+**Unknown parameters and values are reported.** The effects added or changed in Phase FX1
+(`eq`, `limiter`, `gate`, `filter`, `reverb`, `delay`, `flanger`, `vibrato`, `auto-pan`,
+`ring-mod`, `width`) know their parameters. A wrong name or value is not sent; the output line
+ends with a warning and the editor underlines the parameter:
+
+```
+(fx :reverb :room 0.8)
+  → Warning: fx :reverb has no parameter :room — parameters: wet, dry, type, decay, size, damp, predelay
+(fx :reverb :type :cathedral :wet 0.4)
+  → Warning: fx :reverb :type has no value :cathedral — values: classic, room, hall, plate, spring, gated, reverse
+(fx :eq 3)
+  → Warning: fx :eq takes no positional value — parameters: low, low-freq, mid, mid-freq, mid-q, mid2, mid2-freq, mid2-q, high, high-freq
+(fx :delay :time :fast)
+  → Warning: fx :delay :time expects a number — got :fast
+(fx :limiter)
+  → Warning: fx :limiter needs a parameter — parameters: ceiling, release
+```
+
+Effect names themselves are not checked (effects load asynchronously at startup):
+`(fx :flangr 0.5)` stays silent.
 
 ### `master` — the global chain in one block
 
@@ -3283,50 +3705,192 @@ To remove a per-track effect, re-evaluate the `track` form without the `(fx ...)
 
 > **Warning:** `fx` **must** be inside a `->>` pipeline to act as a per-track effect. Writing it as a bare argument — `(track :k (fx :reverb 0.3) (seq :bd :sd))` — will instead modify the **global** effect chain, not the track's private chain.
 
+### Mixing
+
+EQ the tracks that clash, then EQ and limit the sum on the master:
+
+```lisp
+(bpm 120)
+(track :kick  (seq :bd :_ :bd :_))
+(track :bass  (->> (seq :c2 :_ :eb2 :_) (synth :saw)
+                   (fx :eq :low 3 :low-freq 80 :mid -4 :mid-freq 400 :mid-q 1.5)))
+(track :hats  (->> (fast 8 (seq :hh)) (fx :eq :low -12 :low-freq 400 :high 2)))
+(track :snare (->> (seq :_ :sd :_ :sd) (fx :gate :threshold -35 :release 0.08)))
+(master
+  (fx :eq :high 2 :high-freq 8000)
+  (fx :limiter -1))
+```
+
+The `limiter` is off until you name it. Put it on the master, where it is always last in the
+chain: no output sample then exceeds its ceiling, however loud the tracks get. It delays the
+signal by 5 ms; on the master that is inaudible, on a single track it moves that track 5 ms late
+against the others.
+
+Since FX1 the synthesis engine no longer clips its output at ±1 (it keeps a ±8 safety bound),
+so a hot synth mix reaches the master chain unclipped and a limiter can catch it. Without a
+limiter the overs are clipped by the audio output, and `(export …)` still clips at ±1 when it
+writes the WAV.
+
 ### Built-in effects
 
 #### `reverb` — convolution reverb
 
-Stereo convolution reverb using a procedurally generated impulse response.
+Stereo convolution reverb with seven generated room types. The impulse response is
+regenerated (debounced, cached and crossfaded) when `type`, `decay`, `size` or `damp` change,
+so changing them while it plays does not cut the tail.
 
 | Parameter | Key | Default | Range |
 |-----------|-----|---------|-------|
-| Wet mix   | `wet` / positional | `0.3` | 0–1 |
+| Wet mix   | `wet` / positional | `0` | 0–1 |
+| Dry level | `dry` | `0.8` | 0–1 |
+| Type      | `type` | `:classic` | `:classic` `:room` `:hall` `:plate` `:spring` `:gated` `:reverse` |
+| Decay     | `decay` | per type | 0.1–10 s — see the type table |
+| Size      | `size` | per type | 0–1: spacing of the first reflections and build-up time |
+| Damping   | `damp` | per type | 0–1: how fast the highs die away (0 = not at all) |
+| Pre-delay | `predelay` | `0` | 0–0.25 s: gap before the reverb starts |
+
+| Type | `decay` means | default `decay` | default `size` | default `damp` |
+|---|---|---|---|---|
+| `classic` | length of the response (the reverb before FX1) | 2.5 | — | 0 |
+| `room` | reverberation time | 0.6 | 0.3 | 0.5 |
+| `hall` | reverberation time | 3.0 | 0.8 | 0.35 |
+| `plate` | reverberation time | 1.8 | — | 0.2 |
+| `spring` | reverberation time; `size` = echo spacing | 2.0 | 0.5 | 0 |
+| `gated` | gate time: the tail stops abruptly after it | 0.3 | — | 0.2 |
+| `reverse` | swell length: the reverb rises and stops | 1.0 | — | 0.2 |
+
+Parameters you don't set follow the type. For `room`, `hall` and `plate`, `decay` is the
+reverberation time of the low end; strong damping makes the full-band tail a little shorter.
 
 ```lisp
-(fx :reverb 0.4)
+(fx :reverb 0.4)                                          ; the classic reverb, wet 0.4
+(fx :reverb :type :hall :decay 3.5 :damp 0.4 :predelay 0.02 :wet 0.3)
+(track :snare (->> (seq :_ :sd :_ :sd) (fx :reverb :type :gated :decay 0.4 :wet 0.6)))
+(track :snare (->> (seq :_ :sd :_ :sd) (fx :reverb :type :reverse :decay 0.8 :wet 0.5)))
 ```
+
+The size parameter is `size`; `room` is not a reverb parameter (it is the per-event send
+level, see [Sends & orbits](#sends--orbits)).
 
 #### `delay` — tape delay
 
-Stereo feedback delay with a tempo-synced default time.
+Stereo feedback delay with tempo sync, three modes, multi-tap and filters in the repeats.
 
 | Parameter | Key | Default | Description |
 |-----------|-----|---------|-------------|
-| Wet mix   | `wet` / positional | `0.0` | Overall delay level |
-| Delay time | `time` | `0.375` s | Delay in seconds |
-| Feedback  | `feedback` | `0.35` | Repeat amount (max 0.95) |
+| Wet mix   | `wet` / positional | `0` | Echo level |
+| Delay time | `time` | `0.375` s | Delay in seconds (0.001–4) |
+| Sync      | `sync` | unset | Delay time in cycles, e.g. `3/16`; wins over `time` while set |
+| Feedback  | `feedback` | `0.35` | Repeat amount (0–0.95) |
+| Mode      | `mode` | `:stereo` | `:stereo` (each side echoes on its own side), `:mono` (centred echoes), `:ping-pong` (echoes alternate left, right, left …) |
+| Taps      | `taps` | unset | Up to 4 positions in cycles; wins over `time` and `sync`. The longest tap feeds back, so the whole pattern repeats |
+| Low cut   | `lowcut` | `20` Hz (off) | High-pass in the repeats (20–2000 Hz) |
+| High cut  | `highcut` | `20000` Hz (off) | Low-pass in the repeats (500–20000 Hz): each repeat gets darker |
 
 ```lisp
-(fx :delay 0.4)
-(fx :delay :wet 0.4 :time 0.25 :feedback 0.5)
+(fx :delay 0.4)                                            ; wet 0.4, 375 ms
+(fx :delay :wet 0.4 :time 0.25 :feedback 0.5)              ; time in seconds
+(fx :delay :sync 3/16 :mode :ping-pong :feedback 0.5 :wet 0.35)
+(fx :delay :taps [1/8 3/8] :feedback 0 :wet 0.6)          ; two echoes per hit
+(fx :delay :time 0.3 :feedback 0.7 :highcut 1500 :wet 0.4) ; dub-style darkening repeats
 ```
+
+- **The positional value is the wet level** (since FX1). Before FX1 `(fx :delay 0.25)` set the
+  time and was silent on its own; a session that used it for the time now writes
+  `(fx :delay :time 0.25 …)` (or `:sync`).
+- **Sync follows the tempo.** With `:sync` (or `:taps`) a BPM change moves the echoes to the new
+  grid: the delay time glides there over 50 ms, which bends the repeats briefly, as on a tape
+  delay. At 120 BPM `:sync 3/16` is 375 ms, at 90 BPM 500 ms.
+- **Always write taps as a vector**: `:taps [1/8]`. A bare `:taps 1/8` reads as the two taps 1
+  and 8.
+- Changing `mode`, `taps` or switching the cuts on or off rebuilds the delay and may click.
+- Times longer than 4 s are clamped to 4 s.
 
 #### `filter` — biquad filter
 
-A `BiquadFilterNode` with configurable type, cutoff, and resonance.
+A `BiquadFilterNode` with configurable type, cutoff, resonance and gain.
 
 | Parameter | Key | Default | Description |
 |-----------|-----|---------|-------------|
-| Cutoff freq | `freq` / positional | `20000` Hz | Filter cutoff (20000 = fully open) |
-| Resonance   | `q`   | `1.0` | Q / resonance |
-| Filter type | `type` | `"lowpass"` | `"lowpass"` `"highpass"` `"bandpass"` `"notch"` |
+| Cutoff freq | `freq` / positional | `20000` Hz | Filter cutoff or centre (20–20000; 20000 = fully open) |
+| Resonance   | `q`   | `1.0` | Q / resonance (0.001–30) |
+| Filter type | `type` | `:lowpass` | `:lowpass` `:highpass` `:bandpass` `:notch` `:lowshelf` `:highshelf` `:peaking` `:allpass` (keyword or string) |
+| Gain        | `gain` | `0` dB | −24…24 dB, for `:lowshelf`, `:highshelf` and `:peaking` |
 
 ```lisp
-(fx :filter 800)                          ; lowpass at 800 Hz
-(fx :filter :freq 1200 :q 4)             ; resonant lowpass
-(fx :filter :freq 500 :type "highpass")  ; highpass
+(fx :filter 800)                              ; lowpass at 800 Hz
+(fx :filter :freq 1200 :q 4)                 ; resonant lowpass
+(fx :filter :freq 500 :type :highpass)       ; highpass
+(fx :filter :type :peaking :freq 3000 :gain 12 :q 2)   ; nasal boost
 ```
+
+`(fx :off :filter)` is an exact bypass for every type (before FX1 a bypassed high-pass was
+close to silent).
+
+#### `eq` — parametric EQ
+
+Low shelf, two peaking bands and a high shelf. Flat (an exact identity) at its defaults. No
+positional value.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Low shelf gain | `low` | `0` dB | −24…24 dB |
+| Low shelf corner | `low-freq` | `100` Hz | 20–1000 Hz |
+| Mid band gain | `mid` | `0` dB | −24…24 dB |
+| Mid band centre | `mid-freq` | `1000` Hz | 100–8000 Hz |
+| Mid band Q | `mid-q` | `1` | 0.1–10 |
+| Second mid gain | `mid2` | `0` dB | −24…24 dB |
+| Second mid centre | `mid2-freq` | `3000` Hz | 200–16000 Hz |
+| Second mid Q | `mid2-q` | `1` | 0.1–10 |
+| High shelf gain | `high` | `0` dB | −24…24 dB |
+| High shelf corner | `high-freq` | `8000` Hz | 1000–20000 Hz |
+
+A shelf reaches half its gain at its corner frequency and the full gain about two octaves
+beyond it.
+
+```lisp
+(track :bass (->> (seq :c2 :_ :eb2 :_) (synth :saw) (fx :eq :low 9 :low-freq 120)))
+(track :bass (->> (seq :c2 :_ :eb2 :_) (synth :saw) (fx :eq :mid -12 :mid-freq 800 :mid-q 2)))
+(master (fx :eq :high 2 :high-freq 8000))
+```
+
+#### `limiter` — look-ahead peak limiter
+
+No output sample exceeds the ceiling. Inactive until named (it is not on by default).
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Ceiling | `ceiling` / positional | `-1` dBFS | −24…0 dBFS |
+| Release | `release` | `0.1` s | 0.01–1 s: time to recover after a peak |
+
+```lisp
+(master (fx :limiter -1))
+(master (fx :limiter :ceiling -3 :release 0.05))
+```
+
+The limiter looks 5 ms ahead, so it delays the signal by 5 ms. It is always last in the chain.
+The ceiling applies to sample values, not to inter-sample (true) peaks.
+
+#### `gate` — noise gate
+
+Opens above the threshold, stays open for `hold` after the level drops, then closes. No
+latency. Inactive until named.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Threshold | `threshold` / positional | `-40` dBFS | −80…0 dBFS |
+| Attack | `attack` | `0.001` s | 0.0001–0.1 s: opening time |
+| Hold | `hold` | `0.05` s | 0–2 s |
+| Release | `release` | `0.1` s | 0.005–2 s: closing time |
+| Range | `range` | `-80` dB | −80…0 dB: gain while closed (−80 ≈ silent; −12 makes it an expander) |
+
+```lisp
+(track :snare (->> (seq :_ :sd :_ :sd) (fx :gate :threshold -35 :release 0.08)))
+(track :snare (->> (seq :_ :sd :_ :sd) (fx :reverb 0.6) (fx :gate :threshold -30 :release 0.05)))
+```
+
+The gate sits before the other effects in the master chain; per track it is where you write it,
+so a gate after a reverb cuts the reverb tail.
 
 #### `compressor` — dynamics compressor
 
@@ -3416,6 +3980,38 @@ Amplitude modulation at low frequencies — the sound pulses rhythmically.
 (fx :tremolo :depth 0.8 :rate 6)
 (fx :tremolo :shape "square")
 ```
+
+#### `flanger` — flanger
+
+A short modulated delay with feedback: the "jet" sweep. The dry signal stays at 1; `wet`
+adds the delayed signal (as in `chorus`).
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Wet mix | `wet` / positional | `0` | 0–1 |
+| Rate | `rate` | `0.25` Hz | 0.01–10 Hz: sweep speed |
+| Depth | `depth` | `0.7` | 0–1: the delay moves between `delay·(1 − depth)` and `delay·(1 + depth)` |
+| Delay | `delay` | `0.002` s | 0.0005–0.010 s: centre delay |
+| Feedback | `feedback` | `0` | −0.95…0.95: resonance; negative values invert the comb |
+
+```lisp
+(track :pad (->> (seq :c3 :g3) (synth :saw) (fx :flanger :rate 0.25 :depth 0.7 :feedback 0.6 :wet 0.8)))
+```
+
+#### `vibrato` — pitch vibrato
+
+Wobbles the pitch of the whole track. Fully wet while active; inactive until named.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Depth | `depth` / positional | `20` cents | 0–100 cents up and down |
+| Rate | `rate` | `5` Hz | 0.5–20 Hz |
+
+```lisp
+(track :lead (->> (seq :a4) (synth :saw) (fx :vibrato :rate 5 :depth 50)))
+```
+
+For a per-note vibrato use the per-event `vib` parameter instead.
 
 #### `overdrive` — soft-clip distortion
 
@@ -3600,17 +4196,75 @@ so the duck is perfectly in time regardless of BPM, with zero look-ahead latency
 > over `release` seconds. The automation is written directly onto the Web Audio gain
 > parameter, so it is sample-accurate.
 
+#### `auto-pan` — equal-power auto-pan
+
+Moves the sound between left and right at constant power (no level dip in the middle).
+Inactive until named.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Depth | `depth` / positional | `1` | 0–1 (1 = fully left to fully right) |
+| Rate | `rate` | `1` Hz | 0.01–20 sweeps per second |
+| Sync | `sync` | unset | Length of one sweep in cycles; wins over `rate` while set and locks to the cycle grid |
+| Shape | `shape` | `:sine` | `:sine` `:tri` `:square` |
+
+```lisp
+(track :hats (->> (fast 8 (seq :hh)) (fx :auto-pan :sync 1)))    ; centre → right → centre → left, once per cycle
+(track :hats (->> (fast 8 (seq :hh)) (fx :auto-pan :rate 0.5 :shape :tri)))
+```
+
+Each sweep starts in the centre moving right. A synced auto-pan follows BPM changes: it
+restarts on the next sweep boundary of the new grid.
+
+#### `ring-mod` — ring modulator
+
+Multiplies the signal by a carrier: metallic, bell-like sum and difference tones.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Mix | `mix` / positional | `0` | 0–1: crossfade from dry to modulated |
+| Frequency | `freq` | `440` Hz | 0.1–5000 Hz |
+| Shape | `shape` | `:sine` | `:sine` `:tri` `:square` `:saw` |
+
+```lisp
+(track :lead (->> (seq :a4 :e4) (synth :saw) (fx :ring-mod :freq 220 :mix 1)))
+```
+
+#### `width` — stereo width
+
+Scales the side (L − R) signal: 0 = mono, 1 = unchanged, 2 = side level doubled. `haas`
+delays the right channel and widens mono material.
+
+| Parameter | Key | Default | Range |
+|-----------|-----|---------|-------|
+| Width | `width` / positional | `1` | 0–2 |
+| Haas delay | `haas` | `0` ms | 0–30 ms |
+
+```lisp
+(master (fx :width 1.4))
+(track :hats (->> (seq :hh :_ :hh :_) (fx :width :haas 12)))
+```
+
+- Values above 1 raise the level of out-of-phase content and make the mix less mono-compatible.
+- **Per track, `width` only widens what is already stereo.** A track's sound arrives in the
+  centre unless its events are panned (`(pan …)`), and a centred sound has no side signal to
+  scale. Use `(pan …)` on the events or `:haas`. On the master it works wherever tracks are
+  panned.
+
 ### Effect chain order
 
-The default signal chain is:
+The master signal chain is:
 ```
-synthesis → compressor → reverb → delay → filter → dattorro-reverb
-         → chorus → phaser → tremolo → overdrive → bitcrusher → sidechain
-         → distort → amp-sim → waveshape → cab → output
+synthesis → gate → eq → compressor → reverb → delay → filter → dattorro-reverb
+         → chorus → flanger → vibrato → phaser → tremolo → ring-mod
+         → overdrive → bitcrusher → sidechain → distort → amp-sim → waveshape → cab
+         → [plugins you load] → auto-pan → width → limiter → output
 ```
 
-`cab` sits after the distortion-family effects so amp chains can finish with speaker
-coloration.
+The order is fixed, whatever order the effects are written in (or load in): gate and EQ before
+the compressor, the stereo tools and the limiter last. `cab` sits after the distortion-family
+effects so amp chains can finish with speaker coloration. Per-track chains run in the order
+written in the `->>` pipeline.
 
 Use `(fx :remove :name)` to take an effect out of the chain entirely.
 Use `(fx :off :name)` / `(fx :on :name)` for transparent bypass without removing.
@@ -4136,13 +4790,22 @@ output panel after `freesound!` completes to see which keywords were registered.
 
 REPuLse automatically saves all session state to `localStorage` and restores it on every page reload. No explicit save action is needed.
 
+The save runs about one second after the last change (an edit, a tempo change, a buffer
+switch) and when the page is closed or reloaded; playback alone never writes, and an unchanged
+session is not rewritten. When the browser refuses the write (storage full), the output line
+says once per page load:
+
+```
+session not saved — browser storage is full. Export the project to keep your work.
+```
+
 ### What is persisted
 
 | State | Notes |
 |-------|-------|
 | Project buffers | Every buffer's text, which buffer is `main`, and the active tab |
 | BPM | Current tempo |
-| FX chain | Effect names, parameters, bypass state |
+| FX chain | Not stored separately: the `(fx …)` / `(master …)` forms in the code are the source of truth |
 | Bank prefix | Active `(bank :Name)` prefix |
 | External sample repos | URLs loaded via `(samples! ...)` |
 | Track mute/solo state | Lives in the code as `:mute` / `:solo` flags (Phase WS5). An older session's `:muted` list is migrated into `:mute` flags on load; new sessions don't write it |
@@ -4489,10 +5152,17 @@ The toolbar provides multiple ways to narrow the list:
 | **Search box** | Client-side filter by title, description, or code content |
 | **Tag dropdown** | Filter by genre/role tag |
 | **Sort dropdown** | `★ top rated` (default) · `🕐 newest` · `📈 uses` · `🔥 trending` |
-| **Author input** | Server-side filter by author display name (debounced, 400 ms) |
+| **Author input** | Filter by author name (debounced, 400 ms); case-insensitive substring |
 
 Top rated sorts by average rating first, then rating count. Trending score uses
 a time-decay formula based on weighted rating and usage.
+
+Signed in, sort and author filter are applied by the server. Without an account the built-in
+library is filtered and sorted in the browser — no refetch: **newest** by creation date,
+**uses** and **trending** by usage count (snippets without the field keep their order).
+Typing in the toolbar keeps its focus when the list reloads, and a slow earlier response never
+replaces a newer one. When the library cannot be loaded, the panel says
+`could not load the snippet library` with a **retry** button.
 
 ### Preview and insert
 
@@ -4505,6 +5175,21 @@ Each card has three action buttons:
 | `↓ insert` | Appends the snippet code to the editor and triggers `(upd)`; increments usage counter |
 
 Insert warns you if the snippet's track name already exists in your session.
+
+**What a preview may run.** A preview evaluates the snippet in a sandbox. Built-ins without
+side effects run normally, and so do the ones the sandbox handles itself (`track`, `fx`, `bpm`
+and the tempo, `song` / `play-from` (ignored), `stop`, `mute!` …, `samples!` / `load-plugin` /
+`bus` (skipped), `master` (ignored), `defsynth`, `tween` …). Every other built-in with a side
+effect fails the preview instead of running — for example `restore!`, `snapshot!`,
+`delete-snapshot!`, `rename-snapshot!`, `reset!`, `upd`, `tap!`, `export`, `midi-export`,
+`midi-map`, `midi-out`, `midi-clock-out!`, `midi-sync!`, `freesound!`, `freesound-key!`,
+`history` and `ai`. The card turns red and shows, e.g.:
+
+```
+restore! is not available in snippet previews
+```
+
+`↓ insert` is not affected: inserted code runs like anything you type.
 
 ### Star and report
 
@@ -4522,7 +5207,11 @@ Click **+ share** in the snippet panel toolbar to open the submit modal:
 1. Fill in **Title** (required), Description, Tags (comma-separated), and BPM (pre-filled from current session)
 2. The **Code preview** shows what will be submitted (current editor content)
 3. Click **submit** — on success the panel refreshes and a toast confirms the submission
-4. Close at any time with **cancel**, **Escape**, or clicking outside the modal
+4. Close at any time with **cancel**, the **×** button, **Escape**, or clicking outside the modal.
+   Escape closes only the modal — the snippet panel behind it stays open. Tab stays inside
+   the modal while it is open.
+
+BPM accepts 20–640, the same range as `(bpm …)`; other values are clamped.
 
 ### Lisp built-in
 
@@ -4675,8 +5364,10 @@ Error: Unterminated list
 Error: seq is not a function  (when called wrong)
 ```
 
-Typo detection uses Levenshtein distance — if your symbol is within 3 edits of a known
-name, a suggestion is shown.
+Typo detection uses Levenshtein distance, and the allowed distance grows with the length of
+the name you typed: 1 edit for names of up to 4 letters, 2 for up to 8, 3 for longer ones.
+`(palindrom …)` suggests `palindrome` and `(stakc …)` suggests `stack`, while `(sqe …)` (two
+edits from `seq`, three letters) reports `Undefined symbol: sqe` with no suggestion.
 
 Unknown sound names are reported as warnings rather than errors — the code still plays:
 

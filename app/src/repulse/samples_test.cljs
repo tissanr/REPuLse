@@ -125,3 +125,60 @@
             {:id 4 :start 2.0 :end 3.0}]]
     (is (= {:choke [1 3] :self-stop 2.0} (samples/cut-plan vs 0.5))))
   (is (= {:choke [] :self-stop nil} (samples/cut-plan [] 1.0))))
+
+;;; ── KIT1: velocity layers + round-robin ──────────────────────────────
+
+(def ^:private fixture-layers
+  [{:vel-max 0.4 :urls ["soft1.wav" "soft2.wav" "soft3.wav"]}
+   {:vel-max 1.0 :urls ["hard1.wav" "hard2.wav" "hard3.wav"]}])
+
+(deftest parse-layers-sorts-and-prefixes
+  (let [ls (samples/parse-layers
+            {"layers" [{"vel-max" 1.0 "files" ["h.wav"]}
+                       {"vel-max" 0.4 "files" ["s1.wav" "s2.wav"]}]}
+            "http://x/")]
+    (is (= [0.4 1.0] (mapv :vel-max ls)))
+    (is (= ["http://x/s1.wav" "http://x/s2.wav"] (:urls (first ls)))))
+  (is (nil? (samples/parse-layers ["a.wav"] "")) "plain arrays are not layered")
+  (is (nil? (samples/parse-layers {"layers" []} ""))))
+
+(deftest velocity-selects-layer
+  (is (str/starts-with? (samples/select-url fixture-layers 0.1 0) "soft"))
+  (is (str/starts-with? (samples/select-url fixture-layers 0.9 0) "hard"))
+  (is (str/starts-with? (samples/select-url fixture-layers nil 0) "hard") "default velocity 1"))
+
+(deftest round-robin-is-deterministic-and-rotates
+  (let [times (map #(* % 0.25) (range 8))
+        pick  #(mapv (fn [t] (samples/select-url fixture-layers 0.9 t)) times)]
+    (is (= (pick) (pick)) "same times → same recordings")
+    (is (> (count (set (pick))) 1) "8 hits use more than one recording")))
+
+(deftest layered-bank-via-pick-url
+  (let [orig @samples/layers]
+    (reset! samples/layers {"kit_sd" fixture-layers})
+    (is (str/starts-with? (samples/pick-url :kit_sd 0 {:velocity 0.1 :seed 0}) "soft"))
+    (reset! samples/layers orig))
+  (testing "unlayered banks keep using get-url"
+    (let [orig @samples/registry]
+      (reset! samples/registry {"bd" ["a.wav" "b.wav"]})
+      (is (= "b.wav" (samples/pick-url :bd 1 {:velocity 0.1})))
+      (reset! samples/registry orig))))
+
+(deftest sound-fixed-take-skips-layers
+  (let [lo @samples/layers
+        ro @samples/registry]
+    (reset! samples/layers {"kit_sd" fixture-layers})
+    (reset! samples/registry {"kit_sd" (vec (mapcat :urls fixture-layers))})
+    (is (= "soft2.wav" (samples/pick-url :kit_sd 1 {:fixed-take true :velocity 1.0})))
+    (is (= "hard1.wav" (samples/pick-url :kit_sd 3 {:fixed-take true})))
+    (reset! samples/layers lo)
+    (reset! samples/registry ro)))
+
+(deftest format-banks-filter
+  (let [ro @samples/registry]
+    (reset! samples/registry {"tk_bd" ["a.wav"] "tk_sd" ["b.wav"] "bd" ["c.wav"]})
+    (is (str/includes? (samples/format-banks "tk") "tk"))
+    (is (not (str/includes? (samples/format-banks "tk") "general")))
+    (is (str/includes? (samples/format-banks :TK) "2 sample banks"))
+    (is (str/includes? (samples/format-banks "zzz") "No sample banks match"))
+    (reset! samples/registry ro)))

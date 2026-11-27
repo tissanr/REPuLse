@@ -11,6 +11,7 @@
             [repulse.audio :as audio]
             [repulse.samples :as samples]
             [repulse.ui.buffers :as buffers]
+            [repulse.ui.a11y :as a11y]
             [repulse.ui.dialog :as dialog]
             [repulse.ui.html :refer [escape-html]]))
 
@@ -109,7 +110,7 @@
 
 (defn- snap-html [{:keys [name t]}]
   (str "<div class=\"hist-snap" (when (= [:snapshot name] @selected) " selected")
-       "\" data-name=\"" (escape-html name) "\">"
+       "\" data-name=\"" (escape-html name) "\" role=\"button\" tabindex=\"0\">"
        "<span class=\"hist-name\">" (escape-html name) "</span>"
        "<span class=\"hist-time\">" (escape-html (fmt-time t)) "</span>"
        "<button data-act=\"restore\">restore</button>"
@@ -122,7 +123,8 @@
   (str "<div class=\"hist-entry "
        (cond (= kind :restore-point) "hist-rp" ok? "hist-ok" :else "hist-err")
        (when (= [:entry id] @selected) " selected")
-       "\" data-id=\"" id "\" title=\"" (escape-html (or error "")) "\">"
+       "\" data-id=\"" id "\" title=\"" (escape-html (or error "")) "\""
+       " role=\"button\" tabindex=\"0\"" (when (= [:entry id] @selected) " aria-current=\"true\"") ">"
        "<span class=\"hist-id\">#" id "</span>"
        "<span class=\"hist-time\">" (escape-html (fmt-time t)) "</span>"
        (when (= kind :restore-point) "<span class=\"hist-kind\">before restore</span>")
@@ -136,7 +138,8 @@
     (let [s     @hs/store
           snaps (reverse (:snapshots s))
           hist  (:history s)                       ; oldest first
-          rows  (take @shown (reverse (map-indexed vector hist)))]
+          rows  (take @shown (reverse (map-indexed vector hist)))
+          fk    (a11y/focus-key panel)]   ; QA3 D: keep keyboard focus
       (set! (.-innerHTML panel)
             (str "<div class=\"hist-bar\"><span class=\"hist-title\">history</span>"
                  "<button data-act=\"clear\">clear history</button>"
@@ -150,6 +153,7 @@
                  (when (> (count hist) @shown)
                    "<button data-act=\"older\">show older</button>")
                  "</div>"))
+      (a11y/restore-focus! panel fk)
       ;; Keep the selected row and its preview in view: if the preview runs
       ;; past the bottom, bring the row to the top of the list.
       (when-let [pv (.querySelector panel ".hist-preview")]
@@ -238,7 +242,8 @@
 (defn init! [{:keys [set-output!]}]
   (reset! cbs {:set-output! set-output!})
   (when-let [p (el "history-panel")]
-    (.addEventListener p "click" on-click))
+    (.addEventListener p "click" on-click)
+    (a11y/activate-on-key! p))
   (add-watch hs/store ::render (fn [_ _ _ _] (when @visible? (render!))))
   (set! (.-__REPULSE_HISTORY__ js/window)
         #js {:ready      (fn [] (= :ready @hs/status))

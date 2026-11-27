@@ -5,7 +5,8 @@
    loop-begin, loop-end — and TL7a per-event inserts: lpf/cutoff, resonance, hpf,
    hpq, bpf, bpq, shape, crush, gain, velocity — and TL7b sends: room, size, delay,
    delay-time, delay-feedback, orbit — and TL7c envelopes, pitch
-   modulation, vowel, coarse, djf, postgain, nudge, delay-sync."
+   modulation, vowel, coarse, djf, postgain, nudge, delay-sync — and SYN6
+   oscillator, drum-kit and instrument parameters."
   (:require [repulse.params :as params]
             [repulse.lisp.util :as u]))
 
@@ -87,6 +88,21 @@
    "postgain"     (param params/postgain)
    "nudge"        (param params/nudge)
    "delay-sync"   (param params/delay-sync)
+   ;; Phase SYN6
+   "unison"       (param params/unison)
+   "detune"       (param params/detune)
+   "spread"       (param params/spread)
+   "sub-osc"      (param params/sub-osc)
+   "pw"           (param params/pw)
+   "pw-rate"      (param params/pw-rate)
+   "pw-depth"     (param params/pw-depth)
+   "sync"         (param params/sync)
+   "tune"         (param params/tune)
+   "tone"         (param params/tone)
+   "glide"        (param params/glide)
+   "accent"       (param params/accent)
+   "lp-rate"      (param params/lp-rate)
+   "lp-depth"     (param params/lp-depth)
 "amp"     (fn
                ([v]   (params/amp (u/unwrap v)))
                ([v p] (params/amp (u/unwrap v) (u/unwrap p))))

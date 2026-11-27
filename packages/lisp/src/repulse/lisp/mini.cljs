@@ -21,9 +21,15 @@
 (defn- special? [ch]
   (contains? #{\[ \] \< \> \* \? \: \@ \, \! \% \( \) \{ \} \|} ch))
 
+(def ^:private single-char-tokens
+  {\[ :open-bracket  \] :close-bracket \< :open-angle \> :close-angle
+   \* :star          \? :question      \| :pipe       \: :colon
+   \@ :at            \, :comma         \! :bang       \% :percent
+   \( :open-paren    \) :close-paren   \{ :open-brace \} :close-brace})
+
 (defn- tokenise
-  "Scan a mini-notation string into a flat sequence of tokens.
-   :atom tokens carry :str-from/:str-to — character offsets within s."
+  "Scan a mini-notation string into a flat sequence of tokens. Every token
+   carries :text, :str-from and :str-to — character offsets within s."
   [s]
   (loop [i 0, tokens []]
     (if (>= i (count s))
@@ -33,22 +39,9 @@
           (whitespace? ch)
           (recur (inc i) tokens)
 
-          (= ch \[) (recur (inc i) (conj tokens {:type :open-bracket}))
-          (= ch \]) (recur (inc i) (conj tokens {:type :close-bracket}))
-          (= ch \<) (recur (inc i) (conj tokens {:type :open-angle}))
-          (= ch \>) (recur (inc i) (conj tokens {:type :close-angle}))
-          (= ch \*) (recur (inc i) (conj tokens {:type :star}))
-          (= ch \?) (recur (inc i) (conj tokens {:type :question :str-from i}))
-          (= ch \|) (recur (inc i) (conj tokens {:type :pipe}))
-          (= ch \:) (recur (inc i) (conj tokens {:type :colon}))
-          (= ch \@) (recur (inc i) (conj tokens {:type :at}))
-          (= ch \,) (recur (inc i) (conj tokens {:type :comma}))
-          (= ch \!) (recur (inc i) (conj tokens {:type :bang :str-from i}))
-          (= ch \%) (recur (inc i) (conj tokens {:type :percent}))
-          (= ch \() (recur (inc i) (conj tokens {:type :open-paren}))
-          (= ch \)) (recur (inc i) (conj tokens {:type :close-paren}))
-          (= ch \{) (recur (inc i) (conj tokens {:type :open-brace}))
-          (= ch \}) (recur (inc i) (conj tokens {:type :close-brace}))
+          (contains? single-char-tokens ch)
+          (recur (inc i) (conj tokens {:type (single-char-tokens ch) :text (str ch)
+                                       :str-from i :str-to (inc i)}))
 
           :else
           ;; Accumulate word characters until whitespace or special
@@ -59,10 +52,8 @@
                         j
                         (recur (inc j))))
                 word (subs s i end)]
-            (recur end (conj tokens (if (= word ".")
-                                      {:type :dot}
-                                      {:type :atom :text word
-                                       :str-from i :str-to end})))))))))
+            (recur end (conj tokens {:type (if (= word ".") :dot :atom) :text word
+                                     :str-from i :str-to end}))))))))
 
 ;;; ── Parser ─────────────────────────────────────────────────────────
 
@@ -80,10 +71,31 @@
 
 (declare parse-layers parse-sequence)
 
+(declare peek-token)
+
 (def ^:private rand-scope-msg "| is only allowed at top level and inside [ ]")
 
-(defn- parse-error [msg]
-  (ex-info msg {:type :mini-parse-error}))
+(def ^:private ^:dynamic *src-len*
+  "Length of the string being parsed — the position of an end-of-input error."
+  0)
+
+(defn- parse-error
+  "Mini-notation parse error at a token (its range) or at a position (end of
+   input: a zero-width range at the string's end). The message gets
+   \" in mini-notation at position <n>\" appended; parse adds :from/:to."
+  [msg tok-or-pos]
+  (let [from (if (map? tok-or-pos) (:str-from tok-or-pos) tok-or-pos)
+        to   (if (map? tok-or-pos) (:str-to tok-or-pos) tok-or-pos)]
+    (ex-info (str msg " in mini-notation at position " from)
+             {:type :mini-parse-error :str-from from :str-to to})))
+
+(defn- error-at
+  "The token at pos, or the end-of-input position."
+  [tokens pos]
+  (or (peek-token tokens pos) *src-len*))
+
+(defn- unexpected [tok]
+  (parse-error (str "Unexpected " (pr-str (:text tok))) tok))
 
 (defn- peek-token [tokens pos]
   (when (< pos (count tokens))
@@ -92,10 +104,26 @@
 (defn- tok-type [tokens pos] (:type (peek-token tokens pos)))
 
 (defn- parse-number-text
-  "Parse a string as a number. Returns nil if not a number."
+  "Parse a whole token as a decimal number (-?\\d+(\\.\\d+)? or -?\\.\\d+).
+   Returns nil for anything else: \"808bd\", \"1e3\" and \"1x\" are not numbers."
   [s]
-  (let [n (js/parseFloat s)]
-    (when-not (js/isNaN n) n)))
+  (when (or (re-matches #"-?\d+(\.\d+)?" s) (re-matches #"-?\.\d+" s))
+    (js/parseFloat s)))
+
+(defn- parse-rational-text
+  "\"3/2\" → exact [3 2]; nil if s is not a rational literal."
+  [s]
+  (when (re-matches #"-?\d+/\d+" s)
+    (let [[n d] (.split s "/")]
+      (core/->rat [(js/parseInt n 10) (js/parseInt d 10)]))))
+
+(defn- suffix-number
+  "The number after a * or @ suffix: a decimal or an exact rational.
+   Throws a parse error at tok when it is anything else."
+  [tok sym]
+  (or (parse-rational-text (:text tok))
+      (parse-number-text (:text tok))
+      (throw (parse-error (str "Expected a number after " sym) tok))))
 
 (defn- note-name?
   "True if s looks like a note name: a-g, optional accidental (s/b), then digit(s)."
@@ -108,9 +136,7 @@
   (cond
     (or (= text "~") (= text "_")) :_
     ;; Rational literal "1/8" → exact [1 8] (used by patterned time args)
-    (re-matches #"-?\d+/\d+" text)
-    (let [[n d] (.split text "/")]
-      (core/->rat [(js/parseInt n 10) (js/parseInt d 10)]))
+    (parse-rational-text text)      (parse-rational-text text)
     (parse-number-text text)        (parse-number-text text)
     (note-name? text)               (keyword text)
     :else                           (keyword text)))
@@ -130,7 +156,7 @@
       (case (:type tok)
         :star
         (if (= (:type nxt) :atom)
-          (recur {:type :repeat :child node :times (int (or (parse-number-text (:text nxt)) 1))
+          (recur {:type :repeat :child node :times (suffix-number nxt "*")
                   :weight (:weight node 1)}
                  (+ p 2))
           (recur {:type :repeat :child node :times 2 :weight (:weight node 1)} (inc p)))
@@ -151,18 +177,19 @@
 
         :at
         (if (= (:type nxt) :atom)
-          (recur (assoc node :weight (int (or (parse-number-text (:text nxt)) 1))) (+ p 2))
+          (recur (assoc node :weight (suffix-number nxt "@")) (+ p 2))
           [node p])
 
         :open-paren
         (let [[a p1] (parse-sequence tokens (inc p))
-              _      (when-not (= :comma (tok-type tokens p1)) (throw (parse-error "Expected ,")))
+              _      (when-not (= :comma (tok-type tokens p1))
+                       (throw (parse-error "Expected ," (error-at tokens p1))))
               [b p2] (parse-sequence tokens (inc p1))
               [c p3] (if (= :comma (tok-type tokens p2))
                        (parse-sequence tokens (inc p2))
                        [nil p2])]
           (when-not (= :close-paren (tok-type tokens p3))
-            (throw (parse-error "Expected )")))
+            (throw (parse-error "Expected )" (error-at tokens p3))))
           (recur {:type :euclid :child node :args (if c [a b c] [a b])
                   :weight (:weight node 1)}
                  (inc p3)))
@@ -177,33 +204,33 @@
     (case (:type tok)
       :open-bracket
       (let [[node p] (parse-layers tokens (inc pos))]
-        (when-not (= :close-bracket (tok-type tokens p)) (throw (parse-error "Expected ]")))
+        (when-not (= :close-bracket (tok-type tokens p)) (throw (parse-error "Expected ]" (error-at tokens p))))
         [node (inc p)])
 
       :open-angle
       (let [[node p] (parse-layers tokens (inc pos))]
-        (when-not (= :close-angle (tok-type tokens p)) (throw (parse-error "Expected >")))
-        (when (= :rand (:type node)) (throw (parse-error rand-scope-msg)))
+        (when-not (= :close-angle (tok-type tokens p)) (throw (parse-error "Expected >" (error-at tokens p))))
+        (when (= :rand (:type node)) (throw (parse-error rand-scope-msg tok)))
         (let [alts (mapv (fn [l] {:type :alt :children (:children l)}) (layers->vec node))]
           [(if (= 1 (count alts)) (first alts) {:type :stack :layers alts}) (inc p)]))
 
       :open-brace
       (let [[node p] (parse-layers tokens (inc pos))]
-        (when-not (= :close-brace (tok-type tokens p)) (throw (parse-error "Expected }")))
-        (when (= :rand (:type node)) (throw (parse-error rand-scope-msg)))
+        (when-not (= :close-brace (tok-type tokens p)) (throw (parse-error "Expected }" (error-at tokens p))))
+        (when (= :rand (:type node)) (throw (parse-error rand-scope-msg tok)))
         (let [p (inc p)
               layers (layers->vec node)]
           (if (= :percent (tok-type tokens p))
             (let [nt (peek-token tokens (inc p))
                   n  (when (= :atom (:type nt)) (parse-number-text (:text nt)))]
-              (when-not n (throw (parse-error "Expected a number after %")))
+              (when-not n (throw (parse-error "Expected a number after %" (error-at tokens (inc p)))))
               [{:type :polymeter :layers layers :steps n} (+ p 2)])
             [{:type :polymeter :layers layers :steps nil} p])))
 
       :atom
       (parse-atom tokens pos)
 
-      (throw (parse-error (str "Unexpected token: " (pr-str tok)))))))
+      (throw (if tok (unexpected tok) (parse-error "Unexpected end" *src-len*))))))
 
 (defn- adjacent-int
   "If the token after the bang at pos is an integer atom directly adjacent to it, return it."
@@ -237,8 +264,11 @@
 
         (= t :bang)
         (do
-          (when (empty? cur) (throw (parse-error "Nothing to repeat before !")))
+          (when (empty? cur) (throw (parse-error "Nothing to repeat before !" tok)))
           (let [n (adjacent-int tokens p)
+                _ (when (and n (> n core/max-steps))
+                    (throw (parse-error (str "! count = " n " exceeds the limit of " core/max-steps)
+                                        tok)))
                 copies (if n (max 0 (dec n)) 1)]
             (recur groups (into cur (repeat copies (peek cur))) (if n (+ p 2) (inc p)))))
 
@@ -256,9 +286,11 @@
           layers    (conj layers node)
           sep       (tok-type tokens p1)]
       (if (contains? #{:comma :pipe} sep)
-        (recur layers (conj seps sep) (inc p1))
         (do
-          (when (= 2 (count seps)) (throw (parse-error "Cannot mix , and | in one group")))
+          (when (and (seq seps) (not (contains? seps sep)))
+            (throw (parse-error "Cannot mix , and | in one group" (peek-token tokens p1))))
+          (recur layers (conj seps sep) (inc p1)))
+        (do
           [(cond
              (= 1 (count layers)) (first layers)
              (contains? seps :pipe) {:type :rand :choices layers}
@@ -295,18 +327,6 @@
 ;;                                          :to   base-offset+str-to}
 ;; so the exact token highlights during playback (not the whole string).
 
-(defn alt*
-  "Alternation: on cycle N, play the (mod N count)-th pattern."
-  [pats]
-  (let [n (count pats)]
-    (core/pattern
-      (fn [sp]
-        (mapcat (fn [piece]
-                  (let [cycle (int (Math/floor (core/rat->float (:start piece))))
-                        idx   (mod cycle n)]
-                    (core/query (nth pats idx) piece)))
-                (core/split-cycles sp))))))
-
 (defn- seed-rand
   "rand shifted by seed * 3/10000 of a cycle (Strudel: rand.early(seed * 0.0003))."
   [seed]
@@ -316,7 +336,7 @@
   "Steps in a polymeter layer: the sum of its children's weights."
   [node]
   (if (= :seq (:type node))
-    (reduce + (map #(:weight % 1) (:children node)))
+    (reduce core/rat+ [0 1] (map #(core/->rat (:weight % 1)) (:children node)))
     1))
 
 (defn- compile-ast
@@ -334,9 +354,6 @@
       (if (:sample-index node)
         (core/pure {:bank v :n (:sample-index node)} source)
         (core/pure v source)))
-
-    :rest
-    (core/pure :_)
 
     :seq
     (let [children (:children node)]
@@ -375,7 +392,7 @@
     (let [children (:children node)]
       (if (= 1 (count children))
         (compile-ast (first children) base-offset)
-        (alt* (mapv #(compile-ast % base-offset) children))))
+        (core/cat* (mapv #(compile-ast % base-offset) children))))
 
     :repeat
     (let [child-pat (compile-ast (:child node) base-offset)
@@ -406,6 +423,25 @@
    position in the editor so it highlights individually during playback."
   ([s] (parse s nil))
   ([s base-offset]
-   (let [tokens  (tokenise s)
-         [ast _] (parse-layers tokens 0)]
+   (let [tokens (tokenise s)
+         len    (count s)
+         ast    (try
+                  (binding [*src-len* len]
+                    (let [[ast p] (parse-layers tokens 0)]
+                      ;; A stray ] > } ) after the top level is an error, not the end.
+                      (when (< p (count tokens))
+                        (throw (unexpected (nth tokens p))))
+                      ast))
+                  (catch :default e
+                    (let [{:keys [type str-from str-to]} (ex-data e)]
+                      (throw
+                       (if (and base-offset (= type :mini-parse-error) str-from)
+                         ;; Underline the token; at end of input, the last character.
+                         (let [[f t] (if (= str-from str-to len)
+                                       [(max 0 (dec len)) len]
+                                       [str-from str-to])]
+                           (ex-info (ex-message e)
+                                    (assoc (ex-data e) :from (+ base-offset f)
+                                           :to (+ base-offset t))))
+                         e)))))]
      (compile-ast (number-seeds ast) base-offset))))

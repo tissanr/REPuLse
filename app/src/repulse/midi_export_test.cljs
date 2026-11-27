@@ -4,7 +4,6 @@
   (:require [clojure.string :as str]
             [cljs.test :refer-macros [deftest is testing use-fixtures]]
             [repulse.audio :as audio]
-            [repulse.core :as core]
             [repulse.download :as download]
             [repulse.env.builtins.midi :as b-midi]
             [repulse.env.builtins.song :as b-song]

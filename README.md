@@ -41,8 +41,13 @@ sound.
 REPuLse is a **pattern-based** live coding instrument. Patterns describe **what** sounds play
 and **when** — not **how** synthesis works internally.
 
-- **Sounds:** sample keywords (`:bd`, `:sd`), note keywords (`:c4`), frequencies (`440`), or
+- **Sounds:** drum keywords (`:bd`, `:sd`), sample keywords (`:arpy`), note keywords (`:c4`), frequencies (`440`), or
   synth voices (`(synth :saw)`, `(synth :fm :index 4)`, `(synth :guitar)`)
+- **Synthesizer without samples:** band-limited oscillators with unison
+  (`(->> (chord :minor :a3) (synth :supersaw))`), instruments like `:acid`, `:reese`, `:pad`,
+  `:strings` with `glide` and `accent`, and an 18-voice synth drum kit — REPuLse's default
+  kit, so `(~ "bd cp bd [cp rim]")` needs no samples; shaped with `tune`, `tone`, `decay`.
+  `(bank :dirt)` switches bare drum names to the Dirt-Samples drums
 - **Rhythm and structure:** `seq`, `stack`, `fast`, `slow`, `every`, `euclidean`, `struct`,
   `ply`, `chunk`, and Tidal-style mini-notation: `(~ "bd [sd hh] bd sd")`
 - **Patterns everywhere:** arguments can themselves be patterns (`(fast "<1 2 4>" pat)`),
@@ -59,8 +64,9 @@ and **when** — not **how** synthesis works internally.
   also `size`, `delay-feedback`, `delay-sync` (delay time in cycles)
 - **Inline sliders:** `(amp (slider 0.7 0 1))` evaluates to `0.7` and is drawn as a draggable
   bar in the editor; dragging rewrites the number in the code (`Cmd/Ctrl+K S` wraps/unwraps)
-- **Effects:** `(fx :reverb 0.4)`, `(fx :delay :wet 0.3 :time 0.25)`, `(fx :cab :ir :4x12)`;
-  group the global chain with `(master (fx :delay 0.25) (fx :reverb 0.3))`
+- **Effects:** `(fx :reverb :type :hall :wet 0.4)`, `(fx :delay :sync 3/16 :mode :ping-pong :wet 0.3)`,
+  `(fx :cab :ir :4x12)`, flanger, vibrato, auto-pan, ring-mod, width; mix with EQ, gate and a
+  limiter: `(master (fx :eq :high 2) (fx :limiter -1))`
 - **Performance:** named tracks you can mute, solo and replace live; MIDI in/out; WAV, stem
   and MIDI export
 - **Code is the source of truth:** Alt+Enter plays exactly the tracks the code declares

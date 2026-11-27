@@ -1,6 +1,6 @@
 {
   "name": "repulse",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "workspaces": [
     "packages/core",
@@ -18,8 +18,8 @@
     "test:e2e": "playwright test",
     "test:all": "./scripts/test-all.sh",
     "gen:grammar": "lezer-generator app/src/repulse/lisp-lang/repulse-lisp.grammar -o app/src/repulse/lisp-lang/parser.js",
-    "gen:ai-docs": "node scripts/gen_ai_docs.mjs",
-    "check:ai-docs": "node scripts/gen_ai_docs.mjs && git diff --exit-code docs/ai/builtins.json",
+    "gen:ai-docs": "node scripts/gen_builtins.mjs && npm run gen:grammar",
+    "check:ai-docs": "npm run gen:ai-docs && git diff --exit-code docs/ai/builtins.json app/src/repulse/lisp-lang/builtins.generated.js app/src/repulse/lisp-lang/repulse-lisp.grammar app/src/repulse/lisp-lang/parser.js app/src/repulse/lisp-lang/parser.terms.js",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

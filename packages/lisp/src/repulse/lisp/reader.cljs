@@ -12,7 +12,7 @@
   (boolean (re-matches #"[0-9]" (str ch))))
 
 (defn sym-char? [ch]
-  (boolean (re-matches #"[a-zA-Z0-9\-_+*/=<>!?.~]" (str ch))))
+  (boolean (re-matches #"[a-zA-Z0-9\-_+*/=<>!?.~&]" (str ch))))
 
 (declare read-form)
 
@@ -50,6 +50,10 @@
                                      {:type :read-error :from open-pos :to (inc open-pos)}))
           (= \" ch)  (do (advance r) (apply str acc))
           (= \\ ch)  (do (advance r)
+                         ;; A trailing backslash: the string never closes.
+                         (when (nil? (peek-char r))
+                           (throw (ex-info "Unterminated string — missing closing \""
+                                           {:type :read-error :from open-pos :to (inc open-pos)})))
                          (let [e (advance r)]
                            (recur (conj acc (case e \n \newline \t \tab \\ \\ \" \" e)))))
           :else      (recur (conj acc (advance r))))))))
@@ -60,38 +64,44 @@
    - [numerator denominator] for N/D rational literals (e.g. 1/4)
    - (list (symbol \"bpm\") n) for NNNbpm suffix literals (e.g. 120bpm)"
   [r]
-  (loop [acc []]
-    (let [ch (peek-char r)]
-      (if (and ch (or (digit? ch) (= \. ch)))
-        (recur (conj acc (advance r)))
-        (let [s (apply str acc)
-              n (if (re-find #"\." s) (js/parseFloat s) (js/parseInt s 10))]
-          (let [next-ch (peek-char r)]
-            (cond
-              ;; Rational literal: 1/4, 3/8, etc.
-              (= \/ next-ch)
-              (do
-                (advance r) ; consume /
-                (let [denom-acc (loop [dacc []]
-                                  (let [c (peek-char r)]
-                                    (if (and c (digit? c))
-                                      (recur (conj dacc (advance r)))
-                                      dacc)))]
-                  (if (empty? denom-acc)
-                    ;; no digits after / — the / was the division operator, back off
-                    ;; (shouldn't happen in practice since we peek before consuming)
-                    n
-                    [n (js/parseInt (apply str denom-acc) 10)])))
+  (let [start   @(:pos r)
+        literal (fn [] (subs (:src r) start @(:pos r)))
+        bad     (fn [msg] (throw (ex-info msg {:type :read-error :from start
+                                               :to @(:pos r)})))]
+    (loop [acc []]
+      (let [ch (peek-char r)]
+        (if (and ch (or (digit? ch) (= \. ch)))
+          (recur (conj acc (advance r)))
+          (let [s (apply str acc)
+                _ (when (> (count (re-seq #"\." s)) 1)
+                    (bad (str "Invalid number " (literal))))
+                n (if (re-find #"\." s) (js/parseFloat s) (js/parseInt s 10))]
+            (let [next-ch (peek-char r)]
+              (cond
+                ;; Rational literal: 1/4, 3/8, etc.
+                (= \/ next-ch)
+                (do
+                  (advance r) ; consume /
+                  (let [denom-acc (loop [dacc []]
+                                    (let [c (peek-char r)]
+                                      (if (and c (digit? c))
+                                        (recur (conj dacc (advance r)))
+                                        dacc)))]
+                    (cond
+                      ;; no digits after / — the / was the division operator, back off
+                      ;; (shouldn't happen in practice since we peek before consuming)
+                      (empty? denom-acc) n
+                      (zero? (js/parseInt (apply str denom-acc) 10))
+                      (bad (str "Invalid rational " (literal) " — the denominator is 0"))
+                      :else [n (js/parseInt (apply str denom-acc) 10)])))
 
-              ;; BPM suffix: 120bpm → (bpm 120)
-              (and next-ch
-                   (let [remaining (subs (:src r) @(:pos r))]
-                     (.startsWith remaining "bpm")))
-              (do
-                (dotimes [_ 3] (advance r)) ; consume "bpm"
-                (list (symbol "bpm") n))
+                ;; BPM suffix: 120bpm → (bpm 120)
+                (and next-ch (.startsWith (:src r) "bpm" @(:pos r)))
+                (do
+                  (dotimes [_ 3] (advance r)) ; consume "bpm"
+                  (list (symbol "bpm") n))
 
-              :else n)))))))
+                :else n))))))))
 
 (defn read-keyword [r]
   (advance r) ; consume :

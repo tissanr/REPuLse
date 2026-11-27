@@ -2,7 +2,8 @@
   "Shared helpers for the Lisp evaluator and builtin sub-namespaces.
    Extracted from eval.cljs so builtins can require them without creating
    circular dependencies."
-  (:require [repulse.lisp.reader :as reader]
+  (:require [repulse.core :as core]
+            [repulse.lisp.reader :as reader]
             [repulse.lisp.mini :as mini]))
 
 (defn sourced? [x] (instance? reader/SourcedVal x))
@@ -35,9 +36,7 @@
   "Coerce a value to a number. Rational pairs [n d] → (/ n d). SourcedVals unwrapped first."
   [x]
   (let [v (unwrap x)]
-    (if (and (vector? v) (= 2 (count v)) (number? (first v)) (number? (second v)))
-      (/ (first v) (second v))
-      v)))
+    (or (core/as-number v) v)))
 
 (defn pat-arg
   "Unwrap a value that sits in a patternable argument position.

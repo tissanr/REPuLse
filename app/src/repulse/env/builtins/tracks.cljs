@@ -155,7 +155,7 @@
                      (set-output! "updated" :success))
                  (nil? val) nil
                  (string? val) (set-output! val :success)
-                 :else (set-output! (str "=> " (pr-str val)) :success)))))))
+                 :else (set-output! (str "=> " (pr-str (leval/deep-unwrap val))) :success)))))))
      ;; Always return nil so evaluate! does not re-process upd's output
      nil)
 

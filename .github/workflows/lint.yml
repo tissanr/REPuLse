@@ -14,15 +14,12 @@ jobs:
 
       - name: Install clj-kondo
         run: |
-          curl -sLO https://raw.githubusercontent.com/clj-kondo/clj-kondo/master/script/install-clj-kondo
+          curl -sLO https://raw.githubusercontent.com/clj-kondo/clj-kondo/v2025.10.23/script/install-clj-kondo
           chmod +x install-clj-kondo
-          sudo ./install-clj-kondo --dir /usr/local/bin --version 2024.11.14
+          sudo ./install-clj-kondo --dir /usr/local/bin --version 2025.10.23
 
-      # clj-kondo exits 2 for warnings, 3 for errors — fail only on errors
-      - name: Run clj-kondo (fail on errors, warn on warnings)
-        run: |
-          clj-kondo --parallel --lint packages/ app/src/ || \
-            (code=$?; [ "$code" -eq 2 ] && echo "::warning::clj-kondo warnings found (exit $code)" || exit $code)
+      - name: Run clj-kondo (fail on warnings)
+        run: clj-kondo --parallel --fail-level warning --lint packages/ app/src/
 
   typecheck:
     name: TypeScript type-check (api/)

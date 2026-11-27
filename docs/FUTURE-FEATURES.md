@@ -70,8 +70,8 @@ there's energy for side quests.
 ### Effect plugins
 | Feature | Description |
 |---|---|
-| Ring modulator | Signal × carrier sine — metallic textures |
-| Parametric EQ | Multi-band BiquadFilter chain |
+| Ring modulator | ✅ Done in FX1: `(fx :ring-mod …)` |
+| Parametric EQ | ✅ Done in FX1: `(fx :eq …)` |
 | Wavefolder | Soft-clip / fold wave shaping |
 | Granular processor | Chop + scatter incoming audio — AudioWorklet |
 

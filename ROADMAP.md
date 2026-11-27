@@ -1,20 +1,20 @@
 # REPuLse — Roadmap
 
-## Where we stand (updated 2026-11-20)
+## Where we stand (updated 2026-11-24)
 
 | Milestone | Delivered | Still open |
 |---|---|---|
-| **M1** Tidal-Lisp core | 11 / 14 | KIT1, SYN6, FX1 — all 🤖👂, need a human listen |
-| **M2** Full songs | 9 / 10 | WS6 |
+| **M1** Tidal-Lisp core | 14 / 14 | — (complete) |
+| **M2** Full songs | 10 / 11 | VIZ1 (🤖👂) |
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
 
-- **Next for the unattended pipeline:** QA1 → QA2 → QA3 → QA4 (quality track, added
-  2026-11-20 from a code review), then WS6. After them, every remaining phase on the
-  critical path needs a human (🤖👂 or 🧑).
-- **Next for a human session:** KIT1 (spec is an outline, expand first), SYN6 (Part C
-  is unblocked by TL7c), FX1; N1 opens M3. TL7c's listen check runs in the next release
-  test round.
+- **Next for the unattended pipeline:** VIZ1 (honest track visuals & in-code
+  visualizers, added 2026-11-24). It can be implemented unattended but is delivered only
+  after a human watch-and-listen check. WS6 and the quality-track phases QA1–QA4 are
+  delivered; every other remaining phase needs a human (🤖👂 or 🧑).
+- **Next for a human session:** N1 opens M3. FX1 and KIT1 passed their listen checks on
+  2026-11-24, which completes M1. TL7c's listen check runs in the next release test round.
 - **Side track open:** DOC1, TEST2, UI1, R3, PLUG1, O2, PL1; quality track QA5 (🧑),
   QA6 (🤖👂), QA7 (🧑).
 
@@ -61,10 +61,10 @@ without a human:
 | **Tooling** | | | **Test coverage (no milestone, runs first)** | | | |
 | 0 | TEST3 | ✅ | Release-protocol automation: UI workflows & measured sound | 🤖 | full | sonnet |
 | **Quality** | | | **Quality track (no milestone, from the 2026-11-20 review)** | | | |
-| 0a | QA1 | 📋 | Robust language & pattern engine | 🤖 | full | opus |
-| 0b | QA2 | 📋 | Hardened, allocation-free audio engine | 🤖 | full | opus |
-| 0c | QA3 | 📋 | App robustness & keyboard accessibility | 🤖 | full | opus |
-| 0d | QA4 | 📋 | One source for builtins, strict lint, shared helpers | 🤖 | full | sonnet |
+| 0a | QA1 | ✅ | Robust language & pattern engine | 🤖 | full | opus |
+| 0b | QA2 | ✅ | Hardened, allocation-free audio engine | 🤖 | full | opus |
+| 0c | QA3 | ✅ | App robustness & keyboard accessibility | 🤖 | full | opus |
+| 0d | QA4 | ✅ | One source for builtins, strict lint, shared helpers | 🤖 | full | sonnet |
 | 0e | QA5 | 📋 | Security & backend hardening | 🧑 | outline | opus |
 | 0f | QA6 | 📋 | Audio & MIDI timing quality | 🤖👂 | outline | opus |
 | 0g | QA7 | 📋 | CI, tooling & code structure | 🧑 | outline | sonnet |
@@ -80,9 +80,9 @@ without a human:
 | 8 | TL7a | ✅ | Per-event filters, shape & crush | 🤖👂 | full | opus |
 | 8b | TL7b | ✅ | Reverb & delay sends per orbit | 🤖👂 | full | opus |
 | 8c | TL7c | ✅ | Vowel, envelopes & modulators | 🤖👂 | full | opus |
-| 9 | KIT1 | 📋 | High-quality drum kits | 🤖👂 | outline | sonnet |
-| 9a | SYN6 | 📋 | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | full | opus |
-| 9b | FX1 | 📋 | Mixing, space & modulation effects | 🤖👂 | full | sonnet |
+| 9 | KIT1 | ✅ | High-quality drum kits | 🤖👂 | full | opus |
+| 9a | SYN6 | ✅ | Synth essentials: oscillators, drum kit, synth instruments | 🤖👂 | full | opus |
+| 9b | FX1 | ✅ | Mixing, space & modulation effects | 🤖👂 | full | sonnet |
 | **M2** | | | **Full songs** | | | |
 | 10 | SONG1 | ✅ | Sections, song form & full-song render | 🤖 | full | opus |
 | 11 | SONG2 | ✅ | Song-time automation & transitions | 🤖 | full | sonnet |
@@ -93,7 +93,8 @@ without a human:
 | 13c | WS3 | ✅ | Inline sliders in code: `(slider v min max)` | 🤖 | full | opus |
 | 13d | WS4 | ✅ | AI assistant rail | 🤖 | outline | sonnet |
 | 13e | WS5 | ✅ | Code is the source of truth: track reconciliation, `:mute`/`:solo` in code | 🤖 | full | opus |
-| 13f | WS6 | 📋 | Runtime-aware outline: run state per track, running group | 🤖 | full | sonnet |
+| 13f | WS6 | ✅ | Runtime-aware outline: run state per track, running group | 🤖 | full | sonnet |
+| 13g | VIZ1 | 📋 | Honest track visuals & in-code visualizers (`pianoroll`, `scope`, …) | 🤖👂 | full | opus |
 | **M3** | | | **Plays with others** | | | |
 | 14 | N1 | 📋 | MIDI CC → parameter mapping | 🤖👂 | full | sonnet |
 | 15 | LIVE1 | 📋 | Companion bridge: Ableton Link & OSC | 🧑 | outline | opus |
@@ -1020,7 +1021,7 @@ See full spec: [PROMPTS/PHASE-DST6.md](PROMPTS/PHASE-DST6.md)
 
 ---
 
-## Phase FX1 — Mixing, Space & Modulation Effects 📋 *planned*
+## Phase FX1 — Mixing, Space & Modulation Effects ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
@@ -1028,10 +1029,33 @@ Every effect a finished song needs, in one phase: mixing tools, a controllable r
 delay, and the missing modulation and stereo effects. All are track-level plugins.
 
 **Key additions:**
-- Mixing: `eq` (shelves + two peaking bands), `limiter` (true output ceiling; the engine hard-clips at ±1 today), `gate`; shelving, peaking and all-pass types plus `gain` on `filter`
-- Space: `(fx :reverb :type :room|:hall|:plate|:spring|:gated|:reverse :decay … :size … :damp … :predelay …)` via impulse-response generators (today `reverb` has only `wet`); `(fx :delay :sync 3/16 :mode :ping-pong …)`, multi-tap, filters in the feedback path
+- Mixing: `eq` (shelves + two peaking bands), opt-in `limiter` (true output ceiling; the engine's ±1 hard clip is widened to a ±8 safety bound), `gate`; shelving, peaking and all-pass types plus `gain` on `filter`
+- Space: `(fx :reverb :type :room|:hall|:plate|:spring|:gated|:reverse :decay … :size … :damp … :predelay …)` via impulse-response generators (today `reverb` has only `wet`); `(fx :delay :sync 3/16 :mode :ping-pong …)`, positional value = wet (was time), multi-tap, filters in the feedback path
 - Modulation & stereo: `flanger`, `vibrato`, `auto-pan`, `ring-mod`, `width`
 - All effects work per track and in offline export; acceptance by offline-render measurements plus a human listen
+
+**Delivered (implemented 2026-11-23, listen check passed 2026-11-24):**
+- Groundwork: a `params` descriptor per plugin drives the `fx` built-in (rationals,
+  keywords and lists converted; unknown names and values are eval warnings such as
+  `fx :reverb has no parameter :room — parameters: wet, dry, type, decay, size, damp,
+  predelay`); positional + named values also at top level; `setTempo(cycleDur, origin)` for
+  global, per-track and offline instances; the master chain is sorted by `fx/default-order`
+  (limiter always last), and the master inspector lists it in that order.
+- New effects: `eq`, `limiter` (5 ms look-ahead worklet), `gate` (worklet), `flanger`
+  (worklet), `vibrato`, `auto-pan` (equal power, `:sync`), `ring-mod`, `width` (`:haas`).
+  `filter` gets all 8 types, `gain` and an exact bypass. `reverb` gets 7 seeded IR types
+  (`lib/reverb-ir.js`) with `decay`, `size`, `damp`, `predelay`, debounced and crossfaded.
+  `delay` gets `:sync`, `:mode`, `:taps`, `:lowcut`/`:highcut`; its feedback loop now holds
+  one DelayNode minus a render quantum, so repeats are sample-exact (before, each repeat came
+  128 samples late).
+- Changed behaviour: `(fx :delay 0.4)` sets the wet level (Q3) — track chains that wrote
+  `(fx :delay 0.25 …)` for the time now write `(fx :delay :time 0.25 …)`. The engine's output
+  bound is ±8 instead of ±1 (Q2); the limiter is opt-in (Q1).
+- Tests: 45 Playwright tests in `e2e/fx-effects.spec.ts` (bench A1–A12, B1–B15, C1–C10, X1;
+  app B16, X2–X4, limiter export), 2 Rust tests, CLJS tests for the parser, descriptor rules,
+  chain order, tempo and the slider tables.
+- Listen check passed (project owner, 2026-11-24): `:spring` stays (D7); the reverb trims
+  stay as implemented.
 
 See full spec: [PROMPTS/PHASE-FX1.md](PROMPTS/PHASE-FX1.md)
 
@@ -1177,17 +1201,44 @@ See full spec: [PROMPTS/PHASE-SYN5.md](PROMPTS/PHASE-SYN5.md)
 
 ---
 
-## Phase SYN6 — Synth Essentials: Oscillators, Drum Kit & Synth Instruments 📋 *planned*
+## Phase SYN6 — Synth Essentials: Oscillators, Drum Kit & Synth Instruments ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
 Everything a song needs from the built-in synthesizer, in one phase.
 
 **Key additions:**
-- Oscillator core: band-limited (PolyBLEP) saw, pulse and triangle in the WASM engine (the current ones alias on high notes, and a filter cannot remove that); voices `:tri` `:sine` `:pulse` `:supersaw`; `unison`, `detune`, `spread`, `sub`, PWM, hard sync; `(synth :noise :color :pink|:brown|:dust|:lfsr)`
+- Oscillator core: band-limited (PolyBLEP) saw, pulse and triangle in the WASM engine (the current ones alias on high notes, and a filter cannot remove that); voices `:tri` `:sine` `:pulse` `:supersaw`; `unison`, `detune`, `spread`, `sub-osc`, PWM, hard sync; `(synth :noise :color :pink|:brown|:dust|:lfsr)`
 - Synth drum kit as its own bank: `(bank :synth)` selects it even when sample banks are loaded; voices `:bd :sd :hh :oh :cp :rim :lt :mt :ht :cb :cl :cr :rd :sh :tb :cg`, tunable with `tune`, `tone`, `decay`; hat choke
 - Synth instruments (after TL7a and TL7c): `:acid` `:reese` `:sub-bass` `:fm-bass` `:wobble` `:lead` `:sync-lead` `:pluck` `:theremin` `:reed` `:pad` `:strings` `:sweep-pad` `:brass-pad`; `(glide secs pat)`; explicit parameters override preset values
 - Housekeeping: warning for unknown `(synth :name)` voices (today they play a plain sine without a message), `:trumpet-cup` (documented, not implemented), one shared voice list
+
+**Delivered:**
+- Rust: PolyBLEP saw/pulse and PolyBLAMP triangle in one `Voice::Osc` (replaces `Saw` /
+  `Square`) with up to 7 unison oscillators (fixed start phases, stereo via `tick2` and a
+  second insert chain), `sub-osc`, PWM, hard sync and glide; noise colours white, pink,
+  brown, dust, LFSR; `Voice::Drum` with 18 voices on four models and the hat choke;
+  `:trumpet-cup`; cutoff LFO in trigger_v3 slots 41–43. Named trigger-string fields
+  (`"saw:440:unison=3"`). Measured: aliasing below the fundamental 57–60 dB lower than the
+  naive saw/pulse; supersaw benchmark 72× real time (16 voices × 7). Bare `"440"` and the
+  legacy `bd sd hh oh` stay bit-identical.
+- `repulse.voices`: one voice list (drift-guarded against `lib.rs`, completions and
+  builtin_meta), trigger strings, `drum-route`, `unison-layout`, `expand-preset`,
+  `assign-glide`, the JS kit fallback. `play-event` dispatches through it;
+  `(synth :noise pat)` now plays noise; `(bank :synth)` / `:synth_bd` select the kit.
+- 14 parameter functions (`unison detune spread sub-osc pw pw-rate pw-depth sync tune tone
+  glide accent lp-rate lp-depth`), 14 instruments (`:acid` … `:brass-pad`) as parameter
+  presets that explicit parameters override, glide state per track in the scheduler,
+  export and harness. Unknown voices warn: `unknown synth voice :trii — did you mean :tri?`.
+- Tests: 26 Rust tests (A1–A12, B1–B8, C-R1/2, D-R1), `voices_test`, params and
+  sound-check tests, 6 TEST1 and 5 WASM-export Playwright tests.
+- **Default kit (owner decision 2026-11-21, replaces spec decision 3):** the synth kit is
+  REPuLse's default drum kit — bare `:bd :sd :hh …` play it even with sample banks
+  loaded. `(bank :dirt)` restores the Dirt-Samples drums (the old default); drum-machine
+  banks and `(sound :bd n)` are unchanged. The four legacy engine drums are no longer
+  reachable from patterns.
+- Listen check passed: the project owner worked through the PR #212 test protocol
+  before merging (2026-11-21)
 
 See full spec: [PROMPTS/PHASE-SYN6.md](PROMPTS/PHASE-SYN6.md)
 
@@ -1465,7 +1516,7 @@ See full spec: [PROMPTS/PHASE-TEST3.md](PROMPTS/PHASE-TEST3.md)
 
 ---
 
-## Phase QA1 — Robust Language & Pattern Engine 📋 *planned*
+## Phase QA1 — Robust Language & Pattern Engine ✅ *delivered*
 
 > **Quality track** · **Automation:** 🤖 auto
 
@@ -1480,11 +1531,36 @@ hangs the tab; every such mistake becomes a clear eval error with a position.
   leaked `recur` sentinel; theory names with fuzzy hints; rational `arrange`; tests for
   untested core functions
 
+**Delivered:**
+- Scheduler: each track's query runs in its own `try`; a failing track is skipped for
+  that cycle and reported once (`Error in track :hats: …`, `:on-query-error`), and the
+  cycle always advances. Song mode (`song-onsets` 5-arity), WAV/stem render
+  (`job-events`) and MIDI export use the same isolation. After eval, every new track and
+  a pattern result is probed at cycle 0 (`sound-check/probe-error`): a throw is an eval
+  error (`track :bad fails at cycle 0: …`) and nothing is activated or retired
+- Count limits (`core/check-count!`): 1024 steps for `run`, the euclid family, `ply*`,
+  `segment`, the `chunk` family and mini `!n`; 64 layers for `apply-n`, `echo`/`stut`,
+  `echo-with`/`stutter`. `every`/`first-of` need n ≥ 1; `every`, `last-of`, `chunk*`,
+  `chunk-into*` build their transformed patterns once. `arrange` takes rational
+  durations and cuts sections mid-cycle
+- Mini-notation: leftover tokens are errors, every error has a position (`Unexpected "]"
+  in mini-notation at position 3`, only the token underlined), fractional/rational `*`
+  and `@`, whole-token numbers (`"808bd"` → `:808bd`)
+- Evaluator/reader: `->`/`->>` are a syntactic rewrite (highlight, macros, keyword steps);
+  closures check arity and support `& rest` (`&` added to reader and editor grammar);
+  `recur outside loop`; `"a" is not a function`; eager `map`/`filter`; reader errors for
+  `1/0`, `1.2.3` and a trailing backslash. `levenshtein`/`typo-hint` moved to `util`
+- Theory: unknown scale/chord names and roots fail with a hint
+  (`scale: unknown scale :majr — did you mean :major?`), empty interval vectors fail
+- Tests: 13 previously untested core helpers, caps, `every`, rational `arrange`,
+  `song-onsets`/`job-events` isolation, `probe-error`, mini/eval/reader/theory messages;
+  `e2e/robust-playback.spec.ts` (scheduler counters via `__REPULSE_APP__.onsetCount`)
+
 See full spec: [PROMPTS/PHASE-QA1.md](PROMPTS/PHASE-QA1.md)
 
 ---
 
-## Phase QA2 — Hardened, Allocation-Free Audio Engine 📋 *planned*
+## Phase QA2 — Hardened, Allocation-Free Audio Engine ✅ *delivered*
 
 > **Quality track** · **Automation:** 🤖 auto
 
@@ -1498,11 +1574,38 @@ valid input sounds sample-identical to before.
   buffers; KS buffer sized from the sample rate
 - Hard caps (256 voices, 8192 pending); counting-allocator and golden-render tests
 
+**Delivered:**
+- Golden render first: `src/golden/qa2.bin` (345 blocks, dry bus + per-bus energy of
+  37 voice kinds incl. every FM/KS preset and the SYN6 oscillators, noise and kit with
+  inserts, sends, TL7c and transitions) was recorded and committed before any engine
+  change; `golden_render_matches` passes at the end (max dry difference 6e-8)
+- Sanitising at trigger time: `EventParams::sanitised` (amp 0–2, attack 0–60 s, decay
+  0–600 s, pan ±1, non-finite = slot default), legacy FM index/ratio and square pulse
+  width finite and clamped; `parse_freq` drops non-finite, ≤ 0 or > 1 MHz frequencies
+  (missing/unparsable stays 440 Hz); non-finite event times and transition values are
+  dropped. A voice with a non-finite sample is removed; a non-finite dry sample is 0
+- Voices are built in `schedule` at trigger time (KS buffer, body filters, inserts,
+  seed); the pending queue is a time-sorted `VecDeque` (reserve 1024, push_back for
+  in-order triggers, `pop_front` when due). Caps `MAX_VOICES = 256`,
+  `MAX_PENDING = 8192`, no stealing; counters `invalid_drops`, `queue_cap_drops`,
+  `voice_cap_drops`, `nonfinite_kills` with wasm getters
+- `render` allocates nothing: `process_block_into` / `render_block` /
+  `render_block_buses` write to pre-allocated `out` / `bus` buffers and return
+  pointers; `worklet.js` reads WASM memory through a cached `Float32Array` view
+  (rebuilt only on memory growth). `process_block*` remain as copying wrappers
+- KS buffer `ks_buf_cap(sr) = ceil(sr/20)` (2205 at 44.1 kHz, 4800 at 96 kHz); f64 phase
+  accumulators (Kick, Snare, Tone, FM carrier/modulator) wrap at 1024 cycles, KS vibrato
+  at 2π
+- Tests: `alloc_count.rs` counting allocator; `qa2_tests` — non-finite slots, invalid
+  frequencies, negative FM decay, non-finite time, NaN voice kill, voice cap, queue cap,
+  queue order, phase wrap, KS buffer per sample rate, `render_is_allocation_free`
+  (0 allocations over 2000 blocks with the voice cap hit)
+
 See full spec: [PROMPTS/PHASE-QA2.md](PROMPTS/PHASE-QA2.md)
 
 ---
 
-## Phase QA3 — App Robustness & Keyboard Accessibility 📋 *planned*
+## Phase QA3 — App Robustness & Keyboard Accessibility ✅ *delivered*
 
 > **Quality track** · **Automation:** 🤖 auto
 
@@ -1517,11 +1620,46 @@ keyboard.
   inputs; focusable rows and buttons, keyboard insert menu, `aria-live` output; snippet
   panel keeps focus and ignores stale responses
 
+**Delivered:**
+- Tempo anchor (`repulse.tempo`: `time-at-cycle`, `cycle-at-time`, `retempo`): `:anchor-time`
+  / `:anchor-cycle` in the scheduler; every cycle→time site (tick, free and song scheduling,
+  capture start, song end, `first-song-bar` 6-arity, start cycle) uses it. A BPM change
+  re-anchors at the next unscheduled bar — 480→120 BPM continues within one old bar,
+  120→480 schedules no catch-up burst. `ctx` / `scheduler-state` are `defonce`; the WASM fetch
+  checks `resp.ok`; `tap!` uses `performance.now`
+- Timeline draws the audible bar (`audio/audible-cycle`), queries each track at most once
+  per bar (cache by pattern identity, cycle, mute) and animates only while playing.
+  Autosave: 1 s debounce, only on tempo / code / bank / source changes (no per-bar or
+  `fx/chain` saves), unchanged JSON not rewritten, flushed on `pagehide`; a full storage
+  says so once
+- FX staging: global `(fx …)` ops are recorded during an evaluation and applied on success
+  (whole programs reset the master chain first); a failed eval, `(tap!)` or any op-less
+  command leaves the master effects alone. Plugin `onEvent` failures are logged once per
+  plugin
+- Per-event JS node chains go into one pending list swept every 10th tick; unknown-length
+  chains (samples with sends but no inserts) are freed with their track or by `(stop)`.
+  Samples: negative cache per URL (no refetch, one `sample :x failed to load (…) — it stays
+  silent until reload` message), 200 MB LRU of decoded buffers, `defonce` registries
+- Snippet previews use an allow-list (`snippets/preview-policy`): built-ins with documented
+  side effects throw `<name> is not available in snippet previews` unless the sandbox
+  handles them (`preview-extra`); `restore!`, `delete-snapshot!`, `reset!`, `upd`, `tap!`,
+  `export`, MIDI and AI built-ins can no longer run from a preview
+- One modal stack (`ui/modal-stack`) and `ui/a11y` helpers: dialogs label themselves, trap
+  Tab, activate the focused button on Enter and restore focus; the submit modal is a real
+  dialog (BPM 20–640, Escape closes only it); global shortcuts ignore open modals and
+  outside text fields. Keyboard access: buffer tabs as name + close buttons, focusable outline
+  rows / session head / rail and history entries (Enter/Space), inspector buttons, `Mod-k i`
+  insert menu with arrow keys, `aria-live` output, labelled header buttons and playing dot.
+  Snippet panel: toolbar built once (focus survives reloads), request sequencing, client-side
+  sort/author filter for anonymous users, load error with retry. Tests:
+  `audio_scheduler_test`, `preview_policy_test`, fx staging tests, `e2e/qa3-robustness`,
+  `e2e/qa3-keyboard`, snippet panel E1–E4
+
 See full spec: [PROMPTS/PHASE-QA3.md](PROMPTS/PHASE-QA3.md)
 
 ---
 
-## Phase QA4 — One Source for Builtins, Strict Lint, Shared Helpers 📋 *planned*
+## Phase QA4 — One Source for Builtins, Strict Lint, Shared Helpers ✅ *delivered*
 
 > **Quality track** · **Automation:** 🤖 auto
 
@@ -1534,6 +1672,32 @@ hover docs and grammar highlighting are generated and can't drift.
 - clj-kondo at 0 warnings and failing CI on warnings; pinned installer
 - One shared implementation each for `xf`, number→float, Levenshtein, `shift-event`;
   dead code removed; CLAUDE.md library rule amended for `clojure.string`/`cljs.spec`
+
+**Delivered:**
+- `builtin_meta.edn` is the only hand-written name list: every entry carries `:type`,
+  `:detail`, `:signature` and `:doc` (123 names got hover docs they lacked). `npm run
+  gen:ai-docs` (`scripts/gen_builtins.mjs`, edn-only, validates required keys, examples,
+  `:see-also` and duplicates, fixed escape handling) writes `builtins.generated.js`
+  (completions + hover), the marked `BuiltinName` grammar region, `parser.js`,
+  `parser.terms.js` and `docs/ai/builtins.json`; `completions.js` and `hover.js` keep only
+  logic. `check:ai-docs` diffs all five generated files; the grammar now highlights
+  `samples! + - * / = not= < > <= >= keys vals`. CLAUDE.md Rule 3 rewritten
+- Env ↔ meta guard in two layers: `builtin_meta_test` (lisp env + `leval/special-forms`)
+  and `e2e/builtins-meta.spec.ts` (full app env via `__REPULSE_APP__.builtinNames`, both
+  directions; `play`, a rename stub that throws, is the one exclusion, and
+  synth/effect/UGen docs entries are documented-only). Added `map?`, `seq?`, `vector?`
+  entries the test found missing. Hover/highlight e2e cases in `e2e/editor.spec.ts`
+- clj-kondo 2025.10.23 at 0 warnings (the 8 listed plus one new in
+  `preview_policy_test`); `lint.yml` pins the installer and runs with
+  `--fail-level warning`
+- One implementation each: `repulse.lisp.builtins.common` (`xf`, `step->pat`, `n+p`,
+  `n+f+p`, `numeric-token?`), `core/as-number` (replaces seven coercions; `1/0` pairs now
+  give nil/the pair instead of ±Infinity), `core/shift-event`, `repulse.edit-distance`
+  (O(m·n) Levenshtein, `typo-hint` threshold 1/2/3 edits for names of ≤4/≤8/more letters).
+  Removed `core/combine`, `mini/alt*` (now `core/cat*`), the `:rest` branch,
+  `params/pat?`; `defmacro` uses `make-closure`
+- CLAUDE.md library rule allows the ClojureScript-bundled `clojure.string`, `clojure.set`,
+  `cljs.reader` and `cljs.spec.alpha`
 
 See full spec: [PROMPTS/PHASE-QA4.md](PROMPTS/PHASE-QA4.md)
 
@@ -2461,17 +2625,30 @@ See full spec: [PROMPTS/PHASE-TL7c.md](PROMPTS/PHASE-TL7c.md)
 
 ---
 
-## Phase KIT1 — High-Quality Drum Kits 📋 *planned*
+## Phase KIT1 — High-Quality Drum Kits ✅ *delivered*
 
 > **Milestone 1** · **Automation:** 🤖👂 auto + human check
 
 Studio-quality multisampled drum kits with velocity layers and round-robin, from
-openly licensed sources only (no proprietary Roland module samples).
+openly licensed sources only (CC0 / CC-BY / CC-BY-SA; no proprietary Roland module samples).
 
 **Key additions:**
-- Manifest extension for velocity layers and round-robin groups (backwards compatible)
-- `velocity` per-event parameter (layer selection + gain); `(kit :name)`
-- One or two curated kits with documented licences, lazily loaded
+- Layered banks: manifest entries with velocity layers and takes (backwards compatible)
+- `velocity` picks the recording layer on layered banks; round-robin without repeats,
+  seeded by onset; hat choke
+- `JazzKit` (Virtuosity Drums, CC0) and `StudioKit` (DRSKit, CC-BY 4.0), selected with
+  `(bank :JazzKit)` — no new built-in
+
+**Delivered (PRs #223, #225; listen check passed 2026-11-24):**
+- `repulse.kits`: pure manifest parse/validate, `pick-layer`, `layer-scale`, `pick-take`
+- `samples.cljs`: `repulse-kit/1` manifest entries, layered playback, `kit-names`, a kits
+  section in `sample-banks`, `preload-kit!`; hat choke (closed hat cuts open hat)
+- Layered banks play via bare keywords and `:note` maps; `sound` picks a fixed take;
+  round-robin seeded by onset
+- `scripts/kits/build-kit.mjs`; `JazzKit` (Virtuosity Drums, CC0) and `StudioKit`
+  (DRSKit, CC-BY 4.0) in `app/public/kits`, selected with `(bank :JazzKit)`
+- Unit and e2e tests, USAGE "Drum kits" docs
+- Listen check passed (project owner, 2026-11-24): both kits ship
 
 See full spec: [PROMPTS/PHASE-KIT1.md](PROMPTS/PHASE-KIT1.md)
 
@@ -2800,7 +2977,7 @@ See full spec: [PROMPTS/PHASE-WS5.md](PROMPTS/PHASE-WS5.md)
 
 ---
 
-## Phase WS6 — Runtime-Aware Outline: What You Hear Is What You See 📋 *planned*
+## Phase WS6 — Runtime-Aware Outline: What You Hear Is What You See ✅ *delivered*
 
 > **Milestone 2** · **Automation:** 🤖 auto
 
@@ -2816,7 +2993,42 @@ is never changed.
 - New pure `repulse.ui.outline-model` (`track-state`, `running-rows`) with unit tests;
   `outline-panel` render + `goto/goto-entry-in-buffer!`; no new built-ins
 
+**Delivered:**
+- `repulse.ui.outline-model` (`track-state`, `running-rows`, reference-vector unit tests in
+  `outline_model_test.cljs`, registered in the test runner)
+- Track rows outside a song: `•` / `■` / `ol-off` + `title="not running"`; the song section logic
+  is unchanged; `ol-off` now dims name, kind and line number
+- Running group after the master group (divider + `running` header with count); origins
+  `not in code`, `anonymous` and other-buffer name; not selectable (no `data-id`); shown even
+  when the active buffer has no entries
+- `outline-panel/other-tracks-fn` (set in `app.cljs`, parses memoised per buffer code), a
+  `goto-buffer` click via the new `goto/goto-entry-in-buffer!` (Shift+F12 returns)
+- `e2e/outline-runtime.spec.ts` (6 real-app tests); docs: USAGE "Outline & go-to-definition"
+
 See full spec: [PROMPTS/PHASE-WS6.md](PROMPTS/PHASE-WS6.md)
+
+---
+
+## Phase VIZ1 — Honest Track Visuals & In-Code Visualizers 📋 *planned*
+
+> **Milestone 2** · **Automation:** 🤖👂 auto + human watch-and-listen check
+
+The track panel shows the exact pattern events or the track's real audio, timed by the
+heard clock, and five Strudel-style built-ins draw a live view of a track under its form
+in the code.
+
+**Key additions:**
+- Panel modes `punch roll scope spec level` replace the synthesized `wave spec loud beat
+  seg`; pure `repulse.ui.viz-model` (heard cycle, window, real pitch rows via a shared
+  `audio/event-hz`, drum lanes) and a shared `repulse.ui.viz-draw` renderer
+- Per-track audio: a JS `tap` + `AnalyserNode` per track for JS voices, and 16 meter slots
+  inside the WASM `AudioEngine` (`meter_snapshot`, `trigger_v3` params slot 15), read via
+  ping-pong transferable buffers
+- Built-ins `pianoroll`, `punchcard`, `spiral`, `scope`, `spectrum` (`(pianoroll pat)`,
+  `(pianoroll {:cycles 2} pat)`), shown inline by a CodeMirror block widget
+  (`repulse.ui.inline-viz`); warning when a combinator wraps the viz and drops it
+
+See full spec: [PROMPTS/PHASE-VIZ1.md](PROMPTS/PHASE-VIZ1.md)
 
 ---
 

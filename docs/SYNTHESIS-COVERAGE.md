@@ -20,7 +20,7 @@ currently stand in for a missing synthesized sound.
 |---|---|
 | ✅ | Available today |
 | 🟡 | Partial: exists with a limit named in the row |
-| 📋 | Planned in an existing phase (TL7a–c, KIT1) |
+| 📋 | Planned in an existing phase |
 | ⏸ | Missing; specified in a deferred phase (SYN3–5, SYN7, FX2, P2), revisited after M2 |
 | 🆕 | Missing; scheduled in Milestone 1 by the phases added with this document (SYN6, FX1) |
 | 💤 | Missing and not scheduled; reason in the row |
@@ -38,20 +38,21 @@ TL7a–c are the three phases TL7 was split into.
 
 | Area | ✅ | 🟡 | 📋 | ⏸ | 🆕 | 💤 | Total |
 |---|---|---|---|---|---|---|---|
-| Synthesis methods | 5 | 4 | 0 | 5 | 4 | 5 | 23 |
-| Modulation sources | 2 | 3 | 5 | 0 | 2 | 0 | 12 |
-| Drums & percussion | 0 | 4 | 0 | 2 | 12 | 0 | 18 |
-| Bass | 1 | 4 | 0 | 1 | 3 | 0 | 9 |
-| Leads & keys | 1 | 4 | 0 | 6 | 5 | 0 | 16 |
-| Pads, strings & voices | 1 | 1 | 0 | 4 | 2 | 0 | 8 |
+| Synthesis methods | 13 | 0 | 0 | 5 | 0 | 5 | 23 |
+| Modulation sources | 7 | 3 | 1 | 0 | 0 | 0 | 12 |
+| Drums & percussion | 16 | 0 | 0 | 2 | 0 | 0 | 18 |
+| Bass | 7 | 1 | 0 | 1 | 0 | 0 | 9 |
+| Leads & keys | 10 | 0 | 0 | 6 | 0 | 0 | 16 |
+| Pads, strings & voices | 4 | 0 | 0 | 4 | 0 | 0 | 8 |
 | Plucked strings | 7 | 0 | 0 | 7 | 0 | 0 | 14 |
-| Winds & brass | 7 | 0 | 0 | 5 | 2 | 0 | 14 |
+| Winds & brass | 9 | 0 | 0 | 5 | 0 | 0 | 14 |
 | Mallets & bells | 2 | 0 | 0 | 8 | 0 | 0 | 10 |
-| Sound effects & textures | 1 | 1 | 0 | 9 | 1 | 0 | 12 |
-| Effects | 14 | 4 | 9 | 22 | 12 | 4 | 65 |
-| **Total** | **41** | **25** | **14** | **69** | **43** | **9** | **201** |
+| Sound effects & textures | 2 | 1 | 0 | 9 | 0 | 0 | 12 |
+| Effects | 18 | 4 | 4 | 22 | 12 | 4 | 65 |
+| **Total** | **95** | **9** | **5** | **69** | **12** | **9** | **201** |
 
-Rows that group several names (e.g. "toms lo/mid/hi") count once.
+Rows that group several names (e.g. "toms lo/mid/hi") count once. Rows marked ❓ (open
+parity questions) count only in *Total*. Counts updated 2026-11-20 after SYN6.
 
 ---
 
@@ -60,15 +61,15 @@ Rows that group several names (e.g. "toms lo/mid/hi") count once.
 | Method | What it is good for | Status | Phase | Notes |
 |---|---|---|---|---|
 | Sine oscillator | Sub bass, pure tones, drones | ✅ | — | Default voice for note keywords and Hz numbers (`Voice::Tone`) |
-| Sawtooth, pulse/square | Subtractive basses, leads, pads | 🟡 | SYN6 | `(synth :saw)`, `(synth :square :pw …)`. The WASM oscillators are naive (not band-limited) and alias on high notes |
-| Triangle | Flute-like tones, chip bass | 🟡 | SYN6 | Only as a `defsynth` UGen (`tri`), not as a `synth` voice |
-| Band-limited oscillators (PolyBLEP) | Clean high notes, sweeps | 🆕 | SYN6 | `defsynth` already uses band-limited native `OscillatorNode`s; the WASM voices do not |
-| Pulse-width modulation | Moving, chorused pulse tones | 🟡 | SYN6 | Pulse width is fixed per event (`:pw`), not modulated within a note |
-| Unison / supersaw | Trance leads, reese bass, string ensembles | 🆕 | SYN6 | Resolves the ❓ `detune`/`unison`/`spread` parity row |
-| Oscillator hard sync | Tearing sync leads | 🆕 | SYN6 | |
+| Sawtooth, pulse/square | Subtractive basses, leads, pads | ✅ | SYN6 | `(synth :saw)`, `:square` / `:pulse`; band-limited (PolyBLEP) since SYN6 |
+| Triangle | Flute-like tones, chip bass | ✅ | SYN6 | `(synth :tri)`, band-limited |
+| Band-limited oscillators (PolyBLEP) | Clean high notes, sweeps | ✅ | SYN6 | PolyBLEP saw/pulse, PolyBLAMP triangle in `Voice::Osc` |
+| Pulse-width modulation | Moving, chorused pulse tones | ✅ | SYN6 | `pw`, `pw-rate`, `pw-depth` (WASM; static `pw` on FX tracks) |
+| Unison / supersaw | Trance leads, reese bass, string ensembles | ✅ | SYN6 | `unison`, `detune`, `spread`, `(synth :supersaw)` |
+| Oscillator hard sync | Tearing sync leads | ✅ | SYN6 | `sync` on `:saw` / `:pulse` (WASM) |
 | White noise | Hats, snares, sweeps | ✅ | — | `(synth :noise)`; LCG generator in Rust |
-| Coloured noise (pink, brown), dust/crackle, LFSR chip noise | Wind, surf, vinyl, chiptune drums | 🆕 | SYN6 | |
-| Subtractive voice (oscillator → filter → amp, each with an envelope) | The classic analog synth sound | 🟡 | TL7a, TL7c, SYN6 | Per-event filter (TL7a) with its own envelope (TL7c: `lp-env` …) on any voice; SYN6 adds ready-made instruments |
+| Coloured noise (pink, brown), dust/crackle, LFSR chip noise | Wind, surf, vinyl, chiptune drums | ✅ | SYN6 | `(synth :noise :color :pink)`, `:brown`, `:dust` (`:density`), `:lfsr` |
+| Subtractive voice (oscillator → filter → amp, each with an envelope) | The classic analog synth sound | ✅ | TL7a, TL7c, SYN6 | Per-event filter (TL7a) with its own envelope (TL7c); SYN6 instruments `:pad`, `:acid`, … |
 | FM / phase modulation, 2 operators | Bells, electric pianos, brass, reeds | ✅ | — | `(synth :fm :index … :ratio …)` plus 11 presets |
 | FM, 4–6 operators with algorithms and feedback | DX-style keys, basses, evolving timbres | 💤 | — | Large engine and UI surface; 2-operator presets cover the common cases. Per-event FM controls were deferred by TL7c to SYN6 |
 | Karplus-Strong plucked string | Guitar, harp, koto, pizzicato | ✅ | — | `Voice::KarplusStrong`, 7 presets + alias, body EQ per instrument |
@@ -91,14 +92,14 @@ Rows that group several names (e.g. "toms lo/mid/hi") count once.
 | Multi-segment envelope with curves | ✅ | — | `env` + `env-gen` inside `defsynth` |
 | `adsr` shorthands, `sustain`/`hold` for synth voices | ❓ | — | Deferred by TL7c: `sustain` already means sample length (TL6), and synth voices have no gate |
 | Filter envelope | ✅ | TL7c | `lp-env`, `lp-attack`, … (also `hp-*`, `bp-*`); gate = event length |
-| Pitch envelope | ✅ | TL7c | `penv`, `p-attack` …; tonal voices and samples; drum voices get their own sweeps in SYN6 |
+| Pitch envelope | ✅ | TL7c | `penv`, `p-attack` …; tonal voices and samples; the SYN6 kit drums have their own sweeps |
 | Vibrato | ✅ | TL7c | `vib`, `vib-mod`; koto and mandolin presets have fixed vibrato |
-| Velocity | 📋 | TL7a, KIT1 | |
+| Velocity | ✅ | TL7a, KIT1 | `velocity`; picks the recording layer on layered kits (`JazzKit`, `StudioKit`) |
 | LFO on a synth parameter | 🟡 | — | Only through a control bus in `defsynth` |
 | Pattern-rate modulation (one value per event) | 🟡 | TL7a | Signals (`sine`, `saw`, `perlin`, …) drive `amp`, `pan`, `rate` today; filters follow in TL7a |
 | Session-time ramps | 🟡 | SONG2 | `tween` for `amp` and `pan` only; song-time automation planned |
-| Glide / portamento between notes | 🆕 | SYN6 | |
-| Per-voice LFO and PWM within a note | 🆕 | SYN6 | |
+| Glide / portamento between notes | ✅ | SYN6 | `glide`, per track, nearest note of the previous chord |
+| Per-voice LFO and PWM within a note | ✅ | SYN6 | `pw-rate`/`pw-depth`; cutoff LFO `lp-rate`/`lp-depth` |
 
 ---
 
@@ -111,71 +112,71 @@ sweeps, filtered noise and clusters of detuned square waves.
 
 | Sound | How it is synthesized | Status | Phase | Notes |
 |---|---|---|---|---|
-| Kick | Sine with a fast downward pitch sweep | 🟡 | SYN6 | `:bd`, fixed 150 → 40 Hz, not tunable. Heard only while no `bd` sample bank is loaded |
-| Snare | Tuned sine(s) + band-passed noise | 🟡 | SYN6 | `:sd`, fixed |
-| Closed hi-hat | High-passed noise or 6 detuned squares, short | 🟡 | SYN6 | `:hh`, noise only (no metallic source) |
-| Open hi-hat | Same source, long decay, choked by the closed hat | 🟡 | SYN6 | `:oh`; no choke for synthesized hats (`cut` works on samples only) |
-| Long sub kick / pitched bass drum | Sine, slow decay, tuned to the song key | 🆕 | SYN6 | |
-| Clap | 3–4 noise bursts through a band-pass + tail | 🆕 | SYN6 | Samples: `:cp` |
-| Rimshot / side stick | Very short tuned pulse through band-passes | 🆕 | SYN6 | |
-| Toms lo/mid/hi | Sine with a mild pitch drop | 🆕 | SYN6 | |
-| Cowbell | Two detuned squares through a band-pass | 🆕 | SYN6 | |
-| Claves / woodblock | Short high sine blip | 🆕 | SYN6 | |
-| Crash / ride cymbal | Metallic square cluster, long decay | 🆕 | SYN6 | |
-| Shaker / maracas / cabasa | High-passed noise with a soft attack | 🆕 | SYN6 | |
-| Tambourine | Noise + metallic cluster, jingle envelope | 🆕 | SYN6 | |
-| Conga / bongo | Sine with a short pitch drop, tuned | 🆕 | SYN6 | |
-| Syn-tom / zap | Fast exponential pitch sweep | 🆕 | SYN6 | Drum voice `:zap` |
-| Snap / click / tick | Filtered impulse | 🆕 | SYN6 | |
+| Kick | Sine with a fast downward pitch sweep | ✅ | SYN6 | Synth kit `:bd` (`(bank :synth)` / `:synth_bd`), `tune` `tone` `decay`; the legacy kick stays the no-sample fallback |
+| Snare | Tuned sine(s) + band-passed noise | ✅ | SYN6 | Synth kit `:sd`: two swept sines + noise, `tone` = body ↔ noise |
+| Closed hi-hat | High-passed noise or 6 detuned squares, short | ✅ | SYN6 | Synth kit `:hh`: six band-limited squares, chokes the open hat |
+| Open hi-hat | Same source, long decay, choked by the closed hat | ✅ | SYN6 | Synth kit `:oh`, choked by `:hh` (WASM) |
+| Long sub kick / pitched bass drum | Sine, slow decay, tuned to the song key | ✅ | SYN6 | `:bd` with `tune` and a long `decay` |
+| Clap | 3–4 noise bursts through a band-pass + tail | ✅ | SYN6 | Synth kit `:cp`: four noise bursts |
+| Rimshot / side stick | Very short tuned pulse through band-passes | ✅ | SYN6 | Synth kit `:rim` |
+| Toms lo/mid/hi | Sine with a mild pitch drop | ✅ | SYN6 | Synth kit `:lt` `:mt` `:ht` |
+| Cowbell | Two detuned squares through a band-pass | ✅ | SYN6 | Synth kit `:cb` |
+| Claves / woodblock | Short high sine blip | ✅ | SYN6 | Synth kit `:cl` |
+| Crash / ride cymbal | Metallic square cluster, long decay | ✅ | SYN6 | Synth kit `:cr`, `:rd` |
+| Shaker / maracas / cabasa | High-passed noise with a soft attack | ✅ | SYN6 | Synth kit `:sh` |
+| Tambourine | Noise + metallic cluster, jingle envelope | ✅ | SYN6 | Synth kit `:tb` |
+| Conga / bongo | Sine with a short pitch drop, tuned | ✅ | SYN6 | Synth kit `:cg` |
+| Syn-tom / zap | Fast exponential pitch sweep | ✅ | SYN6 | Synth kit `:zap` |
+| Snap / click / tick | Filtered impulse | ✅ | SYN6 | Synth kit `:click` |
 | Timpani | Membrane modes | ⏸ | SYN7 | |
 | Tabla / hand drums | Membrane modes with pitch bend | ⏸ | SYN7 | Samples: `:tabla` |
 
-Recorded kits: Dirt-Samples and Tidal Drum Machines today, multisampled kits with
-velocity layers in KIT1.
+Recorded kits: Dirt-Samples, Tidal Drum Machines, and the multisampled kits `JazzKit`
+and `StudioKit` with velocity layers and round-robin (KIT1).
 
 ### Bass
 
 | Sound | How it is synthesized | Status | Phase | Notes |
 |---|---|---|---|---|
 | Sub bass | Sine, short attack | ✅ | — | Note keyword + `decay` |
-| Saw / square bass | Oscillator → low-pass | 🟡 | TL7a, SYN6 | Unfiltered today |
-| Acid bass | Saw/square → resonant low-pass with envelope, slide and accent | 🆕 | SYN6 | Filter and envelope from TL7a/TL7c |
-| Reese bass | Two or more detuned saws → low-pass | 🆕 | SYN6 | |
-| FM bass | 2-operator FM, short index decay | 🟡 | SYN6 | By hand with `(synth :fm :index … :ratio …)`; no preset |
-| Wobble bass | Saw → low-pass with an LFO on the cutoff | 🟡 | SYN6 | By hand with `defsynth` + a control bus |
+| Saw / square bass | Oscillator → low-pass | ✅ | TL7a, SYN6 | `(synth :saw)` + `lpf`, or the instruments below |
+| Acid bass | Saw/square → resonant low-pass with envelope, slide and accent | ✅ | SYN6 | `(synth :acid)` with `glide` and `accent` |
+| Reese bass | Two or more detuned saws → low-pass | ✅ | SYN6 | `(synth :reese)` |
+| FM bass | 2-operator FM, short index decay | ✅ | SYN6 | `(synth :fm-bass)` |
+| Wobble bass | Saw → low-pass with an LFO on the cutoff | ✅ | SYN6 | `(synth :wobble)`; `lp-rate` / `lp-depth` on any voice |
 | Plucked / upright bass | Karplus-Strong | 🟡 | SYN7 | `:pizz` on low notes; no bass preset |
 | Electric bass guitar | Karplus-Strong + pickup filter | ⏸ | SYN7 | |
-| Long pitched sub kick as a bass line | Tunable drum voice | 🆕 | SYN6 | |
+| Long pitched sub kick as a bass line | Tunable drum voice | ✅ | SYN6 | `:bd` with `tune` and `decay` under `(bank :synth)` |
 
 ### Leads & keys
 
 | Sound | How it is synthesized | Status | Phase | Notes |
 |---|---|---|---|---|
-| Saw / square lead | Oscillator, optionally filtered | 🟡 | SYN6 | Aliasing on high notes |
-| Supersaw lead | 5–7 detuned saws, stereo spread | 🆕 | SYN6 | |
-| Sync lead | Hard-synced oscillator with a pitch sweep | 🆕 | SYN6 | |
-| PWM lead | Pulse with an LFO on the width | 🆕 | SYN6 | |
-| Chiptune voices | 12.5/25/50 % pulse, triangle, LFSR noise | 🟡 | SYN6 | Pulse via `:pw`; triangle voice and LFSR noise missing |
+| Saw / square lead | Oscillator, optionally filtered | ✅ | SYN6 | `(synth :lead)`; band-limited oscillators |
+| Supersaw lead | 5–7 detuned saws, stereo spread | ✅ | SYN6 | `(synth :supersaw)` |
+| Sync lead | Hard-synced oscillator with a pitch sweep | ✅ | SYN6 | `(synth :sync-lead)` |
+| PWM lead | Pulse with an LFO on the width | ✅ | SYN6 | `(synth :pulse)` with `pw-rate` / `pw-depth` |
+| Chiptune voices | 12.5/25/50 % pulse, triangle, LFSR noise | ✅ | SYN6 | `:pulse` with `pw`, `:tri`, `(synth :noise :color :lfsr)` |
 | Electric piano (tine) | FM, high modulator ratio | ✅ | — | `:epiano` |
 | Clavinet | Plucked string + pickup filter | ⏸ | SYN7 | |
 | Harpsichord | Bright plucked string, fast release | ⏸ | SYN7 | |
 | Celesta / music box | FM or modal, high register | ⏸ | SYN7 | |
 | Drawbar organ | 9 sine drawbars + key click + percussion | ⏸ | SYN7 | Rotary speaker in FX2 |
 | Pipe / church organ | Additive ranks, slow attack | ⏸ | SYN7 | |
-| Accordion / harmonica (free reeds) | Detuned pulse pair → band-pass | 🆕 | SYN6 | |
+| Accordion / harmonica (free reeds) | Detuned pulse pair → band-pass | ✅ | SYN6 | `(synth :reed)` |
 | Piano | Hammered-string model | ⏸ | SYN5 | |
-| Synth brass | Saws with a filter envelope, or FM | 🟡 | SYN6 | FM `:synth-brass` exists in the engine but is undocumented |
-| Pluck synth | Filtered saw with a fast envelope | 🟡 | SYN6 | By hand with `defsynth` |
-| Theremin / whistle lead | Sine with glide and vibrato | 🆕 | SYN6 | Vibrato from TL7c |
+| Synth brass | Saws with a filter envelope, or FM | ✅ | SYN6 | `(synth :brass-pad)`; FM `:synth-brass` documented |
+| Pluck synth | Filtered saw with a fast envelope | ✅ | SYN6 | `(synth :pluck)` |
+| Theremin / whistle lead | Sine with glide and vibrato | ✅ | SYN6 | `(synth :theremin)` |
 
 ### Pads, strings & voices
 
 | Sound | How it is synthesized | Status | Phase | Notes |
 |---|---|---|---|---|
 | Drone | Sustained sine | ✅ | — | `(pure 60)` |
-| Warm pad | Detuned oscillators → low-pass, slow attack | 🟡 | SYN6 | By hand with `defsynth` |
-| String ensemble (string machine) | Unison saws + ensemble chorus, slow attack | 🆕 | SYN6 | |
-| Sweep pad | Pad with a slow filter envelope | 🆕 | SYN6 | |
+| Warm pad | Detuned oscillators → low-pass, slow attack | ✅ | SYN6 | `(synth :pad)` |
+| String ensemble (string machine) | Unison saws + ensemble chorus, slow attack | ✅ | SYN6 | `(synth :strings)` (no ensemble chorus: track `fx`) |
+| Sweep pad | Pad with a slow filter envelope | ✅ | SYN6 | `(synth :sweep-pad)` |
 | Bell / glass pad | Modal partials with long decay | ⏸ | SYN7 | |
 | Choir / vox pad ("aah", "ooh") | Pulse source → vowel formants | ⏸ | SYN7 | |
 | Vowel lead / talking synth | Formant voice with a patterned vowel | ⏸ | SYN7 | TL7c `vowel` puts the same formants on any sound |
@@ -207,17 +208,17 @@ velocity layers in KIT1.
 | Saxophone | ✅ | — | `:sax` (FM + formant EQ + breath noise) |
 | Trumpet | ✅ | — | `:trumpet` |
 | Muted trumpet | ✅ | — | `:trumpet-muted` |
-| Harmon-muted trumpet | ✅ | — | `:harmon-out`, `:harmon-in`; in the engine, missing from the USAGE.md table |
+| Harmon-muted trumpet | ✅ | — | `:harmon-out`, `:harmon-in` |
 | Trombone | ✅ | — | `:trombone` |
 | Flute | ✅ | — | `:flute` |
-| Synth brass | ✅ | — | `:synth-brass`; missing from the USAGE.md table |
-| Cup-muted trumpet | 🆕 | SYN6 | USAGE.md documents `:trumpet-cup`, but no such preset exists; it plays a plain sine |
+| Synth brass | ✅ | — | `:synth-brass` |
+| Cup-muted trumpet | ✅ | SYN6 | `:trumpet-cup` |
 | Clarinet | ⏸ | SYN7 | Odd harmonics (modulator ratio 2) |
 | Oboe / bassoon | ⏸ | SYN7 | |
 | French horn / tuba | ⏸ | SYN7 | |
 | Pan flute / blown bottle | ⏸ | SYN7 | FM + breath noise |
 | Recorder / ocarina / whistle | ⏸ | SYN7 | Near-sine with a soft attack |
-| Harmonica / accordion | 🆕 | SYN6 | See *Leads & keys* |
+| Harmonica / accordion | ✅ | SYN6 | `(synth :reed)`; see *Leads & keys* |
 
 ### Mallets & bells
 
@@ -243,7 +244,7 @@ velocity layers in KIT1.
 | Riser / uplifter | Noise or saw with rising pitch and filter over the whole event | ⏸ | SYN7 | Needs the event length in the engine |
 | Downlifter / fall | The reverse | ⏸ | SYN7 | |
 | Noise sweep / whoosh | Band-passed noise with a moving centre | ⏸ | SYN7 | |
-| Laser / zap | Fast exponential pitch drop | 🆕 | SYN6 | The `:zap` drum voice |
+| Laser / zap | Fast exponential pitch drop | ✅ | SYN6 | The `:zap` drum voice |
 | Siren / alarm | Oscillator with a slow pitch LFO | ⏸ | SYN7 | |
 | Impact / boom | Sub drop + noise burst | ⏸ | SYN7 | |
 | Wind | Band-passed noise, slowly wandering cutoff | ⏸ | SYN7 | Pink noise from SYN6 |
@@ -267,12 +268,12 @@ effect plugins (`(fx …)`, global chain or per track) and no per-event effects 
 | Filter envelope per event | ✅ | TL7c | `lp-env` … `bp-release` |
 | DJ filter (one knob LP↔HP) | ✅ | TL7c | `djf` |
 | Vowel / formant filter | ✅ | TL7c | `vowel` (`:a :e :i :o :u`) |
-| Shelving, peaking, all-pass types on `filter` | 🆕 | FX1 | Native `BiquadFilterNode` types, not exposed |
+| Shelving, peaking, all-pass types on `filter` | ✅ | FX1 | `(fx :filter :type :peaking :gain 6 …)`; all 8 `BiquadFilterNode` types |
 | Ladder filter (24 dB/oct, self-oscillating) | ⏸ | FX2 | |
 | Comb filter | ⏸ | FX2 | |
 | Tuned resonator bank | ⏸ | FX2 | |
 | Auto-wah / envelope filter | ⏸ | FX2 | |
-| Parametric EQ (shelves + peaking bands) | 🆕 | FX1 | FUTURE-FEATURES backlog row |
+| Parametric EQ (shelves + peaking bands) | ✅ | FX1 | `(fx :eq :low … :mid … :mid2 … :high …)` |
 
 ### Dynamics
 
@@ -281,8 +282,8 @@ effect plugins (`(fx …)`, global chain or per track) and no per-event effects 
 | Compressor | ✅ | — | `(fx :compressor …)`, `DynamicsCompressorNode` |
 | Sidechain ducking | ✅ | — | `(fx :sidechain :trigger :bd …)`, pattern-triggered |
 | Per-orbit ducking | ❓ | — | `duck`: deferred by TL7c; `(fx :sidechain …)` covers track ducking |
-| Limiter (output ceiling) | 🆕 | FX1 | The engine hard-clips at ±1 today |
-| Noise gate / expander | 🆕 | FX1 | |
+| Limiter (output ceiling) | ✅ | FX1 | `(fx :limiter -1)`, 5 ms look-ahead worklet; the engine bound is ±8 since FX1 |
+| Noise gate / expander | ✅ | FX1 | `(fx :gate …)` with hold and `:range` (expander) |
 | Transient shaper | ⏸ | FX2 | |
 | Multiband compressor | ⏸ | FX2 | |
 | De-esser | 💤 | — | Vocal-recording tool; no audio input in REPuLse |
@@ -312,9 +313,9 @@ effect plugins (`(fx …)`, global chain or per track) and no per-event effects 
 | Chorus | ✅ | — | `(fx :chorus …)` |
 | Phaser | ✅ | — | `(fx :phaser …)` |
 | Tremolo | ✅ | — | `(fx :tremolo …)` |
-| Flanger | 🆕 | FX1 | |
-| Vibrato (pitch modulation of a whole track) | 🆕 | FX1 | Per-event `vib` is TL7c |
-| Ring modulator | 🆕 | FX1 | FUTURE-FEATURES backlog row; `(* a b)` exists inside `defsynth` |
+| Flanger | ✅ | FX1 | `(fx :flanger …)`, worklet with feedback |
+| Vibrato (pitch modulation of a whole track) | ✅ | FX1 | `(fx :vibrato …)`; per-event `vib` is TL7c |
+| Ring modulator | ✅ | FX1 | `(fx :ring-mod …)`; `(* a b)` also exists inside `defsynth` |
 | Rotary speaker | ⏸ | FX2 | Parity row `leslie` is undecided; FX2 settles it |
 | Frequency shifter | ⏸ | FX2 | |
 
@@ -323,13 +324,13 @@ effect plugins (`(fx …)`, global chain or per track) and no per-event effects 
 | Effect | Status | Phase | Notes |
 |---|---|---|---|
 | Pan per event | ✅ | — | `pan`, `jux` |
-| Convolution reverb | 🟡 | FX1 | `(fx :reverb …)`: one generated impulse response, no size/decay/damping control |
+| Convolution reverb | ✅ | FX1 | `(fx :reverb …)` with `type`, `decay`, `size`, `damp`, `predelay` |
 | Plate reverb | ✅ | — | `(fx :dattorro-reverb …)` with decay, damping, pre-delay |
 | Reverb send per event | 📋 | TL7b | `room`, `size`, `orbit` |
-| Room / hall / spring / gated / reverse reverb | 🆕 | FX1 | |
+| Room / hall / spring / gated / reverse reverb | ✅ | FX1 | `(fx :reverb :type …)`; `:spring` kept after the FX1 listen check (D7) |
 | Shimmer reverb | ⏸ | FX2 | Needs the pitch shifter |
-| Auto-pan | 🆕 | FX1 | |
-| Stereo width (mid/side), Haas widener | 🆕 | FX1 | |
+| Auto-pan | ✅ | FX1 | `(fx :auto-pan …)`, equal power, `:sync` |
+| Stereo width (mid/side), Haas widener | ✅ | FX1 | `(fx :width … :haas …)` |
 | Multichannel panning | 💤 | — | Parity doc: ⛔ (SuperDirt multichannel) |
 | Effect routing (reorder, parallel, sends) | ⏸ | P2 | |
 
@@ -337,11 +338,11 @@ effect plugins (`(fx …)`, global chain or per track) and no per-event effects 
 
 | Effect | Status | Phase | Notes |
 |---|---|---|---|
-| Feedback delay | 🟡 | FX1 | `(fx :delay …)`: time in seconds only, mono feedback path |
+| Feedback delay | ✅ | FX1 | `(fx :delay …)` with `:mode`, `:lowcut`/`:highcut` in the repeats |
 | Delay send per event | 📋 | TL7b | `delay`, `delay-time`, `delay-feedback` |
-| Tempo-synced delay time | 🟡 | TL7c, FX1 | `delay-sync` per event ✅ (TL7c); `:sync` on the track effect (FX1) |
-| Ping-pong delay | 🆕 | FX1 | |
-| Multi-tap delay | 🆕 | FX1 | |
+| Tempo-synced delay time | ✅ | TL7c, FX1 | `delay-sync` per event (TL7c); `(fx :delay :sync 3/16)` on the track effect (FX1) |
+| Ping-pong delay | ✅ | FX1 | `(fx :delay :mode :ping-pong …)` |
+| Multi-tap delay | ✅ | FX1 | `(fx :delay :taps [1/8 3/8] …)` |
 | Tape delay (filtered, saturating, wobbling repeats) | ⏸ | FX2 | |
 
 ### Pitch, time & spectral

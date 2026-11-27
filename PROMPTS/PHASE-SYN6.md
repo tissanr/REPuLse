@@ -26,7 +26,14 @@ confirmed them on 2026-11-14; they are not open.
    (`(sub [mode] amt pat)`, grammar line 43, `completions.js` line 101), so the
    outline's `(sub 0.5)` cannot be registered. `ROADMAP.md` still says `sub` in the
    SYN6 bullets; the delivery commit corrects it.
-3. **Two kicks for one name.** The four legacy engine voices stay bit-identical as the
+3. **Superseded on 2026-11-21 — the synth kit is the default kit.** After hearing the
+   kit, the owner decided that bare kit names play the synth kit even when sample banks
+   of those names have loaded; `(bank :dirt)` restores the Dirt-Samples drums (the
+   previous default), drum-machine banks work as before, and the four legacy engine
+   voices are no longer reachable from patterns (kept in `lib.rs` for old trigger
+   strings). Routing rules: `drum-route` in `app/src/repulse/voices.cljs`. The original
+   decision, kept for the record:
+   **Two kicks for one name.** The four legacy engine voices stay bit-identical as the
    no-sample fallback for bare `:bd :sd :hh :oh`, and the new kit is reached through
    `(bank :synth)` / `:synth_*`. Consequence: without samples, `(seq :bd)` and
    `(bank :synth) (seq :bd)` sound different. Retiring the legacy voices was the
@@ -146,8 +153,9 @@ These answer the outline's open design questions. Each is based on the code as i
    mechanism only ever looks at `synth_<name>`. If a manifest registers a bank named
    `synth_bd`, the synthesized voice wins for keyword addressing and the sample stays
    reachable with `(sound :synth_bd 0)` (a `(sound …)` map always uses samples, see
-   `play-event` line 576). KIT1's `(kit …)` selects multisampled kits and is
-   independent: `(bank :synth)` wins for the 18 drum names while it is active.
+   `play-event` line 576). KIT1's multisampled kits are banks too
+   (`(bank :JazzKit)`): only one prefix is active, so `(bank :synth)` and a kit prefix
+   replace each other.
 8. **`tone` is one shared 0–1 brightness parameter** (event key `:tone`). Each voice
    documents what it maps to. Deferred SYN4 uses the same key for the guitar tone
    control. Reason: it is the same idea (a tone knob), and one name per voice family

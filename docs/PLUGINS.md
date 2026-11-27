@@ -218,6 +218,62 @@ After loading, control the tremolo from the REPL:
 | `destroy()` | **required** | throws | Disconnect all nodes and release references. |
 | `clone()` | optional | shallow object clone fallback | Return a fresh effect instance for per-track chains. Required for closure-state plugins. |
 | `ready()` | optional | treated as already ready | Return a Promise that resolves once the nodes from the last `createNodes()` are fully wired (e.g. an `AudioWorkletNode` created after `addModule`, an IR generated asynchronously) and rejects if wiring failed. Awaited (5 s timeout) before an offline export renders. |
+| `params` | optional (property) | none: every name is passed through | Static parameter descriptor (Phase FX1): the `fx` built-in checks names and values, converts rationals and keywords, and reports unknown ones as eval warnings. See [Parameter descriptor](#parameter-descriptor-params). |
+| `setTempo(cycleDur, origin)` | optional | not called | Tempo for tempo-synced effects (Phase FX1). `cycleDur` is seconds per cycle; `origin` is the context time at which cycle 0 starts. See [Tempo](#tempo-settempocycledur-origin). |
+| `resetParams()` | optional | not called | Return every parameter to its default. Called on every global effect before each evaluation, so the code stays the source of truth. |
+
+### Parameter descriptor (`params`)
+
+An effect may carry a static `params` object. Keys are parameter names, values say what the
+parameter takes:
+
+```javascript
+params: {
+  value: "wet",                                // the positional (fx :name 0.4) sets this parameter
+  wet:   "number",                             // rationals such as 3/16 arrive as 0.1875
+  type:  ["classic", "room", "hall"],          // enum: a keyword :hall arrives as the string "hall"
+  taps:  "list",                               // a vector arrives as a JS array of numbers
+},
+```
+
+With a descriptor, the `fx` built-in (global and per track):
+
+- renames the positional value to the parameter `value` names, or warns
+  `fx :eq takes no positional value — parameters: …` when there is no `value` key;
+- warns `fx :reverb has no parameter :room — parameters: …` for unknown names,
+  `fx :delay :time expects a number — got :fast` for non-numbers and
+  `fx :reverb :type has no value :cathedral — values: …` for unknown enum values;
+- warns `fx :limiter needs a parameter — parameters: …` for `(fx :limiter)`;
+- sends only the values that passed, already converted.
+
+The parameter list in a message is the descriptor's keys in order, without `value`. Plugins
+without `params` get every name and value exactly as before.
+
+### Tempo: `setTempo(cycleDur, origin)`
+
+REPuLse calls `setTempo` on every instance that has it: right after `createNodes` (global and
+per-track instances), again whenever the BPM changes, and on the offline copies of an export
+(`origin` is then the export's pre-roll, 0.25 s; in real time it is 0). Keep tempo-relative
+values in cycles and derive seconds in the plugin, so `getParams()` and the offline replay need
+no special case. `delay` (`:sync`, `:taps`) and `auto-pan` (`:sync`) use it.
+
+### Effects that switch on when used
+
+An effect without a mix control (`limiter`, `gate`, `vibrato`, `auto-pan`) is inactive after
+`createNodes()` and `resetParams()` (input → dry → output only) and becomes active with the
+first `setParam`. Such an effect must return `{}` from `getParams()` while it is inactive: the
+offline export replays `getParams()` into `setParam()` for every effect in the chain, and would
+otherwise switch it on in every export.
+
+### Oscillators and smoothed changes
+
+- Start oscillators with `osc.start(0)` in `createNodes`, not from a `statechange` listener: an
+  `OfflineAudioContext` only becomes "running" inside `startRendering()`.
+- `setTargetAtTime` and ramps are for a running context. While `ctx.currentTime` is 0 (a context
+  that has not started, i.e. every offline render) set `.value` directly, so a render never
+  begins inside a glide.
+- A worklet module may be added twice to one context (e.g. after `(load-plugin …)` of a
+  built-in): wrap `registerProcessor` in `try/catch`.
 
 ### Offline export
 
@@ -454,9 +510,8 @@ Register the plugin in `app.cljs` `init` — no other wiring needed.
 When adding a new effect plugin that introduces a new built-in name (e.g. `:my-effect` via `fx`), keep the AI knowledge base in sync by running `gen:ai-docs` alongside `gen:grammar`:
 
 ```bash
-npm run gen:grammar    # regenerate Lezer parser
-# edit completions.js + hover.js + builtin_meta.edn
-npm run gen:ai-docs    # regenerate docs/ai/builtins.json
+# edit builtin_meta.edn (the only hand-written name list)
+npm run gen:ai-docs    # regenerate completions, hover docs, grammar region, parser, docs/ai/builtins.json
 ```
 
 See `docs/ai/README.md` for the full update workflow and `CLAUDE.md` Rule 3 for the complete checklist.

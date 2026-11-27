@@ -4,8 +4,15 @@
 
 let _getBankNames = () => [];
 let _getFxNames   = () => [];
+let _getVoiceNames = () => [];
+let _getDrumNames  = () => [];
 
 export function setBankNamesProvider(fn) { _getBankNames = fn; }
 export function setFxNamesProvider(fn)   { _getFxNames   = fn; }
 export function getBankNames() { return _getBankNames(); }
 export function getFxNames()   { return _getFxNames();   }
+// Phase SYN6: built-in synth voices and kit drums, from repulse.voices.
+export function setVoiceNamesProvider(fn) { _getVoiceNames = fn; }
+export function setDrumNamesProvider(fn)  { _getDrumNames  = fn; }
+export function getVoiceNames() { return _getVoiceNames(); }
+export function getDrumNames()  { return _getDrumNames();  }
