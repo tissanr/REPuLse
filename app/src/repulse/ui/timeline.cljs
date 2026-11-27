@@ -78,7 +78,9 @@
   [state heard]
   (if-let [{s :song origin :origin} (:song state)]
     (if origin
-      (let [rel (- heard origin)
+      ;; Output latency: the heard position trails the scheduler, so right
+      ;; after a song starts it can lie before the origin — hold at bar 0.
+      (let [rel (max 0 (- heard origin))
             bar (Math/floor rel)
             q   (song/wrap-bar s bar)]
         (if q (+ q (- rel bar)) rel))
