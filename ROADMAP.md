@@ -1,6 +1,6 @@
 # REPuLse — Roadmap
 
-## Where we stand (updated 2026-11-24)
+## Where we stand (updated 2026-11-27)
 
 | Milestone | Delivered | Still open |
 |---|---|---|
@@ -9,8 +9,9 @@
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
 
-- **Next for the unattended pipeline:** VIZ1 (honest track visuals & in-code
-  visualizers, added 2026-11-24). It can be implemented unattended but is delivered only
+- **Next for the unattended pipeline:** TEST4 (e2e coverage expansion: generated tests
+  from `builtin_meta.edn`, demos and tutorial, measured e2e coverage, fuzzing, added
+  2026-11-27), then VIZ1 (honest track visuals & in-code visualizers, added 2026-11-24). It can be implemented unattended but is delivered only
   after a human watch-and-listen check. WS6 and the quality-track phases QA1–QA4 are
   delivered; every other remaining phase needs a human (🤖👂 or 🧑).
 - **Next for a human session:** N1 opens M3. FX1 and KIT1 passed their listen checks on
@@ -60,6 +61,7 @@ without a human:
 |---|---|---|---|---|---|---|
 | **Tooling** | | | **Test coverage (no milestone, runs first)** | | | |
 | 0 | TEST3 | ✅ | Release-protocol automation: UI workflows & measured sound | 🤖 | full | sonnet |
+| 0 | TEST4 | 📋 | E2E coverage expansion: generated, measured, fuzzed | 🤖 | full | opus |
 | **Quality** | | | **Quality track (no milestone, from the 2026-11-20 review)** | | | |
 | 0a | QA1 | ✅ | Robust language & pattern engine | 🤖 | full | opus |
 | 0b | QA2 | ✅ | Hardened, allocation-free audio engine | 🤖 | full | opus |
@@ -1752,6 +1754,31 @@ Faster, stricter CI on a current Node, and files small enough to review.
 - Archive delivered phases out of `ROADMAP.md`; `AGENTS.md`/`GEMINI.md` point to CLAUDE.md
 
 See full spec: [PROMPTS/PHASE-QA7.md](PROMPTS/PHASE-QA7.md)
+
+---
+
+## Phase TEST4 — E2E Coverage Expansion: Generated, Measured, Fuzzed 📋 *planned*
+
+> **Tooling** (no milestone, row 0 of the implementation order) · **Automation:** 🤖 auto
+
+Scale e2e coverage from hand-written per-feature specs to tests generated from the
+project's own data, measured per namespace and backed by a seeded fuzz test.
+
+**Key additions:**
+- `e2e/gen-examples.spec.ts`: one test per builtin name, which runs all 753 `builtin_meta.edn`
+  examples in the harness or the app env (allow-list ≤ 25). `e2e/gen-content.spec.ts`
+  plays every demo and tutorial chapter. Editor E7–E9 check highlight and hover for every
+  name. `e2e/error-messages.spec.ts` covers every "did you mean" and reader error
+- `npm run test:e2e:coverage`: V8 coverage fixture (`e2e/helpers/coverage.ts`) plus
+  `scripts/e2e-coverage-report.mjs`, giving per-namespace function/byte coverage and
+  never-called functions. Targeted specs for the weakest namespaces raise app function
+  coverage by ≥ 15 points
+- `e2e/fuzz.spec.ts`: 200 seeded random programs per run, each ending in a result or a
+  typed `Error:` line, and playback must survive. Opt-in Firefox/WebKit (`@cross`,
+  `npm run test:e2e:browsers`). ARIA snapshots of 8 layout states (`e2e/layout.spec.ts`)
+- No CI workflow changes (QA7), no `api/` tests (QA5), no production-audio capture (TEST2)
+
+See full spec: [PROMPTS/PHASE-TEST4.md](PROMPTS/PHASE-TEST4.md)
 
 ---
 
