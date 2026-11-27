@@ -2383,8 +2383,7 @@ one word:
      (synth :fm :index 4 :ratio 2)
      (amp 0.5) (attack 0.05) (decay 1.2))
 
-(->> (seq :c4 :_ :c4 :c4)        ; every note is a noise burst, rests stay silent
-     (synth :noise :color :pink)
+(->> (struct "t ~ t t" (pure (noise :color :pink)))   ; noise has no pitch: t = burst
      (amp 0.5) (decay 0.08))
 ```
 
@@ -2399,7 +2398,7 @@ Available voices:
 | Sine                 | `:sine`      | Pure sine; takes the oscillator parameters (unison, sub-osc, glide)               |
 | Supersaw             | `:supersaw`  | `:saw` with `unison 7`, `detune 20`, `spread 0.7` — each overridable             |
 | FM synthesis         | `:fm`        | `:index` modulation depth (default `1.0`), `:ratio` mod/carrier ratio (default `2.0`) |
-| Noise                | `:noise`     | `:color` `:white` (default) `:pink` `:brown` `:dust` `:lfsr`; `:density` dust impulses per second (1–2000, default 20). Every note plays noise; `:lfsr` takes its clock from the note's pitch |
+| Noise                | `:noise`     | `:color` `:white` (default) `:pink` `:brown` `:dust` `:lfsr`; `:density` dust impulses per second (1–2000, default 20). Noise has no pitch: every non-rest step plays a burst, the note is ignored — except by `:lfsr`, which takes its clock from it (see [Noise](#noise)) |
 | Steel-string guitar  | `:western`   | Karplus-Strong; hard pick attack, dreadnought body resonances                     |
 | Classical guitar     | `:nylon`     | Soft fingertip attack, darker timbre, treble rolloff above 3.5 kHz                |
 | Guitar (alias)       | `:guitar`    | Alias for `:western`                                                              |
@@ -2479,6 +2478,35 @@ different voices on individual steps within the same `seq`. Pulse width of the s
 voice goes through `synth`: `(synth :square :pw 0.25 pat)`. (`saw` and `square` on their
 own are [signals](#signals--sine-saw-rand-perlin-segment-range); `(saw :c4)` is an error.)
 `(noise :color :pink)` takes the same options as `(synth :noise …)`.
+
+#### Noise
+
+Noise has no pitch. `(noise)` is one burst; give it a rhythm with `struct`, `euclidean`
+or `seq` instead of writing notes that would only act as triggers:
+
+```lisp
+(->> (struct "t*4" (pure (noise :color :pink))) (decay 0.3))      ; 4 soft bursts
+(->> (euclidean 3 8 (noise :color :dust :density 200)) (decay 0.3)) ; crackle, 3 of 8
+(->> (seq (noise) :_ (noise :color :brown) (noise)) (decay 0.2))   ; mixed colours
+```
+
+`struct` needs `(pure (noise …))`: the noise map is a value, not a pattern.
+
+| `:color` | Sound | Pitch |
+|---|---|---|
+| `:white` (default) | even hiss | ignored |
+| `:pink` | softer, less top end (−3 dB/octave) | ignored |
+| `:brown` | low rumble (−6 dB/octave) | ignored |
+| `:dust` | single random clicks, `:density` per second | ignored |
+| `:lfsr` | gritty digital ("chip") noise | **sets the clock** (16 × the note's frequency; without a note 8 kHz): low notes crunch, high notes hiss |
+
+`:lfsr` is the one colour where `(synth :noise …)` on notes is meaningful:
+
+```lisp
+(->> (seq :c1 :c3 :c5 :c7) (synth :noise :color :lfsr) (decay 0.3)) ; dull → bright
+```
+
+It changes the brightness, not a playable pitch — there is no melody in it.
 
 ### Unison and oscillator parameters
 
