@@ -60,26 +60,92 @@
                                                     :outputNode (node-stub)})
                "ok")))))
 
+(defn- param-stub
+  "Effect plugin stub that records setParam calls into `calls` as [id k v]."
+  [calls id]
+  #js {:setParam (fn [k v] (swap! calls conj [id k v]))
+       :destroy  (fn [] (swap! calls conj [id :destroy]))})
+
+(defn- with-fake-track-fx
+  "Run f with a fake registry (delay, distort), an empty :t track node and
+   add-track-effect! appending stub instances; returns the recorded calls."
+  [f]
+  (let [calls   (atom [])
+        made    (atom 0)
+        sources {"delay" #js {} "distort" #js {}}]
+    (with-redefs [fx/chain           (atom (mapv (fn [[n p]] {:name n :plugin p}) sources))
+                  audio/track-nodes  (atom {:t {:gain-node (node-stub) :fx-chain []}})
+                  fx/add-track-effect!
+                  (fn [track-name effect-name]
+                    (when-let [src (get sources effect-name)]
+                      (let [id (str effect-name (swap! made inc))]
+                        (swap! calls conj [:add effect-name])
+                        (swap! audio/track-nodes update-in [track-name :fx-chain] conj
+                               {:name effect-name :plugin (param-stub calls id)
+                                :source src :params {}}))))
+                  fx/clear-track-effects!
+                  (fn [track-name]
+                    (swap! calls conj [:clear])
+                    (swap! audio/track-nodes assoc-in [track-name :fx-chain] []))]
+      (f calls))
+    @calls))
+
 (deftest apply-track-effects-replaces-chain-and-applies-params
   (testing "pattern FX metadata is applied as a fresh track chain"
-    (let [calls (atom [])]
-      (with-redefs [fx/clear-track-effects! (fn [track-name]
-                                              (swap! calls conj [:clear track-name]))
-                    fx/add-track-effect!    (fn [track-name effect-name]
-                                              (swap! calls conj [:add track-name effect-name]))
-                    fx/set-track-param!     (fn [track-name effect-name param-name value]
-                                              (swap! calls conj [:set track-name effect-name param-name value]))]
-        (fx/apply-track-effects! :_ [{:name "delay"
-                                      :params (array-map "time" 0.5 "wet" 0.3)}
-                                     {:name "distort"
-                                      :params (array-map "drive" 100)}]))
-      (is (= [[:clear :_]
-              [:add :_ "delay"]
-              [:set :_ "delay" "time" 0.5]
-              [:set :_ "delay" "wet" 0.3]
-              [:add :_ "distort"]
-              [:set :_ "distort" "drive" 100]]
-             @calls)))))
+    (is (= [[:clear]
+            [:add "delay"]
+            ["delay1" "time" 0.5]
+            ["delay1" "wet" 0.3]
+            [:add "distort"]
+            ["distort2" "drive" 100]]
+           (with-fake-track-fx
+             (fn [_]
+               (fx/apply-track-effects! :t [{:name "delay"
+                                             :params (array-map "time" 0.5 "wet" 0.3)}
+                                            {:name "distort"
+                                             :params (array-map "drive" 100)}])))))))
+
+(deftest apply-track-effects-reuses-an-unchanged-chain
+  (testing "same effects and param names: no rebuild, only changed params are set"
+    (is (= [["distort2" "drive" 60]]
+           (with-fake-track-fx
+             (fn [calls]
+               (fx/apply-track-effects! :t [{:name "delay" :params {"time" 0.5}}
+                                            {:name "distort" :params {"drive" 100}}])
+               (reset! calls [])
+               (fx/apply-track-effects! :t [{:name "delay" :params {"time" 0.5}}
+                                            {:name "distort" :params {"drive" 60}}]))))))
+  (testing "a live slider value (set-track-param!) counts as applied"
+    (is (= []
+           (with-fake-track-fx
+             (fn [calls]
+               (fx/apply-track-effects! :t [{:name "delay" :params {"time" 0.5}}])
+               (fx/set-track-param! :t "delay" "time" 0.25)
+               (reset! calls [])
+               ;; code patched to the slider value: nothing to do
+               (fx/apply-track-effects! :t [{:name "delay" :params {"time" 0.25}}])))))))
+
+(deftest apply-track-effects-rebuilds-a-changed-chain
+  (testing "a dropped param, another order or another effect rebuilds"
+    (doseq [wanted [[{:name "delay" :params {}}]
+                    [{:name "distort" :params {"drive" 1}}]
+                    [{:name "delay" :params {"time" 0.5}} {:name "distort" :params {}}]]]
+      (let [calls (with-fake-track-fx
+                    (fn [calls]
+                      (fx/apply-track-effects! :t [{:name "delay" :params {"time" 0.5}}])
+                      (reset! calls [])
+                      (fx/apply-track-effects! :t wanted)))]
+        (is (= [:clear] (first calls)) (pr-str wanted))))))
+
+(deftest reusable-track-chain-checks-source-identity
+  (let [src #js {}
+        cur [{:name "eq" :source src :params {"low" 9}}]]
+    (is (fx/reusable-track-chain? cur [{:name "eq" :params {"low" 3}}] {"eq" src}))
+    (testing "a reloaded plugin (new registry object) is not reused"
+      (is (not (fx/reusable-track-chain? cur [{:name "eq" :params {"low" 3}}] {"eq" #js {}}))))
+    (testing "an entry without :source (built elsewhere) is not reused"
+      (is (not (fx/reusable-track-chain? [{:name "eq" :params {"low" 9}}]
+                                         [{:name "eq" :params {"low" 9}}] {"eq" nil}))))))
 
 (deftest per-track-waveshape-accepts-parenthesized-curve
   (testing "DST5 waveshape curve data can use a parenthesized numeric list"
