@@ -576,6 +576,84 @@ the right):
 Inline sliders are drawn in the main editor only (not in the `<repulse-editor>` embed or the
 command bar); `slider` itself evaluates everywhere.
 
+### Visualizers — `pianoroll` `punchcard` `spiral` `scope` `spectrum`
+
+Wrap a track's pattern in a visualizer and a live view of **that track** appears under its form
+in the editor. Visualizers only decorate the pattern: the events (and so playback, export and
+MIDI) are exactly the same with or without them.
+
+```lisp
+;; a piano roll scrolls under this form: :c3 :eb3 :g3 :bb3 on their pitch rows,
+;; a playhead that crosses each note when you hear it
+(track :lead (pianoroll (->> (seq :c3 :eb3 :g3 :bb3) (synth :saw))))
+
+;; an oscilloscope of this track's own audio (not the master mix)
+(track :bass (scope (->> (seq :c2 :_ :c2 :g1) (synth :saw))))
+
+;; options map first, pattern last — so ->> threading works
+(track :drums (->> (seq :bd :sd :bd :sd) (punchcard {:cycles 2 :labels true})))
+
+;; up to 3 per track, stacked
+(track :pad (scope (spectrum (->> (chord :minor :c3) (synth :supersaw)))))
+```
+
+| Built-in | Shows | Options (default) |
+|---|---|---|
+| `pianoroll` | The track's events scrolling past a fixed playhead. Pitched notes on their MIDI rows (highest on top), drums and samples in lanes above. Brighter = louder (`amp`). | `:cycles` (4, 1–16) · `:playhead` (0.5, 0–1) · `:labels` (false) · `:fold` (true — only used pitches; false = full range) · `:height` (80 px, 32–240) |
+| `punchcard` | A static grid of whole cycles; the playhead sweeps it. Same rows and lanes as `pianoroll`. | `:cycles` (1, 1–16) · `:labels` (true) · `:height` (48) |
+| `spiral` | One turn per cycle, events as arcs, the playhead as a rotating radius. | `:cycles` (2, 1–8) · `:height` (120) |
+| `scope` | The track's audio waveform. | `:scale` (1, 0.1–10) · `:trigger` (true — start at a rising zero crossing) · `:height` (64) |
+| `spectrum` | The track's spectrum: 2048-point FFT, 20 Hz–20 kHz, −90…−10 dB. | `:log` (true — log frequency axis) · `:height` (64) |
+
+- **Timing:** every view follows the *heard* position — the scheduler clock minus the audio
+  output latency — so a note lights up when you hear it, at any tempo. In a song, views follow
+  the song bar and tracks that rest in the current section are drawn dimmed, like muted tracks.
+- **Wrap the whole track pattern.** A function applied *after* a visualizer builds a new pattern
+  and drops it. The evaluation then warns, e.g.
+  `pianoroll has no effect here — it must wrap the whole track pattern, e.g. (track :lead (pianoroll …))`,
+  and the widget shows `not playing — evaluate to start`.
+- **Which track:** the widget belongs to the form's `(track :name …)`; a bare top-level pattern
+  is the anonymous track `:_`. `def`, `defn` and `song` forms get no widget.
+- **Errors:** `pianoroll expects a pattern as its last argument, got 3`;
+  `pianoroll: unknown option :cycle — did you mean :cycles?`;
+  `pianoroll: :cycles must be between 1 and 16, got 40`. More than 3 visualizers on one track is
+  a warning (`track :lead shows at most 3 visualizers — ignoring spiral`).
+- **Per-track audio (scope, spectrum):** samples and tracks with track FX are measured with a
+  per-track analyser; synth voices are metered inside the WASM engine. The engine meters up to
+  16 tracks; a 17th shows `no meter: more than 16 tracks`. When a track mixes both kinds of voice,
+  the two sources are summed but not sample-aligned.
+
+Visualizers are drawn in the main editor only (not in the `<repulse-editor>` embed); the
+built-ins evaluate everywhere.
+
+### Track panel
+
+The panel under the editor shows one row per running track, in one of five modes:
+
+| Mode | Shows |
+|---|---|
+| `▦ punch` (default) | `punchcard` of the current cycle, with labels |
+| `⊟ roll` | `pianoroll`, 4 cycles around the playhead |
+| `∿ scope` | each track's own waveform |
+| `⊞ spec` | each track's own spectrum |
+| `◐ level` | each track's peak level and the last 4 seconds of its RMS level |
+
+All modes use the same rules as the in-code visualizers: exact events or measured audio, the heard
+position, muted and resting tracks dimmed. The track buttons next to the modes mute a track by
+writing `:mute` into its form.
+
+The panel grows by 32 px per track (126 px minimum) instead of cutting off rows, and draws at the
+screen's pixel density, so the track names stay sharp at any window width.
+
+#### Hiding the bottom panels
+
+The track panel and the frequency analyser below it each have a **×** in their top-right
+corner. Close either one on its own; the editor takes the freed space. A closed panel leaves a
+button in the status bar — **+ track viz** or **+ spectrum** — that brings it back. Which panels
+are closed is remembered in this browser (`localStorage`, key `repulse.closed-panels`); it is
+not part of the project or a share link. A closed track panel stops drawing; in-code
+visualizers keep running.
+
 ---
 
 ## Language basics
@@ -3155,6 +3233,18 @@ undo step (`Cmd/Ctrl+Z` restores the form). In a multi-buffer project the form i
 the buffer that holds it. The `:_` track's buttons are disabled
 (`name the track to mute it: (track :name …)`).
 
+**Muted code is greyed out.** Every `(track :name …)` form that does not play right now — its
+own `:mute`, or silenced because another track has `:solo` — is drawn faded and grey in the
+editor (hover shows `muted — this track does not play`). The grey follows what the scheduler
+plays, so it appears when the change is evaluated (a button click re-evaluates by itself),
+not while you are still typing `:mute`:
+
+```lisp
+(track :drums (seq :bd :sd :bd :sd))
+(track :hats  (fast 2 (seq :hh :oh)) :mute)   ; greyed out
+(track :bass  (->> (seq :c2 :eb2) (synth :saw)))
+```
+
 Because the flags are code, copying the buffer, sharing a `#v3:` link or restoring a snapshot
 reproduces exactly what you heard — mutes included.
 
@@ -4302,7 +4392,9 @@ plugins stack vertically (up to 40vh total height).
 
 ### Built-in visual plugins
 
-The **spectrum** analyser loads automatically at startup.
+The **spectrum** analyser loads automatically at startup. Its **×** hides the analyser panel
+(see [Hiding the bottom panels](#hiding-the-bottom-panels)); **+ spectrum** in the status bar
+shows it again.
 
 | Plugin | File | Auto-loaded | Description |
 |--------|------|-------------|-------------|

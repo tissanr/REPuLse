@@ -163,3 +163,15 @@
         names  (map name voices/synth-voices)]
     (is (= [] (remove labels names)) "voices missing in builtins.generated.js")
     (is (= [] (remove metas names)) "voices missing in builtin_meta.edn")))
+
+(deftest played-hz-test
+  ;; Phase VIZ1: the pitch MIDI out and the visualizers share
+  (is (= 440 (voices/played-hz 440)))
+  (is (< (Math/abs (- 130.81 (voices/played-hz :c3))) 0.01))
+  (is (< (Math/abs (- 130.81 (voices/played-hz {:note :c3 :amp 0.5}))) 0.01))
+  (is (= 220 (voices/played-hz {:note 220})))
+  (is (= 330 (voices/played-hz {:note :c3 :freq 330})))
+  (is (nil? (voices/played-hz :bd)))
+  (is (nil? (voices/played-hz {:note :bd})))
+  (is (nil? (voices/played-hz {:bank :bd :n 2})))
+  (is (nil? (voices/played-hz :_))))

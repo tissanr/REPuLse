@@ -7250,5 +7250,102 @@
     ],
     "detail": "(synth :trumpet-cup) — FM cup-muted trumpet, softer and rounder than the open trumpet",
     "description": "FM cup-muted trumpet, softer and rounder than the open trumpet."
+  },
+  "pianoroll": {
+    "category": "visual",
+    "signature": "(pianoroll pat) (pianoroll opts pat)",
+    "returns": "Pattern",
+    "side-effects": [
+      "dom"
+    ],
+    "examples": [
+      "(track :lead (pianoroll (->> (seq :c3 :eb3 :g3 :bb3) (synth :saw))))",
+      "(track :lead (->> (seq :c3 :e3 :g3) (pianoroll {:cycles 2 :labels true})))"
+    ],
+    "see-also": [
+      "punchcard",
+      "spiral",
+      "scope",
+      "spectrum"
+    ],
+    "detail": "(pianoroll [opts] pat) — scrolling piano roll of the track under its form",
+    "description": "Shows a live piano roll of the track's exact events under the track's form: notes on their pitch rows, drums in lanes above, a playhead at the heard position. Options: :cycles (4, 1–16), :playhead (0.5, 0–1), :labels (false), :fold (true), :height (80 px). Must wrap the whole track pattern."
+  },
+  "punchcard": {
+    "category": "visual",
+    "signature": "(punchcard pat) (punchcard opts pat)",
+    "returns": "Pattern",
+    "side-effects": [
+      "dom"
+    ],
+    "examples": [
+      "(track :drums (punchcard (seq :bd :sd :bd :sd)))",
+      "(track :drums (->> (seq :bd :sd :bd :sd) (punchcard {:cycles 2 :labels true})))"
+    ],
+    "see-also": [
+      "pianoroll",
+      "spiral",
+      "scope",
+      "spectrum"
+    ],
+    "detail": "(punchcard [opts] pat) — static grid of whole cycles, playhead sweeps it",
+    "description": "Shows the track's events as a grid of whole cycles under its form; the playhead sweeps it. Same pitch rows and drum lanes as pianoroll. Options: :cycles (1, 1–16), :labels (true), :height (48 px). Must wrap the whole track pattern."
+  },
+  "spiral": {
+    "category": "visual",
+    "signature": "(spiral pat) (spiral opts pat)",
+    "returns": "Pattern",
+    "side-effects": [
+      "dom"
+    ],
+    "examples": [
+      "(track :arp (spiral (fast 2 (seq :c4 :e4 :g4 :b4))))"
+    ],
+    "see-also": [
+      "pianoroll",
+      "punchcard",
+      "scope",
+      "spectrum"
+    ],
+    "detail": "(spiral [opts] pat) — one turn per cycle, events as arcs",
+    "description": "Shows the track's events on a spiral under its form: one turn per cycle, events as arcs, the playhead as a rotating radius. Options: :cycles (2, 1–8), :height (120 px). Must wrap the whole track pattern."
+  },
+  "scope": {
+    "category": "visual",
+    "signature": "(scope pat) (scope opts pat)",
+    "returns": "Pattern",
+    "side-effects": [
+      "dom"
+    ],
+    "examples": [
+      "(track :bass (scope (->> (seq :c2 :_ :c2 :g1) (synth :saw))))"
+    ],
+    "see-also": [
+      "pianoroll",
+      "punchcard",
+      "spiral",
+      "spectrum"
+    ],
+    "detail": "(scope [opts] pat) — live oscilloscope of this track's own audio",
+    "description": "Shows an oscilloscope of the track's own audio (not the master mix) under its form. Options: :scale (1, 0.1–10), :trigger (true, align on a rising zero crossing), :height (64 px). Must wrap the whole track pattern."
+  },
+  "spectrum": {
+    "category": "visual",
+    "signature": "(spectrum pat) (spectrum opts pat)",
+    "returns": "Pattern",
+    "side-effects": [
+      "dom"
+    ],
+    "examples": [
+      "(track :pad (spectrum (->> (chord :minor :c3) (synth :supersaw))))"
+    ],
+    "see-also": [
+      "pianoroll",
+      "punchcard",
+      "spiral",
+      "scope"
+    ],
+    "detail": "(spectrum [opts] pat) — live spectrum of this track's own audio",
+    "description": "Shows the frequency spectrum (2048-point FFT, 20 Hz–20 kHz, −90…−10 dB) of the track's own audio under its form. Options: :log (true, log frequency axis), :height (64 px). Must wrap the whole track pattern."
   }
 }

@@ -49,8 +49,8 @@ Method-chaining (`s("bd").fast(2)`) maps to Lisp application or threading:
 | Control parameters & effects | TL7a–c, SYN6 | 27 | 4 | 2 | 9 | 7 | 11 | 60 |
 | Mini-notation | TL1/TL3/TL4 | 15 | 0 | 2 | 0 | 0 | 0 | 17 |
 | Tidal-only functions | TL3–TL5 | 8 | 0 | 0 | 3 | 0 | 2 | 13 |
-| Visuals, I/O & JS-specific | — | 4 | 2 | 1 | 1 | 13 | 3 | 24 |
-| **Total** | | **210** | **9** | **22** | **47** | **29** | **38** | **355** |
+| Visuals, I/O & JS-specific | VIZ1 | 5 | 1 | 1 | 1 | 13 | 4 | 25 |
+| **Total** | | **211** | **8** | **22** | **47** | **29** | **39** | **356** |
 
 Rows grouped in one line (e.g. `sine2 / cosine2 / …`) count once.
 
@@ -496,7 +496,8 @@ Not in Strudel, but common in Tidal tutorials.
 | `samples()` | `samples!` | ✅ | — | Strudel JSON manifests supported |
 | `soundAlias` | — | ❓ | — | |
 | `all` / `each` | — | ❓ | — | Apply a function to every track |
-| `pianoroll` / `punchcard` / `spiral` / `scope` / `spectrum` / `pitchwheel` | visual plugins | 🟡 | — | Oscilloscope and spectrum exist; piano roll / punchcard are in FUTURE-FEATURES |
+| `._pianoroll` / `._punchcard` / `._spiral` / `._scope` / `._spectrum` (inline) | `pianoroll` `punchcard` `spiral` `scope` `spectrum` | ✅ | VIZ1 | Wrap a track's pattern; the view of that track (its exact events or its own audio) appears under its form. Full-screen background variants are not included |
+| `pitchwheel` | — | ❓ | — | Not in VIZ1; a follow-on visual |
 | `color` / `hsl` / `hsla` / `markcss` | — | ⛔ | — | Visual styling of highlights |
 | Hydra (`H`, `initHydra`) | — | ⛔ | — | p5.js visuals exist (Phase B) instead |
 | Csound | — | ⛔ | — | Out of scope |

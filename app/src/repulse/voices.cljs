@@ -295,6 +295,22 @@
       (number? n)                                 n
       :else                                       nil)))
 
+;; Phase VIZ1: the pitch an event really plays, shared by MIDI out
+;; (audio/schedule-event!) and the visualizers (repulse.ui.viz-model).
+(defn played-hz
+  "Pure. Hz an event value sounds at, or nil when it has no pitch (drums,
+   samples, rests): :freq, else a :note keyword or number, else a bare note
+   keyword, else a bare number (numbers are frequencies in REPuLse)."
+  [value]
+  (cond
+    (and (map? value) (number? (:freq value))) (:freq value)
+    (and (map? value) (keyword? (:note value)) (theory/note-keyword? (:note value)))
+    (theory/note->hz (:note value))
+    (and (map? value) (number? (:note value))) (:note value)
+    (and (keyword? value) (theory/note-keyword? value)) (theory/note->hz value)
+    (number? value) value
+    :else nil))
+
 (defn- log-dist [a b] (Math/abs (Math/log (/ a b))))
 
 (defn assign-glide

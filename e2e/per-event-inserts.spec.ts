@@ -82,7 +82,10 @@ test('signal-driven lpf sweep: 8 hats with rising high-band energy', async ({ pa
   // 1–2 dB, so each hat slot's 4–8 kHz power is averaged over 8 identical cycles.
   const cycles = 8;
   const { sr, mono } = await render(page, '(lpf (range 400 6000 saw) (fast 8 (seq :hh)))', cycles);
-  expect(countOnsets(slice(mono, sr, 0, 2), sr, { threshold: 0.0005, minGapSeconds: 0.1 })).toBe(8);
+  // The first hat sits behind a ~400 Hz low-pass and peaks at only 0.0005–0.0008
+  // (measured over 25 renders); the gaps between hats are exact silence, so the
+  // threshold sits well below that peak.
+  expect(countOnsets(slice(mono, sr, 0, 2), sr, { threshold: 0.0001, minGapSeconds: 0.1 })).toBe(8);
   const energy = Array.from({ length: 8 }, (_, i) => {
     let p = 0;
     for (let c = 0; c < cycles; c += 1) {

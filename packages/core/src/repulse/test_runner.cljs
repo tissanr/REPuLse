@@ -20,6 +20,7 @@
             [repulse.sound-check-test]
             [repulse.content.demos-test]
             [repulse.ui.timeline-test]
+            [repulse.ui.viz-model-test]
             [repulse.outline-test]
             [repulse.lisp-patcher-test]
             [repulse.content.builtin-meta-test]
@@ -65,6 +66,7 @@
                   'repulse.sound-check-test
                   'repulse.content.demos-test
                   'repulse.ui.timeline-test
+                  'repulse.ui.viz-model-test
                   'repulse.outline-test
                   'repulse.lisp-patcher-test
                   'repulse.project-test 'repulse.history-test

@@ -30,6 +30,7 @@ class RepulseProcessor extends AudioWorkletProcessor {
     this.wasm = null;   // wasm exports (initSync's return value); has `memory`
     this.nBuses = 1;
     this._v = null;     // cached Float32Array view into WASM memory (Phase QA2)
+    this._mv = null;    // cached view of the meter snapshot (Phase VIZ1)
     this.port.onmessage = (e) => this._onMessage(e.data);
     if (DEBUG) console.log("[REPuLse Worklet] Processor created");
   }
@@ -50,10 +51,18 @@ class RepulseProcessor extends AudioWorkletProcessor {
         console.error("[REPuLse Worklet] Init failed:", err);
         this.port.postMessage({ type: 'error', message: String(err) });
       }
+    } else if (msg.type === 'meter-req') {
+      // Phase VIZ1: ping-pong — fill the transferred buffer with the per-track
+      // meter snapshot and send it straight back (no allocation in steady state).
+      this._meter(msg.buf);
     } else if (msg.type === 'trigger') {
-      if (this.engine) this.engine.trigger(msg.value, msg.time);
+      if (this.engine) {
+        this._meterNext(msg);
+        this.engine.trigger(msg.value, msg.time);
+      }
     } else if (msg.type === 'trigger_v2') {
       if (this.engine) {
+        this._meterNext(msg);
         this.engine.trigger_v2(
           msg.value, msg.time,
           msg.amp, msg.attack, msg.decay, msg.pan
@@ -61,7 +70,10 @@ class RepulseProcessor extends AudioWorkletProcessor {
       }
     } else if (msg.type === 'trigger_v3') {
       // Phase TL7a/TL7b/TL7c: params is a Float32Array in the lib.rs trigger_v3 slot layout.
-      if (this.engine) this.engine.trigger_v3(msg.value, msg.time, msg.params);
+      if (this.engine) {
+        this._meterNext(msg);
+        this.engine.trigger_v3(msg.value, msg.time, msg.params);
+      }
     } else if (msg.type === 'stop') {
       if (this.engine) this.engine.stop_all();
     } else if (msg.type === 'sync') {
@@ -79,6 +91,30 @@ class RepulseProcessor extends AudioWorkletProcessor {
         );
       }
     }
+  }
+
+  // Phase VIZ1: a trigger's `meter` field is its track's meter slot (0–15);
+  // meter_next applies it to the next trigger call only.
+  _meterNext(msg) {
+    if (typeof msg.meter === 'number' && this.engine.meter_next) {
+      this.engine.meter_next(msg.meter);
+    }
+  }
+
+  _meter(buf) {
+    if (!buf) return;
+    const e = this.engine;
+    if (e && e.meter_snapshot) {
+      const len = e.meter_snapshot_len();
+      const ptr = e.meter_snapshot();
+      const mem = this.wasm.memory.buffer;
+      let v = this._mv;
+      if (v === null || v.buffer !== mem || v.byteOffset !== ptr || v.length !== len) {
+        v = this._mv = new Float32Array(mem, ptr, len);
+      }
+      if (buf.length >= len) buf.set(v);
+    }
+    this.port.postMessage({ type: 'meter', buf }, [buf.buffer]);
   }
 
   // Phase QA2: a Float32Array view of `len` floats at `ptr` in WASM memory.
