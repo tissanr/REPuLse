@@ -109,6 +109,18 @@ Object.prototype.scrollIntoView;
 Object.prototype.changes;
 Object.prototype.selection;
 Object.prototype.anchor;
+// QA3 D (insert menu via Mod-k i): selection.main.head, keyboard placement via
+// requestMeasure({read, write}) + coordsAtPos. Without these the release build
+// renames requestMeasure/coordsAtPos and the insert-helper plugin crashes.
+Object.prototype.main;
+Object.prototype.head;
+Object.prototype.insert;
+Object.prototype.requestMeasure;
+Object.prototype.coordsAtPos;
+Object.prototype.read;
+Object.prototype.write;
+Object.prototype.high;
+Object.prototype.preventScroll;
 
 // ---------------------------------------------------------------------------
 // @codemirror/state — StateEffect / StateField

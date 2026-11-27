@@ -196,3 +196,20 @@
   (is (= #{} (:flags (p/find-track-form ";; c\n(track :x (seq :bd))" :x))))
   (is (nil? (p/find-track-form "(track :x (seq :bd))" :y)))
   (is (nil? (p/find-track-form ";; (track :y (seq :bd))" :y))))
+
+(deftest bpm-edit-test
+  (testing "replaces the number of the first (bpm …) form"
+    (let [doc "(bpm 120)\n(track :a (seq :bd :sd))"]
+      (is (= "(bpm 480)\n(track :a (seq :bd :sd))" (apply-edit doc (p/bpm-edit doc 480))))
+      (is (= "(bpm 97.3)\n(track :a (seq :bd :sd))" (apply-edit doc (p/bpm-edit doc 97.34))))
+      (is (nil? (p/bpm-edit doc 120)))))
+  (testing "skips comments and strings, keeps the first real form"
+    (let [doc ";; (bpm 90)\n(bpm 100)\n(bpm 140)"]
+      (is (= ";; (bpm 90)\n(bpm 130)\n(bpm 140)" (apply-edit doc (p/bpm-edit doc 130))))))
+  (testing "a slider value is clamped to its range"
+    (let [doc "(bpm (slider 120 60 200))"]
+      (is (= "(bpm (slider 150 60 200))" (apply-edit doc (p/bpm-edit doc 150))))
+      (is (= "(bpm (slider 200 60 200))" (apply-edit doc (p/bpm-edit doc 300))))))
+  (testing "no (bpm …) form: inserted as the first line"
+    (let [doc "(track :a (seq :bd :sd))"]
+      (is (= "(bpm 90)\n(track :a (seq :bd :sd))" (apply-edit doc (p/bpm-edit doc 90)))))))
