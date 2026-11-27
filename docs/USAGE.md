@@ -642,6 +642,18 @@ All modes use the same rules as the in-code visualizers: exact events or measure
 position, muted and resting tracks dimmed. The track buttons next to the modes mute a track by
 writing `:mute` into its form.
 
+The panel grows by 32 px per track (126 px minimum) instead of cutting off rows, and draws at the
+screen's pixel density, so the track names stay sharp at any window width.
+
+#### Hiding the bottom panels
+
+The track panel and the frequency analyser below it each have a **×** in their top-right
+corner. Close either one on its own; the editor takes the freed space. A closed panel leaves a
+button in the status bar — **+ track viz** or **+ spectrum** — that brings it back. Which panels
+are closed is remembered in this browser (`localStorage`, key `repulse.closed-panels`); it is
+not part of the project or a share link. A closed track panel stops drawing; in-code
+visualizers keep running.
+
 ---
 
 ## Language basics
@@ -3221,6 +3233,18 @@ undo step (`Cmd/Ctrl+Z` restores the form). In a multi-buffer project the form i
 the buffer that holds it. The `:_` track's buttons are disabled
 (`name the track to mute it: (track :name …)`).
 
+**Muted code is greyed out.** Every `(track :name …)` form that does not play right now — its
+own `:mute`, or silenced because another track has `:solo` — is drawn faded and grey in the
+editor (hover shows `muted — this track does not play`). The grey follows what the scheduler
+plays, so it appears when the change is evaluated (a button click re-evaluates by itself),
+not while you are still typing `:mute`:
+
+```lisp
+(track :drums (seq :bd :sd :bd :sd))
+(track :hats  (fast 2 (seq :hh :oh)) :mute)   ; greyed out
+(track :bass  (->> (seq :c2 :eb2) (synth :saw)))
+```
+
 Because the flags are code, copying the buffer, sharing a `#v3:` link or restoring a snapshot
 reproduces exactly what you heard — mutes included.
 
@@ -4368,7 +4392,9 @@ plugins stack vertically (up to 40vh total height).
 
 ### Built-in visual plugins
 
-The **spectrum** analyser loads automatically at startup.
+The **spectrum** analyser loads automatically at startup. Its **×** hides the analyser panel
+(see [Hiding the bottom panels](#hiding-the-bottom-panels)); **+ spectrum** in the status bar
+shows it again.
 
 | Plugin | File | Auto-loaded | Description |
 |--------|------|-------------|-------------|

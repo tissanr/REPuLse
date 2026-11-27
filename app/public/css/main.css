@@ -2862,3 +2862,83 @@ footer {
 .cm-inline-viz { padding: 3px 0 3px 4px; }
 .cm-inline-viz-canvas { display: block; width: 100%; max-width: 900px; height: 64px;
   border: 1px solid #1a2438; border-radius: 4px; background: #060b16; }
+
+/* Closable bottom panels — track visuals and frequency analyser.
+   A closed panel leaves a restore button in the status bar. */
+.panel-closed { display: none !important; }
+
+.panel-close {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--mid);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.12s, background-color 0.12s, border-color 0.12s;
+}
+.panel-close:hover {
+  color: var(--text);
+  background: rgba(233, 69, 96, 0.09);
+  border-color: rgba(233, 69, 96, 0.31);
+}
+.panel-close:focus-visible,
+.panel-restore:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.viz-toolbar .panel-close {
+  margin-left: 8px;
+}
+
+.plugin-panel { position: relative; }
+.plugin-panel > .panel-close {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  width: 18px;
+  height: 18px !important;
+  z-index: 1;
+  background: rgba(2, 5, 7, 0.72);
+}
+.plugin-panel > .panel-close:hover { background: rgba(233, 69, 96, 0.16); }
+
+.panel-restore {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 6px;
+  padding: 1px 8px 1px 6px;
+  background: transparent;
+  border: 1px dashed var(--bd);
+  border-radius: 2px;
+  color: var(--mid);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.panel-restore[hidden] { display: none; }
+.panel-restore:hover {
+  color: var(--text);
+  border-style: solid;
+  border-color: rgba(233, 69, 96, 0.45);
+}
+.panel-restore-icon { color: var(--accent); font-size: 11px; }
+
+/* Muted tracks: the code of a track that does not play (its own :mute, or
+   silenced by a :solo elsewhere) is greyed out. */
+.cm-muted-track {
+  opacity: 0.38;
+  filter: grayscale(1);
+}

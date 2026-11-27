@@ -14,6 +14,7 @@
             [repulse.song :as song]
             [repulse.ui.viz-model :as vm]
             [repulse.ui.viz-draw :as vd]
+            [repulse.ui.panels :as panels]
             [repulse.ui.html :refer [escape-html]]))
 
 (defn- el [id] (.getElementById js/document id))
@@ -142,7 +143,7 @@
     [cw ch]))
 
 (defn- draw-panel! [state heard]
-  (when-let [^js canvas (el "track-viz-canvas")]
+  (when-let [^js canvas (when-not (panels/closed? :tracks) (el "track-viz-canvas"))]
     (let [ctx     (.getContext canvas "2d")
           entries (track-entries state heard)
           ;; grow the panel with the track count instead of clipping rows
@@ -228,49 +229,64 @@
       (when (and (:playing? state) (or panel-audio? inline-audio?))
         (audio/request-meters!)))))
 
-(defn render-track-panel! []
+(defn- toolbar-html [entries]
+  (str "<div class=\"viz-toolbar\">"
+       "<span class=\"viz-label\">viz</span>"
+       (apply str
+              (map (fn [{:keys [id label]}]
+                     (str "<button class=\"viz-mode-btn"
+                          (when (= id @viz-mode) " active")
+                          "\" data-mode=\"" id "\" title=\"" id "\">"
+                          (escape-html label)
+                          "</button>"))
+                   modes))
+       "<div class=\"viz-track-mutes\">"
+       (apply str
+              (map (fn [{:keys [name color muted?]}]
+                     (str "<button class=\"viz-track-btn"
+                          (when muted? " muted")
+                          "\" style=\"--track-color:" color "\""
+                          ;; WS5: muting writes :mute into the code;
+                          ;; the anonymous :_ track has no form
+                          (if (= :_ name)
+                            " disabled title=\"name the track to mute it: (track :name …)\""
+                            " title=\"mute — writes :mute into the code\"")
+                          " data-name=\"" (escape-html (cljs.core/name name))
+                          "\">:" (escape-html (cljs.core/name name)) "</button>"))
+                   entries))
+       "</div>"
+       (panels/close-button-html :tracks)
+       "</div>"))
+
+(defn render-track-panel!
+  "Build the panel once (toolbar + canvas); afterwards replace the toolbar
+   only when its HTML changes. The scheduler state changes on every tick, and
+   rebuilding the buttons that often swallowed clicks (mousedown and mouseup
+   landing on different elements)."
+  []
   (when-let [panel (el "track-panel")]
-    (let [entries (track-entries @audio/scheduler-state nil)]
-      (set! (.-innerHTML panel)
-            (str "<div class=\"viz-toolbar\">"
-                 "<span class=\"viz-label\">viz</span>"
-                 (apply str
-                   (map (fn [{:keys [id label]}]
-                          (str "<button class=\"viz-mode-btn"
-                               (when (= id @viz-mode) " active")
-                               "\" data-mode=\"" id "\" title=\"" id "\">"
-                               (escape-html label)
-                               "</button>"))
-                        modes))
-                 (when (seq entries)
-                   (str "<div class=\"viz-track-mutes\">"
-                        (apply str
-                          (map (fn [{:keys [name color muted?]}]
-                                 (str "<button class=\"viz-track-btn"
-                                      (when muted? " muted")
-                                      "\" style=\"--track-color:" color "\""
-                                      ;; WS5: muting writes :mute into the code;
-                                      ;; the anonymous :_ track has no form
-                                      (if (= :_ name)
-                                        " disabled title=\"name the track to mute it: (track :name …)\""
-                                        " title=\"mute — writes :mute into the code\"")
-                                      " data-name=\"" (escape-html (cljs.core/name name))
-                                      "\">:" (escape-html (cljs.core/name name)) "</button>"))
-                               entries))
-                        "</div>"))
-                 "</div>"
-                 "<canvas id=\"track-viz-canvas\" class=\"track-viz-canvas\" width=\"1600\" height=\"126\"></canvas>"))
-      (doseq [btn (array-seq (.querySelectorAll panel ".viz-mode-btn"))]
-        (.addEventListener btn "click"
-          (fn []
-            (reset! viz-mode (.. btn -dataset -mode))
-            (render-track-panel!))))
-      ;; Inline onclick handlers are blocked by the CSP (no unsafe-inline),
-      ;; so mute buttons are wired here like the viz-mode buttons above.
-      (doseq [btn (array-seq (.querySelectorAll panel ".viz-track-btn"))]
-        (.addEventListener btn "click"
-          (fn []
-            (js/window._repulseMuteToggle (.. btn -dataset -name)))))
+    (let [html (toolbar-html (track-entries @audio/scheduler-state nil))]
+      (when-not (el "track-viz-canvas")
+        (set! (.-innerHTML panel)
+              (str "<div class=\"viz-toolbar-slot\"></div>"
+                   "<canvas id=\"track-viz-canvas\" class=\"track-viz-canvas\"></canvas>"))
+        ;; Inline onclick handlers are blocked by the CSP (no unsafe-inline):
+        ;; one delegated listener serves the mode and mute buttons.
+        (.addEventListener panel "click"
+          (fn [^js e]
+            (when-let [^js btn (some-> (.-target e) (.closest "button"))]
+              (cond
+                (.contains (.-classList btn) "viz-mode-btn")
+                (do (reset! viz-mode (.. btn -dataset -mode))
+                    (render-track-panel!))
+
+                (and (.contains (.-classList btn) "viz-track-btn")
+                     (not (.-disabled btn)))
+                (js/window._repulseMuteToggle (.. btn -dataset -name)))))))
+      (let [^js slot (.querySelector panel ".viz-toolbar-slot")]
+        (when (not= html (unchecked-get slot "_html"))
+          (set! (.-innerHTML slot) html)
+          (unchecked-set slot "_html" html)))
       (draw-all!))))
 
 (defn start-viz-raf!

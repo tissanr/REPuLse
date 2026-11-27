@@ -286,6 +286,15 @@ Replace `modes`, delete `event-energy`, `energy-curve`, `sample-energy`,
 `viz-draw/draw!`. Event views take their window from `viz-model` with panel defaults
 (`punch` 1 cycle, `roll` 4 cycles). Default mode `punch`.
 
+*Added in review (2026-11-27):* the panel canvas is sized to its CSS box × `devicePixelRatio`
+(no stretched or blurred labels) and grows 32 px per track (min 126 px) instead of clipping
+rows; the toolbar is rebuilt only when its HTML changes (rebuilding it on every scheduler tick
+swallowed clicks). The track panel and the analyser panel each get a `×`
+(`repulse.ui.panels`), with `+ track viz` / `+ spectrum` restore buttons in the status bar and
+the closed set in `localStorage` `repulse.closed-panels`. Muted track forms (the scheduler's
+`:muted` set: `:mute`, or silenced by `:solo`) are greyed out in the editor
+(`repulse.ui.muted-tracks`, class `cm-muted-track`).
+
 ### 7. Built-ins — `app/src/repulse/env/builtins/viz.cljs` (new)
 
 `pianoroll punchcard spiral scope spectrum`: `([pat])` and `([opts pat])`. Validate with

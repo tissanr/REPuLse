@@ -219,3 +219,68 @@ test('panel: the modes are punch roll scope spec level, no fake waveform', async
     return window.__REPULSE_APP__.trackAudio('d').rms;
   }), { timeout: 10_000 }).toBeGreaterThan(0.001);
 });
+
+test('bottom panels: × hides track visuals and the analyser one by one; the status bar brings them back', async ({ page }) => {
+  await load(page);
+  await altEnter(page, '(track :d (seq :bd :sd))');
+  await waitPlaying(page);
+  const tracks = page.locator('#track-panel');
+  const spectrum = page.locator('#plugin-panel');
+  const restoreTracks = page.locator('.panel-restore[data-panel="tracks"]');
+  const restoreSpectrum = page.locator('.panel-restore[data-panel="spectrum"]');
+  await expect(spectrum).toBeVisible();
+  await expect(restoreTracks).toBeHidden();
+  await expect(restoreSpectrum).toBeHidden();
+
+  // the toolbar is not rebuilt on every scheduler tick: the × stays one element
+  const close = page.locator('#track-panel .panel-close');
+  const handle = await close.elementHandle();
+  await page.waitForTimeout(500);
+  expect(await handle!.evaluate((b) => b.isConnected)).toBe(true);
+
+  await close.click();
+  await expect(tracks).toBeHidden();
+  await expect(spectrum).toBeVisible();
+  await expect(restoreTracks).toBeVisible();
+  await expect(restoreTracks).toHaveText('+track viz');
+
+  await page.locator('#plugin-panel .panel-close').click();
+  await expect(spectrum).toBeHidden();
+  await expect(restoreSpectrum).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('repulse.closed-panels'))).toBe('["spectrum","tracks"]');
+
+  await restoreTracks.click();
+  await expect(tracks).toBeVisible();
+  await expect(restoreTracks).toBeHidden();
+  await expect.poll(async () => (await summary(page, 'd', 'punchcard', 'panel'))?.notes?.length ?? 0,
+    { timeout: 10_000 }).toBe(2);
+  await restoreSpectrum.click();
+  await expect(spectrum).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('repulse.closed-panels'))).toBe('[]');
+});
+
+test('muted code: a track that does not play is greyed out in the editor', async ({ page }) => {
+  await load(page);
+  const greyed = () => page.locator('#editor-container .cm-muted-track').allTextContents();
+  await altEnter(page, [
+    '(track :a (seq :bd :sd))',
+    '(track :b (seq :hh :hh) :mute)',
+    '(track :c (seq :c3 :e3))',
+  ].join('\n'));
+  await waitPlaying(page);
+  await expect.poll(greyed).toEqual(['(track :b (seq :hh :hh) :mute)']);
+  await expect(page.locator('#editor-container .cm-muted-track')).toHaveCSS('opacity', '0.38');
+  // the track panel's mute button writes :mute into the code and greys it
+  await page.locator('#track-panel .viz-track-btn[data-name="a"]').click();
+  await expect.poll(greyed).toEqual(['(track :a (seq :bd :sd) :mute)', '(track :b (seq :hh :hh) :mute)']);
+  // :solo silences every other track
+  await altEnter(page, [
+    '(track :a (seq :bd :sd))',
+    '(track :b (seq :hh :hh))',
+    '(track :c (seq :c3 :e3) :solo)',
+  ].join('\n'));
+  await expect.poll(greyed).toEqual(['(track :a (seq :bd :sd))', '(track :b (seq :hh :hh))']);
+  // nothing muted → nothing greyed
+  await altEnter(page, '(track :a (seq :bd :sd))\n(track :b (seq :hh :hh))');
+  await expect.poll(greyed).toEqual([]);
+});

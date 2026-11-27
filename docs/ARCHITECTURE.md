@@ -373,7 +373,12 @@ app/src/repulse/
 │       └── routing.cljs          bus, load-plugin, unload-plugin, freesound-key!, freesound!
 ├── ui/
 │   ├── editor.cljs               CodeMirror editor, highlighting (highlight-range!)
-│   ├── timeline.cljs             Canvas track visualizer + cached RAF energy curves
+│   ├── timeline.cljs             Track panel (VIZ1 modes) + the one viz animation loop
+│   ├── viz_model.cljs            Pure: heard cycle, windows, event layout, options (VIZ1)
+│   ├── viz_draw.cljs             Shared canvas renderer for panel and inline visualizers
+│   ├── inline_viz.cljs           CodeMirror block widgets under (pianoroll …) etc.
+│   ├── muted_tracks.cljs         CodeMirror marks greying out muted (track …) forms
+│   ├── panels.cljs               × / restore for the track panel and the analyser panel
 │   ├── outline_panel.cljs        Outline column: rows, selection, fx group, session block
 │   ├── status_head.cljs          Status head: BPM edit, backend/bank badges, song progress + cue, latency
 │   ├── inspector.cljs            Inspector column: track/section/def/fx blocks, sliders, M/S, resize
@@ -516,6 +521,12 @@ no audio: they query the track's pattern around `audio/heard-cycle-pos` (the cyc
 `currentTime − outputLatency`) and cache the result per track and integer cycle
 window (`repulse.ui.timeline`). One animation loop draws the panel and every visible
 inline canvas.
+
+The track panel and the visual-plugin panel (frequency analyser) can each be closed
+(`repulse.ui.panels`: a `.panel-closed` class, restore buttons in the status bar, the
+closed set in `localStorage`); a closed track panel is skipped by the animation loop.
+`repulse.ui.muted-tracks` mirrors the scheduler's `:muted` set into the editor state
+(a `StateEffect` on every change) and marks those `(track :name …)` forms.
 
 ---
 

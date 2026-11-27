@@ -3102,6 +3102,13 @@ in the code.
   `e2e/viz.spec.ts` (9 tests: events unchanged, pianoroll rows, punchcard lanes, per-track
   scope for WASM and JS voices, muted/silent flat, tempo 60 vs 180 BPM, song dimming, exact
   warning and error texts, panel modes).
+- Review follow-ups (2026-11-27): sharp, unstretched panel text (canvas sized to its box ×
+  `devicePixelRatio`, 32 px per track instead of clipped rows); song playhead held at bar 0
+  until the song is heard; `×` on the track panel and the frequency analyser with
+  `+ track viz` / `+ spectrum` restore buttons in the status bar (`repulse.ui.panels`,
+  remembered in `localStorage`); muted track forms greyed out in the editor
+  (`repulse.ui.muted-tracks`); toolbar no longer rebuilt every tick (clicks were lost);
+  flaky `per-event-inserts` hat-onset threshold fixed. `e2e/viz.spec.ts` now 11 tests.
 
 See full spec: [PROMPTS/PHASE-VIZ1.md](PROMPTS/PHASE-VIZ1.md)
 
