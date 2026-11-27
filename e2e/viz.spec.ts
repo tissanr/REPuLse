@@ -203,7 +203,9 @@ test('option and argument errors use the exact texts', async ({ page }) => {
 
 test('panel: the modes are punch roll scope spec level, no fake waveform', async ({ page }) => {
   await load(page);
-  await altEnter(page, '(track :d (seq :bd :sd))');
+  // A sustained voice: the scope check measures RMS over a ~46 ms window, and
+  // short drum hits leave that window in their decay tail most of the time.
+  await altEnter(page, '(track :d (->> (seq :c2 :g1) (synth :saw)))');
   await waitPlaying(page);
   const ids = await page.locator('#track-panel .viz-mode-btn').evaluateAll((bs) =>
     bs.map((b) => (b as HTMLElement).dataset.mode));
