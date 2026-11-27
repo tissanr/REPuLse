@@ -9,10 +9,13 @@
             [repulse.plugins.compressor :as compressor-plugin]
             [repulse.ui.editor :as editor]
             [repulse.ui.timeline :as timeline]
+            [repulse.ui.panels :as panels]
             [repulse.ui.outline-panel :as outline-panel]
             [repulse.ui.status-head :as status-head]
             [repulse.ui.inspector :as inspector]
             [repulse.ui.inline-slider :as inline-slider]
+            [repulse.ui.inline-viz :as inline-viz]
+            [repulse.ui.muted-tracks :as muted-tracks]
             [repulse.ui.selection-highlight :as selection-highlight]
             [repulse.ui.dialog :as dialog]
             [repulse.ui.modal-stack :as modal-stack]
@@ -219,6 +222,7 @@
                "    <div id=\"track-panel\" class=\"track-panel\"></div>"
                "    <div id=\"plugin-panel\" class=\"plugin-panel hidden\"></div>"
                "    <footer class=\"status-bar\">"
+               (panels/restore-buttons-html)
                "      <span class=\"status-spacer\"></span>"
                "      <span class=\"hint\">Alt+Enter to eval</span>"
                "    </footer>"
@@ -231,7 +235,8 @@
   (.addEventListener (el "tap-btn")            "click" (fn [] (eo/evaluate-command! "(tap!)")))
   (.addEventListener (el "share-btn")          "click" share!)
   (.addEventListener (el "snippet-toggle-btn") "click" snippet-panel/toggle-panel!)
-  (.addEventListener (el "history-toggle-btn") "click" history-panel/toggle!))
+  (.addEventListener (el "history-toggle-btn") "click" history-panel/toggle!)
+  (panels/init!))
 
 (defn init []
   (injectSpeedInsights)
@@ -312,9 +317,12 @@
                              #js [outline-panel/extension goto/extension
                                   selection-highlight/extension
                                   inline-slider/extension
+                                  inline-viz/extension
+                                  muted-tracks/extension
                                   assistant-panel/extension])
           view      (editor/make-view container (editor/make-state "" exts))]
       (reset! editor/editor-view view)
+      (muted-tracks/init! editor/editor-view)
       (buffers/init! view proj exts {:set-output! set-output!})
       (outline-panel/init! view)
       (status-head/init!)
@@ -373,6 +381,17 @@
                                          (tempo/time-at-cycle st (:cycle st))))
                  :audibleCycle  (fn [] (audio/audible-cycle))
                  :timelineQueries (fn [] @timeline/query-count)
+                 ;; Phase VIZ1 (e2e/viz.spec.ts): last drawn summary of a view
+                 ;; (source "inline" or "panel"), a track's own audio, the
+                 ;; heard cycle position.
+                 :vizSummary (fn [track kind source]
+                               (clj->js (get @timeline/summaries
+                                             [(keyword track) (keyword kind) (or source "inline")])))
+                 :trackAudio (fn [track]
+                               (let [{:keys [rms peak slot]} (audio/track-audio (keyword track))]
+                                 #js {:rms rms :peak peak :slot slot}))
+                 :heardCycle (fn [] (audio/heard-cycle-pos))
+                 :requestMeters (fn [] (audio/request-meters!))
                  :timelineCycle   (fn [] @timeline/last-cycle)
                  :pendingDisconnects (fn [] (count @audio/pending-disconnects))
                  ;; QA3 (e2e/qa3-keyboard.spec.ts): the share button needs a
@@ -573,7 +592,7 @@
   (add-watch midi/cc-mappings           ::workspace (fn [_ _ _ _] (outline-panel/schedule-render!)))
 
   (timeline/render-track-panel!)
-  (timeline/start-playhead-raf!))
+  (timeline/start-viz-raf!))
 
 (defn reload []
   ;; Hot-reload hook: reset env so new/changed built-in bindings take effect

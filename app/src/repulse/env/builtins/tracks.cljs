@@ -7,6 +7,7 @@
             [repulse.fx :as fx]
             [repulse.song-transport :as song-transport]
             [repulse.tracks-model :as tracks-model]
+            [repulse.env.builtins.viz :as b-viz]
             [repulse.lisp.core :as lisp]
             [repulse.lisp.eval :as leval]
             [repulse.ui.editor :as editor]
@@ -56,7 +57,7 @@
 (defn make-builtins
   "ctx — {:on-beat f :set-playing! f :set-output! f :make-stop-fn f
            :env-atom atom :seen-tracks atom}"
-  [{:keys [on-beat set-playing! set-output! make-stop-fn env-atom seen-tracks]}]
+  [{:keys [on-beat set-playing! set-output! make-stop-fn env-atom seen-tracks warn!]}]
   {"track"
    (fn [track-name pat & flag-args]
      (let [name' (leval/unwrap track-name)
@@ -69,7 +70,8 @@
                                     (or (src-data (nth flag-args (:index flags)))
                                         (src-data track-name))))))
        (if (core/pattern? pat')
-         (do
+         (let [;; VIZ1: warn about dropped visualizers, keep at most 3
+               pat' (b-viz/check-track! (or warn! (fn [_])) name' pat' (src-data track-name))]
            ;; SONG1: tracks are only collected here; eval-orchestrator activates
            ;; them (under the buffer's song, if any) once the whole buffer has
            ;; evaluated. collect-track! rejects duplicates and tracks below a song.

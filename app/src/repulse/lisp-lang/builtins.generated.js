@@ -434,6 +434,11 @@ export const BUILTINS = [
   {"label":"sweep-pad","type":"keyword","detail":"(synth :sweep-pad) — wide seven-saw pad with a slow filter sweep"},
   {"label":"brass-pad","type":"keyword","detail":"(synth :brass-pad) — brassy pad with a short filter swell"},
   {"label":"trumpet-cup","type":"keyword","detail":"(synth :trumpet-cup) — FM cup-muted trumpet, softer and rounder than the open trumpet"},
+  {"label":"pianoroll","type":"function","detail":"(pianoroll [opts] pat) — scrolling piano roll of the track under its form"},
+  {"label":"punchcard","type":"function","detail":"(punchcard [opts] pat) — static grid of whole cycles, playhead sweeps it"},
+  {"label":"spiral","type":"function","detail":"(spiral [opts] pat) — one turn per cycle, events as arcs"},
+  {"label":"scope","type":"function","detail":"(scope [opts] pat) — live oscilloscope of this track's own audio"},
+  {"label":"spectrum","type":"function","detail":"(spectrum [opts] pat) — live spectrum of this track's own audio"},
 ];
 
 /** Hover docs: name → { signature, description, example }. */
@@ -869,4 +874,9 @@ export const DOCS = {
   "sweep-pad": {"signature":"(synth :sweep-pad)","description":"Wide seven-saw pad with a slow filter sweep.","example":"(->> (chord :minor :a2) (synth :sweep-pad))"},
   "brass-pad": {"signature":"(synth :brass-pad)","description":"Brassy pad with a short filter swell.","example":"(->> (chord :major :bb2) (synth :brass-pad))"},
   "trumpet-cup": {"signature":"(synth :trumpet-cup)","description":"FM cup-muted trumpet, softer and rounder than the open trumpet.","example":"(->> (seq :c4 :e4) (synth :trumpet-cup))"},
+  "pianoroll": {"signature":"(pianoroll pat) (pianoroll opts pat)","description":"Shows a live piano roll of the track's exact events under the track's form: notes on their pitch rows, drums in lanes above, a playhead at the heard position. Options: :cycles (4, 1–16), :playhead (0.5, 0–1), :labels (false), :fold (true), :height (80 px). Must wrap the whole track pattern.","example":"(track :lead (pianoroll (->> (seq :c3 :eb3 :g3 :bb3) (synth :saw))))"},
+  "punchcard": {"signature":"(punchcard pat) (punchcard opts pat)","description":"Shows the track's events as a grid of whole cycles under its form; the playhead sweeps it. Same pitch rows and drum lanes as pianoroll. Options: :cycles (1, 1–16), :labels (true), :height (48 px). Must wrap the whole track pattern.","example":"(track :drums (punchcard (seq :bd :sd :bd :sd)))"},
+  "spiral": {"signature":"(spiral pat) (spiral opts pat)","description":"Shows the track's events on a spiral under its form: one turn per cycle, events as arcs, the playhead as a rotating radius. Options: :cycles (2, 1–8), :height (120 px). Must wrap the whole track pattern.","example":"(track :arp (spiral (fast 2 (seq :c4 :e4 :g4 :b4))))"},
+  "scope": {"signature":"(scope pat) (scope opts pat)","description":"Shows an oscilloscope of the track's own audio (not the master mix) under its form. Options: :scale (1, 0.1–10), :trigger (true, align on a rising zero crossing), :height (64 px). Must wrap the whole track pattern.","example":"(track :bass (scope (->> (seq :c2 :_ :c2 :g1) (synth :saw))))"},
+  "spectrum": {"signature":"(spectrum pat) (spectrum opts pat)","description":"Shows the frequency spectrum (2048-point FFT, 20 Hz–20 kHz, −90…−10 dB) of the track's own audio under its form. Options: :log (true, log frequency axis), :height (64 px). Must wrap the whole track pattern.","example":"(track :pad (spectrum (->> (chord :minor :c3) (synth :supersaw))))"},
 };
