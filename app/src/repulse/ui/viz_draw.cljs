@@ -16,7 +16,7 @@
                  :history [rms…]}      ; level view, oldest first, ≤ 4 s"
   (:require [repulse.ui.viz-model :as vm]))
 
-(def dim-color "#3a4868")
+(def dim-color "#5a6a8c")
 (def bg-color "#060b16")
 (def grid-color "#0e1628")
 
@@ -304,7 +304,7 @@
   "A dark rectangle with a centred hint (track not playing, …)."
   [^js ctx x y w h text]
   (clear! ctx x y w h)
-  (set! (.-fillStyle ctx) "#2a3a55")
+  (set! (.-fillStyle ctx) "#5a6a8c")
   (set! (.-font ctx) "11px JetBrains Mono, monospace")
   (set! (.-textBaseline ctx) "middle")
   (.fillText ctx text (+ x 12) (+ y (/ h 2))))

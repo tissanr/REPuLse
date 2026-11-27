@@ -121,17 +121,38 @@
 (defn- current-mode []
   (or (some #(when (= (:id %) @viz-mode) %) modes) (first modes)))
 
+(def ^:private panel-min-h 126)
+(def ^:private panel-min-row-h 32)
+
+(defn- fit-canvas!
+  "Size canvas's backing store to its CSS box × devicePixelRatio and set the
+   transform, so drawing happens in CSS pixels and text is neither stretched
+   nor blurred. → [css-width css-height]."
+  [^js canvas ^js ctx]
+  (let [dpr (or (.-devicePixelRatio js/window) 1)
+        cw  (max 1 (.-clientWidth canvas))
+        ch  (max 1 (.-clientHeight canvas))]
+    (when (or (not= (.-width canvas) (Math/round (* cw dpr)))
+              (not= (.-height canvas) (Math/round (* ch dpr))))
+      (set! (.-width canvas) (Math/round (* cw dpr)))
+      (set! (.-height canvas) (Math/round (* ch dpr))))
+    (.setTransform ctx dpr 0 0 dpr 0 0)
+    [cw ch]))
+
 (defn- draw-panel! [state heard]
   (when-let [^js canvas (el "track-viz-canvas")]
     (let [ctx     (.getContext canvas "2d")
-          w       (.-width canvas)
-          h       (.-height canvas)
           entries (track-entries state heard)
+          ;; grow the panel with the track count instead of clipping rows
+          css-h   (max panel-min-h (* (count entries) panel-min-row-h))
+          _       (when (not= (str css-h "px") (.. canvas -style -height))
+                    (set! (.. canvas -style -height) (str css-h "px")))
+          [w h]   (fit-canvas! canvas ctx)
           {:keys [kind opts]} (current-mode)
           opts    (merge (vm/default-opts kind) opts)]
       (if (or (empty? entries) (nil? heard))
         (vd/draw-placeholder! ctx 0 0 w h "viz waits for active tracks")
-        (let [row-h (max 28 (Math/floor (/ h (count entries))))]
+        (let [row-h (/ h (count entries))]
           (doseq [[idx entry] (map-indexed vector entries)]
             (let [y  (* idx row-h)
                   td (track-data entry kind opts state heard)
@@ -140,7 +161,7 @@
                      (assoc sm :heard (:heard td) :muted? (:muted? entry)))
               (when (< idx (dec (count entries)))
                 (set! (.-fillStyle ctx) vd/grid-color)
-                (.fillRect ctx 0 (+ y row-h) w 1))))))
+                (.fillRect ctx 0 (Math/round (+ y row-h)) w 1))))))
       (contains? vm/audio-kinds kind))))
 
 ;;; ── Inline canvases (registered by repulse.ui.inline-viz) ────────────────
@@ -168,18 +189,11 @@
    not-playing placeholder. → true when it drew an audio view."
   [{:keys [^js canvas track]} state heard]
   (let [ctx    (.getContext canvas "2d")
-        dpr    (or (.-devicePixelRatio js/window) 1)
-        cw     (max 1 (.-clientWidth canvas))
         vizzes (track-vizzes track)
         total  (if vizzes (reduce + (map #(get-in % [:opts :height] 64) vizzes)) 0)]
     (when (and vizzes (not= (str total "px") (.. canvas -style -height)))
       (set! (.. canvas -style -height) (str total "px")))
-    (let [ch (max 1 (.-clientHeight canvas))]
-      (when (or (not= (.-width canvas) (Math/round (* cw dpr)))
-                (not= (.-height canvas) (Math/round (* ch dpr))))
-        (set! (.-width canvas) (Math/round (* cw dpr)))
-        (set! (.-height canvas) (Math/round (* ch dpr))))
-      (.setTransform ctx dpr 0 0 dpr 0 0)
+    (let [[cw ch] (fit-canvas! canvas ctx)]
       (let [entry (some #(when (= track (:name %)) %) (track-entries state heard))]
         (if (or (nil? vizzes) (nil? entry) (nil? heard))
           (do (vd/draw-placeholder! ctx 0 0 cw ch not-playing-text)
