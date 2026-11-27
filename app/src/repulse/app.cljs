@@ -229,7 +229,7 @@
                "</div>"
                )))
   (.addEventListener (el "play-btn")           "click" on-play-btn-click)
-  (.addEventListener (el "tap-btn")            "click" (fn [] (eo/evaluate! "(tap!)")))
+  (.addEventListener (el "tap-btn")            "click" (fn [] (eo/evaluate-command! "(tap!)")))
   (.addEventListener (el "share-btn")          "click" share!)
   (.addEventListener (el "snippet-toggle-btn") "click" snippet-panel/toggle-panel!)
   (.addEventListener (el "history-toggle-btn") "click" history-panel/toggle!))
@@ -284,7 +284,7 @@
               (eo/track-flag-patch-and-eval!
                kw :mute (not (:mute? (get @eo/declared-flags kw))))))))
 
-  (reset! editor/cmd-view (editor/make-cmd-editor (el "cmd-container") eo/evaluate!))
+  (reset! editor/cmd-view (editor/make-cmd-editor (el "cmd-container") eo/evaluate-command!))
 
   ;; ── Session restore ───────────────────────────────────────────────────────
   ;; Precedence: URL hash (#v3:/#v2:/#v1:) > localStorage (v3, v2 migrated)
