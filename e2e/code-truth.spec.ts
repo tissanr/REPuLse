@@ -378,3 +378,32 @@ test('tempo set outside the code (command bar, tap, BPM field) is written into (
   await page.keyboard.press('Enter');
   await expect.poll(() => doc(page)).toBe('(bpm 100)\n(track :a (seq :bd :sd))');
 });
+
+test('project mode: the tempo goes into a (bpm …) only in a buffer the program runs', async ({ page }) => {
+  await load(page);
+  await page.waitForFunction(() => !!window.__REPULSE_BUFFERS__);
+  const code = async (n: string) => {
+    const p = await page.evaluate(() => window.__REPULSE_BUFFERS__.project());
+    return p.buffers.find((b: { name: string }) => b.name === n).code;
+  };
+  await page.evaluate(() => window.__REPULSE_BUFFERS__.create('tempo', '(bpm 120)'));
+  await page.evaluate(() => window.__REPULSE_BUFFERS__.switchTo('main'));
+  const cmdBar = async (c: string) => {
+    await page.locator('#cmd-container .cm-content').click();
+    await page.keyboard.type(c);
+    await page.keyboard.press('Enter');
+  };
+
+  // main does not use :tempo → its (bpm 120) is not run: write into main
+  await evalText(page, '(track :a (seq :bd :sd))');
+  await expectTracks(page, ['a']);
+  await cmdBar('(bpm 100)');
+  await expect.poll(() => doc(page)).toBe('(bpm 100)\n(track :a (seq :bd :sd))');
+  expect(await code('tempo')).toBe('(bpm 120)');
+
+  // main uses :tempo → the tempo lives there
+  await evalText(page, '(use :tempo)\n(track :a (seq :bd :sd))');
+  await cmdBar('(bpm 140)');
+  await expect.poll(() => code('tempo')).toBe('(bpm 140)');
+  expect(await doc(page)).toBe('(use :tempo)\n(track :a (seq :bd :sd))');
+});

@@ -249,6 +249,10 @@
 ;; Offset bases of the last successful project evaluation (Phase SONG4).
 (defonce last-bases (atom {"main" 0}))
 
+;; Buffers run by the last successful project evaluation, main first, then the
+;; ones it pulled in with `use` (repulse.project-eval/run-project :order).
+(defonce last-order (atom []))
+
 (defn- project-highlighter
   "on-event callback for a project evaluation: map a global source range back
    to its buffer and highlight it only when that buffer is shown."
@@ -349,7 +353,7 @@
           ;; Project mode (Phase SONG4): evaluate from the main buffer with
           ;; `use` enabled; every source position is global (offset per buffer).
           ;; WS5: mute!/unmute!/solo! refuse to run inside a reconciling eval.
-          {result :value bases :bases}
+          {result :value bases :bases order :order}
           (do (reset! b-tracks/reconciling? (boolean reconcile?))
               (try
                 (if project
@@ -398,7 +402,9 @@
           ;; (fx …) calls (a whole program resets the master chain first).
           (when-not (::nested? opts)
             (fx/commit-staging! (boolean (or reconcile? @b-tracks/whole-buffer-upd))))
-          (when project (reset! last-bases bases))
+          (when project
+            (reset! last-bases bases)
+            (reset! last-order order))
           ;; Clear stale diagnostics only when there is a real result.
           ;; A nil val means the command handled output itself (e.g. (upd), (stop))
           ;; and may have already set its own diagnostics — don't clobber them.
@@ -532,15 +538,19 @@
 ;;; Tempo changes outside the code write the code
 
 (defn- bpm-target
-  "{:buffer name-or-nil :code str} to write the tempo into: the first buffer
-   holding a (bpm …) form, else the main buffer. Without a project (embed)
-   the editor's own doc."
+  "{:buffer name-or-nil :code str} to write the tempo into: of the buffers the
+   program runs (main, then those it `use`s in the last evaluation), the first
+   holding a (bpm …) form, else the main buffer. A buffer the program does not
+   run is never written — its (bpm …) would not take effect and the edit would
+   happen out of sight. Without a project (embed) the editor's own doc."
   []
   (if (buffers/active-name)
     (let [{:keys [main buffers]} (buffers/current-project)
+          by-name  (into {} (map (juxt :name identity)) buffers)
+          run      (keep by-name (distinct (cons main @last-order)))
           has-bpm? #(patcher/find-param-num (:code %) 0 (count (:code %)) "bpm")]
-      (when-let [{:keys [name code]} (or (first (filter has-bpm? buffers))
-                                         (first (filter #(= main (:name %)) buffers)))]
+      (when-let [{:keys [name code]} (or (first (filter has-bpm? run))
+                                         (by-name main))]
         {:buffer name :code code}))
     (when-let [view @editor/editor-view]
       {:buffer nil :code (.. view -state -doc (toString))})))
