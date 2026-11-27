@@ -2006,7 +2006,23 @@ struct ActiveVoice {
     /// QA2: produced a non-finite sample; silent from then on, removed at
     /// the end of the block.
     dead: bool,
+    /// Phase VIZ1: per-track meter slot 0..N_METERS, or -1 (not metered).
+    meter: i8,
 }
+
+// ── Per-track meters (Phase VIZ1) ─────────────────────────────────────────
+// The main thread gives each track a meter slot. Every voice of a metered
+// track adds its mono dry output to its slot; per slot the engine keeps the
+// last METER_LEN samples (a ring) and a decaying peak, so the UI can draw a
+// track's own scope / spectrum / level without one Web Audio output per track.
+
+/// Number of meter slots (tracks metered at once).
+pub const N_METERS: usize = 16;
+/// Samples kept per meter slot (the scope / FFT window).
+pub const METER_LEN: usize = 2048;
+/// Length of the `meter_snapshot` buffer: N_METERS rings (oldest sample
+/// first), then N_METERS peaks, then N_METERS RMS values.
+pub const METER_SNAPSHOT_LEN: usize = N_METERS * METER_LEN + 2 * N_METERS;
 
 // ── Orbit sends (Phase TL7b) ──────────────────────────────────────────────
 // The reverb and delay of each orbit are Web Audio nodes on the main thread
@@ -2246,6 +2262,19 @@ pub struct AudioEngine {
     queue_cap_drops: u32,
     voice_cap_drops: u32,
     nonfinite_kills: u32,
+    /// Phase VIZ1: meter slot for the next scheduled event (-1 = none);
+    /// set by `meter_next`, consumed by the next trigger call.
+    next_meter: i8,
+    /// Phase VIZ1: N_METERS rings of METER_LEN samples, [slot][sample],
+    /// all written at `meter_pos` (they advance together).
+    meter_rings: Vec<f32>,
+    meter_pos: usize,
+    /// Phase VIZ1: decaying absolute peak per slot (20 dB/s).
+    meter_peaks: [f32; N_METERS],
+    /// Phase VIZ1: per-sample peak decay factor, 10^(-1/sr).
+    meter_decay: f32,
+    /// Phase VIZ1: pre-allocated output of `meter_snapshot`.
+    meter_snap: Vec<f32>,
 }
 
 #[wasm_bindgen]
@@ -2296,6 +2325,30 @@ impl AudioEngine {
     /// Schedule a sound event at the given AudioContext time (uses default parameters).
     pub fn trigger(&mut self, value: &str, time: f64) {
         self.schedule(value, time, EventParams::DEFAULT);
+    }
+
+    /// Phase VIZ1: meter the next triggered event (any trigger kind) on slot
+    /// 0..N_METERS; any other value means not metered. Consumed by the next
+    /// trigger call, so the main thread sends it right before each trigger.
+    pub fn meter_next(&mut self, slot: i32) {
+        self.next_meter = if (0..N_METERS as i32).contains(&slot) {
+            slot as i8
+        } else {
+            -1
+        };
+    }
+
+    /// Phase VIZ1: fill the pre-allocated snapshot buffer and return a
+    /// pointer to its METER_SNAPSHOT_LEN floats in WASM memory: per slot the
+    /// last METER_LEN samples, oldest first, then N_METERS peaks, then
+    /// N_METERS RMS values (over the ring). No allocation.
+    pub fn meter_snapshot(&mut self) -> *const f32 {
+        self.fill_meter_snapshot().as_ptr()
+    }
+
+    /// Phase VIZ1: METER_SNAPSHOT_LEN.
+    pub fn meter_snapshot_len(&self) -> u32 {
+        METER_SNAPSHOT_LEN as u32
     }
 
     /// Schedule a sound event with explicit synthesis parameters.
@@ -2375,6 +2428,10 @@ impl AudioEngine {
         self.voices.clear();
         self.pending.clear();
         self.clear_transitions();
+        // VIZ1: meters go flat with the sound.
+        self.next_meter = -1;
+        self.meter_rings.fill(0.0);
+        self.meter_peaks = [0.0; N_METERS];
     }
 
     /// Events and transitions dropped for invalid input (non-finite time or
@@ -2415,7 +2472,29 @@ impl AudioEngine {
             queue_cap_drops: 0,
             voice_cap_drops: 0,
             nonfinite_kills: 0,
+            next_meter: -1,
+            meter_rings: vec![0.0; N_METERS * METER_LEN],
+            meter_pos: 0,
+            meter_peaks: [0.0; N_METERS],
+            meter_decay: 10f32.powf(-1.0 / sample_rate.max(1.0)),
+            meter_snap: vec![0.0; METER_SNAPSHOT_LEN],
         }
+    }
+
+    /// Phase VIZ1: see `meter_snapshot`.
+    pub fn fill_meter_snapshot(&mut self) -> &[f32] {
+        let pos = self.meter_pos;
+        for s in 0..N_METERS {
+            let ring = &self.meter_rings[s * METER_LEN..(s + 1) * METER_LEN];
+            let out = &mut self.meter_snap[s * METER_LEN..(s + 1) * METER_LEN];
+            let older = METER_LEN - pos;
+            out[..older].copy_from_slice(&ring[pos..]);
+            out[older..].copy_from_slice(&ring[..pos]);
+            let sq: f32 = ring.iter().map(|x| x * x).sum();
+            self.meter_snap[N_METERS * METER_LEN + s] = self.meter_peaks[s];
+            self.meter_snap[N_METERS * METER_LEN + N_METERS + s] = (sq / METER_LEN as f32).sqrt();
+        }
+        &self.meter_snap
     }
 
     #[cfg(test)]
@@ -2499,7 +2578,10 @@ impl AudioEngine {
         let mut kills = 0u32;
 
         let stride = n * 2;
+        let decay = self.meter_decay;
         for i in 0..n {
+            // VIZ1: this sample's mono dry sum per meter slot.
+            let mut macc = [0.0f32; N_METERS];
             // Activate every event due at or before sample i.
             while let Some(next) = self.pending.front() {
                 if next.time >= block_end {
@@ -2555,6 +2637,9 @@ impl AudioEngine {
                 let (vl, vr) = (sa * angle.cos(), sb * angle.sin());
                 l += vl;
                 r += vr;
+                if av.meter >= 0 {
+                    macc[av.meter as usize] += 0.5 * (vl + vr);
+                }
                 if sends {
                     let Sends { room, delay, orbit } = av.sends;
                     if room > 0.0 {
@@ -2588,6 +2673,15 @@ impl AudioEngine {
             };
             out[i * 2] = clamp_out(dl);
             out[i * 2 + 1] = clamp_out(dr);
+
+            let pos = self.meter_pos;
+            for (s, &v) in macc.iter().enumerate() {
+                let v = if v.is_finite() { v } else { 0.0 };
+                self.meter_rings[s * METER_LEN + pos] = v;
+                let p = self.meter_peaks[s] * decay;
+                self.meter_peaks[s] = if v.abs() > p { v.abs() } else { p };
+            }
+            self.meter_pos = (pos + 1) % METER_LEN;
         }
         self.voices.retain(|av| !av.dead && !av.voice.is_silent());
         self.nonfinite_kills = self.nonfinite_kills.saturating_add(kills);
@@ -2619,6 +2713,8 @@ impl AudioEngine {
     /// Order: time check → queue cap → build (frequency check, seed) → sorted
     /// insert. All allocation of the event happens here, never in `render`.
     fn schedule(&mut self, value: &str, time: f64, p: EventParams) {
+        // VIZ1: the meter slot belongs to this trigger, even a dropped one.
+        let meter = std::mem::replace(&mut self.next_meter, -1);
         if !time.is_finite() {
             bump(&mut self.invalid_drops);
             return;
@@ -2629,7 +2725,8 @@ impl AudioEngine {
         }
         let p = p.sanitised();
         match self.build_voice(value, time, &p) {
-            Some(voice) => {
+            Some(mut voice) => {
+                voice.meter = meter;
                 // After every queued event with time ≤ this one.
                 let at = self.pending.partition_point(|q| q.time <= time);
                 self.pending.insert(at, Scheduled { time, voice });
@@ -2886,6 +2983,7 @@ impl AudioEngine {
             sends: p.sends,
             mods,
             dead: false,
+            meter: -1,
         })
     }
 }
@@ -4907,3 +5005,5 @@ mod syn6_tests {
 mod alloc_count;
 #[cfg(test)]
 mod qa2_tests;
+#[cfg(test)]
+mod viz1_tests;

@@ -324,13 +324,20 @@
 ;;; ── Per-track FX chains ───────────────────────────────────────────────────
 
 (defn- rewire-track!
-  "Reconnect a track's FX chain: trackGain → fx1 → fx2 → ... → masterGain."
+  "Reconnect a track's FX chain: trackGain → fx1 → fx2 → ... → masterGain.
+   Phase VIZ1: the track's tap feeds the same first node (and its analyser)."
   [track-name]
   (when-let [tn (get @audio/track-nodes track-name)]
     (let [gain    (:gain-node tn)
+          ^js tap (:tap tn)
           effects (:fx-chain tn)
-          master  @audio/master-gain]
+          master  @audio/master-gain
+          head    (if (empty? effects) master (:input (first effects)))]
       (.disconnect gain)
+      (when tap
+        (.disconnect tap)
+        (when-let [anl (:analyser tn)] (.connect tap anl))
+        (.connect tap head))
       (doseq [{:keys [output]} effects]
         (try (.disconnect output) (catch :default _)))
       (if (empty? effects)

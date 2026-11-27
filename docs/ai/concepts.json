@@ -51,7 +51,7 @@
   "track-model": {
     "named-tracks": "(track :name pattern) registers a pattern under a keyword name. Multiple tracks run in parallel, each queried independently by the scheduler.",
     "anonymous-track": "A bare top-level pattern (not wrapped in track) runs on the implicit anonymous track. Only one anonymous track exists at a time.",
-    "mute": "(mute! :name) silences a track without removing it from the scheduler. (unmute! :name) re-enables. (solo! :name) mutes all other tracks.",
+    "mute": "Mute and solo are trailing flags in the code: (track :name pat :mute) is silent but keeps its pattern and FX; (track :name pat :solo) silences every track without :solo. :mute beats :solo. (mute! :name), (unmute! :name) and (solo! :name) from the command bar edit the code and re-evaluate. The editor greys out every (track :name …) form that does not play.",
     "update": "(upd) re-evaluates the editor buffer and hot-swaps running tracks without restarting the scheduler or producing audible glitches.",
     "clear": "(clear! :name) removes a specific track. (clear!) removes all tracks. Stopping audio entirely: (stop)."
   },

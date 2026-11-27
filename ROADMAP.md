@@ -5,19 +5,19 @@
 | Milestone | Delivered | Still open |
 |---|---|---|
 | **M1** Tidal-Lisp core | 14 / 15 | MST1 (🤖👂) |
-| **M2** Full songs | 10 / 11 | VIZ1 (🤖👂) |
+| **M2** Full songs | 10 / 11 | VIZ1 (🤖👂, implemented — watch-and-listen check open) |
 | **M3** Plays with others | 0 / 3 | N1, LIVE1, LIVE2 |
 | **M4** Sketchpad | 3 / 6 | SK3, SK4, SK5 |
 
 - **Next for the unattended pipeline:** TEST4 (e2e coverage expansion: generated tests
   from `builtin_meta.edn`, demos and tutorial, measured e2e coverage, fuzzing, added
-  2026-11-27), then VIZ1 (honest track visuals & in-code visualizers, added 2026-11-24). It can be implemented unattended but is delivered only
-  after a human watch-and-listen check. WS6 and the quality-track phases QA1–QA4 are
-  delivered; every other remaining phase needs a human (🤖👂 or 🧑).
+  2026-11-27). VIZ1 is implemented (2026-11-24); WS6 and the quality-track phases
+  QA1–QA4 are delivered; every other remaining phase needs a human (🤖👂 or 🧑).
 - **Added 2026-11-24:** MST1 (master output stage & loudness): REPuLse plays 6–11 dB
   quieter than streaming audio; three owner decisions (Q1–Q3) are open in its spec.
-- **Next for a human session:** N1 opens M3. FX1 and KIT1 passed their listen checks on
-  2026-11-24. TL7c's listen check runs in the next release test round.
+- **Next for a human session:** the VIZ1 watch-and-listen check (PR on `dev`; it closes
+  M2), then N1 opens M3. FX1 and KIT1 passed their listen checks on 2026-11-24. TL7c's
+  listen check runs in the next release test round.
 - **Added 2026-11-27:** V1 (version 1 launch: domain, link previews, phone fallback,
   issues #11 and #73, demo video, `1.0.0` release). 🧑; waits for MST1 and QA5 parts 1–3.
 - **Side track open:** DOC1, TEST2, UI1, R3, PLUG1, O2, PL1; quality track QA5 (🧑),
@@ -3110,6 +3110,39 @@ in the code.
 - Built-ins `pianoroll`, `punchcard`, `spiral`, `scope`, `spectrum` (`(pianoroll pat)`,
   `(pianoroll {:cycles 2} pat)`), shown inline by a CodeMirror block widget
   (`repulse.ui.inline-viz`); warning when a combinator wraps the viz and drops it
+
+**Implemented (2026-11-24) — not delivered until the watch-and-listen check (🤖👂) has passed:**
+- Track panel (`repulse.ui.timeline`): modes `punch roll scope spec level`; the synthesized
+  `wave spec loud beat seg` modes, `energy-curve`, `value-pitch` and the wall-clock `phase`
+  are gone. One animation loop (`start-viz-raf!`) draws the panel and every visible inline
+  canvas; event queries are cached per track and integer cycle window.
+- Pure model `repulse.ui.viz-model` (heard cycle, windows, event layout with real MIDI rows
+  from `voices/played-hz` — shared with MIDI out —, drum lanes, opacity from `amp`, option
+  validation with exact texts, scope trigger, `song-resting-tracks`) and the shared renderer
+  `repulse.ui.viz-draw` (six views, plain-CLJS radix-2 FFT). `audio/heard-cycle-pos` = cycle
+  at `currentTime − outputLatency`; song mode follows the wrapped song bar.
+- Per-track audio: a `tap` GainNode + `AnalyserNode` per track for JS voices (rewired with
+  the track FX chain); 16 meter slots in the WASM engine (`meter_next`, `meter_snapshot`,
+  rings of 2048 samples, peaks decaying 20 dB/s, allocation-free), ping-pong transferable
+  buffers ≤ 30×/s while an audio view is visible; `audio/track-audio` sums both.
+  Deviation from the spec: the slot travels as a `meter` field on every trigger message
+  (the worklet calls `meter_next` before the trigger) instead of `trigger_v3` slot 44, so
+  bare-keyword `trigger` and `trigger_v2` events are metered too without padding slots.
+- Built-ins `pianoroll punchcard spiral scope spectrum` (`env/builtins/viz.cljs`, also in the
+  TEST1 harness env), `track` warnings (viz dropped, at most 3), inline block widgets
+  (`repulse.ui.inline-viz`, main app only).
+- Tests: `viz_model_test` (all spec reference vectors), 6 Rust tests (`viz1_tests.rs`: slot
+  isolation, unmetered voices, ring order, stop, no allocation / no growth),
+  `e2e/viz.spec.ts` (9 tests: events unchanged, pianoroll rows, punchcard lanes, per-track
+  scope for WASM and JS voices, muted/silent flat, tempo 60 vs 180 BPM, song dimming, exact
+  warning and error texts, panel modes).
+- Review follow-ups (2026-11-27): sharp, unstretched panel text (canvas sized to its box ×
+  `devicePixelRatio`, 32 px per track instead of clipped rows); song playhead held at bar 0
+  until the song is heard; `×` on the track panel and the frequency analyser with
+  `+ track viz` / `+ spectrum` restore buttons in the status bar (`repulse.ui.panels`,
+  remembered in `localStorage`); muted track forms greyed out in the editor
+  (`repulse.ui.muted-tracks`); toolbar no longer rebuilt every tick (clicks were lost);
+  flaky `per-event-inserts` hat-onset threshold fixed. `e2e/viz.spec.ts` now 11 tests.
 
 See full spec: [PROMPTS/PHASE-VIZ1.md](PROMPTS/PHASE-VIZ1.md)
 

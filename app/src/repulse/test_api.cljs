@@ -9,6 +9,7 @@
             [repulse.song :as song]
             [repulse.song-transport :as song-transport]
             [repulse.env.builtins.song :as b-song]
+            [repulse.env.builtins.viz :as b-viz]
             [repulse.tracks-model :as tracks-model]
             [repulse.voices :as voices]))
 
@@ -17,7 +18,9 @@
 
 (defn- make-test-env
   "Pattern-only env; given an audio context, also defsynth and (bus …) on it."
-  ([] (leval/make-env (fn [] nil) (fn [_] nil)))
+  ;; VIZ1: the visualizers decorate patterns only — the harness has them so
+  ;; tests can check that events are unchanged.
+  ([] (merge (leval/make-env (fn [] nil) (fn [_] nil)) (b-viz/make-builtins {})))
   ([ac]
    (assoc (make-test-env)
           :*register-synth-fn* synth/register-synth!
